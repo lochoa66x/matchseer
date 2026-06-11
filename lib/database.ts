@@ -18,7 +18,7 @@ type MatchListResult = {
 type NeonQuery = (
   strings: TemplateStringsArray,
   ...values: unknown[]
-) => Promise<DatabaseMatchRow[]>;
+) => Promise<Record<string, unknown>[]>;
 
 type NeonModule = {
   neon: (connectionString: string) => NeonQuery;
@@ -177,7 +177,7 @@ function sampleResult(reason: DataSourceReason): MatchListResult {
 }
 
 async function fetchMatchRows(sql: NeonQuery) {
-  return sql`
+  return (await sql`
     with latest_weather as (
       select distinct on (match_id)
         match_id,
@@ -320,7 +320,61 @@ async function fetchMatchRows(sql: NeonQuery) {
       interpretation_groups.tone,
       forecast_reason_groups.factors
     order by matches.starts_at nulls last, matches.external_id;
-  `;
+  `) as unknown as DatabaseMatchRow[];
+}
+
+export async function recordAiRequestAudit({
+  matchId,
+  model,
+  requestPayload,
+  responsePayload,
+  status,
+}: {
+  matchId: string;
+  model: string;
+  requestPayload: unknown;
+  responsePayload: unknown | null;
+  status: string;
+}) {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    return false;
+  }
+
+  const serializedResponse =
+    responsePayload === null ? null : JSON.stringify(responsePayload);
+
+  try {
+    await connection.sql`
+      insert into ai_request_audits (
+        forecast_id,
+        model,
+        request_payload,
+        response_payload,
+        status
+      )
+      values (
+        (
+          select forecasts.id
+          from forecasts
+          join matches on matches.id = forecasts.match_id
+          where matches.external_id = ${matchId}
+          order by forecasts.version desc, forecasts.created_at desc
+          limit 1
+        ),
+        ${model},
+        ${JSON.stringify(requestPayload)}::jsonb,
+        ${serializedResponse}::jsonb,
+        ${status}
+      );
+    `;
+
+    return true;
+  } catch (error) {
+    console.error("MatchSeer AI audit write failed", error);
+    return false;
+  }
 }
 
 function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
