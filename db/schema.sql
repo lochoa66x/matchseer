@@ -1,3 +1,5 @@
+create extension if not exists pgcrypto;
+
 create table if not exists competitions (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique,
@@ -15,6 +17,12 @@ create table if not exists teams (
   code text not null,
   color text not null,
   country text,
+  record text,
+  form text[] not null default '{}',
+  attack integer check (attack between 0 and 100),
+  control integer check (control between 0 and 100),
+  defense integer check (defense between 0 and 100),
+  set_pieces integer check (set_pieces between 0 and 100),
   created_at timestamptz not null default now()
 );
 
@@ -91,7 +99,8 @@ create table if not exists forecasts (
   confidence integer check (confidence between 0 and 100),
   chaos integer check (chaos between 0 and 100),
   source_payload jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (match_id, version)
 );
 
 create table if not exists forecast_factors (
@@ -126,4 +135,3 @@ create table if not exists ai_request_audits (
   status text not null,
   created_at timestamptz not null default now()
 );
-
