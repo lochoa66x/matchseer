@@ -3,6 +3,7 @@
 import {
   BarChart3,
   CalendarDays,
+  Check,
   ChevronRight,
   CloudSun,
   Languages,
@@ -28,6 +29,7 @@ import type {
 
 type Tab = "forecast" | "teams" | "players" | "weather";
 type OracleStatus = "idle" | "loading" | "error";
+type ShareStatus = "idle" | "copied" | "error";
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
   reason?: string;
@@ -57,6 +59,8 @@ const copy = {
     comparePlayers: "Player sparks",
     referee: "Referee",
     share: "Share card",
+    copied: "Copied",
+    shareError: "Copy failed",
     review: "Forecasts are for entertainment and sports analysis only. No betting advice.",
     ad: "Sponsor space",
     adCopy: "Future ad slot. No sportsbooks, no weird subscription mambo jumbo.",
@@ -87,6 +91,8 @@ const copy = {
     comparePlayers: "Chispas de jugadores",
     referee: "Árbitro",
     share: "Compartir carta",
+    copied: "Copiado",
+    shareError: "No se copió",
     review: "Pronósticos solo para entretenimiento y análisis deportivo. No son consejos de apuestas.",
     ad: "Espacio patrocinado",
     adCopy: "Futuro espacio publicitario. Sin casas de apuestas ni suscripciones raras.",
@@ -117,6 +123,8 @@ const copy = {
     comparePlayers: "Étincelles joueurs",
     referee: "Arbitre",
     share: "Partager",
+    copied: "Copié",
+    shareError: "Échec copie",
     review: "Prévisions à des fins de divertissement et d’analyse sportive seulement. Aucun conseil de pari.",
     ad: "Espace sponsor",
     adCopy: "Futur espace publicitaire. Pas de paris sportifs, pas d’abonnement bizarre.",
@@ -326,6 +334,10 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function isLanguageOption(value: string | null): value is Language {
+  return value === "en" || value === "es" || value === "fr";
+}
+
 type MatchesResponse = {
   source: "sample" | "database" | "database-unavailable";
   matches: Match[];
@@ -338,6 +350,21 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
   const [oracleStatus, setOracleStatus] = useState<Record<string, OracleStatus>>({});
+  const [shareStatus, setShareStatus] = useState<ShareStatus>("idle");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkedLanguage = params.get("lang");
+    const linkedMatchId = params.get("match");
+
+    if (isLanguageOption(linkedLanguage)) {
+      setLanguage(linkedLanguage);
+    }
+
+    if (linkedMatchId) {
+      setActiveMatchId(linkedMatchId);
+    }
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -402,6 +429,38 @@ export default function Home() {
       setOracleStatus((current) => ({ ...current, [key]: "idle" }));
     } catch {
       setOracleStatus((current) => ({ ...current, [key]: "error" }));
+    }
+  }
+
+  async function shareMatch(match: Match) {
+    const shareUrl = new URL(window.location.href);
+    shareUrl.searchParams.set("match", match.id);
+    shareUrl.searchParams.set("lang", language);
+    shareUrl.hash = "";
+
+    const shareText = `${match.home.name} vs ${match.away.name}: ${match.forecast.projected} on MatchSeer. ${t.review}`;
+    const shareData = {
+      title: `MatchSeer: ${match.home.name} vs ${match.away.name}`,
+      text: shareText,
+      url: shareUrl.toString(),
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+      }
+
+      setShareStatus("copied");
+      window.setTimeout(() => setShareStatus("idle"), 2200);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      setShareStatus("error");
+      window.setTimeout(() => setShareStatus("idle"), 2200);
     }
   }
 
@@ -505,9 +564,11 @@ export default function Home() {
                 <TeamBadge team={activeMatch.away} />
               </div>
             </div>
-            <button className="share-button" type="button">
-              <Share2 size={17} />
-              {t.share}
+            <button className="share-button" onClick={() => shareMatch(activeMatch)} type="button">
+              {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
+              {shareStatus === "copied" && t.copied}
+              {shareStatus === "error" && t.shareError}
+              {shareStatus === "idle" && t.share}
             </button>
           </div>
 
