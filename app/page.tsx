@@ -17,64 +17,14 @@ import {
   Zap,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import type {
+  Language,
+  MatchSummary as Match,
+  PlayerSpark as Player,
+  TeamRating as Team,
+} from "../lib/domain";
 
-type Language = "en" | "es" | "fr";
 type Tab = "forecast" | "teams" | "players" | "weather";
-
-type Team = {
-  name: string;
-  code: string;
-  color: string;
-  record: string;
-  form: string[];
-  attack: number;
-  control: number;
-  defense: number;
-  setPieces: number;
-};
-
-type Player = {
-  name: string;
-  team: string;
-  role: string;
-  club: string;
-  league: string;
-  spark: number;
-  note: string;
-};
-
-type Match = {
-  id: string;
-  status: "Live" | "Upcoming" | "Final";
-  minute?: string;
-  group: string;
-  time: string;
-  venue: string;
-  city: string;
-  home: Team;
-  away: Team;
-  score?: string;
-  forecast: {
-    home: number;
-    draw: number;
-    away: number;
-    confidence: number;
-    chaos: number;
-    projected: string;
-    tone: Record<Language, string>;
-    reasons: Record<Language, string[]>;
-  };
-  weather: {
-    temp: string;
-    wind: string;
-    mood: Record<Language, string>;
-  };
-  referee: {
-    name: string;
-    cardRisk: string;
-  };
-  players: Player[];
-};
 
 const copy = {
   en: {

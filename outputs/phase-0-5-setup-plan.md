@@ -23,6 +23,8 @@ Primary target:
 
 Status:
 - `matchseer.com` purchased.
+- DNS connected to Vercel.
+- First production deployment working.
 
 Also consider:
 - `matchseer.app`
@@ -182,13 +184,14 @@ WEATHER_API_KEY=
 
 Ready when:
 - Domain decision is made. Done.
+- Domain DNS points to Vercel. Done.
 - GitHub repo exists. Done.
 - Neon database exists. Done.
 - Vercel project exists. Done.
 - `.env.example` exists. Done.
 - `.gitignore` blocks local env files. Done.
 - OpenAI key is ready to add to local and Vercel environments. Done for Vercel.
-- We know whether Sprint 1 starts with mock data or a real sports data provider.
+- We know whether Sprint 1 starts with mock data or a real sports data provider. Done: Sprint 1 started with mock data.
 
 ## Sprint 1 Start
 
