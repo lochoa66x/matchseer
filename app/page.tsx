@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CloudSun,
   Languages,
+  LoaderCircle,
   Radio,
   RefreshCcw,
   Share2,
@@ -19,12 +20,21 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type {
   Language,
+  ForecastInterpretation,
   MatchSummary as Match,
   PlayerSpark as Player,
   TeamRating as Team,
 } from "../lib/domain";
 
 type Tab = "forecast" | "teams" | "players" | "weather";
+type OracleStatus = "idle" | "loading" | "error";
+type OracleResponse = {
+  source: "openai" | "seeded-fallback";
+  reason?: string;
+  model?: string;
+  audited?: boolean;
+  interpretation: ForecastInterpretation;
+};
 
 const copy = {
   en: {
@@ -51,6 +61,11 @@ const copy = {
     ad: "Sponsor space",
     adCopy: "Future ad slot. No sportsbooks, no weird subscription mambo jumbo.",
     signal: "Oracle signal",
+    askSeer: "Ask the Seer",
+    reading: "Reading",
+    freshRead: "Fresh read",
+    seededRead: "Seeded read",
+    oracleError: "The Seer blinked. Try again.",
   },
   es: {
     matchday: "Pronóstico del día",
@@ -76,6 +91,11 @@ const copy = {
     ad: "Espacio patrocinado",
     adCopy: "Futuro espacio publicitario. Sin casas de apuestas ni suscripciones raras.",
     signal: "Señal del oráculo",
+    askSeer: "Preguntar al Vidente",
+    reading: "Leyendo",
+    freshRead: "Lectura nueva",
+    seededRead: "Lectura base",
+    oracleError: "El Vidente parpadeó. Intenta otra vez.",
   },
   fr: {
     matchday: "Prévision du jour",
@@ -101,6 +121,11 @@ const copy = {
     ad: "Espace sponsor",
     adCopy: "Futur espace publicitaire. Pas de paris sportifs, pas d’abonnement bizarre.",
     signal: "Signal oracle",
+    askSeer: "Demander au voyant",
+    reading: "Lecture",
+    freshRead: "Lecture fraîche",
+    seededRead: "Lecture de base",
+    oracleError: "Le voyant a cligné. Réessaie.",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -311,6 +336,8 @@ export default function Home() {
   const [matches, setMatches] = useState(fallbackMatches);
   const [activeMatchId, setActiveMatchId] = useState(fallbackMatches[0].id);
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
+  const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
+  const [oracleStatus, setOracleStatus] = useState<Record<string, OracleStatus>>({});
 
   useEffect(() => {
     let ignore = false;
@@ -350,6 +377,33 @@ export default function Home() {
     [activeMatchId, matches],
   );
   const t = copy[language];
+  const oracleKey = `${activeMatch.id}:${language}`;
+  const activeOracleRead = oracleReads[oracleKey];
+  const activeOracleStatus = oracleStatus[oracleKey] ?? "idle";
+
+  async function requestOracleRead(matchId: string, selectedLanguage: Language) {
+    const key = `${matchId}:${selectedLanguage}`;
+    setOracleStatus((current) => ({ ...current, [key]: "loading" }));
+
+    try {
+      const response = await fetch("/api/ai/forecast-interpretation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId, language: selectedLanguage }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Oracle request failed");
+      }
+
+      const payload = (await response.json()) as OracleResponse;
+
+      setOracleReads((current) => ({ ...current, [key]: payload }));
+      setOracleStatus((current) => ({ ...current, [key]: "idle" }));
+    } catch {
+      setOracleStatus((current) => ({ ...current, [key]: "error" }));
+    }
+  }
 
   return (
     <main className="app-shell">
@@ -474,7 +528,16 @@ export default function Home() {
             ))}
           </nav>
 
-          {activeTab === "forecast" && <ForecastView match={activeMatch} t={t} language={language} />}
+          {activeTab === "forecast" && (
+            <ForecastView
+              match={activeMatch}
+              t={t}
+              language={language}
+              oracleRead={activeOracleRead}
+              oracleStatus={activeOracleStatus}
+              onAskSeer={() => requestOracleRead(activeMatch.id, language)}
+            />
+          )}
           {activeTab === "teams" && <TeamsView match={activeMatch} t={t} />}
           {activeTab === "players" && <PlayersView match={activeMatch} t={t} />}
           {activeTab === "weather" && <WeatherView match={activeMatch} t={t} language={language} />}
@@ -516,19 +579,54 @@ function ForecastView({
   match,
   t,
   language,
+  oracleRead,
+  oracleStatus,
+  onAskSeer,
 }: {
   match: Match;
   t: Record<string, string>;
   language: Language;
+  oracleRead?: OracleResponse;
+  oracleStatus: OracleStatus;
+  onAskSeer: () => void;
 }) {
+  const interpretation = oracleRead?.interpretation;
+  const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
+  const reasons =
+    interpretation?.keyFactors.map((factor) => factor.explanation) ??
+    match.forecast.reasons[language];
+  const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
+
   return (
     <div className="forecast-layout">
       <div className="forecast-card primary-card">
-        <div className="section-heading">
-          <Sparkles size={18} />
-          <span>{t.signal}</span>
+        <div className="forecast-card-head">
+          <div className="section-heading">
+            <Sparkles size={18} />
+            <span>{t.signal}</span>
+          </div>
+          <div className="oracle-actions">
+            <span className={cx("oracle-source", oracleRead?.source === "openai" && "fresh")}>
+              {readLabel}
+            </span>
+            <button
+              className="oracle-button"
+              disabled={oracleStatus === "loading"}
+              onClick={onAskSeer}
+              type="button"
+            >
+              {oracleStatus === "loading" ? (
+                <LoaderCircle className="spin-icon" size={16} />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              {oracleStatus === "loading" ? t.reading : t.askSeer}
+            </button>
+          </div>
         </div>
-        <p className="seer-line">{match.forecast.tone[language]}</p>
+        {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}
+        <p className="seer-line">{signalCopy}</p>
+        {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
         <div className="probability-grid">
           <Probability label={match.home.code} value={match.forecast.home} color={match.home.color} />
           <Probability label="DRAW" value={match.forecast.draw} color="#8b8f98" />
@@ -546,11 +644,11 @@ function ForecastView({
           <span>{t.keyReasons}</span>
         </div>
         <ul className="reason-list">
-          {match.forecast.reasons[language].map((reason) => (
+          {reasons.map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
-        <p className="disclaimer">{t.review}</p>
+        <p className="disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
     </div>
   );

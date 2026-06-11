@@ -507,11 +507,91 @@ h1 {
   color: #fff;
 }
 
+.forecast-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.oracle-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oracle-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 9px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.oracle-source.fresh {
+  color: #111;
+  background: var(--gold);
+  border-color: rgba(240, 184, 74, 0.6);
+}
+
+.oracle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--night);
+  background: #fffaf0;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.oracle-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.spin-icon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.oracle-headline {
+  margin: 15px 0 -4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.88rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
 .seer-line {
   margin: 16px 0;
   font-size: clamp(1.25rem, 2.5vw, 2rem);
   font-weight: 900;
   line-height: 1.08;
+}
+
+.oracle-error {
+  margin: -6px 0 14px;
+  color: #ffd27a;
+  font-size: 0.84rem;
+  font-weight: 850;
 }
 
 .probability-grid {
@@ -801,6 +881,16 @@ h1 {
   }
 
   .share-button {
+    width: 100%;
+  }
+
+  .forecast-card-head,
+  .oracle-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .oracle-button {
     width: 100%;
   }
 
