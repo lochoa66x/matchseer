@@ -4,10 +4,12 @@ import {
   type ForecastInterpretation,
   type ForecastInterpretationRequest,
 } from "../../../../lib/domain";
-import { getSampleMatch } from "../../../../lib/sample-data";
+import { getMatch } from "../../../../lib/database";
 
 const disclaimer =
   "Forecasts are for entertainment and sports analysis only. No betting advice.";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<ForecastInterpretationRequest>;
@@ -19,7 +21,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const match = getSampleMatch(body.matchId);
+  const result = await getMatch(body.matchId);
+  const match = result.match;
 
   if (!match) {
     return NextResponse.json(
@@ -39,7 +42,9 @@ export async function POST(request: Request) {
       explanation: reason,
     })),
     missingDataNotes: [
-      "This Sprint 2 endpoint uses seeded forecast data until the live data provider is connected.",
+      result.source === "database"
+        ? "This interpretation uses the current seeded Neon forecast data."
+        : "This interpretation uses sample forecast data until Neon is available in this runtime.",
     ],
     disclaimer,
   };
@@ -59,4 +64,3 @@ export async function POST(request: Request) {
     interpretation,
   });
 }
-

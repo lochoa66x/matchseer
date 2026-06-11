@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getMatch } from "../../../../lib/database";
 
+export const dynamic = "force-dynamic";
+
 type Params = {
   params: Promise<{
     matchId: string;
@@ -20,4 +22,3 @@ export async function GET(_request: Request, { params }: Params) {
 
   return NextResponse.json(result);
 }
-

@@ -16,7 +16,7 @@ import {
   Wind,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Language,
   MatchSummary as Match,
@@ -104,16 +104,15 @@ const copy = {
   },
 } satisfies Record<Language, Record<string, string>>;
 
-const matches: Match[] = [
+const fallbackMatches: Match[] = [
   {
     id: "mx-rsa",
-    status: "Live",
-    minute: "62'",
+    status: "Final",
     group: "Group A",
-    time: "Now",
+    time: "Final",
     venue: "Estadio Azteca",
     city: "Mexico City",
-    score: "1 - 1",
+    score: "2 - 0",
     home: {
       name: "Mexico",
       code: "MEX",
@@ -302,14 +301,53 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+type MatchesResponse = {
+  source: "sample" | "database" | "database-unavailable";
+  matches: Match[];
+};
+
 export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
-  const [activeMatchId, setActiveMatchId] = useState(matches[0].id);
+  const [matches, setMatches] = useState(fallbackMatches);
+  const [activeMatchId, setActiveMatchId] = useState(fallbackMatches[0].id);
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadMatches() {
+      try {
+        const response = await fetch("/api/matches", { cache: "no-store" });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as MatchesResponse;
+
+        if (!ignore && payload.matches.length > 0) {
+          setMatches(payload.matches);
+          setActiveMatchId((current) =>
+            payload.matches.some((match) => match.id === current)
+              ? current
+              : payload.matches[0].id,
+          );
+        }
+      } catch {
+        // The sample matchday stays visible if the API is unavailable.
+      }
+    }
+
+    void loadMatches();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const activeMatch = useMemo(
     () => matches.find((match) => match.id === activeMatchId) ?? matches[0],
-    [activeMatchId],
+    [activeMatchId, matches],
   );
   const t = copy[language];
 

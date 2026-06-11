@@ -3,13 +3,12 @@ import type { MatchSummary } from "./domain";
 export const sampleMatches: MatchSummary[] = [
   {
     id: "mx-rsa",
-    status: "Live",
-    minute: "62'",
+    status: "Final",
     group: "Group A",
-    time: "Now",
+    time: "Final",
     venue: "Estadio Azteca",
     city: "Mexico City",
-    score: "1 - 1",
+    score: "2 - 0",
     home: {
       name: "Mexico",
       code: "MEX",
