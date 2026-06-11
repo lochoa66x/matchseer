@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit -p tsconfig.lint.json"
   },
   "dependencies": {
-    "@neondatabase/serverless": "latest",
+    "@neondatabase/serverless": "^1.1.0",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",

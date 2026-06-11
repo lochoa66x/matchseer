@@ -80,13 +80,8 @@ const fallbackNote =
 
 async function loadNeon() {
   try {
-    const dynamicImport = new Function(
-      "specifier",
-      "return import(specifier)",
-    ) as (specifier: string) => Promise<NeonModule>;
-
     return {
-      module: await dynamicImport("@neondatabase/serverless"),
+      module: (await import("@neondatabase/serverless")) as unknown as NeonModule,
       error: null,
     };
   } catch (error) {
