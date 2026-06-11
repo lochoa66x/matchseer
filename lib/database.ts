@@ -2,6 +2,18 @@ import type { Language, MatchStatus, MatchSummary } from "./domain";
 import { sampleMatches } from "./sample-data";
 
 export type DataSourceStatus = "sample" | "database" | "database-unavailable";
+export type DataSourceReason =
+  | "database"
+  | "missing-database-url"
+  | "missing-neon-driver"
+  | "empty-database-result"
+  | "database-query-failed";
+
+type MatchListResult = {
+  source: DataSourceStatus;
+  reason: DataSourceReason;
+  matches: MatchSummary[];
+};
 
 type NeonQuery = (
   strings: TemplateStringsArray,
@@ -73,9 +85,15 @@ async function loadNeon() {
       "return import(specifier)",
     ) as (specifier: string) => Promise<NeonModule>;
 
-    return await dynamicImport("@neondatabase/serverless");
-  } catch {
-    return null;
+    return {
+      module: await dynamicImport("@neondatabase/serverless"),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      module: null,
+      error: error instanceof Error ? error.message : "Unknown driver error",
+    };
   }
 }
 
@@ -86,36 +104,49 @@ async function getSql() {
 
   const neonModule = await loadNeon();
 
-  if (!neonModule) {
-    return null;
+  if (!neonModule.module) {
+    return {
+      sql: null,
+      reason: "missing-neon-driver" as const,
+      detail: neonModule.error,
+    };
   }
 
-  return neonModule.neon(process.env.DATABASE_URL);
+  return {
+    sql: neonModule.module.neon(process.env.DATABASE_URL),
+    reason: "database" as const,
+    detail: null,
+  };
 }
 
-export async function listMatches() {
-  const sql = await getSql();
+export async function listMatches(): Promise<MatchListResult> {
+  const connection = await getSql();
 
-  if (sql) {
+  if (!connection) {
+    return sampleResult("missing-database-url");
+  }
+
+  if (connection.sql) {
     try {
-      const rows = await fetchMatchRows(sql);
+      const rows = await fetchMatchRows(connection.sql);
       const matches = rows.map(toMatchSummary);
 
       if (matches.length > 0) {
         return {
           source: "database" satisfies DataSourceStatus,
+          reason: "database",
           matches,
         };
       }
+
+      return sampleResult("empty-database-result");
     } catch (error) {
       console.error("MatchSeer database read failed", error);
+      return sampleResult("database-query-failed");
     }
   }
 
-  return {
-    source: "sample" satisfies DataSourceStatus,
-    matches: sampleMatches,
-  };
+  return sampleResult(connection.reason);
 }
 
 export async function getMatch(matchId: string) {
@@ -123,6 +154,7 @@ export async function getMatch(matchId: string) {
 
   return {
     source: result.source,
+    reason: result.reason,
     match: result.matches.find((match) => match.id === matchId) ?? null,
   };
 }
@@ -138,6 +170,14 @@ export function getDatabaseReadiness() {
     note: hasDatabaseUrl
       ? "The API tries Neon first and falls back to sample data if the driver or database is unavailable."
       : fallbackNote,
+  };
+}
+
+function sampleResult(reason: DataSourceReason): MatchListResult {
+  return {
+    source: "sample",
+    reason,
+    matches: sampleMatches,
   };
 }
 
