@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   hasRestrictedBettingLanguage,
+  hasRestrictedToneLanguage,
   type Language,
   type ForecastInterpretation,
   type ForecastInterpretationRequest,
@@ -103,6 +104,23 @@ export async function POST(request: Request) {
       );
     }
 
+    if (hasRestrictedToneLanguage(serialized)) {
+      await recordAiRequestAudit({
+        matchId: match.id,
+        model,
+        requestPayload: openAiRequest,
+        responsePayload,
+        status: "blocked-tone-language",
+      });
+
+      return NextResponse.json({
+        source: "seeded-fallback",
+        reason: "blocked-tone-language",
+        model,
+        interpretation: fallback,
+      });
+    }
+
     const audited = await recordAiRequestAudit({
       matchId: match.id,
       model,
@@ -174,7 +192,7 @@ function createOpenAiRequest(
           {
             type: "input_text",
             text:
-              "You are MatchSeer's playful sports oracle. Interpret football match forecast data for fans. Use real-stat language, keep it concise, and never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, guarantees, or sportsbook-style copy.",
+              "You are MatchSeer's playful sports oracle. Interpret football match forecast data for fans. Use real-stat language, keep it concise, and stay playful through football, weather, venue, and tactical imagery. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, guarantees, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures.",
           },
         ],
       },
@@ -202,7 +220,8 @@ function createOpenAiRequest(
               outputRules: {
                 headline: "Use the teams or a short match title.",
                 summary: "One or two sentences.",
-                toneLine: "One playful sentence.",
+                toneLine:
+                  "One playful sentence based on football, weather, venue, tactics, or live data only. Do not use cultural stereotypes or cultural props.",
                 keyFactors: "Three factors max.",
                 disclaimer,
               },

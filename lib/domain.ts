@@ -96,8 +96,20 @@ export const restrictedBettingTerms = [
   "bookmaker",
 ];
 
+export const restrictedToneTerms = [
+  "sombrero",
+  "costume",
+  "fiesta",
+  "siesta",
+  "tequila",
+];
+
 export function hasRestrictedBettingLanguage(value: string) {
   const normalized = value.toLowerCase();
   return restrictedBettingTerms.some((term) => normalized.includes(term));
 }
 
+export function hasRestrictedToneLanguage(value: string) {
+  const normalized = value.toLowerCase();
+  return restrictedToneTerms.some((term) => normalized.includes(term));
+}
