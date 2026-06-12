@@ -1300,16 +1300,86 @@ function cupVerdict(
 ) {
   const bestTrait = cupTraits(team, pathSignal)[0]?.toLowerCase() ?? "balance";
   const expectedText = pointsPerMatch.toFixed(1);
+  const isAttackHeavy = team.attack > team.defense + 5;
+  const isDefenseHeavy = team.defense > team.attack + 5;
+  const cleanPath = pathSignal > 76;
+  const highSignal = signal >= 72;
+  const lowSignal = signal < 52;
+  const strongScoring = pointsPerMatch >= 2.0;
+  const weakScoring = pointsPerMatch < 1.5;
 
   if (language === "es") {
-    return `${team.name} sí parece carril finalista: ${signal}% de señal, ${bestTrait} como punto fuerte, ${expectedText} puntos esperados por partido y peso para sobrevivir el ruido inicial.`;
+    if (highSignal && strongScoring && cleanPath) {
+      return `${team.name} es uno de los favoritos reales: ${signal}% de señal, ${expectedText} puntos por partido y una ruta que favorece a los que llegan en forma. ${bestTrait} es la ventaja que los separa.`;
+    }
+    if (highSignal && isAttackHeavy) {
+      return `${team.name} tiene colmillo: ${signal}% de señal y poder de ataque como punto diferencial. Con ${expectedText} puntos esperados por partido, el marcador debería hablar por ellos.`;
+    }
+    if (highSignal && isDefenseHeavy) {
+      return `${team.name} construye desde atrás. Con ${signal}% de señal y ${bestTrait} como escudo, ${expectedText} puntos por partido puede sonar discreto — pero este equipo no regala nada.`;
+    }
+    if (highSignal && !cleanPath) {
+      return `${team.name} tiene la señal (${signal}%) pero el camino está enredado. ${expectedText} puntos por partido y ${bestTrait} serán la clave para salir del grupo.`;
+    }
+    if (!highSignal && !lowSignal && cleanPath) {
+      return `${team.name} no es favorito, pero la ruta juega a su favor. Con ${signal}% de señal y ${expectedText} puntos por partido, ${bestTrait} puede ser el factor sorpresa.`;
+    }
+    if (lowSignal && strongScoring) {
+      return `Los números de ${team.name} son contradictorios: ${expectedText} puntos por partido pero solo ${signal}% de señal. Si el modelo los subestima, ${bestTrait} será la señal de alarma.`;
+    }
+    if (weakScoring) {
+      return `${team.name} llega con ${signal}% de señal pero la producción ofensiva preocupa — solo ${expectedText} puntos por partido. ${bestTrait} tendrá que compensar en los momentos clave.`;
+    }
+    return `${team.name} aparece en el radar con ${signal}% de señal y ${expectedText} puntos esperados por partido. ${bestTrait} es el argumento más sólido que tiene el Vidente.`;
   }
 
   if (language === "fr") {
-    return `${team.name} ressemble à une voie finaliste : signal à ${signal} %, point fort ${bestTrait}, ${expectedText} points attendus par match et assez de poids pour traverser le bruit initial.`;
+    if (highSignal && strongScoring && cleanPath) {
+      return `${team.name} est parmi les vrais favoris : ${signal} % de signal, ${expectedText} points par match et une route qui sourit aux équipes en forme. ${bestTrait} est l'avantage qui les distingue.`;
+    }
+    if (highSignal && isAttackHeavy) {
+      return `${team.name} a du mordant : ${signal} % de signal et une attaque tranchante. Avec ${expectedText} points attendus par match, le score devrait parler pour eux.`;
+    }
+    if (highSignal && isDefenseHeavy) {
+      return `${team.name} construit depuis l'arrière. ${signal} % de signal et ${bestTrait} comme rempart — ${expectedText} points par match peut sembler discret, mais cette équipe ne donne rien.`;
+    }
+    if (highSignal && !cleanPath) {
+      return `${team.name} a le signal (${signal} %) mais le chemin est tortueux. ${expectedText} points par match et ${bestTrait} seront décisifs pour passer la phase de groupes.`;
+    }
+    if (!highSignal && !lowSignal && cleanPath) {
+      return `${team.name} n'est pas favori, mais le tirage joue en sa faveur. Avec ${signal} % de signal et ${expectedText} points par match, ${bestTrait} peut créer la surprise.`;
+    }
+    if (lowSignal && strongScoring) {
+      return `Les chiffres de ${team.name} sont contradictoires : ${expectedText} points par match mais seulement ${signal} % de signal. Si le modèle les sous-estime, ${bestTrait} sera le signal d'alerte.`;
+    }
+    if (weakScoring) {
+      return `${team.name} arrive avec ${signal} % de signal, mais la production offensive inquiète — seulement ${expectedText} points par match. ${bestTrait} devra compenser dans les moments clés.`;
+    }
+    return `${team.name} apparaît sur le radar avec ${signal} % de signal et ${expectedText} points attendus par match. ${bestTrait} est l'argument le plus solide que le voyant peut avancer.`;
   }
 
-  return `${team.name} looks like a finalist lane: ${signal}% signal, ${bestTrait} as the sharp edge, ${expectedText} expected points per match, and enough weight to survive the opening fog.`;
+  if (highSignal && strongScoring && cleanPath) {
+    return `${team.name} is one of the real contenders: ${signal}% signal, ${expectedText} points per match, and a draw that rewards teams arriving in form. ${bestTrait} is the edge that sets them apart.`;
+  }
+  if (highSignal && isAttackHeavy) {
+    return `${team.name} has teeth: ${signal}% signal and attacking weight as the differentiator. At ${expectedText} expected points per match, the scoreboard should do the talking.`;
+  }
+  if (highSignal && isDefenseHeavy) {
+    return `${team.name} builds from the back. ${signal}% signal and ${bestTrait} as the shield — ${expectedText} points per match sounds modest, but this team doesn't give easy games.`;
+  }
+  if (highSignal && !cleanPath) {
+    return `${team.name} has the signal (${signal}%) but the path is knotted. ${expectedText} points per match and ${bestTrait} will be the key to getting out of the group.`;
+  }
+  if (!highSignal && !lowSignal && cleanPath) {
+    return `${team.name} isn't the favourite, but the draw works in their favour. At ${signal}% signal and ${expectedText} points per match, ${bestTrait} could be the surprise factor.`;
+  }
+  if (lowSignal && strongScoring) {
+    return `${team.name}'s numbers tell a mixed story: ${expectedText} points per match but only ${signal}% signal. If the model is underrating them, ${bestTrait} is where to watch.`;
+  }
+  if (weakScoring) {
+    return `${team.name} arrives with ${signal}% signal but the offensive output is thin — just ${expectedText} points per match. ${bestTrait} will need to carry the load at the sharp end.`;
+  }
+  return `${team.name} registers on the radar: ${signal}% signal and ${expectedText} expected points per match. ${bestTrait} is the strongest case the Seer can make for them.`;
 }
 
 function cupRisk(
@@ -1318,21 +1388,67 @@ function cupRisk(
   pathSignal: number,
   language: Language,
 ) {
-  const pressurePoint =
-    team.defense < team.attack ? "defensive weather" : "chance creation fog";
-  const pathText = pathSignal > 76 ? "cleaner group lane" : "knotted group lane";
-  const chaosText = chaos > 60 ? "loud volatility" : "manageable volatility";
+  const isDefensiveWeakness = team.defense < team.attack;
+  const cleanPath = pathSignal > 76;
+  const highChaos = chaos > 60;
+  const veryHighChaos = chaos > 75;
 
   if (language === "es") {
-    return `${pathText === "cleaner group lane" ? "Ruta más limpia" : "Ruta enredada"}; ${chaosText === "loud volatility" ? "volatilidad alta" : "volatilidad manejable"}; cuidado con ${pressurePoint === "defensive weather" ? "el clima defensivo" : "la niebla creativa"}.`;
+    if (veryHighChaos && isDefensiveWeakness) {
+      return `Volatilidad alta (${chaos.toFixed(0)}%) y una defensa expuesta — combinación peligrosa. Si el partido se abre, pueden perder el control.`;
+    }
+    if (veryHighChaos && !isDefensiveWeakness) {
+      return `El caos ronda alto (${chaos.toFixed(0)}%), pero la solidez defensiva les da margen. El riesgo está en que los partidos se vuelvan loterías.`;
+    }
+    if (highChaos && !cleanPath) {
+      return `Ruta enredada más volatilidad media (${chaos.toFixed(0)}%) — no es el escenario ideal. Necesitan resultados limpios para no depender de la diferencia de goles.`;
+    }
+    if (highChaos && cleanPath) {
+      return `La ruta es más limpia, pero la volatilidad (${chaos.toFixed(0)}%) sigue siendo un factor. Un partido malo en el momento equivocado puede torcerlo todo.`;
+    }
+    if (!highChaos && !cleanPath) {
+      return `La volatilidad es manejable (${chaos.toFixed(0)}%), pero el camino está enredado. La consistencia, no el talento, decidirá si pasan.`;
+    }
+    return `Señales tranquilas: volatilidad baja (${chaos.toFixed(0)}%) y ruta favorable. El riesgo principal es la autocomplacencia.`;
   }
 
   if (language === "fr") {
-    return `${pathText === "cleaner group lane" ? "Route plus claire" : "Route nouée"} ; ${chaosText === "loud volatility" ? "volatilité forte" : "volatilité maîtrisable"} ; attention à ${pressurePoint === "defensive weather" ? "la météo défensive" : "la brume créative"}.`;
+    if (veryHighChaos && isDefensiveWeakness) {
+      return `Volatilité forte (${chaos.toFixed(0)} %) et défense exposée — combinaison dangereuse. Si le match s'ouvre, ils peuvent perdre le contrôle.`;
+    }
+    if (veryHighChaos && !isDefensiveWeakness) {
+      return `Le chaos est élevé (${chaos.toFixed(0)} %), mais la solidité défensive leur donne une marge. Le risque : que les matchs deviennent des loteries.`;
+    }
+    if (highChaos && !cleanPath) {
+      return `Route nouée et volatilité moyenne (${chaos.toFixed(0)} %) — pas le scénario idéal. Ils ont besoin de résultats nets pour ne pas dépendre de la différence de buts.`;
+    }
+    if (highChaos && cleanPath) {
+      return `La route est plus dégagée, mais la volatilité (${chaos.toFixed(0)} %) reste un facteur. Un mauvais match au mauvais moment peut tout faire basculer.`;
+    }
+    if (!highChaos && !cleanPath) {
+      return `La volatilité est maîtrisable (${chaos.toFixed(0)} %), mais le chemin reste semé d'embûches. C'est la régularité, pas le talent, qui décidera.`;
+    }
+    return `Signaux calmes : faible volatilité (${chaos.toFixed(0)} %) et route favorable. Le principal risque, c'est la complaisance.`;
   }
 
-  return `${pathText}; ${chaosText}; watch the ${pressurePoint}.`;
+  if (veryHighChaos && isDefensiveWeakness) {
+    return `High volatility (${chaos.toFixed(0)}%) and a defensive soft spot — a dangerous mix. If games open up, they risk losing the plot.`;
+  }
+  if (veryHighChaos && !isDefensiveWeakness) {
+    return `Chaos is loud (${chaos.toFixed(0)}%), but the defensive structure gives them a buffer. The risk is matches turning into coin flips.`;
+  }
+  if (highChaos && !cleanPath) {
+    return `Knotted path plus medium volatility (${chaos.toFixed(0)}%) — not ideal. They'll need clean results to avoid relying on goal difference.`;
+  }
+  if (highChaos && cleanPath) {
+    return `The path is cleaner, but volatility (${chaos.toFixed(0)}%) is still a factor. One bad performance at the wrong moment and the whole picture shifts.`;
+  }
+  if (!highChaos && !cleanPath) {
+    return `Volatility is manageable (${chaos.toFixed(0)}%), but the path is knotted. Consistency, not talent, will decide if they make it through.`;
+  }
+  return `Quiet signals: low volatility (${chaos.toFixed(0)}%) and a favourable lane. The main risk is complacency.`;
 }
+
 
 function formScore(form: string[]) {
   if (form.length === 0) {
@@ -1621,76 +1737,50 @@ function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language:
     match.forecast.tone[language] ??
     "";
 
-  const home = match.home.code;
-  const away = match.away.code;
-  const score = parseScoreline(match.score);
-  const predicted = getForecastSide(match);
-
   if (language === "es") {
     if (outcome === "exact") {
-      if (!score) return "Marcador exacto: recibo limpio.";
-      if (score.home === score.away) {
-        return `${home} y ${away} se repartieron los puntos. El Vidente leyó el empate — y el empate respondió.`;
-      }
-      const winner = score.home > score.away ? home : away;
-      const margin = Math.abs(score.home - score.away);
-      if (margin >= 2) {
-        return `${winner} lo hizo ver sencillo. El Vidente lo llamó y el marcador lo confirmó con margen.`;
-      }
-      return `${winner} siguió la línea que trazó el Vidente. Dirección limpia, recibo archivado.`;
+      return "Marcador clavado: la lectura queda con recibo limpio.";
     }
 
     if (outcome === "hit") {
-      if (predicted === "draw") {
-        return `No fue empate al final, pero la lectura del Vidente sobre ${home} vs ${away} estuvo cerca. La dirección casi se sostuvo.`;
-      }
-      const predictedWinner = predicted === "home" ? home : away;
-      return `${predictedWinner} respondió aunque el marcador no cayó exactamente como estaba escrito. La señal del Vidente se sostuvo.`;
+      return "La dirección aguantó, aunque el marcador se movió un poco.";
     }
 
     if (outcome === "miss") {
-      return `${home} vs ${away} no siguió el guión del Vidente. Recibo archivado — el modelo toma nota y sigue.`;
+      return "El Vidente falló esta lectura; se guarda el recibo para ajustar el modelo.";
     }
 
     if (outcome === "live") {
-      return `${home} vs ${away} sigue en vivo. La lectura del Vidente respira hasta el silbatazo final.`;
+      return "Partido en vivo: la lectura sigue respirando hasta el silbatazo.";
     }
 
-    return "Esperando el marcador final para que el recibo despierte.";
+    return "Esperando el marcador final para revisar la lectura.";
   }
 
   if (language === "fr") {
     if (outcome === "exact") {
-      if (!score) return "Score exact : reçu propre.";
-      if (score.home === score.away) {
-        return `${home} et ${away} se sont partagé les points. Le voyant avait lu le nul — et le nul a répondu.`;
-      }
-      const winner = score.home > score.away ? home : away;
-      const margin = Math.abs(score.home - score.away);
-      if (margin >= 2) {
-        return `${winner} a rendu ça simple. Le voyant l'avait annoncé et le score l'a confirmé avec de la marge.`;
-      }
-      return `${winner} a suivi la ligne tracée par le voyant. Direction propre, reçu classé.`;
+      return "Score exact : la lecture garde un reçu propre.";
     }
 
     if (outcome === "hit") {
-      if (predicted === "draw") {
-        return `Pas de nul au final, mais la lecture du voyant sur ${home} contre ${away} était proche. La direction a presque tenu.`;
-      }
-      const predictedWinner = predicted === "home" ? home : away;
-      return `${predictedWinner} s'est imposé même si le score n'a pas atterri exactement comme prévu. Le penchant du voyant a tenu.`;
+      return "La direction a tenu, même si le score a bougé.";
     }
 
     if (outcome === "miss") {
-      return `${home} contre ${away} n'a pas suivi le script du voyant. Reçu classé — le modèle note et passe à la suite.`;
+      return "Le voyant a raté cette lecture ; reçu gardé pour ajuster le modèle.";
     }
 
     if (outcome === "live") {
-      return `${home} contre ${away} est encore en cours. La lecture du voyant respire jusqu'au coup de sifflet.`;
+      return "Match en direct : la lecture respire encore jusqu’au coup de sifflet.";
     }
 
-    return "En attente du score final pour que le reçu se réveille.";
+    return "En attente du score final pour vérifier la lecture.";
   }
+
+  const home = match.home.code;
+  const away = match.away.code;
+  const score = parseScoreline(match.score);
+  const predicted = getForecastSide(match);
 
   if (outcome === "exact") {
     if (!score) return "Scoreline landed clean: the receipt goes in the bright pile.";
