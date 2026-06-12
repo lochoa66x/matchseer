@@ -42,6 +42,29 @@ type CupCandidate = {
   verdict: string;
   risk: string;
 };
+type ForecastSide = "home" | "draw" | "away";
+type ForecastReceiptOutcome = "exact" | "hit" | "miss" | "live" | "pending";
+type ForecastReceipt = {
+  match: Match;
+  outcome: ForecastReceiptOutcome;
+  predictedSide: ForecastSide;
+  actualSide?: ForecastSide;
+  predictedLabel: string;
+  actualLabel?: string;
+  finalScore?: string;
+  projectedOptions: string[];
+  summary: string;
+  shortLabel: string;
+};
+type SeerScoreboard = {
+  reviewed: number;
+  published: number;
+  awaiting: number;
+  winnerHits: number;
+  exactHits: number;
+  survivalRate: number;
+  receipts: ForecastReceipt[];
+};
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
   reason?: string;
@@ -74,6 +97,24 @@ const copy = {
     noMatches: "No matches in this view yet.",
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
+    seerScoreboard: "Seer scoreboard",
+    seerScoreboardTitle: "Did the Seer survive the whistle?",
+    seerScoreboardIntro: "Every final score gets a receipt: what MatchSeer called, what actually happened, and whether the model earned a clean nod or a humble notebook entry.",
+    reviewedMatches: "Reviewed matches",
+    winnerCalls: "Direction calls",
+    exactScores: "Exact scores",
+    publishedReads: "Published reads",
+    modelSurvival: "Survival rate",
+    latestReceipts: "Latest receipts",
+    waitingForFinals: "Waiting for final whistles",
+    called: "Called",
+    finished: "Finished",
+    seerHit: "Direction hit",
+    seerMiss: "Needs review",
+    exactHit: "Exact score",
+    liveReview: "Live check",
+    awaitingResult: "Awaiting result",
+    scoreboardEmpty: "Receipts wake up as soon as final scores arrive.",
     quickRead: "Quick read",
     seerLean: "Seer lean",
     tightRead: "Tight read",
@@ -167,6 +208,24 @@ const copy = {
     noMatches: "Aún no hay partidos en esta vista.",
     matchExplorer: "Explorar partidos",
     selectedMatch: "Partido seleccionado",
+    seerScoreboard: "Marcador del Vidente",
+    seerScoreboardTitle: "¿El Vidente sobrevivió al silbatazo?",
+    seerScoreboardIntro: "Cada marcador final deja recibo: qué leyó MatchSeer, qué pasó de verdad y si el modelo merece asentir o apuntar tarea.",
+    reviewedMatches: "Partidos revisados",
+    winnerCalls: "Dirección acertada",
+    exactScores: "Marcadores exactos",
+    publishedReads: "Lecturas publicadas",
+    modelSurvival: "Supervivencia",
+    latestReceipts: "Últimos recibos",
+    waitingForFinals: "Esperando finales",
+    called: "Leyó",
+    finished: "Terminó",
+    seerHit: "Dirección bien",
+    seerMiss: "A revisar",
+    exactHit: "Marcador exacto",
+    liveReview: "Chequeo en vivo",
+    awaitingResult: "Esperando resultado",
+    scoreboardEmpty: "Los recibos despiertan cuando llegan marcadores finales.",
     quickRead: "Lectura rápida",
     seerLean: "Señal vidente",
     tightRead: "Lectura cerrada",
@@ -260,6 +319,24 @@ const copy = {
     noMatches: "Aucun match dans cette vue pour le moment.",
     matchExplorer: "Explorer les matchs",
     selectedMatch: "Match sélectionné",
+    seerScoreboard: "Tableau du voyant",
+    seerScoreboardTitle: "Le voyant a-t-il survécu au coup de sifflet ?",
+    seerScoreboardIntro: "Chaque score final reçoit un reçu : ce que MatchSeer a annoncé, ce qui s’est vraiment passé, et si le modèle mérite un signe de tête ou une note d’humilité.",
+    reviewedMatches: "Matchs revus",
+    winnerCalls: "Directions justes",
+    exactScores: "Scores exacts",
+    publishedReads: "Lectures publiées",
+    modelSurvival: "Taux de survie",
+    latestReceipts: "Derniers reçus",
+    waitingForFinals: "En attente des scores finaux",
+    called: "Annoncé",
+    finished: "Terminé",
+    seerHit: "Direction juste",
+    seerMiss: "À revoir",
+    exactHit: "Score exact",
+    liveReview: "Contrôle en direct",
+    awaitingResult: "Résultat attendu",
+    scoreboardEmpty: "Les reçus s’activent dès que les scores finaux arrivent.",
     quickRead: "Lecture rapide",
     seerLean: "Signal voyant",
     tightRead: "Lecture serrée",
@@ -481,6 +558,10 @@ export default function Home() {
   }, [groupFilter, matchFilter, matches, todayKey]);
   const cupCandidates = useMemo(() => buildCupCandidates(matches, language), [matches, language]);
   const cupPulseLabel = useMemo(() => getCupPulseLabel(language), [language]);
+  const seerScoreboard = useMemo(
+    () => buildSeerScoreboard(matches, language, t),
+    [language, matches, t],
+  );
   const hasPendingWeather =
     !activeMatch ||
     activeMatch.weather.temp === "Pending" ||
@@ -748,6 +829,7 @@ export default function Home() {
               const accents = matchAccentColors(match);
               const lean = getMatchLean(match, accents);
               const cardReason = getMatchCardReason(match, language);
+              const receipt = buildForecastReceipt(match, language, t);
 
               return (
                 <button
@@ -762,6 +844,11 @@ export default function Home() {
                   <div className="hero-card-status">
                     <span className={cx("status-dot", match.status.toLowerCase())} />
                     <span>{getMatchCardMood(match, t)}</span>
+                    {receipt.outcome !== "pending" && (
+                      <em className={cx("receipt-chip", receipt.outcome)}>
+                        {receipt.shortLabel}
+                      </em>
+                    )}
                     <strong>{formatMatchSchedule(match)}</strong>
                   </div>
                   <div className="hero-card-teams">
@@ -872,6 +959,15 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <SeerScoreboardBoard
+        scoreboard={seerScoreboard}
+        t={t}
+        onSelectMatch={(matchId) => {
+          setActiveMatchId(matchId);
+          setActiveTab("forecast");
+        }}
+      />
 
       <section className="data-status-grid" aria-label={t.dataStatus}>
         <DataStatusCard
@@ -1374,6 +1470,216 @@ function getMatchCardReason(match: Match, language: Language) {
   return `${reason.slice(0, 109).trim()}...`;
 }
 
+function buildSeerScoreboard(
+  matches: Match[],
+  language: Language,
+  t: Record<string, string>,
+): SeerScoreboard {
+  const receipts = matches
+    .map((match) => buildForecastReceipt(match, language, t))
+    .filter((receipt) => receipt.outcome !== "pending")
+    .sort((left, right) => receiptSortTime(right.match) - receiptSortTime(left.match));
+  const reviewedReceipts = receipts.filter((receipt) =>
+    receipt.outcome === "exact" || receipt.outcome === "hit" || receipt.outcome === "miss",
+  );
+  const winnerHits = reviewedReceipts.filter((receipt) =>
+    receipt.outcome === "exact" || receipt.outcome === "hit",
+  ).length;
+  const exactHits = reviewedReceipts.filter((receipt) => receipt.outcome === "exact").length;
+  const reviewed = reviewedReceipts.length;
+
+  return {
+    reviewed,
+    published: matches.length,
+    awaiting: Math.max(matches.length - reviewed, 0),
+    winnerHits,
+    exactHits,
+    survivalRate: reviewed > 0 ? Math.round((winnerHits / reviewed) * 100) : 0,
+    receipts: receipts.slice(0, 4),
+  };
+}
+
+function buildForecastReceipt(
+  match: Match,
+  language: Language,
+  t: Record<string, string>,
+): ForecastReceipt {
+  const predictedSide = getForecastSide(match);
+  const predictedLabel = sideLabel(match, predictedSide);
+  const projectedOptions = parseProjectedScores(match.forecast.projected);
+
+  if (match.status === "Live") {
+    return {
+      match,
+      outcome: "live",
+      predictedSide,
+      predictedLabel,
+      projectedOptions,
+      summary: receiptSummary("live", match, language),
+      shortLabel: t.liveReview,
+    };
+  }
+
+  const finalScore = parseScoreline(match.score);
+
+  if (match.status !== "Final" || !finalScore) {
+    return {
+      match,
+      outcome: "pending",
+      predictedSide,
+      predictedLabel,
+      projectedOptions,
+      summary: receiptSummary("pending", match, language),
+      shortLabel: t.awaitingResult,
+    };
+  }
+
+  const actualSide = getScoreSide(finalScore.home, finalScore.away);
+  const exactScore = `${finalScore.home}-${finalScore.away}`;
+  const exact = projectedOptions.includes(exactScore);
+  const winnerHit = predictedSide === actualSide;
+  const outcome: ForecastReceiptOutcome = exact ? "exact" : winnerHit ? "hit" : "miss";
+
+  return {
+    match,
+    outcome,
+    predictedSide,
+    actualSide,
+    predictedLabel,
+    actualLabel: sideLabel(match, actualSide),
+    finalScore: exactScore,
+    projectedOptions,
+    summary: receiptSummary(outcome, match, language),
+    shortLabel: outcome === "exact" ? t.exactHit : outcome === "hit" ? t.seerHit : t.seerMiss,
+  };
+}
+
+function getForecastSide(match: Match): ForecastSide {
+  return [
+    { side: "home" as const, value: match.forecast.home },
+    { side: "draw" as const, value: match.forecast.draw },
+    { side: "away" as const, value: match.forecast.away },
+  ].sort((left, right) => right.value - left.value)[0].side;
+}
+
+function sideLabel(match: Match, side: ForecastSide) {
+  if (side === "home") {
+    return match.home.code;
+  }
+
+  if (side === "away") {
+    return match.away.code;
+  }
+
+  return "DRAW";
+}
+
+function getScoreSide(home: number, away: number): ForecastSide {
+  if (home > away) {
+    return "home";
+  }
+
+  if (away > home) {
+    return "away";
+  }
+
+  return "draw";
+}
+
+function parseScoreline(value?: string) {
+  const match = value?.match(/(\d+)\s*[-–]\s*(\d+)/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    home: Number(match[1]),
+    away: Number(match[2]),
+  };
+}
+
+function parseProjectedScores(value: string) {
+  return value
+    .split(/[\/|,]/)
+    .map((part) => parseScoreline(part.trim()))
+    .filter((score): score is { home: number; away: number } => Boolean(score))
+    .map((score) => `${score.home}-${score.away}`);
+}
+
+function receiptSortTime(match: Match) {
+  if (match.startsAt) {
+    return new Date(match.startsAt).getTime();
+  }
+
+  return match.status === "Final" ? 1 : 0;
+}
+
+function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language: Language) {
+  const base =
+    match.forecast.reasons[language]?.[0] ??
+    match.forecast.tone[language] ??
+    "";
+
+  if (language === "es") {
+    if (outcome === "exact") {
+      return "Marcador clavado: la lectura queda con recibo limpio.";
+    }
+
+    if (outcome === "hit") {
+      return "La dirección aguantó, aunque el marcador se movió un poco.";
+    }
+
+    if (outcome === "miss") {
+      return "El Vidente falló esta lectura; se guarda el recibo para ajustar el modelo.";
+    }
+
+    if (outcome === "live") {
+      return "Partido en vivo: la lectura sigue respirando hasta el silbatazo.";
+    }
+
+    return "Esperando el marcador final para revisar la lectura.";
+  }
+
+  if (language === "fr") {
+    if (outcome === "exact") {
+      return "Score exact : la lecture garde un reçu propre.";
+    }
+
+    if (outcome === "hit") {
+      return "La direction a tenu, même si le score a bougé.";
+    }
+
+    if (outcome === "miss") {
+      return "Le voyant a raté cette lecture ; reçu gardé pour ajuster le modèle.";
+    }
+
+    if (outcome === "live") {
+      return "Match en direct : la lecture respire encore jusqu’au coup de sifflet.";
+    }
+
+    return "En attente du score final pour vérifier la lecture.";
+  }
+
+  if (outcome === "exact") {
+    return "Scoreline landed clean: the receipt goes in the bright pile.";
+  }
+
+  if (outcome === "hit") {
+    return "Direction held, even if the scoreline took the scenic route.";
+  }
+
+  if (outcome === "miss") {
+    return "The Seer missed this read; receipt saved for model tuning.";
+  }
+
+  if (outcome === "live") {
+    return "Live match: the read is still breathing until the whistle.";
+  }
+
+  return base || "Awaiting the final score before the receipt wakes up.";
+}
+
 function getCupPulseLabel(language: Language) {
   const weekStart = startOfWeek(new Date());
 
@@ -1391,6 +1697,106 @@ function startOfWeek(date: Date) {
 
   torontoDate.setDate(torontoDate.getDate() + diff);
   return torontoDate;
+}
+
+function SeerScoreboardBoard({
+  scoreboard,
+  onSelectMatch,
+  t,
+}: {
+  scoreboard: SeerScoreboard;
+  onSelectMatch: (matchId: string) => void;
+  t: Record<string, string>;
+}) {
+  const metrics = [
+    {
+      label: t.reviewedMatches,
+      value: `${scoreboard.reviewed}`,
+      detail: `${scoreboard.awaiting} ${t.waitingForFinals.toLowerCase()}`,
+    },
+    {
+      label: t.winnerCalls,
+      value: `${scoreboard.winnerHits}/${scoreboard.reviewed}`,
+      detail: t.modelSurvival,
+    },
+    {
+      label: t.exactScores,
+      value: `${scoreboard.exactHits}`,
+      detail: t.latestReceipts,
+    },
+    {
+      label: t.modelSurvival,
+      value: scoreboard.reviewed > 0 ? `${scoreboard.survivalRate}%` : "0%",
+      detail: `${scoreboard.published} ${t.publishedReads.toLowerCase()}`,
+    },
+  ];
+
+  return (
+    <section className="seer-scoreboard" aria-label={t.seerScoreboard}>
+      <div className="seer-scoreboard-header">
+        <div>
+          <div className="section-heading">
+            <Check size={18} />
+            <span>{t.seerScoreboard}</span>
+          </div>
+          <h2>{t.seerScoreboardTitle}</h2>
+          <p>{t.seerScoreboardIntro}</p>
+        </div>
+        <div className="scoreboard-metrics" aria-label={t.modelSurvival}>
+          {metrics.map((metric) => (
+            <div className="scoreboard-metric" key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.detail}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="receipt-list" aria-label={t.latestReceipts}>
+        {scoreboard.receipts.length === 0 && (
+          <div className="receipt-empty">{t.scoreboardEmpty}</div>
+        )}
+        {scoreboard.receipts.map((receipt) => (
+          <button
+            className={cx("receipt-card", receipt.outcome)}
+            key={receipt.match.id}
+            onClick={() => onSelectMatch(receipt.match.id)}
+            type="button"
+          >
+            <div className="receipt-card-top">
+              <span className={cx("receipt-pill", receipt.outcome)}>
+                {receipt.shortLabel}
+              </span>
+              <span>{receipt.match.group}</span>
+            </div>
+            <div className="receipt-teams">
+              <span>
+                <TeamFlag team={receipt.match.home} compact />
+                {receipt.match.home.code}
+              </span>
+              <strong>{receipt.finalScore ?? receipt.match.score ?? receipt.match.minute ?? receipt.match.time}</strong>
+              <span>
+                <TeamFlag team={receipt.match.away} compact />
+                {receipt.match.away.code}
+              </span>
+            </div>
+            <div className="receipt-call-row">
+              <span>
+                {t.called}: <strong>{receipt.predictedLabel}</strong>
+              </span>
+              {receipt.actualLabel && (
+                <span>
+                  {t.finished}: <strong>{receipt.actualLabel}</strong>
+                </span>
+              )}
+            </div>
+            <p>{receipt.summary}</p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function CupSeerBoard({
