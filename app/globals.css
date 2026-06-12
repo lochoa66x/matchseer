@@ -4510,7 +4510,7 @@ body {
 .hero-match-card {
   position: relative;
   min-width: 0;
-  min-height: 158px;
+  min-height: 220px;
   padding: 13px;
   color: #f7fbff;
   text-align: left;
@@ -4569,7 +4569,7 @@ body {
 .hero-card-teams {
   display: grid;
   gap: 8px;
-  margin: 12px 0;
+  margin: 12px 0 10px;
 }
 
 .hero-card-team {
@@ -4598,6 +4598,52 @@ body {
   color: #fff;
   font-size: 1.26rem;
   font-weight: 950;
+}
+
+.hero-card-signal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.hero-card-signal strong {
+  color: #f7c51d;
+  font-size: 1rem;
+  text-transform: none;
+}
+
+.hero-card-probabilities {
+  display: flex;
+  gap: 3px;
+  height: 9px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+}
+
+.hero-card-probabilities span {
+  min-width: 10%;
+  border-radius: 999px;
+}
+
+.hero-card-reason {
+  display: -webkit-box;
+  min-height: 42px;
+  margin: 10px 0 11px;
+  overflow: hidden;
+  color: #d9e1ef;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .hero-card-footer {
@@ -4723,6 +4769,14 @@ body {
 
   .hero-match-card {
     min-height: 0;
+  }
+
+  .hero-card-reason {
+    min-height: 0;
+  }
+
+  .hero-card-signal {
+    font-size: 0.68rem;
   }
 
   .hero-card-footer span {

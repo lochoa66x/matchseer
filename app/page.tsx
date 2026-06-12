@@ -75,6 +75,12 @@ const copy = {
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
     quickRead: "Quick read",
+    seerLean: "Seer lean",
+    tightRead: "Tight read",
+    chaosWatch: "Chaos watch",
+    strongSignal: "Strong signal",
+    liveSwing: "Live swing",
+    finalRead: "Final read",
     forecast: "Forecast",
     teams: "Teams",
     players: "Players",
@@ -162,6 +168,12 @@ const copy = {
     matchExplorer: "Explorar partidos",
     selectedMatch: "Partido seleccionado",
     quickRead: "Lectura rápida",
+    seerLean: "Señal vidente",
+    tightRead: "Lectura cerrada",
+    chaosWatch: "Ojo al caos",
+    strongSignal: "Señal fuerte",
+    liveSwing: "Giro en vivo",
+    finalRead: "Lectura final",
     forecast: "Pronóstico",
     teams: "Equipos",
     players: "Jugadores",
@@ -249,6 +261,12 @@ const copy = {
     matchExplorer: "Explorer les matchs",
     selectedMatch: "Match sélectionné",
     quickRead: "Lecture rapide",
+    seerLean: "Signal voyant",
+    tightRead: "Lecture serrée",
+    chaosWatch: "Alerte chaos",
+    strongSignal: "Signal fort",
+    liveSwing: "Virage en direct",
+    finalRead: "Lecture finale",
     forecast: "Prévision",
     teams: "Équipes",
     players: "Joueurs",
@@ -728,6 +746,8 @@ export default function Home() {
             )}
             {visibleMatches.map((match) => {
               const accents = matchAccentColors(match);
+              const lean = getMatchLean(match, accents);
+              const cardReason = getMatchCardReason(match, language);
 
               return (
                 <button
@@ -741,7 +761,7 @@ export default function Home() {
                 >
                   <div className="hero-card-status">
                     <span className={cx("status-dot", match.status.toLowerCase())} />
-                    <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
+                    <span>{getMatchCardMood(match, t)}</span>
                     <strong>{formatMatchSchedule(match)}</strong>
                   </div>
                   <div className="hero-card-teams">
@@ -756,9 +776,23 @@ export default function Home() {
                       {match.score && <span>{match.score.split(" - ")[1]}</span>}
                     </div>
                   </div>
+                  <div className="hero-card-signal">
+                    <span>{t.seerLean}</span>
+                    <strong style={{ color: lean.color }}>
+                      {lean.label} {lean.value}%
+                    </strong>
+                  </div>
+                  <div className="hero-card-probabilities" aria-hidden="true">
+                    <span style={{ width: `${match.forecast.home}%`, background: accents.home }} />
+                    <span style={{ width: `${match.forecast.draw}%`, background: "#8fa2c4" }} />
+                    <span style={{ width: `${match.forecast.away}%`, background: accents.away }} />
+                  </div>
+                  <p className="hero-card-reason">{cardReason}</p>
                   <div className="hero-card-footer">
                     <span>{match.group}</span>
                     <span>{match.venue}</span>
+                    <span>{t.confidence}: {match.forecast.confidence}%</span>
+                    <span>{t.chaos}: {match.forecast.chaos}%</span>
                     <span>{t.projected}: {match.forecast.projected}</span>
                   </div>
                 </button>
@@ -1282,6 +1316,62 @@ function splitMeterShares(home: number, away: number) {
     home: homeShare,
     away: 100 - homeShare,
   };
+}
+
+function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
+  return [
+    {
+      label: match.home.code,
+      value: match.forecast.home,
+      color: accents.home,
+    },
+    {
+      label: "DRAW",
+      value: match.forecast.draw,
+      color: "#8fa2c4",
+    },
+    {
+      label: match.away.code,
+      value: match.forecast.away,
+      color: accents.away,
+    },
+  ].sort((left, right) => right.value - left.value)[0];
+}
+
+function getMatchCardMood(match: Match, t: Record<string, string>) {
+  if (match.status === "Live") {
+    return t.liveSwing;
+  }
+
+  if (match.status === "Final") {
+    return t.finalRead;
+  }
+
+  const spread = Math.max(match.forecast.home, match.forecast.draw, match.forecast.away) -
+    Math.min(match.forecast.home, match.forecast.draw, match.forecast.away);
+
+  if (match.forecast.chaos >= 64) {
+    return t.chaosWatch;
+  }
+
+  if (match.forecast.confidence >= 70 && spread >= 14) {
+    return t.strongSignal;
+  }
+
+  return t.tightRead;
+}
+
+function getMatchCardReason(match: Match, language: Language) {
+  const reason =
+    match.forecast.reasons[language]?.[0] ??
+    match.forecast.tone[language] ??
+    "";
+
+  if (reason.length <= 112) {
+    return reason;
+  }
+
+  return `${reason.slice(0, 109).trim()}...`;
 }
 
 function getCupPulseLabel(language: Language) {
