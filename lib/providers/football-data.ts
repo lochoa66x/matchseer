@@ -1,4 +1,7 @@
-import { findWorldCupVenue } from "./world-cup-venues";
+import {
+  findScheduledWorldCupVenueForMatch,
+  findWorldCupVenue,
+} from "./world-cup-venues";
 
 export type FootballDataTeam = {
   id: number;
@@ -200,7 +203,12 @@ function toFootballDataMatch(
   const homeTeamProviderId = match.homeTeam?.id;
   const awayTeamProviderId = match.awayTeam?.id;
   const venueName = readVenueName(match);
-  const venue = findWorldCupVenue(venueName);
+  const venue =
+    findWorldCupVenue(venueName) ??
+    findScheduledWorldCupVenueForMatch({
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+    });
 
   if (!homeTeamProviderId || !awayTeamProviderId) {
     return null;
@@ -218,7 +226,7 @@ function toFootballDataMatch(
     homeTeamProviderId,
     awayTeamProviderId,
     venueSlug: venue?.slug ?? null,
-    venueName,
+    venueName: venueName ?? venue?.name ?? null,
   };
 }
 

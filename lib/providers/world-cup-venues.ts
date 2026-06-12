@@ -155,6 +155,119 @@ export const worldCupVenues: WorldCupVenue[] = [
   },
 ];
 
+type WorldCupFixtureTeam = {
+  code?: string | null;
+  name?: string | null;
+  shortName?: string | null;
+  tla?: string | null;
+};
+
+const teamAliases = new Map([
+  ["bosnia-h", "bih"],
+  ["bosnia-h.", "bih"],
+  ["bosnia-and-herzegovina", "bih"],
+  ["bosnia-herzegovina", "bih"],
+  ["cabo-verde", "cpv"],
+  ["cape-verde", "cpv"],
+  ["congo-dr", "cod"],
+  ["dr-congo", "cod"],
+  ["drc", "cod"],
+  ["democratic-republic-of-the-congo", "cod"],
+  ["cote-d-ivoire", "civ"],
+  ["cote-divoire", "civ"],
+  ["ivory-coast", "civ"],
+  ["curacao", "cuw"],
+  ["ir-iran", "irn"],
+  ["iran", "irn"],
+  ["korea-republic", "kor"],
+  ["republic-of-korea", "kor"],
+  ["south-korea", "kor"],
+  ["netherlands", "ned"],
+  ["nld", "ned"],
+  ["new-zealand", "nzl"],
+  ["saudi-arabia", "ksa"],
+  ["south-africa", "rsa"],
+  ["turkiye", "tur"],
+  ["turkey", "tur"],
+  ["united-states", "usa"],
+  ["united-states-of-america", "usa"],
+]);
+
+const groupStageVenueByFixture = new Map<string, WorldCupVenue["slug"]>([
+  [fixtureKey("mex", "rsa"), "mexico-city-stadium"],
+  [fixtureKey("kor", "cze"), "guadalajara-stadium"],
+  [fixtureKey("can", "bih"), "toronto-stadium"],
+  [fixtureKey("usa", "par"), "los-angeles-stadium"],
+  [fixtureKey("hai", "sco"), "boston-stadium"],
+  [fixtureKey("aus", "tur"), "vancouver-stadium"],
+  [fixtureKey("bra", "mar"), "new-york-new-jersey-stadium"],
+  [fixtureKey("qat", "sui"), "san-francisco-bay-area-stadium"],
+  [fixtureKey("civ", "ecu"), "philadelphia-stadium"],
+  [fixtureKey("ger", "cuw"), "houston-stadium"],
+  [fixtureKey("ned", "jpn"), "dallas-stadium"],
+  [fixtureKey("swe", "tun"), "monterrey-stadium"],
+  [fixtureKey("ksa", "uru"), "miami-stadium"],
+  [fixtureKey("esp", "cpv"), "atlanta-stadium"],
+  [fixtureKey("irn", "nzl"), "los-angeles-stadium"],
+  [fixtureKey("bel", "egy"), "seattle-stadium"],
+  [fixtureKey("fra", "sen"), "new-york-new-jersey-stadium"],
+  [fixtureKey("irq", "nor"), "boston-stadium"],
+  [fixtureKey("arg", "alg"), "kansas-city-stadium"],
+  [fixtureKey("aut", "jor"), "san-francisco-bay-area-stadium"],
+  [fixtureKey("gha", "pan"), "toronto-stadium"],
+  [fixtureKey("eng", "cro"), "dallas-stadium"],
+  [fixtureKey("por", "cod"), "houston-stadium"],
+  [fixtureKey("uzb", "col"), "mexico-city-stadium"],
+  [fixtureKey("cze", "rsa"), "atlanta-stadium"],
+  [fixtureKey("sui", "bih"), "los-angeles-stadium"],
+  [fixtureKey("can", "qat"), "vancouver-stadium"],
+  [fixtureKey("mex", "kor"), "guadalajara-stadium"],
+  [fixtureKey("bra", "hai"), "philadelphia-stadium"],
+  [fixtureKey("sco", "mar"), "boston-stadium"],
+  [fixtureKey("tur", "par"), "san-francisco-bay-area-stadium"],
+  [fixtureKey("usa", "aus"), "seattle-stadium"],
+  [fixtureKey("ger", "civ"), "toronto-stadium"],
+  [fixtureKey("ecu", "cuw"), "kansas-city-stadium"],
+  [fixtureKey("ned", "swe"), "houston-stadium"],
+  [fixtureKey("tun", "jpn"), "monterrey-stadium"],
+  [fixtureKey("uru", "cpv"), "miami-stadium"],
+  [fixtureKey("esp", "ksa"), "atlanta-stadium"],
+  [fixtureKey("bel", "irn"), "los-angeles-stadium"],
+  [fixtureKey("nzl", "egy"), "vancouver-stadium"],
+  [fixtureKey("nor", "sen"), "new-york-new-jersey-stadium"],
+  [fixtureKey("fra", "irq"), "philadelphia-stadium"],
+  [fixtureKey("arg", "aut"), "dallas-stadium"],
+  [fixtureKey("jor", "alg"), "san-francisco-bay-area-stadium"],
+  [fixtureKey("eng", "gha"), "boston-stadium"],
+  [fixtureKey("pan", "cro"), "toronto-stadium"],
+  [fixtureKey("por", "uzb"), "houston-stadium"],
+  [fixtureKey("col", "cod"), "guadalajara-stadium"],
+  [fixtureKey("sco", "bra"), "miami-stadium"],
+  [fixtureKey("mar", "hai"), "atlanta-stadium"],
+  [fixtureKey("sui", "can"), "vancouver-stadium"],
+  [fixtureKey("bih", "qat"), "seattle-stadium"],
+  [fixtureKey("cze", "mex"), "mexico-city-stadium"],
+  [fixtureKey("rsa", "kor"), "monterrey-stadium"],
+  [fixtureKey("cuw", "civ"), "philadelphia-stadium"],
+  [fixtureKey("ecu", "ger"), "new-york-new-jersey-stadium"],
+  [fixtureKey("jpn", "swe"), "dallas-stadium"],
+  [fixtureKey("tun", "ned"), "kansas-city-stadium"],
+  [fixtureKey("tur", "usa"), "los-angeles-stadium"],
+  [fixtureKey("par", "aus"), "san-francisco-bay-area-stadium"],
+  [fixtureKey("nor", "fra"), "boston-stadium"],
+  [fixtureKey("sen", "irq"), "toronto-stadium"],
+  [fixtureKey("egy", "irn"), "seattle-stadium"],
+  [fixtureKey("nzl", "bel"), "vancouver-stadium"],
+  [fixtureKey("cpv", "ksa"), "houston-stadium"],
+  [fixtureKey("uru", "esp"), "guadalajara-stadium"],
+  [fixtureKey("pan", "eng"), "new-york-new-jersey-stadium"],
+  [fixtureKey("cro", "gha"), "philadelphia-stadium"],
+  [fixtureKey("alg", "aut"), "kansas-city-stadium"],
+  [fixtureKey("jor", "arg"), "dallas-stadium"],
+  [fixtureKey("col", "por"), "miami-stadium"],
+  [fixtureKey("cod", "uzb"), "atlanta-stadium"],
+]);
+
 export function findWorldCupVenue(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -169,6 +282,62 @@ export function findWorldCupVenue(value: string | null | undefined) {
         venue.aliases.some((alias) => normalizeVenueName(alias) === normalized),
     ) ?? null
   );
+}
+
+export function findScheduledWorldCupVenueForMatch({
+  homeTeam,
+  awayTeam,
+}: {
+  homeTeam: WorldCupFixtureTeam | null | undefined;
+  awayTeam: WorldCupFixtureTeam | null | undefined;
+}) {
+  const homeKeys = teamKeys(homeTeam);
+  const awayKeys = teamKeys(awayTeam);
+
+  for (const homeKey of homeKeys) {
+    for (const awayKey of awayKeys) {
+      const slug = groupStageVenueByFixture.get(fixtureKey(homeKey, awayKey));
+
+      if (slug) {
+        return worldCupVenues.find((venue) => venue.slug === slug) ?? null;
+      }
+    }
+  }
+
+  return null;
+}
+
+function teamKeys(team: WorldCupFixtureTeam | null | undefined) {
+  const values = [team?.tla, team?.code, team?.shortName, team?.name];
+  const keys = new Set<string>();
+
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    const normalized = normalizeTeamName(value);
+
+    if (normalized) {
+      keys.add(teamAliases.get(normalized) ?? normalized);
+    }
+  }
+
+  return keys;
+}
+
+function fixtureKey(teamA: string, teamB: string) {
+  return [teamA, teamB].sort().join("|");
+}
+
+function normalizeTeamName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function normalizeVenueName(value: string) {

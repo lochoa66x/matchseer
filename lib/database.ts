@@ -23,6 +23,7 @@ export type RealDataSyncResult = {
   season: string;
   teams: number;
   matches: number;
+  venuesMapped: number;
   forecasts: number;
   fetchedAt: string;
 };
@@ -342,6 +343,7 @@ export async function syncFootballDataSnapshot(
     snapshot.teams.map((team) => [team.id, team.slug] as const),
   );
   let forecasts = 0;
+  let venuesMapped = 0;
 
   for (const match of snapshot.matches) {
     const homeSlug = teamSlugByProviderId.get(match.homeTeamProviderId);
@@ -349,6 +351,10 @@ export async function syncFootballDataSnapshot(
 
     if (!homeSlug || !awaySlug) {
       continue;
+    }
+
+    if (match.venueSlug) {
+      venuesMapped += 1;
     }
 
     await sql`
@@ -501,6 +507,7 @@ export async function syncFootballDataSnapshot(
     season: snapshot.competition.season,
     teams: snapshot.teams.length,
     matches: snapshot.matches.length,
+    venuesMapped,
     forecasts,
     fetchedAt: snapshot.fetchedAt,
   };
