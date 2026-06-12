@@ -37,6 +37,20 @@ export type WeatherSyncResult = {
   skippedReason?: string;
 };
 
+export type VenueOverride = {
+  matchId: string;
+  venueSlug: string;
+};
+
+export type VenueOverrideResult = {
+  overridesReceived: number;
+  venuesSeeded: number;
+  matchesUpdated: number;
+  invalidVenues: VenueOverride[];
+  missingMatches: VenueOverride[];
+  fetchedAt: string;
+};
+
 type NeonQuery = (
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -314,7 +328,11 @@ export async function syncFootballDataSnapshot(
         competition_id = excluded.competition_id,
         home_team_id = excluded.home_team_id,
         away_team_id = excluded.away_team_id,
-        venue_id = excluded.venue_id,
+        venue_id = case
+          when ${match.venueSlug === null}
+            then coalesce(matches.venue_id, excluded.venue_id)
+          else excluded.venue_id
+        end,
         stage = excluded.stage,
         group_name = excluded.group_name,
         starts_at = excluded.starts_at,
@@ -429,6 +447,57 @@ export async function syncFootballDataSnapshot(
     matches: snapshot.matches.length,
     forecasts,
     fetchedAt: snapshot.fetchedAt,
+  };
+}
+
+export async function applyVenueOverrides(
+  overrides: VenueOverride[],
+): Promise<VenueOverrideResult> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for venue overrides.");
+  }
+
+  const sql = connection.sql;
+  const venuesSeeded = await upsertWorldCupVenues(sql);
+  const validVenueSlugs = new Set([
+    "provider-venue-tbd",
+    ...worldCupVenues.map((venue) => venue.slug),
+  ]);
+  const invalidVenues = overrides.filter(
+    (override) => !validVenueSlugs.has(override.venueSlug),
+  );
+  const validOverrides = overrides.filter((override) =>
+    validVenueSlugs.has(override.venueSlug),
+  );
+  const missingMatches: VenueOverride[] = [];
+  let matchesUpdated = 0;
+
+  for (const override of validOverrides) {
+    const updatedRows = await sql`
+      update matches
+      set
+        venue_id = (select id from venues where slug = ${override.venueSlug}),
+        updated_at = now()
+      where external_id = ${override.matchId}
+      returning external_id;
+    `;
+
+    if (updatedRows.length === 0) {
+      missingMatches.push(override);
+    } else {
+      matchesUpdated += updatedRows.length;
+    }
+  }
+
+  return {
+    overridesReceived: overrides.length,
+    venuesSeeded,
+    matchesUpdated,
+    invalidVenues,
+    missingMatches,
+    fetchedAt: new Date().toISOString(),
   };
 }
 
