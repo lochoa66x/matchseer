@@ -1,5 +1,8 @@
 import type { Language, MatchStatus, MatchSummary } from "./domain";
-import type { FootballDataSnapshot } from "./providers/football-data";
+import type {
+  FootballDataSnapshot,
+  FootballDataTeam,
+} from "./providers/football-data";
 import { fetchCurrentVenueWeather } from "./providers/open-meteo";
 import { worldCupVenues } from "./providers/world-cup-venues";
 
@@ -142,6 +145,13 @@ type VenueMappingCandidateRow = {
   venue_slug: string;
   venue_name: string;
   venue_city: string;
+};
+
+type TeamRatings = {
+  attack: number;
+  control: number;
+  defense: number;
+  setPieces: number;
 };
 
 const fallbackNote =
@@ -294,8 +304,14 @@ export async function syncFootballDataSnapshot(
 
   await upsertWorldCupVenues(sql);
 
+  const teamByProviderId = new Map(
+    snapshot.teams.map((team) => [team.id, team] as const),
+  );
+  const ratingsByProviderId = new Map<number, TeamRatings>();
+
   for (const team of snapshot.teams) {
-    const ratings = teamRatings(team.id);
+    const ratings = teamRatings(team);
+    ratingsByProviderId.set(team.id, ratings);
 
     await sql`
       insert into teams (
@@ -348,8 +364,12 @@ export async function syncFootballDataSnapshot(
   for (const match of snapshot.matches) {
     const homeSlug = teamSlugByProviderId.get(match.homeTeamProviderId);
     const awaySlug = teamSlugByProviderId.get(match.awayTeamProviderId);
+    const homeTeam = teamByProviderId.get(match.homeTeamProviderId);
+    const awayTeam = teamByProviderId.get(match.awayTeamProviderId);
+    const homeRatings = ratingsByProviderId.get(match.homeTeamProviderId);
+    const awayRatings = ratingsByProviderId.get(match.awayTeamProviderId);
 
-    if (!homeSlug || !awaySlug) {
+    if (!homeSlug || !awaySlug || !homeTeam || !awayTeam || !homeRatings || !awayRatings) {
       continue;
     }
 
@@ -404,13 +424,16 @@ export async function syncFootballDataSnapshot(
         updated_at = now();
     `;
 
-    const forecast = baselineForecast(
-      match.homeTeamProviderId,
-      match.awayTeamProviderId,
-      match.status,
-      match.homeScore,
-      match.awayScore,
-    );
+    const forecast = baselineForecast({
+      homeTeam,
+      awayTeam,
+      homeRatings,
+      awayRatings,
+      status: match.status,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      venueSlug: match.venueSlug,
+    });
     const forecastRows = await sql`
       insert into forecasts (
         match_id,
@@ -436,7 +459,10 @@ export async function syncFootballDataSnapshot(
           provider: snapshot.provider,
           providerMatchId: match.providerId,
           fetchedAt: snapshot.fetchedAt,
-          note: "Baseline forecast from provider fixture state. AI interpretation remains user-triggered.",
+          forecastEngine: "baseline-v2",
+          homeRatings,
+          awayRatings,
+          note: "Baseline forecast from provider fixture state and starter team profiles. AI interpretation remains user-triggered.",
         })}::jsonb
       )
       on conflict (match_id, version) do update set
@@ -1116,7 +1142,57 @@ function toNumber(value: string | number | null) {
   return typeof value === "number" ? value : Number(value);
 }
 
-function teamRatings(seed: number) {
+const teamRatingProfiles: Record<string, TeamRatings> = {
+  ALG: { attack: 72, control: 72, defense: 74, setPieces: 75 },
+  ARG: { attack: 88, control: 87, defense: 83, setPieces: 81 },
+  AUS: { attack: 70, control: 70, defense: 73, setPieces: 78 },
+  AUT: { attack: 78, control: 82, defense: 76, setPieces: 79 },
+  BEL: { attack: 82, control: 82, defense: 77, setPieces: 80 },
+  BIH: { attack: 75, control: 72, defense: 74, setPieces: 78 },
+  BRA: { attack: 90, control: 87, defense: 81, setPieces: 78 },
+  CAN: { attack: 76, control: 72, defense: 68, setPieces: 74 },
+  CHI: { attack: 74, control: 76, defense: 72, setPieces: 73 },
+  CIV: { attack: 79, control: 75, defense: 74, setPieces: 77 },
+  COL: { attack: 82, control: 80, defense: 76, setPieces: 78 },
+  CRO: { attack: 79, control: 86, defense: 80, setPieces: 77 },
+  CZE: { attack: 73, control: 73, defense: 76, setPieces: 79 },
+  DEN: { attack: 78, control: 82, defense: 81, setPieces: 80 },
+  ECU: { attack: 78, control: 79, defense: 77, setPieces: 73 },
+  EGY: { attack: 78, control: 75, defense: 74, setPieces: 76 },
+  ENG: { attack: 87, control: 84, defense: 83, setPieces: 85 },
+  ESP: { attack: 86, control: 91, defense: 84, setPieces: 78 },
+  FRA: { attack: 91, control: 88, defense: 86, setPieces: 83 },
+  GER: { attack: 85, control: 85, defense: 79, setPieces: 81 },
+  GHA: { attack: 75, control: 73, defense: 72, setPieces: 75 },
+  HAI: { attack: 66, control: 64, defense: 65, setPieces: 68 },
+  ITA: { attack: 81, control: 83, defense: 86, setPieces: 80 },
+  JPN: { attack: 80, control: 84, defense: 78, setPieces: 74 },
+  KOR: { attack: 78, control: 77, defense: 74, setPieces: 72 },
+  MAR: { attack: 80, control: 79, defense: 86, setPieces: 81 },
+  MEX: { attack: 75, control: 74, defense: 71, setPieces: 78 },
+  NED: { attack: 85, control: 86, defense: 83, setPieces: 81 },
+  NGA: { attack: 80, control: 74, defense: 73, setPieces: 76 },
+  PAR: { attack: 72, control: 71, defense: 76, setPieces: 78 },
+  POR: { attack: 87, control: 85, defense: 81, setPieces: 83 },
+  QAT: { attack: 68, control: 70, defense: 67, setPieces: 72 },
+  RSA: { attack: 71, control: 70, defense: 72, setPieces: 75 },
+  SCO: { attack: 72, control: 73, defense: 75, setPieces: 80 },
+  SEN: { attack: 80, control: 77, defense: 79, setPieces: 78 },
+  SUI: { attack: 79, control: 81, defense: 80, setPieces: 79 },
+  TUN: { attack: 70, control: 71, defense: 77, setPieces: 76 },
+  URY: { attack: 84, control: 83, defense: 82, setPieces: 82 },
+  USA: { attack: 79, control: 77, defense: 75, setPieces: 76 },
+};
+
+function teamRatings(team: FootballDataTeam): TeamRatings {
+  const profile = teamRatingProfiles[team.code.toUpperCase()];
+
+  if (profile) {
+    return profile;
+  }
+
+  const seed = team.id;
+
   return {
     attack: 58 + (seed % 33),
     control: 56 + ((seed * 3) % 35),
@@ -1125,13 +1201,25 @@ function teamRatings(seed: number) {
   };
 }
 
-function baselineForecast(
-  homeSeed: number,
-  awaySeed: number,
-  status: string,
-  homeScore: number | null,
-  awayScore: number | null,
-) {
+function baselineForecast({
+  homeTeam,
+  awayTeam,
+  homeRatings,
+  awayRatings,
+  status,
+  homeScore,
+  awayScore,
+  venueSlug,
+}: {
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  venueSlug: string | null;
+}) {
   if (status === "final" && homeScore !== null && awayScore !== null) {
     const homeWon = homeScore > awayScore;
     const awayWon = awayScore > homeScore;
@@ -1163,30 +1251,92 @@ function baselineForecast(
     };
   }
 
-  const homeStrength = 45 + (homeSeed % 41);
-  const awayStrength = 45 + (awaySeed % 41);
-  const total = homeStrength + awayStrength;
-  const home = Math.round((homeStrength / total) * 70);
-  const away = Math.round((awayStrength / total) * 70);
-  const draw = Math.max(18, 100 - home - away);
+  const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
+  const awayVenueBoost = venueCountryBoost(awayTeam, venueSlug);
+  const homePower = teamPower(homeRatings) + homeVenueBoost;
+  const awayPower = teamPower(awayRatings) + awayVenueBoost;
+  const powerGap = homePower - awayPower;
+  const chaos = clamp(
+    Math.round(
+      64 -
+        Math.abs(powerGap) * 0.9 +
+        Math.abs(homeRatings.attack - awayRatings.defense) * 0.05 +
+        Math.abs(awayRatings.attack - homeRatings.defense) * 0.05,
+    ),
+    38,
+    76,
+  );
+  const draw = clamp(
+    Math.round(29 + (chaos - 58) * 0.08 - Math.abs(powerGap) * 0.42),
+    16,
+    32,
+  );
+  const nonDrawPool = 100 - draw;
+  const homeShare = 1 / (1 + Math.exp(-powerGap / 10));
+  let home = clamp(Math.round(nonDrawPool * homeShare), 8, 84);
+  let away = 100 - draw - home;
+
+  if (away < 8) {
+    away = 8;
+    home = 100 - draw - away;
+  }
+
+  if (home < 8) {
+    home = 8;
+    away = 100 - draw - home;
+  }
+
+  const homeXg = expectedGoals(homeRatings, awayRatings, homeVenueBoost);
+  const awayXg = expectedGoals(awayRatings, homeRatings, awayVenueBoost);
+  const projected = projectedScoreline({
+    homeProbability: home,
+    drawProbability: draw,
+    awayProbability: away,
+    homeXg,
+    awayXg,
+  });
+  const favorite =
+    home === away
+      ? null
+      : home > away
+        ? { team: homeTeam, ratings: homeRatings, probability: home }
+        : { team: awayTeam, ratings: awayRatings, probability: away };
+  const pressurePoint =
+    Math.abs(homeRatings.attack - awayRatings.defense) >
+    Math.abs(awayRatings.attack - homeRatings.defense)
+      ? `${homeTeam.name}'s attack against ${awayTeam.name}'s defensive shape`
+      : `${awayTeam.name}'s attack against ${homeTeam.name}'s defensive shape`;
+  const venueExplanation =
+    homeVenueBoost > awayVenueBoost
+      ? `${homeTeam.name} get a small venue familiarity lift.`
+      : awayVenueBoost > homeVenueBoost
+        ? `${awayTeam.name} get a small venue familiarity lift.`
+        : "The venue profile stays close to neutral for this baseline read.";
 
   return {
     home,
     draw,
     away,
-    confidence: 54,
-    chaos: 62,
-    projected: home >= away ? "1-1 / 2-1" : "1-1 / 1-2",
+    confidence: clamp(Math.round(51 + Math.abs(powerGap) * 1.1 + (76 - chaos) * 0.08), 48, 78),
+    chaos,
+    projected,
     factors: [
       {
-        label: "Provider fixture synced",
+        label: favorite ? "Team profile signal" : "Balanced profile signal",
         weight: 1,
-        explanation: "The match shell came from the external football data feed.",
+        explanation: favorite
+          ? `${favorite.team.name} carry the stronger starter profile at ${favorite.probability}%.`
+          : "The starter profiles are close enough to keep the match balanced.",
       },
       {
-        label: "Ratings pending enrichment",
+        label: "Attack and defense shape",
         weight: 0.7,
-        explanation: "Team strength is a baseline until advanced form and player stats are connected.",
+        explanation: `The sharpest early matchup is ${pressurePoint}.`,
+      },
+      {
+        label: "Venue context",
+        weight: 0.55,
+        explanation: venueExplanation,
       },
       {
         label: "AI readout available",
@@ -1195,6 +1345,149 @@ function baselineForecast(
       },
     ],
   };
+}
+
+function teamPower(ratings: TeamRatings) {
+  return (
+    ratings.attack * 0.32 +
+    ratings.control * 0.24 +
+    ratings.defense * 0.28 +
+    ratings.setPieces * 0.16
+  );
+}
+
+function venueCountryBoost(team: FootballDataTeam, venueSlug: string | null) {
+  if (!venueSlug || !team.country) {
+    return 0;
+  }
+
+  const country = team.country.toLowerCase();
+
+  if (country === "mexico" && venueSlug.includes("mexico")) {
+    return 3.5;
+  }
+
+  if (
+    country === "canada" &&
+    ["toronto", "vancouver"].some((city) => venueSlug.includes(city))
+  ) {
+    return 3;
+  }
+
+  if (
+    country === "united states" &&
+    [
+      "atlanta",
+      "boston",
+      "dallas",
+      "houston",
+      "kansas-city",
+      "los-angeles",
+      "miami",
+      "new-york",
+      "philadelphia",
+      "san-francisco",
+      "seattle",
+    ].some((city) => venueSlug.includes(city))
+  ) {
+    return 2.5;
+  }
+
+  return 0;
+}
+
+function expectedGoals(
+  attackingTeam: TeamRatings,
+  defendingTeam: TeamRatings,
+  venueBoost: number,
+) {
+  return clampNumber(
+    1.08 +
+      (attackingTeam.attack - defendingTeam.defense) * 0.026 +
+      (attackingTeam.control - defendingTeam.control) * 0.01 +
+      (attackingTeam.setPieces - defendingTeam.setPieces) * 0.008 +
+      venueBoost * 0.035,
+    0.35,
+    3.2,
+  );
+}
+
+function projectedScoreline({
+  homeProbability,
+  drawProbability,
+  awayProbability,
+  homeXg,
+  awayXg,
+}: {
+  homeProbability: number;
+  drawProbability: number;
+  awayProbability: number;
+  homeXg: number;
+  awayXg: number;
+}) {
+  const isDrawish =
+    drawProbability >= Math.max(homeProbability, awayProbability) - 3;
+  let homeGoals = goalsFromXg(homeXg);
+  let awayGoals = goalsFromXg(awayXg);
+  const probabilityGap = homeProbability - awayProbability;
+
+  if (isDrawish) {
+    const drawGoals = homeXg + awayXg >= 2.9 ? 2 : homeXg + awayXg <= 1.7 ? 0 : 1;
+
+    return drawGoals === 1 ? "1-1" : `${drawGoals}-${drawGoals} / 1-1`;
+  }
+
+  if (probabilityGap >= 14 && homeGoals <= awayGoals) {
+    homeGoals = awayGoals + 1;
+  }
+
+  if (probabilityGap <= -14 && awayGoals <= homeGoals) {
+    awayGoals = homeGoals + 1;
+  }
+
+  if (probabilityGap >= 28 && awayGoals > 0 && homeXg - awayXg > 0.9) {
+    awayGoals -= 1;
+  }
+
+  if (probabilityGap <= -28 && homeGoals > 0 && awayXg - homeXg > 0.9) {
+    homeGoals -= 1;
+  }
+
+  const primary = `${homeGoals}-${awayGoals}`;
+  const alternate =
+    Math.abs(probabilityGap) < 18
+      ? probabilityGap > 0
+        ? `${Math.max(homeGoals - 1, 1)}-${awayGoals}`
+        : `${homeGoals}-${Math.max(awayGoals - 1, 1)}`
+      : probabilityGap > 0
+        ? `${Math.max(homeGoals, 2)}-${Math.max(awayGoals, 1)}`
+        : `${Math.max(homeGoals, 1)}-${Math.max(awayGoals, 2)}`;
+
+  return alternate === primary ? primary : `${primary} / ${alternate}`;
+}
+
+function goalsFromXg(xg: number) {
+  if (xg >= 2.45) {
+    return 3;
+  }
+
+  if (xg >= 1.55) {
+    return 2;
+  }
+
+  if (xg >= 0.65) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function baselineInterpretationCopy(language: Language, projected: string) {
