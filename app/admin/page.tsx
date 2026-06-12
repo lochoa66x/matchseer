@@ -72,6 +72,7 @@ export default function AdminPage() {
   const [showMapped, setShowMapped] = useState(false);
   const [loadStatus, setLoadStatus] = useState<ActionStatus>("idle");
   const [actionStatus, setActionStatus] = useState<ActionStatus>("idle");
+  const [messageStatus, setMessageStatus] = useState<ActionStatus>("idle");
   const [message, setMessage] = useState("Ready when you are.");
 
   useEffect(() => {
@@ -134,9 +135,11 @@ export default function AdminPage() {
       setMatchesResponse(matches);
       setSelectedVenues({});
       setLoadStatus("success");
+      setMessageStatus("success");
       setMessage("Dashboard refreshed.");
     } catch (error) {
       setLoadStatus("error");
+      setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "Refresh failed.");
     }
   }
@@ -151,10 +154,12 @@ export default function AdminPage() {
     if (!secret) {
       setMessage("Add the admin secret first.");
       setActionStatus("error");
+      setMessageStatus("error");
       return;
     }
 
     setActionStatus("loading");
+    setMessageStatus("loading");
 
     try {
       const response = await fetch(path, {
@@ -170,10 +175,12 @@ export default function AdminPage() {
       }
 
       setActionStatus("success");
+      setMessageStatus("success");
       setMessage(`${success} ${summarizePayload(payload)}`);
       await refreshDashboard();
     } catch (error) {
       setActionStatus("error");
+      setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "Request failed.");
     }
   }
@@ -182,6 +189,7 @@ export default function AdminPage() {
     if (!secret) {
       setMessage("Add the admin secret first.");
       setActionStatus("error");
+      setMessageStatus("error");
       return;
     }
 
@@ -196,10 +204,12 @@ export default function AdminPage() {
     if (overrides.length === 0) {
       setMessage("Pick at least one venue change.");
       setActionStatus("error");
+      setMessageStatus("error");
       return;
     }
 
     setActionStatus("loading");
+    setMessageStatus("loading");
 
     try {
       const response = await fetch("/api/admin/venue-overrides", {
@@ -217,6 +227,7 @@ export default function AdminPage() {
       }
 
       setActionStatus("success");
+      setMessageStatus("success");
       setMessage(
         `Saved ${payload.matchesUpdated ?? 0} venue override${
           payload.matchesUpdated === 1 ? "" : "s"
@@ -225,6 +236,7 @@ export default function AdminPage() {
       await refreshDashboard();
     } catch (error) {
       setActionStatus("error");
+      setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "Venue save failed.");
     }
   }
@@ -332,7 +344,7 @@ export default function AdminPage() {
         </button>
       </section>
 
-      <p className={`admin-message ${actionStatus}`}>{message}</p>
+      <p className={`admin-message ${messageStatus}`}>{message}</p>
 
       <section className="admin-panel">
         <div className="admin-table-header">
