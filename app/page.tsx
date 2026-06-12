@@ -5,12 +5,10 @@ import {
   BarChart3,
   CalendarDays,
   Check,
-  Clock3,
   CloudSun,
   Languages,
   LoaderCircle,
   MapPin,
-  Radio,
   RefreshCcw,
   Share2,
   ShieldCheck,
@@ -29,8 +27,8 @@ import type {
   TeamRating as Team,
 } from "../lib/domain";
 
-type Tab = "forecast" | "teams" | "players" | "weather";
-type MatchFilter = "today" | "upcoming" | "completed";
+type Tab = "teams" | "players" | "weather";
+type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
 type CupCandidate = {
@@ -56,7 +54,14 @@ const copy = {
   en: {
     matchday: "Matchday forecast",
     subtitle: "Real stats, playful readouts, zero betting energy.",
+    mission: "Pick a match, ask the Seer, then explore the teams, players, venue, and weather behind the read.",
+    noBetting: "No betting energy",
+    realStats: "Real stats",
+    seerHub: "Seer command center",
+    supportingDetails: "Supporting details",
     today: "Today",
+    next: "Next",
+    all: "All",
     live: "Live",
     upcoming: "Upcoming",
     completed: "Completed",
@@ -132,7 +137,14 @@ const copy = {
   es: {
     matchday: "Pronóstico del día",
     subtitle: "Estadísticas reales, lecturas divertidas, cero energía de apuestas.",
+    mission: "Elige un partido, pregunta al Vidente y explora equipos, jugadores, estadio y clima detrás de la lectura.",
+    noBetting: "Cero energía de apuestas",
+    realStats: "Datos reales",
+    seerHub: "Centro del Vidente",
+    supportingDetails: "Detalles de apoyo",
     today: "Hoy",
+    next: "Siguiente",
+    all: "Todos",
     live: "En vivo",
     upcoming: "Próximo",
     completed: "Completados",
@@ -208,7 +220,14 @@ const copy = {
   fr: {
     matchday: "Prévision du jour",
     subtitle: "Vraies stats, lectures ludiques, zéro énergie pari.",
+    mission: "Choisis un match, demande au voyant, puis explore les équipes, joueurs, stade et météo derrière la lecture.",
+    noBetting: "Zéro énergie pari",
+    realStats: "Vraies stats",
+    seerHub: "Centre du voyant",
+    supportingDetails: "Détails d’appui",
     today: "Aujourd’hui",
+    next: "Prochain",
+    all: "Tous",
     live: "En direct",
     upcoming: "À venir",
     completed: "Terminés",
@@ -306,8 +325,8 @@ export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
   const [matches, setMatches] = useState<Match[]>([]);
   const [activeMatchId, setActiveMatchId] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("forecast");
-  const [matchFilter, setMatchFilter] = useState<MatchFilter>("today");
+  const [activeTab, setActiveTab] = useState<Tab>("teams");
+  const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
   const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
     source: "database-unavailable",
@@ -400,27 +419,36 @@ export default function Home() {
     () => Array.from(new Set(matches.map((match) => match.group))).sort(),
     [matches],
   );
-  const visibleMatches = useMemo(
-    () =>
-      matches.filter((match) => {
-        const groupMatches = groupFilter === "all" || match.group === groupFilter;
+  const visibleMatches = useMemo(() => {
+    const groupMatches = matches.filter(
+      (match) => groupFilter === "all" || match.group === groupFilter,
+    );
 
-        if (!groupMatches) {
-          return false;
-        }
+    if (matchFilter === "all") {
+      return groupMatches;
+    }
 
-        if (matchFilter === "today") {
-          return isTodayMatch(match, todayKey);
-        }
+    if (matchFilter === "next") {
+      const nextMatch =
+        groupMatches.find((match) => match.status === "Live") ??
+        groupMatches.find((match) => match.status === "Upcoming") ??
+        groupMatches[0];
 
-        if (matchFilter === "completed") {
-          return match.status === "Final";
-        }
+      return nextMatch ? [nextMatch] : [];
+    }
 
-        return match.status === "Upcoming" || match.status === "Live";
-      }),
-    [groupFilter, matchFilter, matches, todayKey],
-  );
+    if (matchFilter === "today") {
+      return groupMatches.filter((match) => isTodayMatch(match, todayKey));
+    }
+
+    if (matchFilter === "completed") {
+      return groupMatches.filter((match) => match.status === "Final");
+    }
+
+    return groupMatches.filter(
+      (match) => match.status === "Upcoming" || match.status === "Live",
+    );
+  }, [groupFilter, matchFilter, matches, todayKey]);
   const cupCandidates = useMemo(() => buildCupCandidates(matches, language), [matches, language]);
   const cupPulseLabel = useMemo(() => getCupPulseLabel(language), [language]);
   const hasPendingWeather =
@@ -439,7 +467,7 @@ export default function Home() {
       !visibleMatches.some((match) => match.id === activeMatchId)
     ) {
       setActiveMatchId(visibleMatches[0].id);
-      setActiveTab("forecast");
+      setActiveTab("teams");
     }
   }, [activeMatchId, visibleMatches]);
 
@@ -565,7 +593,7 @@ export default function Home() {
             </div>
             <div className="match-filter-panel">
               <div className="match-filter-tabs" aria-label="Match filters">
-                {(["today", "upcoming", "completed"] as MatchFilter[]).map((filter) => (
+                {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
                   <button
                     className={cx("filter-pill", matchFilter === filter && "active")}
                     key={filter}
@@ -630,39 +658,29 @@ export default function Home() {
       </section>
 
       <section className="hero-grid" id="ask-seer">
-        <div className="hero-copy">
+        <div className="hero-copy hero-intro-card">
           <div className="hero-kicker-row">
             <div className="status-chip">
-              <Radio size={15} />
-              {t.today}
+              <Sparkles size={15} />
+              {t.realStats}
             </div>
-            <span>{activeMatch.group}</span>
-          </div>
-          <div className="hero-match-summary">
-            <div className="hero-team-pill">
-              <TeamFlag team={activeMatch.home} />
-              <strong>{activeMatch.home.name}</strong>
-            </div>
-            <span>vs</span>
-            <div className="hero-team-pill">
-              <TeamFlag team={activeMatch.away} />
-              <strong>{activeMatch.away.name}</strong>
-            </div>
+            <span>{t.noBetting}</span>
           </div>
           <h2>{t.subtitle}</h2>
-          <div className="hero-meta-grid">
-            <MetaItem icon={<MapPin size={16} />} label={activeMatch.venue} value={activeMatch.city} />
-            <MetaItem
-              icon={<Clock3 size={16} />}
-              label={t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}
-              value={activeMatch.minute ?? activeMatch.time}
-            />
-            <MetaItem icon={<Activity size={16} />} label={t.forecast} value={activeMatch.forecast.projected} />
-          </div>
-          <div className="quick-signals">
-            <Signal label={t.confidence} value={`${activeMatch.forecast.confidence}%`} />
-            <Signal label={t.chaos} value={`${activeMatch.forecast.chaos}%`} />
-            <Signal label={t.projected} value={activeMatch.forecast.projected} />
+          <p className="hero-mission">{t.mission}</p>
+          <div className="hero-promise-row">
+            <span>
+              <BarChart3 size={16} />
+              {t.realFixtures}
+            </span>
+            <span>
+              <CloudSun size={16} />
+              {t.venueWeather}
+            </span>
+            <span>
+              <ShieldCheck size={16} />
+              {t.noBetting}
+            </span>
           </div>
           <div className="hero-stadium-art" aria-hidden="true">
             <div className="hero-orb" />
@@ -670,41 +688,67 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="seer-access-panel">
-          <p className="eyebrow">{t.selectedMatch}</p>
-          <div className="seer-teams">
-            <div className="seer-team-name">
-              <TeamFlag team={activeMatch.home} />
-              <strong>{activeMatch.home.name}</strong>
+        <div className="seer-access-panel seer-command-panel">
+          <div className="seer-panel-header">
+            <div>
+              <p className="eyebrow">{t.seerHub}</p>
+              <div className="seer-teams">
+                <div className="seer-team-name">
+                  <TeamFlag team={activeMatch.home} />
+                  <strong>{activeMatch.home.name}</strong>
+                </div>
+                <span>vs</span>
+                <div className="seer-team-name">
+                  <TeamFlag team={activeMatch.away} />
+                  <strong>{activeMatch.away.name}</strong>
+                </div>
+              </div>
+              <div className="seer-context">
+                <span>{activeMatch.group}</span>
+                <span>{formatMatchSchedule(activeMatch)}</span>
+                <span>{activeMatch.venue}</span>
+                <span>{activeMatch.weather.temp}</span>
+              </div>
             </div>
-            <span>vs</span>
-            <div className="seer-team-name">
-              <TeamFlag team={activeMatch.away} />
-              <strong>{activeMatch.away.name}</strong>
+            <div className="match-score-card seer-score-card">
+              <span>{t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
+              <strong>{activeMatch.score ?? activeMatch.time}</strong>
+              <small>{t.projected}: {activeMatch.forecast.projected}</small>
             </div>
           </div>
-          <div className="seer-context">
-            <span>{activeMatch.group}</span>
-            <span>{formatMatchSchedule(activeMatch)}</span>
-            <span>{activeMatch.venue}</span>
+
+          <div className="seer-action-row">
+            <button
+              className="seer-primary-button"
+              disabled={activeOracleStatus === "loading"}
+              onClick={() => requestOracleRead(activeMatch.id, language)}
+              type="button"
+            >
+              {activeOracleStatus === "loading" ? (
+                <LoaderCircle className="spin-icon" size={17} />
+              ) : (
+                <Sparkles size={17} />
+              )}
+              {activeOracleStatus === "loading" ? t.reading : t.askSeer}
+            </button>
+            <button className="share-button seer-share-button" onClick={() => shareMatch(activeMatch)} type="button">
+              {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
+              {shareStatus === "copied" && t.copied}
+              {shareStatus === "error" && t.shareError}
+              {shareStatus === "idle" && t.share}
+            </button>
           </div>
-          <button
-            className="seer-primary-button"
-            disabled={activeOracleStatus === "loading"}
-            onClick={() => requestOracleRead(activeMatch.id, language)}
-            type="button"
-          >
-            {activeOracleStatus === "loading" ? (
-              <LoaderCircle className="spin-icon" size={17} />
-            ) : (
-              <Sparkles size={17} />
-            )}
-            {activeOracleStatus === "loading" ? t.reading : t.askSeer}
-          </button>
-          <div className="seer-mini-grid">
-            <Signal label={t.confidence} value={`${activeMatch.forecast.confidence}%`} />
-            <Signal label={t.weather} value={activeMatch.weather.temp} />
-          </div>
+
+          <ForecastView
+            compact
+            match={activeMatch}
+            t={t}
+            language={language}
+            oracleRead={activeOracleRead}
+            oracleStatus={activeOracleStatus}
+            onAskSeer={() => requestOracleRead(activeMatch.id, language)}
+            showAsk={false}
+          />
         </div>
       </section>
 
@@ -743,7 +787,7 @@ export default function Home() {
           </div>
           <div className="match-filter-panel">
             <div className="match-filter-tabs" aria-label="Match filters">
-              {(["today", "upcoming", "completed"] as MatchFilter[]).map((filter) => (
+              {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
                 <button
                   className={cx("filter-pill", matchFilter === filter && "active")}
                   key={filter}
@@ -787,7 +831,7 @@ export default function Home() {
                 key={match.id}
                 onClick={() => {
                   setActiveMatchId(match.id);
-                  setActiveTab("forecast");
+                  setActiveTab("teams");
                 }}
                 type="button"
               >
@@ -819,52 +863,22 @@ export default function Home() {
         </aside>
 
         <section className="detail-panel">
-          <div className="match-hero">
-            <div>
-              <p className="eyebrow">{activeMatch.venue} · {activeMatch.city}</p>
-              <div className="teams-title">
-                <TeamBadge team={activeMatch.home} />
-                <span className="versus">vs</span>
-                <TeamBadge team={activeMatch.away} />
-              </div>
+          <div className="detail-support-header">
+            <div className="section-heading">
+              <BarChart3 size={18} />
+              <span>{t.supportingDetails}</span>
             </div>
-            <div className="detail-actions">
-              <button
-                className="seer-inline-button"
-                disabled={activeOracleStatus === "loading"}
-                onClick={() => requestOracleRead(activeMatch.id, language)}
-                type="button"
-              >
-                {activeOracleStatus === "loading" ? (
-                  <LoaderCircle className="spin-icon" size={17} />
-                ) : (
-                  <Sparkles size={17} />
-                )}
-                {activeOracleStatus === "loading" ? t.reading : t.askSeer}
-              </button>
-              <div className="match-score-card">
-                <span>{t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
-                <strong>{activeMatch.score ?? activeMatch.time}</strong>
-                <small>{t.projected}: {activeMatch.forecast.projected}</small>
-              </div>
-              <button className="share-button" onClick={() => shareMatch(activeMatch)} type="button">
-                {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
-                {shareStatus === "copied" && t.copied}
-                {shareStatus === "error" && t.shareError}
-                {shareStatus === "idle" && t.share}
-              </button>
-            </div>
+            <p>{activeMatch.venue} · {activeMatch.city} · {formatMatchSchedule(activeMatch)}</p>
           </div>
 
           <nav className="tabs" aria-label="Match detail tabs">
-            {(["forecast", "teams", "players", "weather"] as Tab[]).map((tab) => (
+            {(["teams", "players", "weather"] as Tab[]).map((tab) => (
               <button
                 className={cx("tab", activeTab === tab && "active")}
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 type="button"
               >
-                {tab === "forecast" && <Sparkles size={16} />}
                 {tab === "teams" && <UsersRound size={16} />}
                 {tab === "players" && <Zap size={16} />}
                 {tab === "weather" && <CloudSun size={16} />}
@@ -873,16 +887,6 @@ export default function Home() {
             ))}
           </nav>
 
-          {activeTab === "forecast" && (
-            <ForecastView
-              match={activeMatch}
-              t={t}
-              language={language}
-              oracleRead={activeOracleRead}
-              oracleStatus={activeOracleStatus}
-              onAskSeer={() => requestOracleRead(activeMatch.id, language)}
-            />
-          )}
           {activeTab === "teams" && <TeamsView match={activeMatch} t={t} />}
           {activeTab === "players" && <PlayersView match={activeMatch} t={t} />}
           {activeTab === "weather" && <WeatherView match={activeMatch} t={t} language={language} />}
@@ -1382,15 +1386,6 @@ function SeerLensStrip({ t }: { t: Record<string, string> }) {
   );
 }
 
-function Signal({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="signal">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function toDateKey(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     day: "2-digit",
@@ -1424,26 +1419,6 @@ function formatMatchSchedule(match: Match) {
     month: "short",
     timeZone: "America/Toronto",
   }).format(new Date(match.startsAt));
-}
-
-function MetaItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="meta-item">
-      {icon}
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
-    </div>
-  );
 }
 
 function DataStatusCard({
@@ -1616,6 +1591,8 @@ function ForecastView({
   oracleRead,
   oracleStatus,
   onAskSeer,
+  showAsk = true,
+  compact = false,
 }: {
   match: Match;
   t: Record<string, string>;
@@ -1623,6 +1600,8 @@ function ForecastView({
   oracleRead?: OracleResponse;
   oracleStatus: OracleStatus;
   onAskSeer: () => void;
+  showAsk?: boolean;
+  compact?: boolean;
 }) {
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
@@ -1632,7 +1611,7 @@ function ForecastView({
   const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
 
   return (
-    <div className="forecast-layout">
+    <div className={cx("forecast-layout", compact && "compact")}>
       <div className="forecast-card primary-card">
         <div className="forecast-card-head">
           <div className="section-heading">
@@ -1643,19 +1622,21 @@ function ForecastView({
             <span className={cx("oracle-source", oracleRead?.source === "openai" && "fresh")}>
               {readLabel}
             </span>
-            <button
-              className="oracle-button"
-              disabled={oracleStatus === "loading"}
-              onClick={onAskSeer}
-              type="button"
-            >
-              {oracleStatus === "loading" ? (
-                <LoaderCircle className="spin-icon" size={16} />
-              ) : (
-                <Sparkles size={16} />
-              )}
-              {oracleStatus === "loading" ? t.reading : t.askSeer}
-            </button>
+            {showAsk && (
+              <button
+                className="oracle-button"
+                disabled={oracleStatus === "loading"}
+                onClick={onAskSeer}
+                type="button"
+              >
+                {oracleStatus === "loading" ? (
+                  <LoaderCircle className="spin-icon" size={16} />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {oracleStatus === "loading" ? t.reading : t.askSeer}
+              </button>
+            )}
           </div>
         </div>
         {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}

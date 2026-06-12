@@ -3999,6 +3999,267 @@ body {
   }
 }
 
+/* One-Seer command center pass. */
+.hero-grid {
+  grid-template-columns: minmax(340px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+}
+
+.hero-intro-card {
+  min-height: 430px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hero-intro-card .hero-kicker-row {
+  margin-bottom: 0;
+}
+
+.hero-copy h2 {
+  max-width: 680px;
+  margin: 22px 0 0;
+  font-size: clamp(2.45rem, 3.45vw, 4rem);
+  line-height: 1;
+}
+
+.hero-mission {
+  max-width: 590px;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.15vw, 1.12rem);
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.hero-promise-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+.hero-promise-row span {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #dfe7f7;
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 9px;
+}
+
+.hero-promise-row svg {
+  flex: 0 0 auto;
+  color: var(--gold);
+}
+
+.seer-command-panel {
+  min-height: 430px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.seer-panel-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(145px, 188px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.seer-command-panel .seer-teams {
+  margin: 10px 0;
+}
+
+.seer-command-panel .seer-teams strong {
+  font-size: clamp(1.55rem, 2.35vw, 2.55rem);
+}
+
+.seer-score-card {
+  min-height: 112px;
+  align-self: stretch;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(247, 197, 29, 0.08), transparent 36%),
+    rgba(255, 255, 255, 0.055);
+  border-color: rgba(143, 160, 189, 0.18);
+}
+
+.seer-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.seer-action-row .seer-primary-button {
+  margin-top: 0;
+}
+
+.seer-share-button {
+  min-width: 132px;
+  min-height: 48px;
+}
+
+.seer-command-panel .forecast-layout.compact {
+  grid-template-columns: minmax(0, 1.05fr) minmax(245px, 0.78fr);
+  gap: 12px;
+  margin-top: 0;
+}
+
+.forecast-layout.compact .forecast-card {
+  padding: 14px;
+}
+
+.forecast-layout.compact .forecast-card-head {
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.forecast-layout.compact .oracle-actions {
+  justify-content: flex-end;
+}
+
+.forecast-layout.compact .oracle-headline {
+  font-size: 1rem;
+}
+
+.forecast-layout.compact .seer-line {
+  font-size: clamp(1.05rem, 1.45vw, 1.45rem);
+  line-height: 1.17;
+}
+
+.forecast-layout.compact .probability-grid {
+  gap: 8px;
+}
+
+.forecast-layout.compact .probability-ring {
+  width: 68px;
+  height: 68px;
+}
+
+.forecast-layout.compact .probability-ring span {
+  font-size: 1.05rem;
+}
+
+.forecast-layout.compact .metric-row {
+  gap: 10px;
+}
+
+.forecast-layout.compact .reason-list {
+  gap: 8px;
+}
+
+.forecast-layout.compact .reason-list li {
+  padding: 10px;
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.forecast-layout.compact .disclaimer {
+  margin-top: 10px;
+}
+
+.detail-panel {
+  padding: 16px;
+}
+
+.detail-support-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-support-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.detail-panel .tabs {
+  margin-bottom: 14px;
+}
+
+.match-filter-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-intro-card,
+  .seer-command-panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero-copy h2 {
+    margin-top: 18px;
+    font-size: clamp(2rem, 10vw, 2.85rem);
+    line-height: 1.03;
+  }
+
+  .hero-mission {
+    font-size: 0.95rem;
+  }
+
+  .hero-promise-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-top: 18px;
+  }
+
+  .seer-command-panel {
+    padding: 14px;
+  }
+
+  .seer-panel-header,
+  .seer-command-panel .forecast-layout.compact,
+  .seer-action-row,
+  .detail-support-header {
+    grid-template-columns: 1fr;
+  }
+
+  .seer-panel-header,
+  .detail-support-header {
+    display: grid;
+  }
+
+  .seer-command-panel .seer-teams strong {
+    font-size: clamp(1.65rem, 8vw, 2.35rem);
+  }
+
+  .seer-share-button {
+    width: 100%;
+  }
+
+  .forecast-layout.compact .probability-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .forecast-layout.compact .probability-ring {
+    width: 62px;
+    height: 62px;
+  }
+
+  .match-filter-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .admin-shell {
   --ink: #101624;
   --muted: #667085;
