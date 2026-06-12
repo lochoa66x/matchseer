@@ -435,6 +435,19 @@ h1 {
   line-height: 1;
 }
 
+.team-flag img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.team-flag span {
+  color: #06100f;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
 .team-flag.compact {
   width: 26px;
   height: 26px;
@@ -3522,14 +3535,17 @@ body {
 }
 
 .team-flag {
-  width: 42px;
+  width: 44px;
   height: 34px;
   color: #06100f;
-  background: var(--green);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(230, 247, 242, 0.64)),
+    var(--team-color, var(--green));
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 11px;
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.14),
+    0 0 22px color-mix(in srgb, var(--team-color, var(--green)) 18%, transparent),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset;
   font-size: 0.74rem;
   font-weight: 950;
@@ -3538,8 +3554,12 @@ body {
 
 .team-flag.compact {
   width: 34px;
-  height: 28px;
+  height: 26px;
   font-size: 0.66rem;
+}
+
+.team-flag img {
+  border-radius: inherit;
 }
 
 .cup-seer-board {

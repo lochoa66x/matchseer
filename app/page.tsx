@@ -1479,6 +1479,7 @@ function TeamLine({ team, score }: { team: Team; score?: string }) {
 function TeamBadge({ team }: { team: Team }) {
   return (
     <div className="team-badge">
+      <TeamFlag team={team} />
       <span className="team-code" style={{ background: team.color }}>{team.code}</span>
       <strong>{team.name}</strong>
     </div>
@@ -1486,17 +1487,127 @@ function TeamBadge({ team }: { team: Team }) {
 }
 
 function TeamFlag({ team, compact = false }: { team: Team; compact?: boolean }) {
+  const flagCode = flagCodeForTeam(team);
+  const [failed, setFailed] = useState(!flagCode);
+
   return (
     <span
-      aria-label={`${team.name} team code`}
+      aria-label={`${team.name} flag`}
       className={cx("team-flag", compact && "compact")}
-      style={{ background: team.color }}
+      style={{ "--team-color": team.color } as React.CSSProperties}
       title={team.name}
     >
-      {team.code}
+      {flagCode && !failed ? (
+        <img
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          src={`https://flagcdn.com/${flagCode}.svg`}
+        />
+      ) : (
+        <span>{team.code}</span>
+      )}
     </span>
   );
 }
+
+function flagCodeForTeam(team: Team) {
+  const code = team.code.toUpperCase();
+  const nameKey = normalizeTeamKey(team.name);
+
+  return fifaCodeToFlagCode[code] ?? teamNameToFlagCode[nameKey] ?? "";
+}
+
+const fifaCodeToFlagCode: Record<string, string> = {
+  ALB: "al",
+  ALG: "dz",
+  ARG: "ar",
+  AUS: "au",
+  AUT: "at",
+  BEL: "be",
+  BIH: "ba",
+  BRA: "br",
+  CAN: "ca",
+  CHI: "cl",
+  COL: "co",
+  CRC: "cr",
+  CRO: "hr",
+  CZE: "cz",
+  DEN: "dk",
+  ECU: "ec",
+  ENG: "gb-eng",
+  FRA: "fr",
+  GER: "de",
+  GHA: "gh",
+  HAI: "ht",
+  ITA: "it",
+  JPN: "jp",
+  KOR: "kr",
+  MAR: "ma",
+  MEX: "mx",
+  NED: "nl",
+  NGA: "ng",
+  PAR: "py",
+  POL: "pl",
+  POR: "pt",
+  QAT: "qa",
+  RSA: "za",
+  SCO: "gb-sct",
+  SEN: "sn",
+  SRB: "rs",
+  SUI: "ch",
+  TUN: "tn",
+  URU: "uy",
+  USA: "us",
+  WAL: "gb-wls",
+};
+
+const teamNameToFlagCode: Record<string, string> = {
+  algeria: "dz",
+  argentina: "ar",
+  australia: "au",
+  austria: "at",
+  belgium: "be",
+  "bosnia h": "ba",
+  "bosnia and herzegovina": "ba",
+  brazil: "br",
+  canada: "ca",
+  chile: "cl",
+  colombia: "co",
+  "costa rica": "cr",
+  croatia: "hr",
+  czechia: "cz",
+  denmark: "dk",
+  ecuador: "ec",
+  england: "gb-eng",
+  france: "fr",
+  germany: "de",
+  ghana: "gh",
+  haiti: "ht",
+  italy: "it",
+  japan: "jp",
+  korea: "kr",
+  "korea republic": "kr",
+  mexico: "mx",
+  morocco: "ma",
+  netherlands: "nl",
+  nigeria: "ng",
+  paraguay: "py",
+  poland: "pl",
+  portugal: "pt",
+  qatar: "qa",
+  scotland: "gb-sct",
+  senegal: "sn",
+  serbia: "rs",
+  "south africa": "za",
+  spain: "es",
+  switzerland: "ch",
+  tunisia: "tn",
+  uruguay: "uy",
+  usa: "us",
+  "united states": "us",
+  wales: "gb-wls",
+};
 
 function ForecastView({
   match,
