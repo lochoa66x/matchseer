@@ -27,7 +27,7 @@ import type {
   TeamRating as Team,
 } from "../lib/domain";
 
-type Tab = "teams" | "players" | "weather";
+type Tab = "forecast" | "teams" | "players" | "weather";
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
@@ -657,8 +657,99 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="hero-grid hero-seer-only" id="ask-seer">
-        <div className="seer-access-panel seer-command-panel">
+      <section className="hero-grid hero-matchroom" id="forecast-board">
+        <div className="hero-match-board">
+          <div className="hero-match-board-header">
+            <div className="hero-board-copy">
+              <div className="section-heading">
+                <CalendarDays size={18} />
+                <span>{t.matchExplorer}</span>
+              </div>
+              <h2>{t.subtitle}</h2>
+              <p>{t.mission}</p>
+            </div>
+            <div className="hero-board-count">
+              <strong>{visibleMatches.length}</strong>
+              <span>/ {matches.length} {t.matches}</span>
+            </div>
+          </div>
+
+          <div className="match-filter-panel hero-match-filters">
+            <div className="match-filter-tabs" aria-label="Match filters">
+              {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
+                <button
+                  className={cx("filter-pill", matchFilter === filter && "active")}
+                  key={filter}
+                  onClick={() => setMatchFilter(filter)}
+                  type="button"
+                >
+                  {t[filter]}
+                </button>
+              ))}
+            </div>
+            <div className="group-chip-panel" aria-label={t.groups}>
+              <button
+                className={cx("group-chip", groupFilter === "all" && "active")}
+                onClick={() => setGroupFilter("all")}
+                type="button"
+              >
+                {t.allGroups}
+              </button>
+              {groups.map((group) => (
+                <button
+                  className={cx("group-chip", groupFilter === group && "active")}
+                  key={group}
+                  onClick={() => setGroupFilter(group)}
+                  type="button"
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="hero-match-list">
+            {visibleMatches.length === 0 && (
+              <div className="empty-match-state">{t.noMatches}</div>
+            )}
+            {visibleMatches.map((match) => (
+              <button
+                className={cx("hero-match-card", activeMatch.id === match.id && "selected")}
+                key={match.id}
+                onClick={() => {
+                  setActiveMatchId(match.id);
+                  setActiveTab("teams");
+                }}
+                type="button"
+              >
+                <div className="hero-card-status">
+                  <span className={cx("status-dot", match.status.toLowerCase())} />
+                  <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
+                  <strong>{formatMatchSchedule(match)}</strong>
+                </div>
+                <div className="hero-card-teams">
+                  <div className="hero-card-team">
+                    <TeamFlag team={match.home} />
+                    <strong>{match.home.name}</strong>
+                    {match.score && <span>{match.score.split(" - ")[0]}</span>}
+                  </div>
+                  <div className="hero-card-team">
+                    <TeamFlag team={match.away} />
+                    <strong>{match.away.name}</strong>
+                    {match.score && <span>{match.score.split(" - ")[1]}</span>}
+                  </div>
+                </div>
+                <div className="hero-card-footer">
+                  <span>{match.group}</span>
+                  <span>{match.venue}</span>
+                  <span>{t.projected}: {match.forecast.projected}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="seer-access-panel seer-command-panel hero-selected-panel" id="ask-seer">
           <div className="seer-panel-header">
             <div>
               <p className="eyebrow">{t.seerHub}</p>
@@ -692,7 +783,10 @@ export default function Home() {
             <button
               className="seer-primary-button"
               disabled={activeOracleStatus === "loading"}
-              onClick={() => requestOracleRead(activeMatch.id, language)}
+              onClick={() => {
+                setActiveTab("forecast");
+                void requestOracleRead(activeMatch.id, language);
+              }}
               type="button"
             >
               {activeOracleStatus === "loading" ? (
@@ -710,16 +804,20 @@ export default function Home() {
             </button>
           </div>
 
-          <ForecastView
-            compact
-            match={activeMatch}
-            t={t}
-            language={language}
-            oracleRead={activeOracleRead}
-            oracleStatus={activeOracleStatus}
-            onAskSeer={() => requestOracleRead(activeMatch.id, language)}
-            showAsk={false}
-          />
+          <div className="hero-selected-metrics">
+            <span>
+              <small>{t.confidence}</small>
+              <strong>{activeMatch.forecast.confidence}%</strong>
+            </span>
+            <span>
+              <small>{t.weather}</small>
+              <strong>{activeMatch.weather.temp}</strong>
+            </span>
+            <span>
+              <small>{t.projected}</small>
+              <strong>{activeMatch.forecast.projected}</strong>
+            </span>
+          </div>
         </div>
       </section>
 
@@ -750,89 +848,7 @@ export default function Home() {
         />
       </section>
 
-      <section className="content-grid" id="forecast-board">
-        <aside className="match-rail" aria-label="Match list">
-          <div className="section-heading">
-            <CalendarDays size={18} />
-            <span>{t.matchExplorer}</span>
-          </div>
-          <div className="match-filter-panel">
-            <div className="match-filter-tabs" aria-label="Match filters">
-              {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
-                <button
-                  className={cx("filter-pill", matchFilter === filter && "active")}
-                  key={filter}
-                  onClick={() => setMatchFilter(filter)}
-                  type="button"
-                >
-                  {t[filter]}
-                </button>
-              ))}
-            </div>
-            <div className="group-chip-panel" aria-label={t.groups}>
-              <button
-                className={cx("group-chip", groupFilter === "all" && "active")}
-                onClick={() => setGroupFilter("all")}
-                type="button"
-              >
-                {t.allGroups}
-              </button>
-              {groups.map((group) => (
-                <button
-                  className={cx("group-chip", groupFilter === group && "active")}
-                  key={group}
-                  onClick={() => setGroupFilter(group)}
-                  type="button"
-                >
-                  {group}
-                </button>
-              ))}
-            </div>
-            <p className="match-count">
-              {visibleMatches.length} / {matches.length} {t.matches}
-            </p>
-          </div>
-          <div className="match-list">
-            {visibleMatches.length === 0 && (
-              <div className="empty-match-state">{t.noMatches}</div>
-            )}
-            {visibleMatches.map((match) => (
-              <button
-                className={cx("match-card", activeMatch.id === match.id && "selected")}
-                key={match.id}
-                onClick={() => {
-                  setActiveMatchId(match.id);
-                  setActiveTab("teams");
-                }}
-                type="button"
-              >
-                <div className="match-card-top">
-                  <span className={cx("status-dot", match.status.toLowerCase())} />
-                  <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
-                  <span>{formatMatchSchedule(match)}</span>
-                </div>
-                <TeamLine team={match.home} score={match.score?.split(" - ")[0]} />
-                <TeamLine team={match.away} score={match.score?.split(" - ")[1]} />
-                <div className="match-card-footer">
-                  <span>{match.group}</span>
-                  <span className="quick-read-label">
-                    <Sparkles size={14} />
-                    {t.quickRead}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="ad-card">
-            <div className="section-heading">
-              <ShieldCheck size={17} />
-              <span>{t.ad}</span>
-            </div>
-            <p>{t.adCopy}</p>
-          </div>
-        </aside>
-
+      <section className="content-grid content-grid-support">
         <section className="detail-panel">
           <div className="detail-support-header">
             <div className="section-heading">
@@ -843,13 +859,14 @@ export default function Home() {
           </div>
 
           <nav className="tabs" aria-label="Match detail tabs">
-            {(["teams", "players", "weather"] as Tab[]).map((tab) => (
+            {(["forecast", "teams", "players", "weather"] as Tab[]).map((tab) => (
               <button
                 className={cx("tab", activeTab === tab && "active")}
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 type="button"
               >
+                {tab === "forecast" && <Sparkles size={16} />}
                 {tab === "teams" && <UsersRound size={16} />}
                 {tab === "players" && <Zap size={16} />}
                 {tab === "weather" && <CloudSun size={16} />}
@@ -858,6 +875,16 @@ export default function Home() {
             ))}
           </nav>
 
+          {activeTab === "forecast" && (
+            <ForecastView
+              match={activeMatch}
+              t={t}
+              language={language}
+              oracleRead={activeOracleRead}
+              oracleStatus={activeOracleStatus}
+              onAskSeer={() => requestOracleRead(activeMatch.id, language)}
+            />
+          )}
           {activeTab === "teams" && <TeamsView match={activeMatch} t={t} />}
           {activeTab === "players" && <PlayersView match={activeMatch} t={t} />}
           {activeTab === "weather" && <WeatherView match={activeMatch} t={t} language={language} />}
@@ -1408,16 +1435,6 @@ function DataStatusCard({
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{detail}</small>
-    </div>
-  );
-}
-
-function TeamLine({ team, score }: { team: Team; score?: string }) {
-  return (
-    <div className="team-line">
-      <TeamFlag team={team} compact />
-      <strong>{team.name}</strong>
-      {score && <span className="score">{score}</span>}
     </div>
   );
 }
