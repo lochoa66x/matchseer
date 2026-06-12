@@ -144,7 +144,7 @@ const copy = {
     askSeer: "Ask the Seer",
     reading: "Reading",
     freshRead: "Fresh read",
-    seededRead: "Seeded read",
+    seededRead: "Early signal",
     oracleError: "The Seer blinked. Try again.",
     dataStatus: "Data status",
     liveDatabase: "Live database",
@@ -255,7 +255,7 @@ const copy = {
     askSeer: "Preguntar al Vidente",
     reading: "Leyendo",
     freshRead: "Lectura nueva",
-    seededRead: "Lectura base",
+    seededRead: "Señal inicial",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
     dataStatus: "Estado de datos",
     liveDatabase: "Base en vivo",
@@ -366,7 +366,7 @@ const copy = {
     askSeer: "Demander au voyant",
     reading: "Lecture",
     freshRead: "Lecture fraîche",
-    seededRead: "Lecture de base",
+    seededRead: "Signal précoce",
     oracleError: "Le voyant a cligné. Réessaie.",
     dataStatus: "État des données",
     liveDatabase: "Base en direct",
@@ -2411,11 +2411,7 @@ function ForecastView({
         {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}
         <p className="seer-line">{signalCopy}</p>
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
-        <div className="probability-grid">
-          <Probability team={match.home} label={match.home.code} value={match.forecast.home} color={accents.home} />
-          <Probability label="DRAW" value={match.forecast.draw} color="#8b8f98" />
-          <Probability team={match.away} label={match.away.code} value={match.forecast.away} color={accents.away} />
-        </div>
+        <TensionBar match={match} accents={accents} />
         <div className="metric-row">
           <Meter label={t.confidence} value={match.forecast.confidence} />
           <Meter label={t.chaos} value={match.forecast.chaos} hot />
@@ -2433,6 +2429,34 @@ function ForecastView({
           ))}
         </ul>
         <p className="disclaimer">{interpretation?.disclaimer ?? t.review}</p>
+      </div>
+    </div>
+  );
+}
+
+function TensionBar({ match, accents }: { match: Match; accents: { home: string; away: string } }) {
+  const { home, draw, away } = match.forecast;
+  return (
+    <div style={{ width: "100%", padding: "10px 0 4px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", fontSize: "13px", lineHeight: 1 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          <TeamFlag team={match.home} compact accentColor={accents.home} />
+          <span style={{ color: accents.home, fontWeight: 700 }}>{match.home.code}</span>
+          <span style={{ fontWeight: 700 }}>{home}%</span>
+        </span>
+        <span style={{ color: "#8b8f98", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Draw&nbsp;<strong style={{ color: "inherit" }}>{draw}%</strong>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          <span style={{ fontWeight: 700 }}>{away}%</span>
+          <span style={{ color: accents.away, fontWeight: 700 }}>{match.away.code}</span>
+          <TeamFlag team={match.away} compact accentColor={accents.away} />
+        </span>
+      </div>
+      <div style={{ display: "flex", width: "100%", height: "10px", borderRadius: "5px", overflow: "hidden", gap: "2px" }}>
+        <div style={{ width: `${home}%`, background: accents.home, borderRadius: "5px 0 0 5px", flexShrink: 0 }} />
+        <div style={{ width: `${draw}%`, background: "#8b8f98", flexShrink: 0 }} />
+        <div style={{ width: `${away}%`, background: accents.away, borderRadius: "0 5px 5px 0", flexShrink: 0 }} />
       </div>
     </div>
   );
