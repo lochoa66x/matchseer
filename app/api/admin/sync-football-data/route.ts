@@ -5,12 +5,17 @@ import { fetchFootballDataSnapshot } from "../../../../lib/providers/football-da
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const hasFootballDataToken = Boolean(process.env.FOOTBALL_DATA_API_TOKEN);
+  const hasSyncSecret = Boolean(process.env.MATCHSEER_SYNC_SECRET);
+
   return NextResponse.json({
-    ready: Boolean(
-      process.env.FOOTBALL_DATA_API_TOKEN && process.env.MATCHSEER_SYNC_SECRET,
-    ),
+    ready: hasFootballDataToken && hasSyncSecret,
     provider: "football-data",
     competition: process.env.FOOTBALL_DATA_COMPETITION ?? "WC",
+    envStatus: {
+      hasFootballDataToken,
+      hasSyncSecret,
+    },
     requiredEnv: ["FOOTBALL_DATA_API_TOKEN", "MATCHSEER_SYNC_SECRET"],
   });
 }
