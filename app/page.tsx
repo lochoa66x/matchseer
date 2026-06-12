@@ -109,6 +109,8 @@ const copy = {
     venueWeather: "Venue + weather",
     connected: "Connected",
     mapping: "Mapping underway",
+    pending: "Pending",
+    refereePending: "Assignment pending",
     aiLayer: "AI layer",
     aiReady: "Ready on demand",
     cupSeer: "Weekly Cup Seer",
@@ -194,6 +196,8 @@ const copy = {
     venueWeather: "Estadio + clima",
     connected: "Conectado",
     mapping: "Mapeo en curso",
+    pending: "Pendiente",
+    refereePending: "Asignación pendiente",
     aiLayer: "Capa IA",
     aiReady: "Lista al pedir",
     cupSeer: "Vidente semanal de la copa",
@@ -279,6 +283,8 @@ const copy = {
     venueWeather: "Stade + météo",
     connected: "Connecté",
     mapping: "Mappage en cours",
+    pending: "En attente",
+    refereePending: "Affectation en attente",
     aiLayer: "Couche IA",
     aiReady: "Prête à la demande",
     cupSeer: "Voyant hebdo de la coupe",
@@ -331,7 +337,7 @@ export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
   const [matches, setMatches] = useState<Match[]>([]);
   const [activeMatchId, setActiveMatchId] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("teams");
+  const [activeTab, setActiveTab] = useState<Tab>("forecast");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
   const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
@@ -473,7 +479,7 @@ export default function Home() {
       !visibleMatches.some((match) => match.id === activeMatchId)
     ) {
       setActiveMatchId(visibleMatches[0].id);
-      setActiveTab("teams");
+      setActiveTab("forecast");
     }
   }, [activeMatchId, visibleMatches]);
 
@@ -630,6 +636,8 @@ export default function Home() {
     );
   }
 
+  const activeAccents = matchAccentColors(activeMatch);
+
   return (
     <main className="app-shell">
       <section className="topbar" aria-label="MatchSeer header">
@@ -718,40 +726,44 @@ export default function Home() {
             {visibleMatches.length === 0 && (
               <div className="empty-match-state">{t.noMatches}</div>
             )}
-            {visibleMatches.map((match) => (
-              <button
-                className={cx("hero-match-card", activeMatch.id === match.id && "selected")}
-                key={match.id}
-                onClick={() => {
-                  setActiveMatchId(match.id);
-                  setActiveTab("teams");
-                }}
-                type="button"
-              >
-                <div className="hero-card-status">
-                  <span className={cx("status-dot", match.status.toLowerCase())} />
-                  <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
-                  <strong>{formatMatchSchedule(match)}</strong>
-                </div>
-                <div className="hero-card-teams">
-                  <div className="hero-card-team">
-                    <TeamFlag team={match.home} />
-                    <strong>{match.home.name}</strong>
-                    {match.score && <span>{match.score.split(" - ")[0]}</span>}
+            {visibleMatches.map((match) => {
+              const accents = matchAccentColors(match);
+
+              return (
+                <button
+                  className={cx("hero-match-card", activeMatch.id === match.id && "selected")}
+                  key={match.id}
+                  onClick={() => {
+                    setActiveMatchId(match.id);
+                    setActiveTab("forecast");
+                  }}
+                  type="button"
+                >
+                  <div className="hero-card-status">
+                    <span className={cx("status-dot", match.status.toLowerCase())} />
+                    <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
+                    <strong>{formatMatchSchedule(match)}</strong>
                   </div>
-                  <div className="hero-card-team">
-                    <TeamFlag team={match.away} />
-                    <strong>{match.away.name}</strong>
-                    {match.score && <span>{match.score.split(" - ")[1]}</span>}
+                  <div className="hero-card-teams">
+                    <div className="hero-card-team">
+                      <TeamFlag accentColor={accents.home} team={match.home} />
+                      <strong>{match.home.name}</strong>
+                      {match.score && <span>{match.score.split(" - ")[0]}</span>}
+                    </div>
+                    <div className="hero-card-team">
+                      <TeamFlag accentColor={accents.away} team={match.away} />
+                      <strong>{match.away.name}</strong>
+                      {match.score && <span>{match.score.split(" - ")[1]}</span>}
+                    </div>
                   </div>
-                </div>
-                <div className="hero-card-footer">
-                  <span>{match.group}</span>
-                  <span>{match.venue}</span>
-                  <span>{t.projected}: {match.forecast.projected}</span>
-                </div>
-              </button>
-            ))}
+                  <div className="hero-card-footer">
+                    <span>{match.group}</span>
+                    <span>{match.venue}</span>
+                    <span>{t.projected}: {match.forecast.projected}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -762,12 +774,12 @@ export default function Home() {
               <h2 className="seer-panel-title">{t.matchday}</h2>
               <div className="seer-teams">
                 <div className="seer-team-name">
-                  <TeamFlag team={activeMatch.home} />
+                  <TeamFlag accentColor={activeAccents.home} team={activeMatch.home} />
                   <strong>{activeMatch.home.name}</strong>
                 </div>
                 <span>vs</span>
                 <div className="seer-team-name">
-                  <TeamFlag team={activeMatch.away} />
+                  <TeamFlag accentColor={activeAccents.away} team={activeMatch.away} />
                   <strong>{activeMatch.away.name}</strong>
                 </div>
               </div>
@@ -908,7 +920,7 @@ export default function Home() {
 
           if (candidateMatch) {
             setActiveMatchId(candidateMatch.id);
-            setActiveTab("teams");
+            setActiveTab("forecast");
           }
         }}
         pulseLabel={cupPulseLabel}
@@ -1224,6 +1236,54 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+const teamAccentPalette = [
+  "#f7c948",
+  "#ff7043",
+  "#8fa2c4",
+  "#4ea5d9",
+  "#34d399",
+  "#a78bfa",
+  "#ef5b5b",
+  "#2dd4bf",
+];
+
+function teamAccentIndex(team: Team) {
+  const seed = `${team.code}-${team.name}`;
+
+  return Array.from(seed).reduce(
+    (total, char) => total + char.charCodeAt(0),
+    0,
+  ) % teamAccentPalette.length;
+}
+
+function teamAccentColor(team: Team) {
+  return teamAccentPalette[teamAccentIndex(team)];
+}
+
+function matchAccentColors(match: Match) {
+  const homeIndex = teamAccentIndex(match.home);
+  let awayIndex = teamAccentIndex(match.away);
+
+  if (awayIndex === homeIndex) {
+    awayIndex = (awayIndex + 3) % teamAccentPalette.length;
+  }
+
+  return {
+    home: teamAccentPalette[homeIndex],
+    away: teamAccentPalette[awayIndex],
+  };
+}
+
+function splitMeterShares(home: number, away: number) {
+  const total = Math.max(1, home + away);
+  const homeShare = clamp((home / total) * 100, 8, 92);
+
+  return {
+    home: homeShare,
+    away: 100 - homeShare,
+  };
+}
+
 function getCupPulseLabel(language: Language) {
   const weekStart = startOfWeek(new Date());
 
@@ -1445,25 +1505,36 @@ function DataStatusCard({
   );
 }
 
-function TeamBadge({ team }: { team: Team }) {
+function TeamBadge({ team, accentColor }: { team: Team; accentColor?: string }) {
+  const displayColor = accentColor ?? teamAccentColor(team);
+
   return (
     <div className="team-badge">
-      <TeamFlag team={team} />
-      <span className="team-code" style={{ background: team.color }}>{team.code}</span>
+      <TeamFlag accentColor={displayColor} team={team} />
+      <span className="team-code" style={{ background: displayColor }}>{team.code}</span>
       <strong>{team.name}</strong>
     </div>
   );
 }
 
-function TeamFlag({ team, compact = false }: { team: Team; compact?: boolean }) {
+function TeamFlag({
+  team,
+  compact = false,
+  accentColor,
+}: {
+  team: Team;
+  compact?: boolean;
+  accentColor?: string;
+}) {
   const flagCode = flagCodeForTeam(team);
   const [failed, setFailed] = useState(!flagCode);
+  const displayColor = accentColor ?? teamAccentColor(team);
 
   return (
     <span
       aria-label={`${team.name} flag`}
       className={cx("team-flag", compact && "compact")}
-      style={{ "--team-color": team.color } as React.CSSProperties}
+      style={{ "--team-color": displayColor } as React.CSSProperties}
       title={team.name}
     >
       {flagCode && !failed ? (
@@ -1603,6 +1674,7 @@ function ForecastView({
     interpretation?.keyFactors.map((factor) => factor.explanation) ??
     match.forecast.reasons[language];
   const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
+  const accents = matchAccentColors(match);
 
   return (
     <div className={cx("forecast-layout", compact && "compact")}>
@@ -1637,9 +1709,9 @@ function ForecastView({
         <p className="seer-line">{signalCopy}</p>
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
         <div className="probability-grid">
-          <Probability team={match.home} label={match.home.code} value={match.forecast.home} color={match.home.color} />
+          <Probability team={match.home} label={match.home.code} value={match.forecast.home} color={accents.home} />
           <Probability label="DRAW" value={match.forecast.draw} color="#8b8f98" />
-          <Probability team={match.away} label={match.away.code} value={match.forecast.away} color={match.away.color} />
+          <Probability team={match.away} label={match.away.code} value={match.forecast.away} color={accents.away} />
         </div>
         <div className="metric-row">
           <Meter label={t.confidence} value={match.forecast.confidence} />
@@ -1670,7 +1742,7 @@ function Probability({ label, value, color, team }: { label: string; value: numb
         <span>{value}%</span>
       </div>
       <strong>
-        {team && <TeamFlag team={team} compact />}
+        {team && <TeamFlag accentColor={color} team={team} compact />}
         {label}
       </strong>
     </div>
@@ -1692,6 +1764,7 @@ function Meter({ label, value, hot = false }: { label: string; value: number; ho
 }
 
 function TeamsView({ match, t }: { match: Match; t: Record<string, string> }) {
+  const accents = matchAccentColors(match);
   const rows = [
     ["Attack", match.home.attack, match.away.attack],
     ["Control", match.home.control, match.away.control],
@@ -1706,23 +1779,27 @@ function TeamsView({ match, t }: { match: Match; t: Record<string, string> }) {
         <span>{t.compareTeams}</span>
       </div>
       <div className="team-comparison-header">
-        <TeamBadge team={match.home} />
-        <TeamBadge team={match.away} />
+        <TeamBadge accentColor={accents.home} team={match.home} />
+        <TeamBadge accentColor={accents.away} team={match.away} />
       </div>
       <div className="comparison-rows">
-        {rows.map(([label, home, away]) => (
-          <div className="comparison-row" key={label}>
-            <strong>{home}</strong>
-            <div>
-              <span>{label}</span>
-              <div className="split-meter">
-                <span style={{ width: `${home}%`, background: match.home.color }} />
-                <span style={{ width: `${away}%`, background: match.away.color }} />
+        {rows.map(([label, home, away]) => {
+          const shares = splitMeterShares(home, away);
+
+          return (
+            <div className="comparison-row" key={label}>
+              <strong>{home}</strong>
+              <div>
+                <span>{label}</span>
+                <div className="split-meter">
+                  <span style={{ flexGrow: shares.home, background: accents.home }} />
+                  <span style={{ flexGrow: shares.away, background: accents.away }} />
+                </div>
               </div>
+              <strong>{away}</strong>
             </div>
-            <strong>{away}</strong>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1765,6 +1842,13 @@ function WeatherView({
   t: Record<string, string>;
   language: Language;
 }) {
+  const hasRefereeAssignment =
+    match.referee.name !== "TBD" &&
+    match.referee.name !== "Assignment pending";
+  const refereeName = hasRefereeAssignment ? match.referee.name : t.refereePending;
+  const cardRisk =
+    match.referee.cardRisk === "Pending" ? t.pending : match.referee.cardRisk;
+
   return (
     <div className="weather-grid">
       <div className="weather-card">
@@ -1785,7 +1869,7 @@ function WeatherView({
       <div className="weather-card wide">
         <Trophy size={22} />
         <span>{t.referee}</span>
-        <strong>{match.referee.name} · {match.referee.cardRisk}</strong>
+        <strong>{refereeName} · {cardRisk}</strong>
       </div>
     </div>
   );

@@ -1121,6 +1121,10 @@ function toLanguageRecord(value: string): Record<Language, string> {
 }
 
 function toCardRisk(value: string | number | null) {
+  if (value === null) {
+    return "Pending";
+  }
+
   const cardsPerMatch = toNumber(value);
 
   if (cardsPerMatch >= 4) {

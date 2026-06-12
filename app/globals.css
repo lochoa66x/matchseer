@@ -761,15 +761,19 @@ h1 {
 
 .split-meter {
   display: flex;
+  gap: 3px;
   height: 12px;
+  padding: 2px;
   overflow: hidden;
   background: #e4dccf;
   border-radius: 999px;
 }
 
 .split-meter span {
+  flex-basis: 0;
   height: 100%;
   margin: 0;
+  border-radius: 999px;
 }
 
 .players-grid {
