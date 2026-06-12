@@ -153,7 +153,7 @@ export async function listMatches(): Promise<MatchListResult> {
   if (connection.sql) {
     try {
       const rows = await fetchMatchRows(connection.sql);
-      const matches = rows.map(toMatchSummary);
+      const matches = filterDemoRows(rows.map(toMatchSummary));
 
       if (matches.length > 0) {
         return {
@@ -171,6 +171,18 @@ export async function listMatches(): Promise<MatchListResult> {
   }
 
   return sampleResult(connection.reason);
+}
+
+function filterDemoRows(matches: MatchSummary[]) {
+  const hasProviderRows = matches.some((match) => match.id.startsWith("fd-"));
+
+  if (!hasProviderRows) {
+    return matches;
+  }
+
+  const demoIds = new Set(["mx-rsa", "br-jp", "ca-ma"]);
+
+  return matches.filter((match) => !demoIds.has(match.id));
 }
 
 export async function getMatch(matchId: string) {
@@ -768,7 +780,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   return {
     id: row.id,
     status,
-    group: row.group_name ?? "Group",
+    group: normalizeGroupName(row.group_name),
     time: toMatchTime(status, row.starts_at),
     venue: row.venue_name,
     city: row.venue_city,
@@ -836,6 +848,20 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       note: player.note ?? "Spark pending",
     })),
   };
+}
+
+function normalizeGroupName(groupName: string | null) {
+  if (!groupName) {
+    return "Group";
+  }
+
+  const normalized = groupName
+    .replace(/^GROUP[_\s-]+/i, "Group ")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized.replace(/\b([a-z])/g, (letter) => letter.toUpperCase());
 }
 
 function toMatchStatus(status: string): MatchStatus {
