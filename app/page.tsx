@@ -1933,6 +1933,117 @@ function SeerScoreboardBoard({
   );
 }
 
+function CupCandidateCard({
+  candidate,
+  index,
+  language,
+  onSelectTeam,
+  t,
+}: {
+  candidate: CupCandidate;
+  index: number;
+  language: Language;
+  onSelectTeam: (teamName: string) => void;
+  t: Record<string, string>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const showLabel =
+    language === "es"
+      ? "Ver an\u00e1lisis"
+      : language === "fr"
+        ? "Voir l'analyse"
+        : "Show analysis";
+  const hideLabel =
+    language === "es"
+      ? "Ocultar an\u00e1lisis"
+      : language === "fr"
+        ? "Masquer l'analyse"
+        : "Hide analysis";
+
+  return (
+    <div
+      className="cup-candidate-card"
+      onClick={() => onSelectTeam(candidate.team.name)}
+      style={{ "--team-color": candidate.team.color } as React.CSSProperties}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onSelectTeam(candidate.team.name);
+      }}
+    >
+      <div className="cup-candidate-top">
+        <div className="cup-candidate-aura">
+          <span className="candidate-rank">#{index + 1}</span>
+          <TeamFlag team={candidate.team} />
+        </div>
+        <div className="cup-candidate-name">
+          <span
+            className="team-code"
+            style={{ background: candidate.team.color }}
+          >
+            {candidate.team.code}
+          </span>
+          <strong>{candidate.team.name}</strong>
+        </div>
+      </div>
+      <div className="cup-oracle-line">
+        <Sparkles size={15} />
+        <span>{candidate.traits.join(" \u00b7 ")}</span>
+      </div>
+      <div className="cup-signal-row">
+        <span>{t.cupSignal}</span>
+        <strong>{candidate.signal}%</strong>
+      </div>
+      <div className="cup-signal-track">
+        <span
+          style={{
+            background: candidate.team.color,
+            width: `${candidate.signal}%`,
+          }}
+        />
+      </div>
+      <div className="cup-path-meta">
+        <span>
+          {candidate.matches} {t.matches}
+        </span>
+        <span>{candidate.expectedPoints.toFixed(1)} xPts</span>
+      </div>
+      <button
+        className="cup-analysis-toggle"
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded((prev) => !prev);
+        }}
+        aria-expanded={expanded}
+      >
+        <span>{expanded ? hideLabel : showLabel}</span>
+        <span
+          style={{
+            display: "inline-block",
+            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s",
+            marginLeft: "4px",
+          }}
+        >
+          \u25be
+        </span>
+      </button>
+      {expanded && (
+        <div className="cup-analysis-panel">
+          <p>
+            <strong>{t.seerVerdict}: </strong>
+            {candidate.verdict}
+          </p>
+          <small>
+            {t.riskCloud}: {candidate.risk}
+          </small>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CupSeerBoard({
   candidates,
   language,
@@ -1966,58 +2077,14 @@ function CupSeerBoard({
           <div className="empty-match-state">{t.noCupCandidates}</div>
         )}
         {candidates.map((candidate, index) => (
-          <button
-            className="cup-candidate-card"
+          <CupCandidateCard
             key={candidate.team.name}
-            onClick={() => onSelectTeam(candidate.team.name)}
-            style={{ "--team-color": candidate.team.color } as React.CSSProperties}
-            type="button"
-          >
-            <div className="cup-candidate-top">
-              <div className="cup-candidate-aura">
-                <span className="candidate-rank">#{index + 1}</span>
-                <TeamFlag team={candidate.team} />
-              </div>
-              <div className="cup-candidate-name">
-                <span
-                  className="team-code"
-                  style={{ background: candidate.team.color }}
-                >
-                  {candidate.team.code}
-                </span>
-                <strong>{candidate.team.name}</strong>
-              </div>
-            </div>
-            <div className="cup-oracle-line">
-              <Sparkles size={15} />
-              <span>{candidate.traits.join(" · ")}</span>
-            </div>
-            <div className="cup-signal-row">
-              <span>{t.cupSignal}</span>
-              <strong>{candidate.signal}%</strong>
-            </div>
-            <div className="cup-signal-track">
-              <span
-                style={{
-                  background: candidate.team.color,
-                  width: `${candidate.signal}%`,
-                }}
-              />
-            </div>
-            <div className="cup-path-meta">
-              <span>
-                {candidate.matches} {t.matches}
-              </span>
-              <span>{candidate.expectedPoints.toFixed(1)} xPts</span>
-            </div>
-            <p>
-              <strong>{t.seerVerdict}: </strong>
-              {candidate.verdict}
-            </p>
-            <small>
-              {t.riskCloud}: {candidate.risk}
-            </small>
-          </button>
+            candidate={candidate}
+            index={index}
+            language={language}
+            onSelectTeam={onSelectTeam}
+            t={t}
+          />
         ))}
       </div>
       <p className="disclaimer cup-disclaimer">
