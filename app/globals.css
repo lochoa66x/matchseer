@@ -3403,6 +3403,169 @@ body {
   }
 }
 
+/* Calmer MatchSeer pass: less neon-poster, more modern matchroom. */
+:root {
+  --ink: #f6fbf8;
+  --muted: #aab8b3;
+  --paper: #06100f;
+  --panel: rgba(8, 21, 24, 0.86);
+  --surface: rgba(16, 33, 38, 0.76);
+  --line: rgba(75, 214, 178, 0.2);
+  --night: #071312;
+  --gold: #f4c95d;
+  --green: #43e58f;
+  --blue: #46cbd3;
+  --red: #e05a4f;
+  --violet: #2e5264;
+  --pink: #68d8a6;
+}
+
+body {
+  background:
+    radial-gradient(circle at 18% 16%, rgba(70, 203, 211, 0.18), transparent 24%),
+    radial-gradient(circle at 84% 14%, rgba(67, 229, 143, 0.13), transparent 24%),
+    radial-gradient(circle at 50% 94%, rgba(244, 201, 93, 0.1), transparent 30%),
+    linear-gradient(125deg, rgba(70, 203, 211, 0.045) 1px, transparent 1px) 0 0 / 78px 78px,
+    linear-gradient(180deg, #07100f 0%, #0a191e 48%, #050908 100%);
+}
+
+.app-shell::before {
+  background:
+    linear-gradient(90deg, transparent 0 19%, rgba(70, 203, 211, 0.12) 19.2%, transparent 19.5% 49.6%, rgba(67, 229, 143, 0.11) 49.9%, transparent 50.2% 80.5%, rgba(244, 201, 93, 0.1) 80.8%, transparent 81%),
+    radial-gradient(ellipse at 50% 100%, transparent 0 58%, rgba(70, 203, 211, 0.28) 58.3% 58.8%, transparent 59.2%);
+  opacity: 0.42;
+}
+
+.brand-mark {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.72), transparent 0 8%, transparent 9%),
+    conic-gradient(from 25deg, #46cbd3, #43e58f, #f4c95d, #46cbd3);
+  border-color: rgba(67, 229, 143, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 28px rgba(70, 203, 211, 0.2);
+}
+
+.brand-ball {
+  background:
+    linear-gradient(60deg, transparent 42%, rgba(255, 255, 255, 0.7) 42% 48%, transparent 48%),
+    linear-gradient(-45deg, transparent 40%, rgba(255, 255, 255, 0.6) 40% 47%, transparent 47%),
+    radial-gradient(circle at 50% 50%, transparent 0 31%, rgba(255, 255, 255, 0.88) 32% 36%, transparent 37%),
+    rgba(6, 16, 15, 0.18);
+}
+
+.hero-copy,
+.seer-access-panel,
+.data-status-card,
+.cup-seer-board,
+.seer-lens-strip,
+.match-filter-panel,
+.match-card,
+.ad-card,
+.detail-panel,
+.forecast-card,
+.comparison-card,
+.player-card,
+.weather-card {
+  background:
+    linear-gradient(145deg, rgba(11, 28, 34, 0.94), rgba(5, 12, 13, 0.94)),
+    var(--panel);
+  border-color: rgba(75, 214, 178, 0.18);
+}
+
+.hero-copy {
+  background:
+    radial-gradient(circle at 32% 86%, rgba(70, 203, 211, 0.18), transparent 18%),
+    linear-gradient(145deg, rgba(9, 25, 31, 0.96), rgba(5, 11, 12, 0.98));
+  border-color: rgba(70, 203, 211, 0.22);
+}
+
+.hero-copy h2::first-line {
+  color: inherit;
+}
+
+.hero-match-summary {
+  background: rgba(4, 12, 13, 0.76);
+  border-color: rgba(75, 214, 178, 0.24);
+}
+
+.seer-access-panel {
+  background:
+    radial-gradient(circle at 78% 18%, rgba(67, 229, 143, 0.14), transparent 28%),
+    radial-gradient(circle at 18% 82%, rgba(70, 203, 211, 0.15), transparent 30%),
+    linear-gradient(145deg, rgba(9, 25, 31, 0.98), rgba(4, 11, 12, 0.98));
+  border-color: rgba(75, 214, 178, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(70, 203, 211, 0.08),
+    0 28px 78px rgba(0, 0, 0, 0.34);
+}
+
+.seer-primary-button,
+.share-button,
+.oracle-button,
+.admin-command.primary {
+  color: #06100f;
+  background: linear-gradient(100deg, #46cbd3, #43e58f 58%, #f4c95d);
+  border-color: rgba(75, 214, 178, 0.38);
+  box-shadow:
+    0 16px 36px rgba(67, 229, 143, 0.13),
+    0 0 24px rgba(70, 203, 211, 0.12);
+}
+
+.status-chip,
+.main-nav a:hover,
+.cup-pulse-chip,
+.cup-oracle-line {
+  color: var(--blue);
+  background: rgba(70, 203, 211, 0.08);
+  border-color: rgba(70, 203, 211, 0.28);
+}
+
+.team-flag {
+  width: 42px;
+  height: 34px;
+  color: #06100f;
+  background: var(--green);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.14),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  font-size: 0.74rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.team-flag.compact {
+  width: 34px;
+  height: 28px;
+  font-size: 0.66rem;
+}
+
+.cup-seer-board {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(70, 203, 211, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 20%, rgba(67, 229, 143, 0.1), transparent 28%),
+    linear-gradient(145deg, rgba(10, 26, 31, 0.94), rgba(4, 10, 11, 0.96));
+  border-color: rgba(75, 214, 178, 0.2);
+}
+
+.cup-candidate-card {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--team-color, var(--blue)) 20%, transparent), transparent 34%),
+    linear-gradient(145deg, rgba(12, 29, 35, 0.92), rgba(5, 12, 13, 0.96));
+}
+
+.cup-signal-track span {
+  background: linear-gradient(90deg, var(--team-color, var(--green)), var(--blue)) !important;
+}
+
+.cup-candidate-aura .team-flag {
+  width: 54px;
+  height: 42px;
+  font-size: 0.88rem;
+}
+
 .admin-shell {
   --ink: #101624;
   --muted: #667085;

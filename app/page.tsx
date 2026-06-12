@@ -55,7 +55,7 @@ type OracleResponse = {
 const copy = {
   en: {
     matchday: "Matchday forecast",
-    subtitle: "See the match before it happens.",
+    subtitle: "Real stats, playful readouts, zero betting energy.",
     today: "Today",
     live: "Live",
     upcoming: "Upcoming",
@@ -131,7 +131,7 @@ const copy = {
   },
   es: {
     matchday: "Pronóstico del día",
-    subtitle: "Ve el partido antes de que pase.",
+    subtitle: "Estadísticas reales, lecturas divertidas, cero energía de apuestas.",
     today: "Hoy",
     live: "En vivo",
     upcoming: "Próximo",
@@ -207,7 +207,7 @@ const copy = {
   },
   fr: {
     matchday: "Prévision du jour",
-    subtitle: "Vois le match avant qu’il arrive.",
+    subtitle: "Vraies stats, lectures ludiques, zéro énergie pari.",
     today: "Aujourd’hui",
     live: "En direct",
     upcoming: "À venir",
@@ -1479,7 +1479,6 @@ function TeamLine({ team, score }: { team: Team; score?: string }) {
 function TeamBadge({ team }: { team: Team }) {
   return (
     <div className="team-badge">
-      <TeamFlag team={team} />
       <span className="team-code" style={{ background: team.color }}>{team.code}</span>
       <strong>{team.name}</strong>
     </div>
@@ -1489,135 +1488,15 @@ function TeamBadge({ team }: { team: Team }) {
 function TeamFlag({ team, compact = false }: { team: Team; compact?: boolean }) {
   return (
     <span
-      aria-label={`${team.name} flag`}
+      aria-label={`${team.name} team code`}
       className={cx("team-flag", compact && "compact")}
+      style={{ background: team.color }}
       title={team.name}
     >
-      {flagEmojiForTeam(team)}
+      {team.code}
     </span>
   );
 }
-
-function flagEmojiForTeam(team: Team) {
-  const code = team.code.toUpperCase();
-  const nameKey = normalizeTeamKey(team.name);
-  const flagCode =
-    fifaCodeToFlagCode[code] ??
-    teamNameToFlagCode[nameKey] ??
-    code.slice(0, 2);
-
-  if (specialFlags[flagCode]) {
-    return specialFlags[flagCode];
-  }
-
-  return countryCodeToEmoji(flagCode);
-}
-
-function countryCodeToEmoji(countryCode: string) {
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
-    return "🏳️";
-  }
-
-  return countryCode
-    .split("")
-    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
-    .join("");
-}
-
-const specialFlags: Record<string, string> = {
-  ENG: "🏴",
-  SCO: "🏴",
-  WAL: "🏴",
-};
-
-const fifaCodeToFlagCode: Record<string, string> = {
-  ALB: "AL",
-  ALG: "DZ",
-  ARG: "AR",
-  AUS: "AU",
-  AUT: "AT",
-  BEL: "BE",
-  BIH: "BA",
-  BRA: "BR",
-  CAN: "CA",
-  CHI: "CL",
-  COL: "CO",
-  CRC: "CR",
-  CRO: "HR",
-  CZE: "CZ",
-  DEN: "DK",
-  ECU: "EC",
-  ENG: "ENG",
-  FRA: "FR",
-  GER: "DE",
-  GHA: "GH",
-  HAI: "HT",
-  ITA: "IT",
-  JPN: "JP",
-  KOR: "KR",
-  MAR: "MA",
-  MEX: "MX",
-  NED: "NL",
-  NGA: "NG",
-  PAR: "PY",
-  POL: "PL",
-  POR: "PT",
-  QAT: "QA",
-  RSA: "ZA",
-  SCO: "SCO",
-  SEN: "SN",
-  SRB: "RS",
-  SUI: "CH",
-  TUN: "TN",
-  URU: "UY",
-  USA: "US",
-};
-
-const teamNameToFlagCode: Record<string, string> = {
-  algeria: "DZ",
-  argentina: "AR",
-  australia: "AU",
-  austria: "AT",
-  belgium: "BE",
-  "bosnia h": "BA",
-  "bosnia and herzegovina": "BA",
-  brazil: "BR",
-  canada: "CA",
-  chile: "CL",
-  colombia: "CO",
-  costa: "CR",
-  croatia: "HR",
-  czechia: "CZ",
-  denmark: "DK",
-  ecuador: "EC",
-  england: "ENG",
-  france: "FR",
-  germany: "DE",
-  ghana: "GH",
-  haiti: "HT",
-  italy: "IT",
-  japan: "JP",
-  korea: "KR",
-  "korea republic": "KR",
-  mexico: "MX",
-  morocco: "MA",
-  netherlands: "NL",
-  nigeria: "NG",
-  paraguay: "PY",
-  poland: "PL",
-  portugal: "PT",
-  qatar: "QA",
-  scotland: "SCO",
-  senegal: "SN",
-  serbia: "RS",
-  "south africa": "ZA",
-  spain: "ES",
-  switzerland: "CH",
-  tunisia: "TN",
-  uruguay: "UY",
-  usa: "US",
-  "united states": "US",
-};
 
 function ForecastView({
   match,
