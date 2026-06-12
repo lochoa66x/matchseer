@@ -921,6 +921,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   return {
     id: row.id,
     status,
+    startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
     group: normalizeGroupName(row.group_name),
     time: toMatchTime(status, row.starts_at),
     venue: row.venue_name,

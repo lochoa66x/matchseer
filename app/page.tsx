@@ -31,6 +31,7 @@ import type {
 } from "../lib/domain";
 
 type Tab = "forecast" | "teams" | "players" | "weather";
+type MatchFilter = "today" | "upcoming" | "completed";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
 type OracleResponse = {
@@ -48,7 +49,12 @@ const copy = {
     today: "Today",
     live: "Live",
     upcoming: "Upcoming",
+    completed: "Completed",
     final: "Final",
+    groups: "Groups",
+    allGroups: "All groups",
+    matches: "matches",
+    noMatches: "No matches in this view yet.",
     forecast: "Forecast",
     teams: "Teams",
     players: "Players",
@@ -92,7 +98,12 @@ const copy = {
     today: "Hoy",
     live: "En vivo",
     upcoming: "Próximo",
+    completed: "Completados",
     final: "Final",
+    groups: "Grupos",
+    allGroups: "Todos los grupos",
+    matches: "partidos",
+    noMatches: "Aún no hay partidos en esta vista.",
     forecast: "Pronóstico",
     teams: "Equipos",
     players: "Jugadores",
@@ -136,7 +147,12 @@ const copy = {
     today: "Aujourd’hui",
     live: "En direct",
     upcoming: "À venir",
+    completed: "Terminés",
     final: "Terminé",
+    groups: "Groupes",
+    allGroups: "Tous les groupes",
+    matches: "matchs",
+    noMatches: "Aucun match dans cette vue pour le moment.",
     forecast: "Prévision",
     teams: "Équipes",
     players: "Joueurs",
@@ -393,6 +409,8 @@ export default function Home() {
   const [matches, setMatches] = useState(fallbackMatches);
   const [activeMatchId, setActiveMatchId] = useState(fallbackMatches[0].id);
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
+  const [matchFilter, setMatchFilter] = useState<MatchFilter>("today");
+  const [groupFilter, setGroupFilter] = useState("all");
   const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
     source: "sample",
     reason: "loading",
@@ -461,6 +479,32 @@ export default function Home() {
   const oracleKey = `${activeMatch.id}:${language}`;
   const activeOracleRead = oracleReads[oracleKey];
   const activeOracleStatus = oracleStatus[oracleKey] ?? "idle";
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const groups = useMemo(
+    () => Array.from(new Set(matches.map((match) => match.group))).sort(),
+    [matches],
+  );
+  const visibleMatches = useMemo(
+    () =>
+      matches.filter((match) => {
+        const groupMatches = groupFilter === "all" || match.group === groupFilter;
+
+        if (!groupMatches) {
+          return false;
+        }
+
+        if (matchFilter === "today") {
+          return isTodayMatch(match, todayKey);
+        }
+
+        if (matchFilter === "completed") {
+          return match.status === "Final";
+        }
+
+        return match.status === "Upcoming" || match.status === "Live";
+      }),
+    [groupFilter, matchFilter, matches, todayKey],
+  );
   const hasPendingWeather =
     activeMatch.weather.temp === "Pending" ||
     activeMatch.weather.wind === "Pending" ||
@@ -470,7 +514,17 @@ export default function Home() {
       ? t.liveDatabase
       : dataInfo.source === "sample"
         ? t.sampleMode
-        : t.fallbackMode;
+      : t.fallbackMode;
+
+  useEffect(() => {
+    if (
+      visibleMatches.length > 0 &&
+      !visibleMatches.some((match) => match.id === activeMatchId)
+    ) {
+      setActiveMatchId(visibleMatches[0].id);
+      setActiveTab("forecast");
+    }
+  }, [activeMatchId, visibleMatches]);
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const key = `${matchId}:${selectedLanguage}`;
@@ -627,8 +681,42 @@ export default function Home() {
             <CalendarDays size={18} />
             <span>{t.today}</span>
           </div>
+          <div className="match-filter-panel">
+            <div className="match-filter-tabs" aria-label="Match filters">
+              {(["today", "upcoming", "completed"] as MatchFilter[]).map((filter) => (
+                <button
+                  className={cx("filter-pill", matchFilter === filter && "active")}
+                  key={filter}
+                  onClick={() => setMatchFilter(filter)}
+                  type="button"
+                >
+                  {t[filter]}
+                </button>
+              ))}
+            </div>
+            <label className="group-filter">
+              <span>{t.groups}</span>
+              <select
+                onChange={(event) => setGroupFilter(event.target.value)}
+                value={groupFilter}
+              >
+                <option value="all">{t.allGroups}</option>
+                {groups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="match-count">
+              {visibleMatches.length} / {matches.length} {t.matches}
+            </p>
+          </div>
           <div className="match-list">
-            {matches.map((match) => (
+            {visibleMatches.length === 0 && (
+              <div className="empty-match-state">{t.noMatches}</div>
+            )}
+            {visibleMatches.map((match) => (
               <button
                 className={cx("match-card", activeMatch.id === match.id && "selected")}
                 key={match.id}
@@ -641,7 +729,7 @@ export default function Home() {
                 <div className="match-card-top">
                   <span className={cx("status-dot", match.status.toLowerCase())} />
                   <span>{t[match.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
-                  <span>{match.minute ?? match.time}</span>
+                  <span>{formatMatchSchedule(match)}</span>
                 </div>
                 <TeamLine team={match.home} score={match.score?.split(" - ")[0]} />
                 <TeamLine team={match.away} score={match.score?.split(" - ")[1]} />
@@ -730,6 +818,41 @@ function Signal({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function toDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Toronto",
+    year: "numeric",
+  }).format(date);
+}
+
+function isTodayMatch(match: Match, todayKey: string) {
+  if (!match.startsAt) {
+    return match.status !== "Upcoming";
+  }
+
+  return toDateKey(new Date(match.startsAt)) === todayKey;
+}
+
+function formatMatchSchedule(match: Match) {
+  if (match.status === "Final") {
+    return match.time;
+  }
+
+  if (!match.startsAt) {
+    return match.minute ?? match.time;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "America/Toronto",
+  }).format(new Date(match.startsAt));
 }
 
 function MetaItem({

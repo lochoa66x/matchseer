@@ -1139,6 +1139,79 @@ h1 {
   gap: 10px;
 }
 
+.match-filter-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(18, 20, 23, 0.09);
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(16, 24, 32, 0.05);
+}
+
+.match-filter-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.filter-pill {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.filter-pill.active {
+  color: #fff;
+  background: var(--night);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.group-filter {
+  display: grid;
+  gap: 6px;
+}
+
+.group-filter span,
+.match-count {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.group-filter select {
+  min-height: 38px;
+  width: 100%;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid rgba(18, 20, 23, 0.11);
+  border-radius: 7px;
+  font: inherit;
+  font-weight: 800;
+}
+
+.match-count {
+  margin: 0;
+}
+
+.empty-match-state {
+  padding: 16px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed rgba(18, 20, 23, 0.18);
+  border-radius: 8px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .section-heading {
   color: #1a2027;
 }

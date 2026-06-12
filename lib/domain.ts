@@ -42,6 +42,7 @@ export type MatchSummary = {
   id: string;
   status: MatchStatus;
   minute?: string;
+  startsAt?: string | null;
   group: string;
   time: string;
   venue: string;
