@@ -1661,20 +1661,38 @@ function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language:
     return "En attente du score final pour vérifier la lecture.";
   }
 
+  const home = match.home.code;
+  const away = match.away.code;
+  const score = parseScoreline(match.score);
+  const predicted = getForecastSide(match);
+
   if (outcome === "exact") {
-    return "Scoreline landed clean: the receipt goes in the bright pile.";
+    if (!score) return "Scoreline landed clean: the receipt goes in the bright pile.";
+    if (score.home === score.away) {
+      return `${home} and ${away} split the points. The Seer read the draw — and the draw delivered.`;
+    }
+    const winner = score.home > score.away ? home : away;
+    const margin = Math.abs(score.home - score.away);
+    if (margin >= 2) {
+      return `${winner} made it look straightforward. The Seer called it and the scoreline confirmed it with room to spare.`;
+    }
+    return `${winner} walked the line the Seer drew. Clean direction, receipt filed.`;
   }
 
   if (outcome === "hit") {
-    return "Direction held, even if the scoreline took the scenic route.";
+    if (predicted === "draw") {
+      return `Not a draw in the end, but the Seer's read on ${home} vs ${away} was still close. Direction nearly held.`;
+    }
+    const predictedWinner = predicted === "home" ? home : away;
+    return `${predictedWinner} came through even if the scoreline didn't land exactly as written. The Seer's lean held.`;
   }
 
   if (outcome === "miss") {
-    return "The Seer missed this read; receipt saved for model tuning.";
+    return `${home} vs ${away} didn't follow the Seer's script. Receipt filed — the model takes note and moves on.`;
   }
 
   if (outcome === "live") {
-    return "Live match: the read is still breathing until the whistle.";
+    return `${home} vs ${away} is still live. The Seer's read is still breathing until the whistle.`;
   }
 
   return base || "Awaiting the final score before the receipt wakes up.";
