@@ -55,6 +55,8 @@ const copy = {
     matchday: "Matchday forecast",
     subtitle: "Real stats, playful readouts, zero betting energy.",
     mission: "Pick a match, ask the Seer, then explore the teams, players, venue, and weather behind the read.",
+    heroExplorerTitle: "Find the match signal",
+    heroExplorerCopy: "Filter by timing or group, pick a fixture, and send it to the Seer for the full read.",
     noBetting: "No betting energy",
     realStats: "Real stats",
     seerHub: "Seer command center",
@@ -138,6 +140,8 @@ const copy = {
     matchday: "Pronóstico del día",
     subtitle: "Estadísticas reales, lecturas divertidas, cero energía de apuestas.",
     mission: "Elige un partido, pregunta al Vidente y explora equipos, jugadores, estadio y clima detrás de la lectura.",
+    heroExplorerTitle: "Encuentra la señal del partido",
+    heroExplorerCopy: "Filtra por horario o grupo, elige un partido y mándalo al Vidente para la lectura completa.",
     noBetting: "Cero energía de apuestas",
     realStats: "Datos reales",
     seerHub: "Centro del Vidente",
@@ -221,6 +225,8 @@ const copy = {
     matchday: "Prévision du jour",
     subtitle: "Vraies stats, lectures ludiques, zéro énergie pari.",
     mission: "Choisis un match, demande au voyant, puis explore les équipes, joueurs, stade et météo derrière la lecture.",
+    heroExplorerTitle: "Trouve le signal du match",
+    heroExplorerCopy: "Filtre par moment ou groupe, choisis une affiche et envoie-la au voyant pour la lecture complète.",
     noBetting: "Zéro énergie pari",
     realStats: "Vraies stats",
     seerHub: "Centre du voyant",
@@ -665,8 +671,8 @@ export default function Home() {
                 <CalendarDays size={18} />
                 <span>{t.matchExplorer}</span>
               </div>
-              <h2>{t.subtitle}</h2>
-              <p>{t.mission}</p>
+              <h2>{t.heroExplorerTitle}</h2>
+              <p>{t.heroExplorerCopy}</p>
             </div>
             <div className="hero-board-count">
               <strong>{visibleMatches.length}</strong>
