@@ -540,7 +540,7 @@ export default function Home() {
             </div>
             <div>
               <p className="eyebrow">MatchSeer</p>
-              <h1>{t.matchday}</h1>
+              <h1>{t.subtitle}</h1>
             </div>
           </div>
           <div className="language-switcher" aria-label="Language selector">
@@ -633,7 +633,7 @@ export default function Home() {
           </div>
           <div>
             <p className="eyebrow">MatchSeer</p>
-            <h1>{t.matchday}</h1>
+            <h1>{t.subtitle}</h1>
           </div>
         </div>
         <nav className="main-nav" aria-label="Primary navigation">
@@ -657,41 +657,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="hero-grid" id="ask-seer">
-        <div className="hero-copy hero-intro-card">
-          <div className="hero-kicker-row">
-            <div className="status-chip">
-              <Sparkles size={15} />
-              {t.realStats}
-            </div>
-            <span>{t.noBetting}</span>
-          </div>
-          <h2>{t.subtitle}</h2>
-          <p className="hero-mission">{t.mission}</p>
-          <div className="hero-promise-row">
-            <span>
-              <BarChart3 size={16} />
-              {t.realFixtures}
-            </span>
-            <span>
-              <CloudSun size={16} />
-              {t.venueWeather}
-            </span>
-            <span>
-              <ShieldCheck size={16} />
-              {t.noBetting}
-            </span>
-          </div>
-          <div className="hero-stadium-art" aria-hidden="true">
-            <div className="hero-orb" />
-            <div className="hero-field-lines" />
-          </div>
-        </div>
-
+      <section className="hero-grid hero-seer-only" id="ask-seer">
         <div className="seer-access-panel seer-command-panel">
           <div className="seer-panel-header">
             <div>
               <p className="eyebrow">{t.seerHub}</p>
+              <h2 className="seer-panel-title">{t.matchday}</h2>
               <div className="seer-teams">
                 <div className="seer-team-name">
                   <TeamFlag team={activeMatch.home} />
