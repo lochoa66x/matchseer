@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  Activity,
   BarChart3,
   CalendarDays,
   Check,
   ChevronRight,
+  Clock3,
   CloudSun,
   Languages,
   LoaderCircle,
+  MapPin,
   Radio,
   RefreshCcw,
   Share2,
@@ -70,6 +73,18 @@ const copy = {
     freshRead: "Fresh read",
     seededRead: "Seeded read",
     oracleError: "The Seer blinked. Try again.",
+    dataStatus: "Data status",
+    liveDatabase: "Live database",
+    sampleMode: "Sample mode",
+    fallbackMode: "Fallback mode",
+    dataDepth: "Data depth",
+    realFixtures: "Real fixture feed",
+    sampleFixtures: "Demo matchday",
+    venueWeather: "Venue + weather",
+    connected: "Connected",
+    mapping: "Mapping underway",
+    aiLayer: "AI layer",
+    aiReady: "Ready on demand",
   },
   es: {
     matchday: "Pronóstico del día",
@@ -102,6 +117,18 @@ const copy = {
     freshRead: "Lectura nueva",
     seededRead: "Lectura base",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
+    dataStatus: "Estado de datos",
+    liveDatabase: "Base en vivo",
+    sampleMode: "Modo demo",
+    fallbackMode: "Respaldo",
+    dataDepth: "Nivel de datos",
+    realFixtures: "Calendario real",
+    sampleFixtures: "Jornada demo",
+    venueWeather: "Estadio + clima",
+    connected: "Conectado",
+    mapping: "Mapeo en curso",
+    aiLayer: "Capa IA",
+    aiReady: "Lista al pedir",
   },
   fr: {
     matchday: "Prévision du jour",
@@ -134,6 +161,18 @@ const copy = {
     freshRead: "Lecture fraîche",
     seededRead: "Lecture de base",
     oracleError: "Le voyant a cligné. Réessaie.",
+    dataStatus: "État des données",
+    liveDatabase: "Base en direct",
+    sampleMode: "Mode démo",
+    fallbackMode: "Repli",
+    dataDepth: "Niveau données",
+    realFixtures: "Calendrier réel",
+    sampleFixtures: "Journée démo",
+    venueWeather: "Stade + météo",
+    connected: "Connecté",
+    mapping: "Mappage en cours",
+    aiLayer: "Couche IA",
+    aiReady: "Prête à la demande",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -340,7 +379,13 @@ function isLanguageOption(value: string | null): value is Language {
 
 type MatchesResponse = {
   source: "sample" | "database" | "database-unavailable";
+  reason: string;
   matches: Match[];
+  database?: {
+    hasDatabaseUrl: boolean;
+    driver: string;
+    note: string;
+  };
 };
 
 export default function Home() {
@@ -348,6 +393,10 @@ export default function Home() {
   const [matches, setMatches] = useState(fallbackMatches);
   const [activeMatchId, setActiveMatchId] = useState(fallbackMatches[0].id);
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
+  const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
+    source: "sample",
+    reason: "loading",
+  });
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
   const [oracleStatus, setOracleStatus] = useState<Record<string, OracleStatus>>({});
   const [shareStatus, setShareStatus] = useState<ShareStatus>("idle");
@@ -380,6 +429,11 @@ export default function Home() {
         const payload = (await response.json()) as MatchesResponse;
 
         if (!ignore && payload.matches.length > 0) {
+          setDataInfo({
+            source: payload.source,
+            reason: payload.reason,
+            database: payload.database,
+          });
           setMatches(payload.matches);
           setActiveMatchId((current) =>
             payload.matches.some((match) => match.id === current)
@@ -407,6 +461,16 @@ export default function Home() {
   const oracleKey = `${activeMatch.id}:${language}`;
   const activeOracleRead = oracleReads[oracleKey];
   const activeOracleStatus = oracleStatus[oracleKey] ?? "idle";
+  const hasPendingWeather =
+    activeMatch.weather.temp === "Pending" ||
+    activeMatch.weather.wind === "Pending" ||
+    activeMatch.weather.mood[language].toLowerCase().includes("pending");
+  const dataSourceLabel =
+    dataInfo.source === "database"
+      ? t.liveDatabase
+      : dataInfo.source === "sample"
+        ? t.sampleMode
+        : t.fallbackMode;
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const key = `${matchId}:${selectedLanguage}`;
@@ -493,11 +557,28 @@ export default function Home() {
 
       <section className="hero-grid">
         <div className="hero-copy">
-          <div className="status-chip">
-            <Radio size={15} />
-            {t.today}
+          <div className="hero-kicker-row">
+            <div className="status-chip">
+              <Radio size={15} />
+              {t.today}
+            </div>
+            <span>{activeMatch.group}</span>
+          </div>
+          <div className="hero-match-summary">
+            <strong>{activeMatch.home.name}</strong>
+            <span>vs</span>
+            <strong>{activeMatch.away.name}</strong>
           </div>
           <h2>{t.subtitle}</h2>
+          <div className="hero-meta-grid">
+            <MetaItem icon={<MapPin size={16} />} label={activeMatch.venue} value={activeMatch.city} />
+            <MetaItem
+              icon={<Clock3 size={16} />}
+              label={t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}
+              value={activeMatch.minute ?? activeMatch.time}
+            />
+            <MetaItem icon={<Activity size={16} />} label={t.forecast} value={activeMatch.forecast.projected} />
+          </div>
           <div className="quick-signals">
             <Signal label={t.confidence} value={`${activeMatch.forecast.confidence}%`} />
             <Signal label={t.chaos} value={`${activeMatch.forecast.chaos}%`} />
@@ -511,6 +592,33 @@ export default function Home() {
           <div className="pitch-orbit orbit-two" />
           <div className="pulse-ball" />
         </div>
+      </section>
+
+      <section className="data-status-grid" aria-label={t.dataStatus}>
+        <DataStatusCard
+          label={t.dataStatus}
+          value={dataSourceLabel}
+          detail={dataInfo.source === "database" ? dataInfo.database?.driver ?? "Neon" : dataInfo.reason}
+          tone={dataInfo.source === "database" ? "good" : "watch"}
+        />
+        <DataStatusCard
+          label={t.dataDepth}
+          value={dataInfo.source === "database" ? t.realFixtures : t.sampleFixtures}
+          detail={`${matches.length} matches`}
+          tone={dataInfo.source === "database" ? "good" : "watch"}
+        />
+        <DataStatusCard
+          label={t.venueWeather}
+          value={hasPendingWeather ? t.mapping : t.connected}
+          detail={`${activeMatch.venue} · ${activeMatch.weather.temp}`}
+          tone={hasPendingWeather ? "watch" : "good"}
+        />
+        <DataStatusCard
+          label={t.aiLayer}
+          value={activeOracleRead?.source === "openai" ? t.freshRead : t.aiReady}
+          detail={activeOracleRead?.model ?? "OpenAI"}
+          tone={activeOracleRead?.source === "openai" ? "good" : "neutral"}
+        />
       </section>
 
       <section className="content-grid">
@@ -564,12 +672,19 @@ export default function Home() {
                 <TeamBadge team={activeMatch.away} />
               </div>
             </div>
-            <button className="share-button" onClick={() => shareMatch(activeMatch)} type="button">
-              {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
-              {shareStatus === "copied" && t.copied}
-              {shareStatus === "error" && t.shareError}
-              {shareStatus === "idle" && t.share}
-            </button>
+            <div className="detail-actions">
+              <div className="match-score-card">
+                <span>{t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
+                <strong>{activeMatch.score ?? activeMatch.time}</strong>
+                <small>{t.projected}: {activeMatch.forecast.projected}</small>
+              </div>
+              <button className="share-button" onClick={() => shareMatch(activeMatch)} type="button">
+                {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
+                {shareStatus === "copied" && t.copied}
+                {shareStatus === "error" && t.shareError}
+                {shareStatus === "idle" && t.share}
+              </button>
+            </div>
           </div>
 
           <nav className="tabs" aria-label="Match detail tabs">
@@ -613,6 +728,46 @@ function Signal({ label, value }: { label: string; value: string }) {
     <div className="signal">
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function MetaItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="meta-item">
+      {icon}
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function DataStatusCard({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "good" | "watch" | "neutral";
+}) {
+  return (
+    <div className={cx("data-status-card", tone)}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
     </div>
   );
 }
