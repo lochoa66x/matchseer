@@ -5,7 +5,6 @@ import {
   BarChart3,
   CalendarDays,
   Check,
-  ChevronRight,
   Clock3,
   CloudSun,
   Languages,
@@ -55,6 +54,9 @@ const copy = {
     allGroups: "All groups",
     matches: "matches",
     noMatches: "No matches in this view yet.",
+    matchExplorer: "Match explorer",
+    selectedMatch: "Selected match",
+    quickRead: "Quick read",
     forecast: "Forecast",
     teams: "Teams",
     players: "Players",
@@ -104,6 +106,9 @@ const copy = {
     allGroups: "Todos los grupos",
     matches: "partidos",
     noMatches: "Aún no hay partidos en esta vista.",
+    matchExplorer: "Explorar partidos",
+    selectedMatch: "Partido seleccionado",
+    quickRead: "Lectura rápida",
     forecast: "Pronóstico",
     teams: "Equipos",
     players: "Jugadores",
@@ -153,6 +158,9 @@ const copy = {
     allGroups: "Tous les groupes",
     matches: "matchs",
     noMatches: "Aucun match dans cette vue pour le moment.",
+    matchExplorer: "Explorer les matchs",
+    selectedMatch: "Match sélectionné",
+    quickRead: "Lecture rapide",
     forecast: "Prévision",
     teams: "Équipes",
     players: "Joueurs",
@@ -640,11 +648,35 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="pitch-visual" aria-hidden="true">
-          <div className="pitch-lines" />
-          <div className="pitch-orbit orbit-one" />
-          <div className="pitch-orbit orbit-two" />
-          <div className="pulse-ball" />
+        <div className="seer-access-panel">
+          <p className="eyebrow">{t.selectedMatch}</p>
+          <div className="seer-teams">
+            <strong>{activeMatch.home.name}</strong>
+            <span>vs</span>
+            <strong>{activeMatch.away.name}</strong>
+          </div>
+          <div className="seer-context">
+            <span>{activeMatch.group}</span>
+            <span>{formatMatchSchedule(activeMatch)}</span>
+            <span>{activeMatch.venue}</span>
+          </div>
+          <button
+            className="seer-primary-button"
+            disabled={activeOracleStatus === "loading"}
+            onClick={() => requestOracleRead(activeMatch.id, language)}
+            type="button"
+          >
+            {activeOracleStatus === "loading" ? (
+              <LoaderCircle className="spin-icon" size={17} />
+            ) : (
+              <Sparkles size={17} />
+            )}
+            {activeOracleStatus === "loading" ? t.reading : t.askSeer}
+          </button>
+          <div className="seer-mini-grid">
+            <Signal label={t.confidence} value={`${activeMatch.forecast.confidence}%`} />
+            <Signal label={t.weather} value={activeMatch.weather.temp} />
+          </div>
         </div>
       </section>
 
@@ -679,7 +711,7 @@ export default function Home() {
         <aside className="match-rail" aria-label="Match list">
           <div className="section-heading">
             <CalendarDays size={18} />
-            <span>{t.today}</span>
+            <span>{t.matchExplorer}</span>
           </div>
           <div className="match-filter-panel">
             <div className="match-filter-tabs" aria-label="Match filters">
@@ -694,20 +726,25 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <label className="group-filter">
-              <span>{t.groups}</span>
-              <select
-                onChange={(event) => setGroupFilter(event.target.value)}
-                value={groupFilter}
+            <div className="group-chip-panel" aria-label={t.groups}>
+              <button
+                className={cx("group-chip", groupFilter === "all" && "active")}
+                onClick={() => setGroupFilter("all")}
+                type="button"
               >
-                <option value="all">{t.allGroups}</option>
-                {groups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {t.allGroups}
+              </button>
+              {groups.map((group) => (
+                <button
+                  className={cx("group-chip", groupFilter === group && "active")}
+                  key={group}
+                  onClick={() => setGroupFilter(group)}
+                  type="button"
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
             <p className="match-count">
               {visibleMatches.length} / {matches.length} {t.matches}
             </p>
@@ -735,7 +772,10 @@ export default function Home() {
                 <TeamLine team={match.away} score={match.score?.split(" - ")[1]} />
                 <div className="match-card-footer">
                   <span>{match.group}</span>
-                  <ChevronRight size={17} />
+                  <span className="quick-read-label">
+                    <Sparkles size={14} />
+                    {t.quickRead}
+                  </span>
                 </div>
               </button>
             ))}
@@ -761,6 +801,19 @@ export default function Home() {
               </div>
             </div>
             <div className="detail-actions">
+              <button
+                className="seer-inline-button"
+                disabled={activeOracleStatus === "loading"}
+                onClick={() => requestOracleRead(activeMatch.id, language)}
+                type="button"
+              >
+                {activeOracleStatus === "loading" ? (
+                  <LoaderCircle className="spin-icon" size={17} />
+                ) : (
+                  <Sparkles size={17} />
+                )}
+                {activeOracleStatus === "loading" ? t.reading : t.askSeer}
+              </button>
               <div className="match-score-card">
                 <span>{t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
                 <strong>{activeMatch.score ?? activeMatch.time}</strong>

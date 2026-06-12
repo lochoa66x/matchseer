@@ -193,7 +193,7 @@ export async function listMatches(): Promise<MatchListResult> {
   if (connection.sql) {
     try {
       const rows = await fetchMatchRows(connection.sql);
-      const matches = filterDemoRows(rows.map(toMatchSummary));
+      const matches = dedupeMatches(filterDemoRows(rows.map(toMatchSummary)));
 
       if (matches.length > 0) {
         return {
@@ -223,6 +223,43 @@ function filterDemoRows(matches: MatchSummary[]) {
   const demoIds = new Set(["mx-rsa", "br-jp", "ca-ma"]);
 
   return matches.filter((match) => !demoIds.has(match.id));
+}
+
+function dedupeMatches(matches: MatchSummary[]) {
+  const preferredByFixture = new Map<string, MatchSummary>();
+
+  for (const match of matches) {
+    const key = [
+      normalizeFixtureName(match.home.name),
+      normalizeFixtureName(match.away.name),
+      normalizeFixtureName(match.group),
+    ]
+      .sort()
+      .join("|");
+    const current = preferredByFixture.get(key);
+
+    if (!current || matchQualityScore(match) >= matchQualityScore(current)) {
+      preferredByFixture.set(key, match);
+    }
+  }
+
+  return Array.from(preferredByFixture.values());
+}
+
+function normalizeFixtureName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function matchQualityScore(match: MatchSummary) {
+  return [
+    match.id.startsWith("fd-") ? 8 : 0,
+    match.startsAt ? 4 : 0,
+    match.venue.toLowerCase().includes("tbd") ? 0 : 2,
+    match.players.length > 0 ? 1 : 0,
+  ].reduce((total, value) => total + value, 0);
 }
 
 export async function getMatch(matchId: string) {
