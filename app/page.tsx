@@ -102,13 +102,26 @@ const copy = {
     mapping: "Mapping underway",
     aiLayer: "AI layer",
     aiReady: "Ready on demand",
-    cupSeer: "Cup Seer",
-    cupSeerTitle: "Who can lift the cup?",
-    cupSeerIntro: "The Seer ranks the five brightest tournament signals from team strength, match reads, result rhythm, and chaos control.",
+    cupSeer: "Weekly Cup Seer",
+    cupSeerTitle: "Who can lift the cup this week?",
+    cupSeerIntro: "Every week, the Seer recalculates the five brightest tournament signals from team strength, match reads, result rhythm, and chaos control.",
+    cupPulse: "Weekly pulse",
     cupSignal: "Cup signal",
     seerVerdict: "Seer verdict",
     riskCloud: "Risk cloud",
     noCupCandidates: "The cup lens needs real synced teams before it can wake up.",
+    seerLenses: "How the Seer thinks",
+    seerLensesDetail: "Five lenses. One smarter match read.",
+    lensForm: "Form",
+    lensFormCopy: "Recent results, team rhythm, and tournament temperature.",
+    lensMomentum: "Momentum",
+    lensMomentumCopy: "Confidence shifts, late pressure, and chaos control.",
+    lensVenue: "Venue",
+    lensVenueCopy: "Home edge, altitude, travel, surface, and crowd signal.",
+    lensWeather: "Weather",
+    lensWeatherCopy: "Temperature, wind, humidity, and how the match might bite.",
+    lensRisk: "Upset risk",
+    lensRiskCopy: "Style clashes, volatility, and the weird little doors in a fixture.",
   },
   es: {
     matchday: "Pronóstico del día",
@@ -161,13 +174,26 @@ const copy = {
     mapping: "Mapeo en curso",
     aiLayer: "Capa IA",
     aiReady: "Lista al pedir",
-    cupSeer: "Vidente de la copa",
-    cupSeerTitle: "¿Quién puede levantar la copa?",
-    cupSeerIntro: "El Vidente ordena las cinco señales más brillantes con fuerza de equipo, lectura de partidos, ritmo de resultados y control del caos.",
+    cupSeer: "Vidente semanal de la copa",
+    cupSeerTitle: "¿Quién puede levantar la copa esta semana?",
+    cupSeerIntro: "Cada semana, el Vidente recalcula las cinco señales más brillantes con fuerza de equipo, lectura de partidos, ritmo de resultados y control del caos.",
+    cupPulse: "Pulso semanal",
     cupSignal: "Señal de copa",
     seerVerdict: "Veredicto vidente",
     riskCloud: "Nube de riesgo",
     noCupCandidates: "La lente de copa necesita equipos reales sincronizados para despertar.",
+    seerLenses: "Cómo piensa el Vidente",
+    seerLensesDetail: "Cinco lentes. Una lectura más inteligente.",
+    lensForm: "Forma",
+    lensFormCopy: "Resultados recientes, ritmo del equipo y temperatura del torneo.",
+    lensMomentum: "Impulso",
+    lensMomentumCopy: "Cambios de confianza, presión final y control del caos.",
+    lensVenue: "Estadio",
+    lensVenueCopy: "Localía, altitud, viaje, superficie y señal de ambiente.",
+    lensWeather: "Clima",
+    lensWeatherCopy: "Temperatura, viento, humedad y cómo puede morder el partido.",
+    lensRisk: "Riesgo sorpresa",
+    lensRiskCopy: "Choques de estilo, volatilidad y puertas raras del partido.",
   },
   fr: {
     matchday: "Prévision du jour",
@@ -220,13 +246,26 @@ const copy = {
     mapping: "Mappage en cours",
     aiLayer: "Couche IA",
     aiReady: "Prête à la demande",
-    cupSeer: "Voyant de la coupe",
-    cupSeerTitle: "Qui peut soulever la coupe ?",
-    cupSeerIntro: "Le voyant classe les cinq signaux les plus lumineux avec force d’équipe, lectures de match, rythme de résultats et contrôle du chaos.",
+    cupSeer: "Voyant hebdo de la coupe",
+    cupSeerTitle: "Qui peut soulever la coupe cette semaine ?",
+    cupSeerIntro: "Chaque semaine, le voyant recalcule les cinq signaux les plus lumineux avec force d’équipe, lectures de match, rythme de résultats et contrôle du chaos.",
+    cupPulse: "Pulse hebdo",
     cupSignal: "Signal coupe",
     seerVerdict: "Verdict du voyant",
     riskCloud: "Nuage de risque",
     noCupCandidates: "La lentille coupe a besoin d’équipes réelles synchronisées pour se réveiller.",
+    seerLenses: "Comment pense le voyant",
+    seerLensesDetail: "Cinq lentilles. Une lecture plus intelligente.",
+    lensForm: "Forme",
+    lensFormCopy: "Résultats récents, rythme d’équipe et température du tournoi.",
+    lensMomentum: "Momentum",
+    lensMomentumCopy: "Glissements de confiance, pression tardive et contrôle du chaos.",
+    lensVenue: "Stade",
+    lensVenueCopy: "Avantage local, altitude, voyage, surface et signal du public.",
+    lensWeather: "Météo",
+    lensWeatherCopy: "Température, vent, humidité et la façon dont le match peut mordre.",
+    lensRisk: "Risque surprise",
+    lensRiskCopy: "Styles opposés, volatilité et petites portes étranges du match.",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -362,6 +401,7 @@ export default function Home() {
     [groupFilter, matchFilter, matches, todayKey],
   );
   const cupCandidates = useMemo(() => buildCupCandidates(matches, language), [matches, language]);
+  const cupPulseLabel = useMemo(() => getCupPulseLabel(language), [language]);
   const hasPendingWeather =
     !activeMatch ||
     activeMatch.weather.temp === "Pending" ||
@@ -663,8 +703,11 @@ export default function Home() {
             setActiveTab("teams");
           }
         }}
+        pulseLabel={cupPulseLabel}
         t={t}
       />
+
+      <SeerLensStrip t={t} />
 
       <section className="content-grid">
         <aside className="match-rail" aria-label="Match list">
@@ -996,23 +1039,49 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function getCupPulseLabel(language: Language) {
+  const weekStart = startOfWeek(new Date());
+
+  return new Intl.DateTimeFormat(language === "en" ? "en-US" : language, {
+    day: "numeric",
+    month: "short",
+    timeZone: "America/Toronto",
+  }).format(weekStart);
+}
+
+function startOfWeek(date: Date) {
+  const torontoDate = new Date(date);
+  const day = torontoDate.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+
+  torontoDate.setDate(torontoDate.getDate() + diff);
+  return torontoDate;
+}
+
 function CupSeerBoard({
   candidates,
   language,
   onSelectTeam,
+  pulseLabel,
   t,
 }: {
   candidates: CupCandidate[];
   language: Language;
   onSelectTeam: (teamName: string) => void;
+  pulseLabel: string;
   t: Record<string, string>;
 }) {
   return (
     <section className="cup-seer-board" aria-label={t.cupSeer}>
       <div className="cup-seer-copy">
-        <div className="section-heading">
-          <Trophy size={18} />
-          <span>{t.cupSeer}</span>
+        <div className="cup-seer-heading-row">
+          <div className="section-heading">
+            <Trophy size={18} />
+            <span>{t.cupSeer}</span>
+          </div>
+          <span className="cup-pulse-chip">
+            {t.cupPulse} · {pulseLabel}
+          </span>
         </div>
         <h2>{t.cupSeerTitle}</h2>
         <p>{t.cupSeerIntro}</p>
@@ -1064,6 +1133,57 @@ function CupSeerBoard({
         {language === "es" && "Las señales de copa son análisis deportivo divertido, no consejos de apuestas ni certezas."}
         {language === "fr" && "Les signaux coupe sont une analyse sportive ludique, pas des conseils de pari ni des certitudes."}
       </p>
+    </section>
+  );
+}
+
+function SeerLensStrip({ t }: { t: Record<string, string> }) {
+  const lenses = [
+    {
+      icon: <BarChart3 size={20} />,
+      label: t.lensForm,
+      copy: t.lensFormCopy,
+    },
+    {
+      icon: <Activity size={20} />,
+      label: t.lensMomentum,
+      copy: t.lensMomentumCopy,
+    },
+    {
+      icon: <MapPin size={20} />,
+      label: t.lensVenue,
+      copy: t.lensVenueCopy,
+    },
+    {
+      icon: <CloudSun size={20} />,
+      label: t.lensWeather,
+      copy: t.lensWeatherCopy,
+    },
+    {
+      icon: <ShieldCheck size={20} />,
+      label: t.lensRisk,
+      copy: t.lensRiskCopy,
+    },
+  ];
+
+  return (
+    <section className="seer-lens-strip" aria-label={t.seerLenses}>
+      <div className="seer-lens-copy">
+        <div className="section-heading">
+          <Sparkles size={18} />
+          <span>{t.seerLenses}</span>
+        </div>
+        <p>{t.seerLensesDetail}</p>
+      </div>
+      <div className="seer-lens-grid">
+        {lenses.map((lens) => (
+          <article className="seer-lens-card" key={lens.label}>
+            <div className="lens-icon">{lens.icon}</div>
+            <h3>{lens.label}</h3>
+            <p>{lens.copy}</p>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
