@@ -55,7 +55,7 @@ type OracleResponse = {
 const copy = {
   en: {
     matchday: "Matchday forecast",
-    subtitle: "Real stats, playful readouts, zero betting energy.",
+    subtitle: "See the match before it happens.",
     today: "Today",
     live: "Live",
     upcoming: "Upcoming",
@@ -124,10 +124,14 @@ const copy = {
     lensWeatherCopy: "Temperature, wind, humidity, and how the match might bite.",
     lensRisk: "Upset risk",
     lensRiskCopy: "Style clashes, volatility, and the weird little doors in a fixture.",
+    navHow: "How it works",
+    navForecasts: "Forecasts",
+    navSeer: "Ask the Seer",
+    navCup: "Cup Seer",
   },
   es: {
     matchday: "Pronóstico del día",
-    subtitle: "Estadísticas reales, lectura divertida y cero vibra de apuestas.",
+    subtitle: "Ve el partido antes de que pase.",
     today: "Hoy",
     live: "En vivo",
     upcoming: "Próximo",
@@ -196,10 +200,14 @@ const copy = {
     lensWeatherCopy: "Temperatura, viento, humedad y cómo puede morder el partido.",
     lensRisk: "Riesgo sorpresa",
     lensRiskCopy: "Choques de estilo, volatilidad y puertas raras del partido.",
+    navHow: "Cómo funciona",
+    navForecasts: "Pronósticos",
+    navSeer: "Preguntar",
+    navCup: "Copa",
   },
   fr: {
     matchday: "Prévision du jour",
-    subtitle: "Des stats réelles, une lecture légère, aucune vibe pari sportif.",
+    subtitle: "Vois le match avant qu’il arrive.",
     today: "Aujourd’hui",
     live: "En direct",
     upcoming: "À venir",
@@ -268,6 +276,10 @@ const copy = {
     lensWeatherCopy: "Température, vent, humidité et la façon dont le match peut mordre.",
     lensRisk: "Risque surprise",
     lensRiskCopy: "Styles opposés, volatilité et petites portes étranges du match.",
+    navHow: "Mode d’emploi",
+    navForecasts: "Prévisions",
+    navSeer: "Demander",
+    navCup: "Coupe",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -589,13 +601,19 @@ export default function Home() {
       <section className="topbar" aria-label="MatchSeer header">
         <div className="brand-lockup">
           <div className="brand-mark">
-            <Sparkles size={20} />
+            <span className="brand-ball" aria-hidden="true" />
           </div>
           <div>
             <p className="eyebrow">MatchSeer</p>
             <h1>{t.matchday}</h1>
           </div>
         </div>
+        <nav className="main-nav" aria-label="Primary navigation">
+          <a href="#seer-lenses">{t.navHow}</a>
+          <a href="#forecast-board">{t.navForecasts}</a>
+          <a href="#ask-seer">{t.navSeer}</a>
+          <a href="#cup-seer">{t.navCup}</a>
+        </nav>
         <div className="language-switcher" aria-label="Language selector">
           <Languages size={17} />
           {(["en", "es", "fr"] as Language[]).map((option) => (
@@ -611,7 +629,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="hero-grid">
+      <section className="hero-grid" id="ask-seer">
         <div className="hero-copy">
           <div className="hero-kicker-row">
             <div className="status-chip">
@@ -639,6 +657,10 @@ export default function Home() {
             <Signal label={t.confidence} value={`${activeMatch.forecast.confidence}%`} />
             <Signal label={t.chaos} value={`${activeMatch.forecast.chaos}%`} />
             <Signal label={t.projected} value={activeMatch.forecast.projected} />
+          </div>
+          <div className="hero-stadium-art" aria-hidden="true">
+            <div className="hero-orb" />
+            <div className="hero-field-lines" />
           </div>
         </div>
 
@@ -721,7 +743,7 @@ export default function Home() {
 
       <SeerLensStrip t={t} />
 
-      <section className="content-grid">
+      <section className="content-grid" id="forecast-board">
         <aside className="match-rail" aria-label="Match list">
           <div className="section-heading">
             <CalendarDays size={18} />
@@ -1215,7 +1237,7 @@ function CupSeerBoard({
   t: Record<string, string>;
 }) {
   return (
-    <section className="cup-seer-board" aria-label={t.cupSeer}>
+    <section className="cup-seer-board" id="cup-seer" aria-label={t.cupSeer}>
       <div className="cup-seer-copy">
         <div className="cup-seer-heading-row">
           <div className="section-heading">
@@ -1316,7 +1338,7 @@ function SeerLensStrip({ t }: { t: Record<string, string> }) {
   ];
 
   return (
-    <section className="seer-lens-strip" aria-label={t.seerLenses}>
+    <section className="seer-lens-strip" id="seer-lenses" aria-label={t.seerLenses}>
       <div className="seer-lens-copy">
         <div className="section-heading">
           <Sparkles size={18} />
