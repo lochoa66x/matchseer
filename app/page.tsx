@@ -33,6 +33,15 @@ type Tab = "forecast" | "teams" | "players" | "weather";
 type MatchFilter = "today" | "upcoming" | "completed";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
+type CupCandidate = {
+  team: Team;
+  score: number;
+  signal: number;
+  matches: number;
+  traits: string[];
+  verdict: string;
+  risk: string;
+};
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
   reason?: string;
@@ -93,6 +102,13 @@ const copy = {
     mapping: "Mapping underway",
     aiLayer: "AI layer",
     aiReady: "Ready on demand",
+    cupSeer: "Cup Seer",
+    cupSeerTitle: "Who can lift the cup?",
+    cupSeerIntro: "The Seer ranks the five brightest tournament signals from team strength, match reads, result rhythm, and chaos control.",
+    cupSignal: "Cup signal",
+    seerVerdict: "Seer verdict",
+    riskCloud: "Risk cloud",
+    noCupCandidates: "The cup lens needs real synced teams before it can wake up.",
   },
   es: {
     matchday: "Pronóstico del día",
@@ -145,6 +161,13 @@ const copy = {
     mapping: "Mapeo en curso",
     aiLayer: "Capa IA",
     aiReady: "Lista al pedir",
+    cupSeer: "Vidente de la copa",
+    cupSeerTitle: "¿Quién puede levantar la copa?",
+    cupSeerIntro: "El Vidente ordena las cinco señales más brillantes con fuerza de equipo, lectura de partidos, ritmo de resultados y control del caos.",
+    cupSignal: "Señal de copa",
+    seerVerdict: "Veredicto vidente",
+    riskCloud: "Nube de riesgo",
+    noCupCandidates: "La lente de copa necesita equipos reales sincronizados para despertar.",
   },
   fr: {
     matchday: "Prévision du jour",
@@ -197,6 +220,13 @@ const copy = {
     mapping: "Mappage en cours",
     aiLayer: "Couche IA",
     aiReady: "Prête à la demande",
+    cupSeer: "Voyant de la coupe",
+    cupSeerTitle: "Qui peut soulever la coupe ?",
+    cupSeerIntro: "Le voyant classe les cinq signaux les plus lumineux avec force d’équipe, lectures de match, rythme de résultats et contrôle du chaos.",
+    cupSignal: "Signal coupe",
+    seerVerdict: "Verdict du voyant",
+    riskCloud: "Nuage de risque",
+    noCupCandidates: "La lentille coupe a besoin d’équipes réelles synchronisées pour se réveiller.",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -331,6 +361,7 @@ export default function Home() {
       }),
     [groupFilter, matchFilter, matches, todayKey],
   );
+  const cupCandidates = useMemo(() => buildCupCandidates(matches, language), [matches, language]);
   const hasPendingWeather =
     !activeMatch ||
     activeMatch.weather.temp === "Pending" ||
@@ -618,6 +649,23 @@ export default function Home() {
         />
       </section>
 
+      <CupSeerBoard
+        candidates={cupCandidates}
+        language={language}
+        onSelectTeam={(teamName) => {
+          const candidateMatch = matches.find(
+            (match) =>
+              match.home.name === teamName || match.away.name === teamName,
+          );
+
+          if (candidateMatch) {
+            setActiveMatchId(candidateMatch.id);
+            setActiveTab("teams");
+          }
+        }}
+        t={t}
+      />
+
       <section className="content-grid">
         <aside className="match-rail" aria-label="Match list">
           <div className="section-heading">
@@ -772,6 +820,251 @@ export default function Home() {
         </section>
       </section>
     </main>
+  );
+}
+
+function buildCupCandidates(matches: Match[], language: Language): CupCandidate[] {
+  const teamMap = new Map<
+    string,
+    {
+      team: Team;
+      forecastSignals: number[];
+      chaosSignals: number[];
+      resultBonus: number;
+      matches: number;
+    }
+  >();
+
+  for (const match of matches) {
+    addCupTeam(teamMap, match.home, match.forecast.home, match.forecast.chaos);
+    addCupTeam(teamMap, match.away, match.forecast.away, match.forecast.chaos);
+
+    if (match.status === "Final" && match.score) {
+      const [homeScore, awayScore] = match.score
+        .split(" - ")
+        .map((score) => Number(score.trim()));
+
+      if (Number.isFinite(homeScore) && Number.isFinite(awayScore)) {
+        if (homeScore > awayScore) {
+          teamMap.get(match.home.name)!.resultBonus += 6;
+          teamMap.get(match.away.name)!.resultBonus -= 2;
+        } else if (awayScore > homeScore) {
+          teamMap.get(match.away.name)!.resultBonus += 6;
+          teamMap.get(match.home.name)!.resultBonus -= 2;
+        } else {
+          teamMap.get(match.home.name)!.resultBonus += 2;
+          teamMap.get(match.away.name)!.resultBonus += 2;
+        }
+      }
+    }
+  }
+
+  return Array.from(teamMap.values())
+    .map((entry) => {
+      const teamCore =
+        entry.team.attack * 0.28 +
+        entry.team.control * 0.26 +
+        entry.team.defense * 0.24 +
+        entry.team.setPieces * 0.12 +
+        formScore(entry.team.form) * 0.1;
+      const averageForecast = average(entry.forecastSignals);
+      const averageChaos = average(entry.chaosSignals);
+      const signal = clamp(
+        Math.round(teamCore * 0.62 + averageForecast * 0.28 + entry.resultBonus - averageChaos * 0.06),
+        1,
+        99,
+      );
+
+      return {
+        team: entry.team,
+        score: signal,
+        signal,
+        matches: entry.matches,
+        traits: cupTraits(entry.team),
+        verdict: cupVerdict(entry.team, signal, language),
+        risk: cupRisk(entry.team, averageChaos, language),
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 5);
+}
+
+function addCupTeam(
+  teamMap: Map<
+    string,
+    {
+      team: Team;
+      forecastSignals: number[];
+      chaosSignals: number[];
+      resultBonus: number;
+      matches: number;
+    }
+  >,
+  team: Team,
+  forecastSignal: number,
+  chaosSignal: number,
+) {
+  const current =
+    teamMap.get(team.name) ??
+    {
+      team,
+      forecastSignals: [],
+      chaosSignals: [],
+      resultBonus: 0,
+      matches: 0,
+    };
+
+  current.forecastSignals.push(forecastSignal);
+  current.chaosSignals.push(chaosSignal);
+  current.matches += 1;
+  teamMap.set(team.name, current);
+}
+
+function cupTraits(team: Team) {
+  const traits: Array<[string, number]> = [
+    ["Attack", team.attack],
+    ["Control", team.control],
+    ["Defense", team.defense],
+    ["Set pieces", team.setPieces],
+  ];
+
+  return traits
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 2)
+    .map(([label]) => label);
+}
+
+function cupVerdict(team: Team, signal: number, language: Language) {
+  const bestTrait = cupTraits(team)[0]?.toLowerCase() ?? "balance";
+
+  if (language === "es") {
+    return `${team.name} trae señal de ${bestTrait}: si el torneo se abre, el Vidente ve una puerta con luz verde.`;
+  }
+
+  if (language === "fr") {
+    return `${team.name} porte un signal ${bestTrait} : si le tournoi s’ouvre, le voyant aperçoit une porte verte.`;
+  }
+
+  return `${team.name} carries a ${bestTrait} signal: if the bracket opens, the Seer sees a green-lit doorway.`;
+}
+
+function cupRisk(team: Team, chaos: number, language: Language) {
+  const pressurePoint =
+    team.defense < team.attack ? "defensive weather" : "chance creation fog";
+  const chaosText = chaos > 58 ? "stormy" : "manageable";
+
+  if (language === "es") {
+    return `${chaosText === "stormy" ? "Tormentoso" : "Manejable"}: cuidado con ${pressurePoint === "defensive weather" ? "el clima defensivo" : "la niebla creativa"}.`;
+  }
+
+  if (language === "fr") {
+    return `${chaosText === "stormy" ? "Orageux" : "Gérable"} : attention à ${pressurePoint === "defensive weather" ? "la météo défensive" : "la brume créative"}.`;
+  }
+
+  return `${chaosText}: watch the ${pressurePoint}.`;
+}
+
+function formScore(form: string[]) {
+  if (form.length === 0) {
+    return 50;
+  }
+
+  const points = form.reduce((total, result) => {
+    if (result === "W") {
+      return total + 100;
+    }
+
+    if (result === "D") {
+      return total + 58;
+    }
+
+    return total + 28;
+  }, 0);
+
+  return points / form.length;
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 50;
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function CupSeerBoard({
+  candidates,
+  language,
+  onSelectTeam,
+  t,
+}: {
+  candidates: CupCandidate[];
+  language: Language;
+  onSelectTeam: (teamName: string) => void;
+  t: Record<string, string>;
+}) {
+  return (
+    <section className="cup-seer-board" aria-label={t.cupSeer}>
+      <div className="cup-seer-copy">
+        <div className="section-heading">
+          <Trophy size={18} />
+          <span>{t.cupSeer}</span>
+        </div>
+        <h2>{t.cupSeerTitle}</h2>
+        <p>{t.cupSeerIntro}</p>
+      </div>
+      <div className="cup-candidate-grid">
+        {candidates.length === 0 && (
+          <div className="empty-match-state">{t.noCupCandidates}</div>
+        )}
+        {candidates.map((candidate, index) => (
+          <button
+            className="cup-candidate-card"
+            key={candidate.team.name}
+            onClick={() => onSelectTeam(candidate.team.name)}
+            type="button"
+          >
+            <div className="cup-candidate-top">
+              <span className="candidate-rank">#{index + 1}</span>
+              <TeamBadge team={candidate.team} />
+            </div>
+            <div className="cup-signal-row">
+              <span>{t.cupSignal}</span>
+              <strong>{candidate.signal}%</strong>
+            </div>
+            <div className="cup-signal-track">
+              <span
+                style={{
+                  background: candidate.team.color,
+                  width: `${candidate.signal}%`,
+                }}
+              />
+            </div>
+            <div className="cup-tags">
+              {candidate.traits.map((trait) => (
+                <span key={trait}>{trait}</span>
+              ))}
+            </div>
+            <p>
+              <strong>{t.seerVerdict}: </strong>
+              {candidate.verdict}
+            </p>
+            <small>
+              {t.riskCloud}: {candidate.risk}
+            </small>
+          </button>
+        ))}
+      </div>
+      <p className="disclaimer cup-disclaimer">
+        {language === "en" && "Cup signals are playful tournament analysis, not betting advice or certainty."}
+        {language === "es" && "Las señales de copa son análisis deportivo divertido, no consejos de apuestas ni certezas."}
+        {language === "fr" && "Les signaux coupe sont une analyse sportive ludique, pas des conseils de pari ni des certitudes."}
+      </p>
+    </section>
   );
 }
 
