@@ -83,6 +83,14 @@ type FootballDataMatchesResponse = {
         home?: number | null;
         away?: number | null;
       } | null;
+      regularTime?: {
+        home?: number | null;
+        away?: number | null;
+      } | null;
+      halfTime?: {
+        home?: number | null;
+        away?: number | null;
+      } | null;
     } | null;
   }>;
 };
@@ -214,6 +222,8 @@ function toFootballDataMatch(
     return null;
   }
 
+  const score = readMatchScore(match);
+
   return {
     providerId: match.id,
     externalId: `fd-${match.id}`,
@@ -221,12 +231,39 @@ function toFootballDataMatch(
     stage: match.stage ?? null,
     groupName: match.group ?? match.stage ?? null,
     startsAt: match.utcDate ?? null,
-    homeScore: match.score?.fullTime?.home ?? null,
-    awayScore: match.score?.fullTime?.away ?? null,
+    homeScore: score.home,
+    awayScore: score.away,
     homeTeamProviderId,
     awayTeamProviderId,
     venueSlug: venue?.slug ?? null,
     venueName: venueName ?? venue?.name ?? null,
+  };
+}
+
+function readMatchScore(
+  match: NonNullable<FootballDataMatchesResponse["matches"]>[number],
+) {
+  const scoreCandidates = [
+    match.score?.fullTime,
+    match.score?.regularTime,
+    match.score?.halfTime,
+  ];
+
+  for (const score of scoreCandidates) {
+    if (
+      typeof score?.home === "number" &&
+      typeof score?.away === "number"
+    ) {
+      return {
+        home: score.home,
+        away: score.away,
+      };
+    }
+  }
+
+  return {
+    home: null,
+    away: null,
   };
 }
 

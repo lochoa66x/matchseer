@@ -320,9 +320,12 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadMatches() {
+    async function loadMatches(refreshLiveData = false) {
       try {
-        const response = await fetch("/api/matches", { cache: "no-store" });
+        const response = await fetch(
+          refreshLiveData ? "/api/matches?refresh=live" : "/api/matches",
+          { cache: "no-store" },
+        );
 
         if (!response.ok) {
           return;
@@ -360,9 +363,13 @@ export default function Home() {
     }
 
     void loadMatches();
+    const liveRefresh = window.setInterval(() => {
+      void loadMatches(true);
+    }, 60_000);
 
     return () => {
       ignore = true;
+      window.clearInterval(liveRefresh);
     };
   }, []);
 
@@ -371,7 +378,7 @@ export default function Home() {
     [activeMatchId, matches],
   );
   const t = copy[language];
-  const oracleKey = activeMatch ? `${activeMatch.id}:${language}` : "";
+  const oracleKey = activeMatch ? oracleReadKey(activeMatch, language) : "";
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
   const todayKey = useMemo(() => toDateKey(new Date()), []);
@@ -423,7 +430,10 @@ export default function Home() {
   }, [activeMatchId, visibleMatches]);
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
-    const key = `${matchId}:${selectedLanguage}`;
+    const match = matches.find((item) => item.id === matchId);
+    const key = match
+      ? oracleReadKey(match, selectedLanguage)
+      : `${matchId}:${selectedLanguage}`;
     setOracleStatus((current) => ({ ...current, [key]: "loading" }));
 
     try {
@@ -864,6 +874,10 @@ export default function Home() {
       </section>
     </main>
   );
+}
+
+function oracleReadKey(match: Match, language: Language) {
+  return `${match.id}:${match.status}:${match.score ?? match.time}:${language}`;
 }
 
 function buildCupCandidates(matches: Match[], language: Language): CupCandidate[] {
