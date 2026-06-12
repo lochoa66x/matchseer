@@ -172,7 +172,7 @@ function createFallbackInterpretation(
     missingDataNotes: [
       usingDatabase
         ? "This interpretation uses the current seeded Neon forecast data."
-        : "This interpretation uses sample forecast data until Neon is available in this runtime.",
+        : "Live forecast data is unavailable for this match.",
     ],
     disclaimer,
   };

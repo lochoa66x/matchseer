@@ -83,11 +83,11 @@ const copy = {
     oracleError: "The Seer blinked. Try again.",
     dataStatus: "Data status",
     liveDatabase: "Live database",
-    sampleMode: "Sample mode",
-    fallbackMode: "Fallback mode",
+    pendingMode: "Live data pending",
+    fallbackMode: "Live data pending",
     dataDepth: "Data depth",
     realFixtures: "Real fixture feed",
-    sampleFixtures: "Demo matchday",
+    noDemoFixtures: "No demo data",
     venueWeather: "Venue + weather",
     connected: "Connected",
     mapping: "Mapping underway",
@@ -135,11 +135,11 @@ const copy = {
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
     dataStatus: "Estado de datos",
     liveDatabase: "Base en vivo",
-    sampleMode: "Modo demo",
-    fallbackMode: "Respaldo",
+    pendingMode: "Datos reales pendientes",
+    fallbackMode: "Datos reales pendientes",
     dataDepth: "Nivel de datos",
     realFixtures: "Calendario real",
-    sampleFixtures: "Jornada demo",
+    noDemoFixtures: "Sin datos demo",
     venueWeather: "Estadio + clima",
     connected: "Conectado",
     mapping: "Mapeo en curso",
@@ -187,11 +187,11 @@ const copy = {
     oracleError: "Le voyant a cligné. Réessaie.",
     dataStatus: "État des données",
     liveDatabase: "Base en direct",
-    sampleMode: "Mode démo",
-    fallbackMode: "Repli",
+    pendingMode: "Données réelles en attente",
+    fallbackMode: "Données réelles en attente",
     dataDepth: "Niveau données",
     realFixtures: "Calendrier réel",
-    sampleFixtures: "Journée démo",
+    noDemoFixtures: "Aucune donnée démo",
     venueWeather: "Stade + météo",
     connected: "Connecté",
     mapping: "Mappage en cours",
@@ -199,199 +199,6 @@ const copy = {
     aiReady: "Prête à la demande",
   },
 } satisfies Record<Language, Record<string, string>>;
-
-const fallbackMatches: Match[] = [
-  {
-    id: "mx-rsa",
-    status: "Final",
-    group: "Group A",
-    time: "Final",
-    venue: "Estadio Azteca",
-    city: "Mexico City",
-    score: "2 - 0",
-    home: {
-      name: "Mexico",
-      code: "MEX",
-      color: "#11a36a",
-      record: "2W 1D 2L",
-      form: ["W", "D", "L", "W", "L"],
-      attack: 74,
-      control: 71,
-      defense: 69,
-      setPieces: 78,
-    },
-    away: {
-      name: "South Africa",
-      code: "RSA",
-      color: "#f5c542",
-      record: "3W 1D 1L",
-      form: ["W", "W", "D", "W", "L"],
-      attack: 72,
-      control: 70,
-      defense: 74,
-      setPieces: 76,
-    },
-    forecast: {
-      home: 57,
-      draw: 24,
-      away: 19,
-      confidence: 74,
-      chaos: 52,
-      projected: "2-0",
-      tone: {
-        en: "Mexico carry the host spark at Azteca, while South Africa bring transition danger and a loud opening-match memory.",
-        es: "México trae la chispa local en el Azteca, mientras Sudáfrica amenaza en transiciones y memoria de partido inaugural.",
-        fr: "Le Mexique porte l’élan local à l’Azteca, tandis que l’Afrique du Sud garde du danger en transition.",
-      },
-      reasons: {
-        en: ["Mexico carry the host rhythm and cleaner territory control.", "South Africa can still flash through midfield transitions.", "The Azteca altitude keeps late legs in the story."],
-        es: ["México trae ritmo local y mejor control territorial.", "Sudáfrica puede activar transiciones peligrosas.", "La altura del Azteca mantiene las piernas finales en la historia."],
-        fr: ["Le Mexique porte le rythme local et contrôle mieux le terrain.", "L’Afrique du Sud peut encore frapper en transition.", "L’altitude de l’Azteca garde les jambes tardives au centre du récit."],
-      },
-    },
-    weather: {
-      temp: "23°C",
-      wind: "11 km/h",
-      mood: {
-        en: "Thin air, fast counters, late legs.",
-        es: "Aire ligero, contragolpes rápidos, piernas pesadas al final.",
-        fr: "Air fin, contres rapides, jambes lourdes en fin de match.",
-      },
-    },
-    referee: { name: "A. Marciniak", cardRisk: "Medium-high" },
-    players: [
-      { name: "Santiago Giménez", team: "Mexico", role: "Forward", club: "Feyenoord", league: "Eredivisie", spark: 76, note: "Box gravity" },
-      { name: "Teboho Mokoena", team: "South Africa", role: "Midfielder", club: "Mamelodi Sundowns", league: "South African Premiership", spark: 82, note: "Long-range spark" },
-      { name: "Edson Álvarez", team: "Mexico", role: "Midfielder", club: "West Ham", league: "Premier League", spark: 80, note: "Duel anchor" },
-    ],
-  },
-  {
-    id: "br-jp",
-    status: "Upcoming",
-    group: "Group C",
-    time: "5:00 PM",
-    venue: "MetLife Stadium",
-    city: "New Jersey",
-    home: {
-      name: "Brazil",
-      code: "BRA",
-      color: "#f5c542",
-      record: "3W 1D 1L",
-      form: ["W", "W", "L", "D", "W"],
-      attack: 91,
-      control: 86,
-      defense: 77,
-      setPieces: 72,
-    },
-    away: {
-      name: "Japan",
-      code: "JPN",
-      color: "#e83d52",
-      record: "4W 0D 1L",
-      form: ["W", "W", "W", "L", "W"],
-      attack: 79,
-      control: 82,
-      defense: 80,
-      setPieces: 69,
-    },
-    forecast: {
-      home: 53,
-      draw: 23,
-      away: 24,
-      confidence: 72,
-      chaos: 47,
-      projected: "2-1",
-      tone: {
-        en: "Brazil glow in attack, but Japan keep enough transition static to make the Seer sit forward.",
-        es: "Brasil brilla en ataque, pero Japón tiene suficiente electricidad en transición para incomodar al Vidente.",
-        fr: "Le Brésil brille devant, mais le Japon garde assez d’électricité en transition pour réveiller le voyant.",
-      },
-      reasons: {
-        en: ["Brazil lead in shot creation and individual spark.", "Japan narrow the midfield gap with tempo.", "Weather looks clean enough for a technical match."],
-        es: ["Brasil lidera en creación y talento individual.", "Japón reduce la distancia con ritmo en medio campo.", "El clima favorece un partido técnico."],
-        fr: ["Le Brésil domine la création et l’étincelle individuelle.", "Le Japon réduit l’écart avec son rythme au milieu.", "La météo favorise un match technique."],
-      },
-    },
-    weather: {
-      temp: "26°C",
-      wind: "8 km/h",
-      mood: {
-        en: "Warm, clean, friendly to first touch.",
-        es: "Cálido, limpio, amable para el primer toque.",
-        fr: "Doux, clair, favorable au premier contrôle.",
-      },
-    },
-    referee: { name: "M. Oliver", cardRisk: "Medium" },
-    players: [
-      { name: "Vinícius Júnior", team: "Brazil", role: "Winger", club: "Real Madrid", league: "La Liga", spark: 92, note: "Left-lane lightning" },
-      { name: "Takefusa Kubo", team: "Japan", role: "Creator", club: "Real Sociedad", league: "La Liga", spark: 84, note: "Pocket mischief" },
-      { name: "Bruno Guimarães", team: "Brazil", role: "Midfielder", club: "Newcastle", league: "Premier League", spark: 86, note: "Tempo switch" },
-    ],
-  },
-  {
-    id: "ca-ma",
-    status: "Upcoming",
-    group: "Group F",
-    time: "8:00 PM",
-    venue: "BMO Field",
-    city: "Toronto",
-    home: {
-      name: "Canada",
-      code: "CAN",
-      color: "#e1251b",
-      record: "2W 2D 1L",
-      form: ["D", "W", "W", "L", "D"],
-      attack: 77,
-      control: 73,
-      defense: 72,
-      setPieces: 75,
-    },
-    away: {
-      name: "Morocco",
-      code: "MAR",
-      color: "#c1272d",
-      record: "3W 1D 1L",
-      form: ["W", "D", "W", "W", "L"],
-      attack: 78,
-      control: 79,
-      defense: 86,
-      setPieces: 80,
-    },
-    forecast: {
-      home: 31,
-      draw: 30,
-      away: 39,
-      confidence: 59,
-      chaos: 66,
-      projected: "1-1 / 1-2",
-      tone: {
-        en: "Morocco bring the steadier defensive moon, but Canada have enough pace to make this forecast wobble.",
-        es: "Marruecos trae una luna defensiva más estable, pero Canadá tiene velocidad suficiente para mover el pronóstico.",
-        fr: "Le Maroc apporte une lune défensive plus stable, mais le Canada a assez de vitesse pour faire trembler la prévision.",
-      },
-      reasons: {
-        en: ["Morocco rate higher in defensive structure.", "Canada’s wide pace lifts upset risk.", "The draw lane is unusually open."],
-        es: ["Marruecos puntúa mejor en estructura defensiva.", "La velocidad por fuera de Canadá sube el riesgo de sorpresa.", "El camino del empate está muy abierto."],
-        fr: ["Le Maroc est plus solide dans sa structure défensive.", "La vitesse canadienne sur les côtés augmente le risque de surprise.", "La voie du nul reste très ouverte."],
-      },
-    },
-    weather: {
-      temp: "18°C",
-      wind: "17 km/h",
-      mood: {
-        en: "Cool breeze, cross-heavy, set-piece friendly.",
-        es: "Brisa fresca, muchos centros, buen clima para balón parado.",
-        fr: "Brise fraîche, beaucoup de centres, phases arrêtées favorisées.",
-      },
-    },
-    referee: { name: "S. Frappart", cardRisk: "Medium-low" },
-    players: [
-      { name: "Alphonso Davies", team: "Canada", role: "Wingback", club: "Bayern Munich", league: "Bundesliga", spark: 90, note: "Left-side ignition" },
-      { name: "Achraf Hakimi", team: "Morocco", role: "Fullback", club: "PSG", league: "Ligue 1", spark: 88, note: "Two-way engine" },
-      { name: "Youssef En-Nesyri", team: "Morocco", role: "Forward", club: "Fenerbahçe", league: "Süper Lig", spark: 81, note: "Air traffic" },
-    ],
-  },
-];
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -402,7 +209,7 @@ function isLanguageOption(value: string | null): value is Language {
 }
 
 type MatchesResponse = {
-  source: "sample" | "database" | "database-unavailable";
+  source: "database" | "database-unavailable";
   reason: string;
   matches: Match[];
   database?: {
@@ -414,13 +221,13 @@ type MatchesResponse = {
 
 export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
-  const [matches, setMatches] = useState(fallbackMatches);
-  const [activeMatchId, setActiveMatchId] = useState(fallbackMatches[0].id);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [activeMatchId, setActiveMatchId] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("today");
   const [groupFilter, setGroupFilter] = useState("all");
   const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
-    source: "sample",
+    source: "database-unavailable",
     reason: "loading",
   });
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
@@ -454,21 +261,32 @@ export default function Home() {
 
         const payload = (await response.json()) as MatchesResponse;
 
-        if (!ignore && payload.matches.length > 0) {
+        if (!ignore) {
           setDataInfo({
             source: payload.source,
             reason: payload.reason,
             database: payload.database,
           });
           setMatches(payload.matches);
-          setActiveMatchId((current) =>
-            payload.matches.some((match) => match.id === current)
+          setActiveMatchId((current) => {
+            if (payload.matches.length === 0) {
+              return "";
+            }
+
+            return payload.matches.some((match) => match.id === current)
               ? current
-              : payload.matches[0].id,
-          );
+              : payload.matches[0].id;
+          });
         }
       } catch {
-        // The sample matchday stays visible if the API is unavailable.
+        if (!ignore) {
+          setDataInfo({
+            source: "database-unavailable",
+            reason: "database-query-failed",
+          });
+          setMatches([]);
+          setActiveMatchId("");
+        }
       }
     }
 
@@ -480,13 +298,13 @@ export default function Home() {
   }, []);
 
   const activeMatch = useMemo(
-    () => matches.find((match) => match.id === activeMatchId) ?? matches[0],
+    () => matches.find((match) => match.id === activeMatchId) ?? matches[0] ?? null,
     [activeMatchId, matches],
   );
   const t = copy[language];
-  const oracleKey = `${activeMatch.id}:${language}`;
-  const activeOracleRead = oracleReads[oracleKey];
-  const activeOracleStatus = oracleStatus[oracleKey] ?? "idle";
+  const oracleKey = activeMatch ? `${activeMatch.id}:${language}` : "";
+  const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
+  const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const groups = useMemo(
     () => Array.from(new Set(matches.map((match) => match.group))).sort(),
@@ -514,14 +332,13 @@ export default function Home() {
     [groupFilter, matchFilter, matches, todayKey],
   );
   const hasPendingWeather =
+    !activeMatch ||
     activeMatch.weather.temp === "Pending" ||
     activeMatch.weather.wind === "Pending" ||
     activeMatch.weather.mood[language].toLowerCase().includes("pending");
   const dataSourceLabel =
     dataInfo.source === "database"
       ? t.liveDatabase
-      : dataInfo.source === "sample"
-        ? t.sampleMode
       : t.fallbackMode;
 
   useEffect(() => {
@@ -588,6 +405,100 @@ export default function Home() {
       setShareStatus("error");
       window.setTimeout(() => setShareStatus("idle"), 2200);
     }
+  }
+
+  if (!activeMatch) {
+    return (
+      <main className="app-shell">
+        <section className="topbar" aria-label="MatchSeer header">
+          <div className="brand-lockup">
+            <div className="brand-mark">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="eyebrow">MatchSeer</p>
+              <h1>{t.matchday}</h1>
+            </div>
+          </div>
+          <div className="language-switcher" aria-label="Language selector">
+            <Languages size={17} />
+            {(["en", "es", "fr"] as Language[]).map((option) => (
+              <button
+                className={cx("language-pill", language === option && "active")}
+                key={option}
+                onClick={() => setLanguage(option)}
+                type="button"
+              >
+                {option.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="data-status-grid" aria-label={t.dataStatus}>
+          <DataStatusCard
+            label={t.dataStatus}
+            value={dataSourceLabel}
+            detail={dataInfo.source === "database" ? dataInfo.database?.driver ?? "Neon" : dataInfo.reason}
+            tone={dataInfo.source === "database" ? "good" : "watch"}
+          />
+          <DataStatusCard
+            label={t.dataDepth}
+            value={t.noDemoFixtures}
+            detail={`0 ${t.matches}`}
+            tone="watch"
+          />
+          <DataStatusCard
+            label={t.venueWeather}
+            value={t.mapping}
+            detail={t.noMatches}
+            tone="watch"
+          />
+          <DataStatusCard
+            label={t.aiLayer}
+            value={t.aiReady}
+            detail="OpenAI"
+            tone="neutral"
+          />
+        </section>
+
+        <section className="content-grid">
+          <aside className="match-rail" aria-label="Match list">
+            <div className="section-heading">
+              <CalendarDays size={18} />
+              <span>{t.matchExplorer}</span>
+            </div>
+            <div className="match-filter-panel">
+              <div className="match-filter-tabs" aria-label="Match filters">
+                {(["today", "upcoming", "completed"] as MatchFilter[]).map((filter) => (
+                  <button
+                    className={cx("filter-pill", matchFilter === filter && "active")}
+                    key={filter}
+                    onClick={() => setMatchFilter(filter)}
+                    type="button"
+                  >
+                    {t[filter]}
+                  </button>
+                ))}
+              </div>
+              <div className="group-chip-panel" aria-label={t.groups}>
+                <button className="group-chip active" type="button">
+                  {t.allGroups}
+                </button>
+              </div>
+              <p className="match-count">
+                0 / 0 {t.matches}
+              </p>
+            </div>
+            <div className="empty-match-state">{t.noMatches}</div>
+          </aside>
+
+          <section className="detail-panel empty-detail-panel">
+            <div className="empty-match-state">{t.noDemoFixtures}</div>
+          </section>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -689,7 +600,7 @@ export default function Home() {
         />
         <DataStatusCard
           label={t.dataDepth}
-          value={dataInfo.source === "database" ? t.realFixtures : t.sampleFixtures}
+          value={dataInfo.source === "database" ? t.realFixtures : t.noDemoFixtures}
           detail={`${matches.length} matches`}
           tone={dataInfo.source === "database" ? "good" : "watch"}
         />

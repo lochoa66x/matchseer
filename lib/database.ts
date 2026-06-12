@@ -2,9 +2,8 @@ import type { Language, MatchStatus, MatchSummary } from "./domain";
 import type { FootballDataSnapshot } from "./providers/football-data";
 import { fetchCurrentVenueWeather } from "./providers/open-meteo";
 import { worldCupVenues } from "./providers/world-cup-venues";
-import { sampleMatches } from "./sample-data";
 
-export type DataSourceStatus = "sample" | "database" | "database-unavailable";
+export type DataSourceStatus = "database" | "database-unavailable";
 export type DataSourceReason =
   | "database"
   | "missing-database-url"
@@ -145,7 +144,7 @@ type VenueMappingCandidateRow = {
 };
 
 const fallbackNote =
-  "Using sample data because Neon is not available in this runtime.";
+  "Live match data is unavailable. Demo fixtures are not shown in production.";
 
 async function loadNeon() {
   try {
@@ -187,7 +186,7 @@ export async function listMatches(): Promise<MatchListResult> {
   const connection = await getSql();
 
   if (!connection) {
-    return sampleResult("missing-database-url");
+    return unavailableResult("missing-database-url");
   }
 
   if (connection.sql) {
@@ -203,23 +202,17 @@ export async function listMatches(): Promise<MatchListResult> {
         };
       }
 
-      return sampleResult("empty-database-result");
+      return unavailableResult("empty-database-result");
     } catch (error) {
       console.error("MatchSeer database read failed", error);
-      return sampleResult("database-query-failed");
+      return unavailableResult("database-query-failed");
     }
   }
 
-  return sampleResult(connection.reason);
+  return unavailableResult(connection.reason);
 }
 
 function filterDemoRows(matches: MatchSummary[]) {
-  const hasProviderRows = matches.some((match) => match.id.startsWith("fd-"));
-
-  if (!hasProviderRows) {
-    return matches;
-  }
-
   const demoIds = new Set(["mx-rsa", "br-jp", "ca-ma"]);
 
   return matches.filter((match) => !demoIds.has(match.id));
@@ -734,16 +727,16 @@ export function getDatabaseReadiness() {
       ? "@neondatabase/serverless"
       : "waiting-for-database-url",
     note: hasDatabaseUrl
-      ? "The API tries Neon first and falls back to sample data if the driver or database is unavailable."
+      ? "The API reads Neon/provider data only. Demo fixtures are not returned if the database is unavailable."
       : fallbackNote,
   };
 }
 
-function sampleResult(reason: DataSourceReason): MatchListResult {
+function unavailableResult(reason: DataSourceReason): MatchListResult {
   return {
-    source: "sample",
+    source: "database-unavailable",
     reason,
-    matches: sampleMatches,
+    matches: [],
   };
 }
 
