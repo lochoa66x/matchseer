@@ -1,12 +1,13 @@
 :root {
-  --ink: #101624;
-  --muted: #667085;
-  --paper: #f5f7fb;
-  --panel: #ffffff;
-  --surface: #edf1f7;
-  --line: rgba(16, 22, 36, 0.12);
-  --night: #111827;
-  --gold: #f59e0b;
+  --ink: #dfe7f7;
+  --muted: #8fa2c4;
+  --paper: #07090F;
+  --panel: #0F1525;
+  --surface: #111d35;
+  --line: rgba(30, 46, 82, 0.5);
+  --night: #0c111f;
+  --gold: #F5C518;
+  --chaos-orange: #FF6B35;
   --green: #10a36f;
   --blue: #2563eb;
   --red: #ef4444;
@@ -25,9 +26,8 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    radial-gradient(circle at 14% -8%, rgba(37, 99, 235, 0.12), transparent 34%),
-    radial-gradient(circle at 86% 2%, rgba(16, 163, 111, 0.11), transparent 28%),
-    linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(239, 243, 249, 0.98)),
+    radial-gradient(circle at 14% -8%, rgba(245, 197, 24, 0.05), transparent 34%),
+    radial-gradient(circle at 86% 2%, rgba(255, 107, 53, 0.04), transparent 28%),
     var(--paper);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -106,7 +106,7 @@ h1 {
   min-height: 42px;
   padding: 5px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(15, 21, 37, 0.8);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -152,7 +152,7 @@ h1 {
   min-height: 210px;
   padding: 22px;
   background:
-    linear-gradient(110deg, #fffaf0 0%, #f7ead4 42%, #e4f2e9 100%);
+    linear-gradient(110deg, #0F1525 0%, #111d35 55%, #0a1220 100%);
 }
 
 .status-chip {
@@ -185,7 +185,7 @@ h1 {
 .signal {
   min-height: 70px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(15, 21, 37, 0.8);
   border: 1px solid rgba(18, 19, 20, 0.1);
   border-radius: 8px;
 }
@@ -295,7 +295,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--night);
+  color: var(--ink);
   font-size: 0.9rem;
   font-weight: 900;
 }
@@ -313,7 +313,7 @@ h1 {
   width: 100%;
   padding: 14px;
   text-align: left;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--panel);
   cursor: pointer;
 }
 
@@ -380,7 +380,7 @@ h1 {
 
 .ad-card {
   padding: 15px;
-  background: #f4efe5;
+  background: var(--panel);
 }
 
 .ad-card p {
@@ -392,7 +392,7 @@ h1 {
 
 .detail-panel {
   padding: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(15, 21, 37, 0.85);
 }
 
 .match-hero {
@@ -498,7 +498,7 @@ h1 {
   gap: 6px;
   padding: 5px;
   overflow-x: auto;
-  background: #efe8da;
+  background: var(--panel);
   border-radius: 8px;
 }
 
@@ -520,7 +520,7 @@ h1 {
 
 .tab.active {
   color: var(--ink);
-  background: #fffaf0;
+  background: var(--panel);
 }
 
 .forecast-layout {
@@ -533,11 +533,11 @@ h1 {
 .forecast-card,
 .comparison-card {
   padding: 16px;
-  background: #fffaf0;
+  background: var(--panel);
 }
 
 .primary-card {
-  background: #101820;
+  background: var(--paper);
   color: #fff;
 }
 
@@ -585,8 +585,8 @@ h1 {
   gap: 7px;
   min-height: 36px;
   padding: 0 12px;
-  color: var(--night);
-  background: #fffaf0;
+  color: var(--ink);
+  background: var(--panel);
   border: 0;
   border-radius: 8px;
   cursor: pointer;
@@ -661,7 +661,7 @@ h1 {
   width: 68px;
   height: 68px;
   place-items: center;
-  background: #101820;
+  background: var(--paper);
   border-radius: 50%;
   font-size: 1.15rem;
   font-weight: 950;
@@ -716,7 +716,7 @@ h1 {
 .reason-list li {
   padding: 12px;
   color: #222;
-  background: #f3eadc;
+  background: var(--panel);
   border-radius: 8px;
   font-weight: 750;
   line-height: 1.35;
@@ -789,7 +789,7 @@ h1 {
   gap: 12px;
   min-height: 210px;
   padding: 15px;
-  background: #fffaf0;
+  background: var(--panel);
 }
 
 .player-team {
@@ -833,7 +833,7 @@ h1 {
 
 .player-meta span {
   padding: 7px 9px;
-  background: #efe8da;
+  background: var(--panel);
   border-radius: 999px;
   color: #343638;
   font-size: 0.78rem;
@@ -852,7 +852,7 @@ h1 {
   gap: 8px;
   min-height: 140px;
   padding: 16px;
-  background: #fffaf0;
+  background: var(--panel);
 }
 
 .weather-card.wide {
@@ -963,7 +963,7 @@ h1 {
 }
 
 .language-switcher {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--panel);
   box-shadow: 0 12px 32px rgba(16, 24, 32, 0.07);
 }
 
@@ -1061,7 +1061,7 @@ h1 {
   min-width: 0;
   min-height: 62px;
   padding: 11px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--panel);
   border: 1px solid rgba(18, 20, 23, 0.1);
   border-radius: 8px;
 }
@@ -1099,7 +1099,7 @@ h1 {
 }
 
 .signal {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--panel);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
@@ -1123,7 +1123,7 @@ h1 {
   background:
     radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.34), transparent 30%),
     radial-gradient(circle at 8% 78%, rgba(16, 163, 111, 0.28), transparent 28%),
-    linear-gradient(145deg, #111827, #172235);
+    linear-gradient(145deg, #07090F, #0F1525);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius);
   box-shadow: 0 24px 70px rgba(16, 24, 32, 0.18);
@@ -1188,8 +1188,8 @@ h1 {
 
 .seer-primary-button {
   width: 100%;
-  color: var(--night);
-  background: #fff;
+  color: var(--ink);
+  background: var(--panel);
 }
 
 .seer-inline-button {
@@ -1233,7 +1233,7 @@ h1 {
   min-width: 0;
   min-height: 92px;
   padding: 13px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--panel);
   border: 1px solid rgba(18, 20, 23, 0.1);
   border-radius: 8px;
   box-shadow: 0 14px 34px rgba(16, 24, 32, 0.05);
@@ -1351,7 +1351,7 @@ h1 {
   padding: 12px;
   color: var(--ink);
   text-align: left;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--panel);
   border: 1px solid rgba(16, 22, 36, 0.1);
   border-radius: 8px;
   box-shadow: 0 14px 36px rgba(16, 24, 32, 0.06);
@@ -1479,7 +1479,7 @@ h1 {
   display: grid;
   gap: 10px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--panel);
   border: 1px solid rgba(18, 20, 23, 0.09);
   border-radius: 8px;
   box-shadow: 0 14px 34px rgba(16, 24, 32, 0.05);
@@ -1550,7 +1550,7 @@ h1 {
 .empty-match-state {
   padding: 16px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(15, 21, 37, 0.85);
   border: 1px dashed rgba(18, 20, 23, 0.18);
   border-radius: 8px;
   font-weight: 800;
@@ -1565,7 +1565,7 @@ h1 {
   position: relative;
   overflow: hidden;
   padding: 15px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--panel);
   box-shadow: 0 14px 36px rgba(16, 24, 32, 0.06);
   transition:
     border-color 0.18s ease,
@@ -1611,7 +1611,7 @@ h1 {
 .detail-panel {
   padding: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--panel);
   box-shadow: 0 24px 70px rgba(16, 24, 32, 0.08);
 }
 
@@ -1681,7 +1681,7 @@ h1 {
   background:
     radial-gradient(circle at 18% 12%, rgba(37, 99, 235, 0.32), transparent 26%),
     radial-gradient(circle at 90% 18%, rgba(16, 163, 111, 0.22), transparent 28%),
-    linear-gradient(145deg, #111827, #172235);
+    linear-gradient(145deg, #07090F, #0F1525);
   border-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -5093,7 +5093,7 @@ body {
   gap: 8px;
   min-height: 40px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
@@ -5141,7 +5141,7 @@ body {
   width: 100%;
   min-height: 42px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   font: inherit;
