@@ -1621,50 +1621,76 @@ function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language:
     match.forecast.tone[language] ??
     "";
 
-  if (language === "es") {
-    if (outcome === "exact") {
-      return "Marcador clavado: la lectura queda con recibo limpio.";
-    }
-
-    if (outcome === "hit") {
-      return "La dirección aguantó, aunque el marcador se movió un poco.";
-    }
-
-    if (outcome === "miss") {
-      return "El Vidente falló esta lectura; se guarda el recibo para ajustar el modelo.";
-    }
-
-    if (outcome === "live") {
-      return "Partido en vivo: la lectura sigue respirando hasta el silbatazo.";
-    }
-
-    return "Esperando el marcador final para revisar la lectura.";
-  }
-
-  if (language === "fr") {
-    if (outcome === "exact") {
-      return "Score exact : la lecture garde un reçu propre.";
-    }
-
-    if (outcome === "hit") {
-      return "La direction a tenu, même si le score a bougé.";
-    }
-
-    if (outcome === "miss") {
-      return "Le voyant a raté cette lecture ; reçu gardé pour ajuster le modèle.";
-    }
-
-    if (outcome === "live") {
-      return "Match en direct : la lecture respire encore jusqu’au coup de sifflet.";
-    }
-
-    return "En attente du score final pour vérifier la lecture.";
-  }
-
   const home = match.home.code;
   const away = match.away.code;
   const score = parseScoreline(match.score);
   const predicted = getForecastSide(match);
+
+  if (language === "es") {
+    if (outcome === "exact") {
+      if (!score) return "Marcador exacto: recibo limpio.";
+      if (score.home === score.away) {
+        return `${home} y ${away} se repartieron los puntos. El Vidente leyó el empate — y el empate respondió.`;
+      }
+      const winner = score.home > score.away ? home : away;
+      const margin = Math.abs(score.home - score.away);
+      if (margin >= 2) {
+        return `${winner} lo hizo ver sencillo. El Vidente lo llamó y el marcador lo confirmó con margen.`;
+      }
+      return `${winner} siguió la línea que trazó el Vidente. Dirección limpia, recibo archivado.`;
+    }
+
+    if (outcome === "hit") {
+      if (predicted === "draw") {
+        return `No fue empate al final, pero la lectura del Vidente sobre ${home} vs ${away} estuvo cerca. La dirección casi se sostuvo.`;
+      }
+      const predictedWinner = predicted === "home" ? home : away;
+      return `${predictedWinner} respondió aunque el marcador no cayó exactamente como estaba escrito. La señal del Vidente se sostuvo.`;
+    }
+
+    if (outcome === "miss") {
+      return `${home} vs ${away} no siguió el guión del Vidente. Recibo archivado — el modelo toma nota y sigue.`;
+    }
+
+    if (outcome === "live") {
+      return `${home} vs ${away} sigue en vivo. La lectura del Vidente respira hasta el silbatazo final.`;
+    }
+
+    return "Esperando el marcador final para que el recibo despierte.";
+  }
+
+  if (language === "fr") {
+    if (outcome === "exact") {
+      if (!score) return "Score exact : reçu propre.";
+      if (score.home === score.away) {
+        return `${home} et ${away} se sont partagé les points. Le voyant avait lu le nul — et le nul a répondu.`;
+      }
+      const winner = score.home > score.away ? home : away;
+      const margin = Math.abs(score.home - score.away);
+      if (margin >= 2) {
+        return `${winner} a rendu ça simple. Le voyant l'avait annoncé et le score l'a confirmé avec de la marge.`;
+      }
+      return `${winner} a suivi la ligne tracée par le voyant. Direction propre, reçu classé.`;
+    }
+
+    if (outcome === "hit") {
+      if (predicted === "draw") {
+        return `Pas de nul au final, mais la lecture du voyant sur ${home} contre ${away} était proche. La direction a presque tenu.`;
+      }
+      const predictedWinner = predicted === "home" ? home : away;
+      return `${predictedWinner} s'est imposé même si le score n'a pas atterri exactement comme prévu. Le penchant du voyant a tenu.`;
+    }
+
+    if (outcome === "miss") {
+      return `${home} contre ${away} n'a pas suivi le script du voyant. Reçu classé — le modèle note et passe à la suite.`;
+    }
+
+    if (outcome === "live") {
+      return `${home} contre ${away} est encore en cours. La lecture du voyant respire jusqu'au coup de sifflet.`;
+    }
+
+    return "En attente du score final pour que le reçu se réveille.";
+  }
 
   if (outcome === "exact") {
     if (!score) return "Scoreline landed clean: the receipt goes in the bright pile.";
