@@ -639,9 +639,15 @@ export default function Home() {
             <span>{activeMatch.group}</span>
           </div>
           <div className="hero-match-summary">
-            <strong>{activeMatch.home.name}</strong>
+            <div className="hero-team-pill">
+              <TeamFlag team={activeMatch.home} />
+              <strong>{activeMatch.home.name}</strong>
+            </div>
             <span>vs</span>
-            <strong>{activeMatch.away.name}</strong>
+            <div className="hero-team-pill">
+              <TeamFlag team={activeMatch.away} />
+              <strong>{activeMatch.away.name}</strong>
+            </div>
           </div>
           <h2>{t.subtitle}</h2>
           <div className="hero-meta-grid">
@@ -667,9 +673,15 @@ export default function Home() {
         <div className="seer-access-panel">
           <p className="eyebrow">{t.selectedMatch}</p>
           <div className="seer-teams">
-            <strong>{activeMatch.home.name}</strong>
+            <div className="seer-team-name">
+              <TeamFlag team={activeMatch.home} />
+              <strong>{activeMatch.home.name}</strong>
+            </div>
             <span>vs</span>
-            <strong>{activeMatch.away.name}</strong>
+            <div className="seer-team-name">
+              <TeamFlag team={activeMatch.away} />
+              <strong>{activeMatch.away.name}</strong>
+            </div>
           </div>
           <div className="seer-context">
             <span>{activeMatch.group}</span>
@@ -722,26 +734,6 @@ export default function Home() {
           tone={activeOracleRead?.source === "openai" ? "good" : "neutral"}
         />
       </section>
-
-      <CupSeerBoard
-        candidates={cupCandidates}
-        language={language}
-        onSelectTeam={(teamName) => {
-          const candidateMatch = matches.find(
-            (match) =>
-              match.home.name === teamName || match.away.name === teamName,
-          );
-
-          if (candidateMatch) {
-            setActiveMatchId(candidateMatch.id);
-            setActiveTab("teams");
-          }
-        }}
-        pulseLabel={cupPulseLabel}
-        t={t}
-      />
-
-      <SeerLensStrip t={t} />
 
       <section className="content-grid" id="forecast-board">
         <aside className="match-rail" aria-label="Match list">
@@ -896,6 +888,26 @@ export default function Home() {
           {activeTab === "weather" && <WeatherView match={activeMatch} t={t} language={language} />}
         </section>
       </section>
+
+      <CupSeerBoard
+        candidates={cupCandidates}
+        language={language}
+        onSelectTeam={(teamName) => {
+          const candidateMatch = matches.find(
+            (match) =>
+              match.home.name === teamName || match.away.name === teamName,
+          );
+
+          if (candidateMatch) {
+            setActiveMatchId(candidateMatch.id);
+            setActiveTab("teams");
+          }
+        }}
+        pulseLabel={cupPulseLabel}
+        t={t}
+      />
+
+      <SeerLensStrip t={t} />
     </main>
   );
 }
@@ -1260,11 +1272,27 @@ function CupSeerBoard({
             className="cup-candidate-card"
             key={candidate.team.name}
             onClick={() => onSelectTeam(candidate.team.name)}
+            style={{ "--team-color": candidate.team.color } as React.CSSProperties}
             type="button"
           >
             <div className="cup-candidate-top">
-              <span className="candidate-rank">#{index + 1}</span>
-              <TeamBadge team={candidate.team} />
+              <div className="cup-candidate-aura">
+                <span className="candidate-rank">#{index + 1}</span>
+                <TeamFlag team={candidate.team} />
+              </div>
+              <div className="cup-candidate-name">
+                <span
+                  className="team-code"
+                  style={{ background: candidate.team.color }}
+                >
+                  {candidate.team.code}
+                </span>
+                <strong>{candidate.team.name}</strong>
+              </div>
+            </div>
+            <div className="cup-oracle-line">
+              <Sparkles size={15} />
+              <span>{candidate.traits.join(" · ")}</span>
             </div>
             <div className="cup-signal-row">
               <span>{t.cupSignal}</span>
@@ -1283,11 +1311,6 @@ function CupSeerBoard({
                 {candidate.matches} {t.matches}
               </span>
               <span>{candidate.expectedPoints.toFixed(1)} xPts</span>
-            </div>
-            <div className="cup-tags">
-              {candidate.traits.map((trait) => (
-                <span key={trait}>{trait}</span>
-              ))}
             </div>
             <p>
               <strong>{t.seerVerdict}: </strong>
@@ -1446,7 +1469,7 @@ function DataStatusCard({
 function TeamLine({ team, score }: { team: Team; score?: string }) {
   return (
     <div className="team-line">
-      <span className="team-dot" style={{ background: team.color }} />
+      <TeamFlag team={team} compact />
       <strong>{team.name}</strong>
       {score && <span className="score">{score}</span>}
     </div>
@@ -1456,11 +1479,145 @@ function TeamLine({ team, score }: { team: Team; score?: string }) {
 function TeamBadge({ team }: { team: Team }) {
   return (
     <div className="team-badge">
-      <span style={{ background: team.color }}>{team.code}</span>
+      <TeamFlag team={team} />
+      <span className="team-code" style={{ background: team.color }}>{team.code}</span>
       <strong>{team.name}</strong>
     </div>
   );
 }
+
+function TeamFlag({ team, compact = false }: { team: Team; compact?: boolean }) {
+  return (
+    <span
+      aria-label={`${team.name} flag`}
+      className={cx("team-flag", compact && "compact")}
+      title={team.name}
+    >
+      {flagEmojiForTeam(team)}
+    </span>
+  );
+}
+
+function flagEmojiForTeam(team: Team) {
+  const code = team.code.toUpperCase();
+  const nameKey = normalizeTeamKey(team.name);
+  const flagCode =
+    fifaCodeToFlagCode[code] ??
+    teamNameToFlagCode[nameKey] ??
+    code.slice(0, 2);
+
+  if (specialFlags[flagCode]) {
+    return specialFlags[flagCode];
+  }
+
+  return countryCodeToEmoji(flagCode);
+}
+
+function countryCodeToEmoji(countryCode: string) {
+  if (!/^[A-Z]{2}$/.test(countryCode)) {
+    return "🏳️";
+  }
+
+  return countryCode
+    .split("")
+    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
+    .join("");
+}
+
+const specialFlags: Record<string, string> = {
+  ENG: "🏴",
+  SCO: "🏴",
+  WAL: "🏴",
+};
+
+const fifaCodeToFlagCode: Record<string, string> = {
+  ALB: "AL",
+  ALG: "DZ",
+  ARG: "AR",
+  AUS: "AU",
+  AUT: "AT",
+  BEL: "BE",
+  BIH: "BA",
+  BRA: "BR",
+  CAN: "CA",
+  CHI: "CL",
+  COL: "CO",
+  CRC: "CR",
+  CRO: "HR",
+  CZE: "CZ",
+  DEN: "DK",
+  ECU: "EC",
+  ENG: "ENG",
+  FRA: "FR",
+  GER: "DE",
+  GHA: "GH",
+  HAI: "HT",
+  ITA: "IT",
+  JPN: "JP",
+  KOR: "KR",
+  MAR: "MA",
+  MEX: "MX",
+  NED: "NL",
+  NGA: "NG",
+  PAR: "PY",
+  POL: "PL",
+  POR: "PT",
+  QAT: "QA",
+  RSA: "ZA",
+  SCO: "SCO",
+  SEN: "SN",
+  SRB: "RS",
+  SUI: "CH",
+  TUN: "TN",
+  URU: "UY",
+  USA: "US",
+};
+
+const teamNameToFlagCode: Record<string, string> = {
+  algeria: "DZ",
+  argentina: "AR",
+  australia: "AU",
+  austria: "AT",
+  belgium: "BE",
+  "bosnia h": "BA",
+  "bosnia and herzegovina": "BA",
+  brazil: "BR",
+  canada: "CA",
+  chile: "CL",
+  colombia: "CO",
+  costa: "CR",
+  croatia: "HR",
+  czechia: "CZ",
+  denmark: "DK",
+  ecuador: "EC",
+  england: "ENG",
+  france: "FR",
+  germany: "DE",
+  ghana: "GH",
+  haiti: "HT",
+  italy: "IT",
+  japan: "JP",
+  korea: "KR",
+  "korea republic": "KR",
+  mexico: "MX",
+  morocco: "MA",
+  netherlands: "NL",
+  nigeria: "NG",
+  paraguay: "PY",
+  poland: "PL",
+  portugal: "PT",
+  qatar: "QA",
+  scotland: "SCO",
+  senegal: "SN",
+  serbia: "RS",
+  "south africa": "ZA",
+  spain: "ES",
+  switzerland: "CH",
+  tunisia: "TN",
+  uruguay: "UY",
+  usa: "US",
+  "united states": "US",
+};
 
 function ForecastView({
   match,
@@ -1515,9 +1672,9 @@ function ForecastView({
         <p className="seer-line">{signalCopy}</p>
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
         <div className="probability-grid">
-          <Probability label={match.home.code} value={match.forecast.home} color={match.home.color} />
+          <Probability team={match.home} label={match.home.code} value={match.forecast.home} color={match.home.color} />
           <Probability label="DRAW" value={match.forecast.draw} color="#8b8f98" />
-          <Probability label={match.away.code} value={match.forecast.away} color={match.away.color} />
+          <Probability team={match.away} label={match.away.code} value={match.forecast.away} color={match.away.color} />
         </div>
         <div className="metric-row">
           <Meter label={t.confidence} value={match.forecast.confidence} />
@@ -1541,13 +1698,16 @@ function ForecastView({
   );
 }
 
-function Probability({ label, value, color }: { label: string; value: number; color: string }) {
+function Probability({ label, value, color, team }: { label: string; value: number; color: string; team?: Team }) {
   return (
     <div className="probability">
       <div className="probability-ring" style={{ "--ring-color": color, "--ring-value": `${value * 3.6}deg` } as React.CSSProperties}>
         <span>{value}%</span>
       </div>
-      <strong>{label}</strong>
+      <strong>
+        {team && <TeamFlag team={team} compact />}
+        {label}
+      </strong>
     </div>
   );
 }
