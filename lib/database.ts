@@ -51,6 +51,20 @@ export type VenueOverrideResult = {
   fetchedAt: string;
 };
 
+export type VenueMappingCandidate = {
+  matchId: string;
+  home: string;
+  away: string;
+  group: string;
+  status: string;
+  startsAt: string | null;
+  currentVenue: {
+    slug: string;
+    name: string;
+    city: string;
+  };
+};
+
 type NeonQuery = (
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -116,6 +130,18 @@ type WeatherVenueRow = {
   venue_slug: string;
   latitude: string | number;
   longitude: string | number;
+};
+
+type VenueMappingCandidateRow = {
+  match_id: string;
+  home_name: string;
+  away_name: string;
+  group_name: string | null;
+  status: string;
+  starts_at: Date | string | null;
+  venue_slug: string;
+  venue_name: string;
+  venue_city: string;
 };
 
 const fallbackNote =
@@ -499,6 +525,52 @@ export async function applyVenueOverrides(
     missingMatches,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+export async function listVenueMappingCandidates({
+  includeMapped = false,
+}: {
+  includeMapped?: boolean;
+} = {}) {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for venue mapping candidates.");
+  }
+
+  const rows = (await connection.sql`
+    select
+      matches.external_id as match_id,
+      home_team.name as home_name,
+      away_team.name as away_name,
+      matches.group_name,
+      matches.status,
+      matches.starts_at,
+      venues.slug as venue_slug,
+      venues.name as venue_name,
+      venues.city as venue_city
+    from matches
+    join teams home_team on home_team.id = matches.home_team_id
+    join teams away_team on away_team.id = matches.away_team_id
+    join venues on venues.id = matches.venue_id
+    where matches.external_id like 'fd-%'
+      and (${includeMapped} or venues.slug = 'provider-venue-tbd')
+    order by matches.starts_at nulls last, matches.external_id;
+  `) as unknown as VenueMappingCandidateRow[];
+
+  return rows.map((row) => ({
+    matchId: row.match_id,
+    home: row.home_name,
+    away: row.away_name,
+    group: normalizeGroupName(row.group_name),
+    status: row.status,
+    startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
+    currentVenue: {
+      slug: row.venue_slug,
+      name: row.venue_name,
+      city: row.venue_city,
+    },
+  })) satisfies VenueMappingCandidate[];
 }
 
 export async function syncWorldCupWeather(): Promise<WeatherSyncResult> {

@@ -12,6 +12,18 @@
 curl -s https://matchseer.com/api/admin/venue-overrides
 ```
 
+## List matches that still need venues
+
+```bash
+curl -s https://matchseer.com/api/admin/venue-candidates
+```
+
+To include already mapped matches too:
+
+```bash
+curl -s "https://matchseer.com/api/admin/venue-candidates?all=1"
+```
+
 ## Apply venue overrides
 
 ```bash
