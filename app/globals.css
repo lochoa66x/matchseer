@@ -3586,12 +3586,29 @@ body {
   font-size: 0.88rem;
 }
 
-/* Compact matchroom pass: less poster, more app. */
+/* Golden Boot compact matchroom pass: less poster, more app. */
+:root {
+  --ink: #f7f3ea;
+  --muted: #9aa7bd;
+  --paper: #070a11;
+  --panel: rgba(13, 20, 38, 0.88);
+  --surface: rgba(29, 45, 80, 0.62);
+  --line: rgba(142, 160, 190, 0.22);
+  --night: #070a11;
+  --gold: #f7c51d;
+  --green: #f7c51d;
+  --blue: #8fa0bd;
+  --red: #ff6a3d;
+  --violet: #1f376b;
+  --pink: #ff6a3d;
+}
+
 body {
   background:
-    radial-gradient(circle at 16% 8%, rgba(70, 203, 211, 0.1), transparent 22%),
-    radial-gradient(circle at 82% 12%, rgba(79, 224, 164, 0.08), transparent 24%),
-    linear-gradient(180deg, #07100f 0%, #081516 48%, #040706 100%);
+    radial-gradient(circle at 14% 10%, rgba(31, 55, 107, 0.28), transparent 24%),
+    radial-gradient(circle at 86% 9%, rgba(247, 197, 29, 0.07), transparent 22%),
+    radial-gradient(circle at 78% 54%, rgba(255, 106, 61, 0.055), transparent 26%),
+    linear-gradient(180deg, #070a11 0%, #0a1020 52%, #05070d 100%);
 }
 
 .app-shell {
@@ -3601,7 +3618,7 @@ body {
 
 .app-shell::before {
   height: 320px;
-  opacity: 0.16;
+  opacity: 0.11;
 }
 
 .topbar {
@@ -3613,9 +3630,13 @@ body {
   width: 46px;
   height: 46px;
   border-radius: 12px;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.72), transparent 0 8%, transparent 9%),
+    conic-gradient(from 30deg, #8fa0bd, #1f376b, #f7c51d, #ff6a3d, #8fa0bd);
+  border-color: rgba(247, 197, 29, 0.38);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 0 20px rgba(70, 203, 211, 0.14);
+    0 0 20px rgba(247, 197, 29, 0.12);
 }
 
 .brand-ball {
@@ -3642,9 +3663,25 @@ body {
   padding: 0 10px;
 }
 
+.main-nav a:hover,
+.status-chip,
+.cup-pulse-chip,
+.cup-oracle-line {
+  color: #f7c51d;
+  background: rgba(247, 197, 29, 0.08);
+  border-color: rgba(247, 197, 29, 0.24);
+}
+
 .language-switcher {
   min-height: 44px;
   padding: 4px;
+  background: rgba(8, 12, 24, 0.82);
+  border-color: rgba(143, 160, 189, 0.28);
+}
+
+.language-pill.active {
+  color: #080b12;
+  background: #f7c51d;
 }
 
 .hero-grid {
@@ -3658,15 +3695,16 @@ body {
 .seer-access-panel {
   min-height: 0;
   padding: 24px;
-  border-color: rgba(93, 218, 190, 0.2);
+  border-color: rgba(143, 160, 189, 0.22);
   border-radius: 10px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
 }
 
 .hero-copy {
   background:
-    radial-gradient(circle at 26% 92%, rgba(70, 203, 211, 0.08), transparent 24%),
-    linear-gradient(145deg, rgba(8, 22, 27, 0.95), rgba(4, 10, 11, 0.97));
+    radial-gradient(circle at 20% 92%, rgba(31, 55, 107, 0.2), transparent 26%),
+    radial-gradient(circle at 86% 12%, rgba(247, 197, 29, 0.055), transparent 24%),
+    linear-gradient(145deg, rgba(9, 14, 27, 0.97), rgba(5, 7, 13, 0.98));
 }
 
 .hero-kicker-row {
@@ -3721,7 +3759,7 @@ body {
   min-height: 68px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(143, 160, 189, 0.18);
 }
 
 .meta-item strong,
@@ -3743,17 +3781,17 @@ body {
 
 .hero-field-lines {
   height: 72px;
-  opacity: 0.35;
+  opacity: 0.28;
 }
 
 .seer-access-panel {
   align-content: start;
   gap: 18px;
   background:
-    radial-gradient(circle at 78% 14%, rgba(91, 122, 255, 0.08), transparent 32%),
-    radial-gradient(circle at 16% 88%, rgba(70, 203, 211, 0.08), transparent 30%),
-    linear-gradient(145deg, rgba(10, 22, 28, 0.96), rgba(4, 10, 11, 0.98));
-  border-color: rgba(93, 218, 190, 0.22);
+    radial-gradient(circle at 78% 14%, rgba(31, 55, 107, 0.22), transparent 32%),
+    radial-gradient(circle at 18% 86%, rgba(247, 197, 29, 0.055), transparent 28%),
+    linear-gradient(145deg, rgba(12, 18, 34, 0.97), rgba(5, 7, 13, 0.98));
+  border-color: rgba(143, 160, 189, 0.22);
 }
 
 .seer-teams {
@@ -3787,11 +3825,12 @@ body {
 .seer-primary-button {
   min-height: 48px;
   margin-top: 4px;
-  color: #06100f;
-  background: linear-gradient(100deg, #68dce4, #79e5b2);
+  color: #080b12;
+  background: linear-gradient(100deg, #f7c51d, #ff6a3d);
+  border-color: rgba(247, 197, 29, 0.4);
   box-shadow:
-    0 12px 30px rgba(70, 203, 211, 0.1),
-    0 10px 30px rgba(67, 229, 143, 0.1);
+    0 12px 30px rgba(247, 197, 29, 0.1),
+    0 10px 30px rgba(255, 106, 61, 0.08);
 }
 
 .seer-mini-grid {
@@ -3809,7 +3848,37 @@ body {
 .comparison-card,
 .player-card,
 .weather-card {
+  background:
+    linear-gradient(145deg, rgba(13, 20, 38, 0.9), rgba(6, 9, 17, 0.94)),
+    var(--panel);
+  border-color: rgba(143, 160, 189, 0.18);
   border-radius: 10px;
+}
+
+.share-button,
+.oracle-button,
+.admin-command.primary {
+  color: #080b12;
+  background: linear-gradient(100deg, #f7c51d, #ff6a3d);
+  border-color: rgba(247, 197, 29, 0.34);
+  box-shadow: 0 12px 30px rgba(247, 197, 29, 0.1);
+}
+
+.cup-seer-board {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(31, 55, 107, 0.22), transparent 28%),
+    radial-gradient(circle at 94% 16%, rgba(247, 197, 29, 0.08), transparent 26%),
+    linear-gradient(145deg, rgba(11, 17, 32, 0.94), rgba(5, 7, 13, 0.96));
+}
+
+.cup-candidate-card {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--team-color, #8fa0bd) 14%, transparent), transparent 34%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(6, 9, 17, 0.96));
+}
+
+.cup-signal-track span {
+  background: linear-gradient(90deg, var(--team-color, #f7c51d), #ff6a3d) !important;
 }
 
 .team-flag {
