@@ -2368,8 +2368,14 @@ function ForecastView({
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
   const reasons =
-    interpretation?.keyFactors.map((factor) => factor.explanation) ??
-    match.forecast.reasons[language];
+    interpretation?.keyFactors.map((factor) =>
+      typeof factor.explanation === "string"
+        ? factor.explanation.replace(/^explanation:\s*/i, "").trim()
+        : String(factor.explanation ?? ""),
+    ) ??
+    match.forecast.reasons[language].map((r) =>
+      typeof r === "string" ? r.replace(/^explanation:\s*/i, "").trim() : r,
+    );
   const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
   const accents = matchAccentColors(match);
 

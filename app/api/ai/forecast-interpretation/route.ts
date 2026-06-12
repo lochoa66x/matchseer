@@ -14,6 +14,11 @@ const disclaimer =
 
 export const dynamic = "force-dynamic";
 
+function cleanExplanation(raw: unknown): string {
+  const s = typeof raw === "string" ? raw : String(raw ?? "");
+  return s.replace(/^explanation:\s*/i, "").trim();
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<ForecastInterpretationRequest>;
 
@@ -167,7 +172,7 @@ function createFallbackInterpretation(
     toneLine: match.forecast.tone[language],
     keyFactors: match.forecast.reasons[language].map((reason, index) => ({
       label: `Factor ${index + 1}`,
-      explanation: reason,
+      explanation: cleanExplanation(reason),
     })),
     missingDataNotes: [
       usingDatabase
@@ -294,7 +299,10 @@ function parseOpenAiInterpretation(
     toneLine: parsed.toneLine ?? fallback.toneLine,
     keyFactors:
       parsed.keyFactors && parsed.keyFactors.length > 0
-        ? parsed.keyFactors
+        ? parsed.keyFactors.map((f) => ({
+            ...f,
+            explanation: cleanExplanation(f.explanation),
+          }))
         : fallback.keyFactors,
     missingDataNotes: parsed.missingDataNotes ?? fallback.missingDataNotes,
     disclaimer,
