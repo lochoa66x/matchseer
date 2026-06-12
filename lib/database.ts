@@ -1,4 +1,5 @@
 import type { Language, MatchStatus, MatchSummary } from "./domain";
+import type { FootballDataSnapshot } from "./providers/football-data";
 import { sampleMatches } from "./sample-data";
 
 export type DataSourceStatus = "sample" | "database" | "database-unavailable";
@@ -13,6 +14,16 @@ type MatchListResult = {
   source: DataSourceStatus;
   reason: DataSourceReason;
   matches: MatchSummary[];
+};
+
+export type RealDataSyncResult = {
+  source: "football-data";
+  competition: string;
+  season: string;
+  teams: number;
+  matches: number;
+  forecasts: number;
+  fetchedAt: string;
 };
 
 type NeonQuery = (
@@ -151,6 +162,250 @@ export async function getMatch(matchId: string) {
     source: result.source,
     reason: result.reason,
     match: result.matches.find((match) => match.id === matchId) ?? null,
+  };
+}
+
+export async function syncFootballDataSnapshot(
+  snapshot: FootballDataSnapshot,
+): Promise<RealDataSyncResult> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for real data sync.");
+  }
+
+  const sql = connection.sql;
+  const venueSlug = "provider-venue-tbd";
+
+  await sql`
+    insert into competitions (slug, name, sport, season)
+    values (
+      ${snapshot.competition.slug},
+      ${snapshot.competition.name},
+      ${snapshot.competition.sport},
+      ${snapshot.competition.season}
+    )
+    on conflict (slug) do update set
+      name = excluded.name,
+      sport = excluded.sport,
+      season = excluded.season;
+  `;
+
+  await sql`
+    insert into venues (slug, name, city, country)
+    values (${venueSlug}, 'Venue TBD', 'City TBD', null)
+    on conflict (slug) do update set
+      name = excluded.name,
+      city = excluded.city,
+      country = excluded.country;
+  `;
+
+  for (const team of snapshot.teams) {
+    const ratings = teamRatings(team.id);
+
+    await sql`
+      insert into teams (
+        competition_id,
+        slug,
+        name,
+        code,
+        color,
+        country,
+        record,
+        form,
+        attack,
+        control,
+        defense,
+        set_pieces
+      )
+      values (
+        (select id from competitions where slug = ${snapshot.competition.slug}),
+        ${team.slug},
+        ${team.name},
+        ${team.code},
+        ${team.color},
+        ${team.country},
+        'Provider synced',
+        array[]::text[],
+        ${ratings.attack},
+        ${ratings.control},
+        ${ratings.defense},
+        ${ratings.setPieces}
+      )
+      on conflict (slug) do update set
+        competition_id = excluded.competition_id,
+        name = excluded.name,
+        code = excluded.code,
+        color = excluded.color,
+        country = excluded.country,
+        attack = excluded.attack,
+        control = excluded.control,
+        defense = excluded.defense,
+        set_pieces = excluded.set_pieces;
+    `;
+  }
+
+  const teamSlugByProviderId = new Map(
+    snapshot.teams.map((team) => [team.id, team.slug] as const),
+  );
+  let forecasts = 0;
+
+  for (const match of snapshot.matches) {
+    const homeSlug = teamSlugByProviderId.get(match.homeTeamProviderId);
+    const awaySlug = teamSlugByProviderId.get(match.awayTeamProviderId);
+
+    if (!homeSlug || !awaySlug) {
+      continue;
+    }
+
+    await sql`
+      insert into matches (
+        external_id,
+        competition_id,
+        home_team_id,
+        away_team_id,
+        venue_id,
+        stage,
+        group_name,
+        starts_at,
+        status,
+        home_score,
+        away_score,
+        updated_at
+      )
+      values (
+        ${match.externalId},
+        (select id from competitions where slug = ${snapshot.competition.slug}),
+        (select id from teams where slug = ${homeSlug}),
+        (select id from teams where slug = ${awaySlug}),
+        (select id from venues where slug = ${venueSlug}),
+        ${match.stage},
+        ${match.groupName},
+        ${match.startsAt},
+        ${match.status},
+        ${match.homeScore},
+        ${match.awayScore},
+        now()
+      )
+      on conflict (external_id) do update set
+        competition_id = excluded.competition_id,
+        home_team_id = excluded.home_team_id,
+        away_team_id = excluded.away_team_id,
+        venue_id = excluded.venue_id,
+        stage = excluded.stage,
+        group_name = excluded.group_name,
+        starts_at = excluded.starts_at,
+        status = excluded.status,
+        home_score = excluded.home_score,
+        away_score = excluded.away_score,
+        updated_at = now();
+    `;
+
+    const forecast = baselineForecast(
+      match.homeTeamProviderId,
+      match.awayTeamProviderId,
+      match.status,
+      match.homeScore,
+      match.awayScore,
+    );
+    const forecastRows = await sql`
+      insert into forecasts (
+        match_id,
+        version,
+        home_win_probability,
+        draw_probability,
+        away_win_probability,
+        projected_score,
+        confidence,
+        chaos,
+        source_payload
+      )
+      values (
+        (select id from matches where external_id = ${match.externalId}),
+        1,
+        ${forecast.home},
+        ${forecast.draw},
+        ${forecast.away},
+        ${forecast.projected},
+        ${forecast.confidence},
+        ${forecast.chaos},
+        ${JSON.stringify({
+          provider: snapshot.provider,
+          providerMatchId: match.providerId,
+          fetchedAt: snapshot.fetchedAt,
+          note: "Baseline forecast from provider fixture state. AI interpretation remains user-triggered.",
+        })}::jsonb
+      )
+      on conflict (match_id, version) do update set
+        home_win_probability = excluded.home_win_probability,
+        draw_probability = excluded.draw_probability,
+        away_win_probability = excluded.away_win_probability,
+        projected_score = excluded.projected_score,
+        confidence = excluded.confidence,
+        chaos = excluded.chaos,
+        source_payload = excluded.source_payload
+      returning id;
+    `;
+    const forecastId = forecastRows[0]?.id;
+
+    if (typeof forecastId !== "string") {
+      continue;
+    }
+
+    await sql`
+      delete from forecast_factors
+      where forecast_id = ${forecastId};
+    `;
+
+    for (const factor of forecast.factors) {
+      await sql`
+        insert into forecast_factors (forecast_id, label, weight, explanation)
+        values (${forecastId}, ${factor.label}, ${factor.weight}, ${factor.explanation});
+      `;
+    }
+
+    for (const language of ["en", "es", "fr"] as Language[]) {
+      const copy = baselineInterpretationCopy(language, forecast.projected);
+
+      await sql`
+        insert into forecast_interpretations (
+          forecast_id,
+          language,
+          headline,
+          summary,
+          tone_line,
+          missing_data_notes,
+          disclaimer
+        )
+        values (
+          ${forecastId},
+          ${language},
+          ${copy.headline},
+          ${copy.summary},
+          ${copy.toneLine},
+          array['Provider synced fixture data. Ask the Seer for a fresh AI readout.']::text[],
+          'Forecasts are for entertainment and sports analysis only. No betting advice.'
+        )
+        on conflict (forecast_id, language) do update set
+          headline = excluded.headline,
+          summary = excluded.summary,
+          tone_line = excluded.tone_line,
+          missing_data_notes = excluded.missing_data_notes,
+          disclaimer = excluded.disclaimer;
+      `;
+    }
+
+    forecasts += 1;
+  }
+
+  return {
+    source: snapshot.provider,
+    competition: snapshot.competition.name,
+    season: snapshot.competition.season,
+    teams: snapshot.teams.length,
+    matches: snapshot.matches.length,
+    forecasts,
+    fetchedAt: snapshot.fetchedAt,
   };
 }
 
@@ -528,4 +783,110 @@ function toNumber(value: string | number | null) {
   }
 
   return typeof value === "number" ? value : Number(value);
+}
+
+function teamRatings(seed: number) {
+  return {
+    attack: 58 + (seed % 33),
+    control: 56 + ((seed * 3) % 35),
+    defense: 57 + ((seed * 5) % 34),
+    setPieces: 55 + ((seed * 7) % 36),
+  };
+}
+
+function baselineForecast(
+  homeSeed: number,
+  awaySeed: number,
+  status: string,
+  homeScore: number | null,
+  awayScore: number | null,
+) {
+  if (status === "final" && homeScore !== null && awayScore !== null) {
+    const homeWon = homeScore > awayScore;
+    const awayWon = awayScore > homeScore;
+
+    return {
+      home: homeWon ? 72 : awayWon ? 12 : 26,
+      draw: homeScore === awayScore ? 48 : 16,
+      away: awayWon ? 72 : homeWon ? 12 : 26,
+      confidence: 76,
+      chaos: Math.min(82, 40 + Math.abs(homeScore - awayScore) * 12),
+      projected: `${homeScore}-${awayScore}`,
+      factors: [
+        {
+          label: "Final score confirmed",
+          weight: 1,
+          explanation: "The provider feed has the finished score in Neon.",
+        },
+        {
+          label: "Fixture state synced",
+          weight: 0.7,
+          explanation: "Match status and score came from the external data provider.",
+        },
+        {
+          label: "AI readout available",
+          weight: 0.5,
+          explanation: "Ask the Seer to turn the synced data into a fresh interpretation.",
+        },
+      ],
+    };
+  }
+
+  const homeStrength = 45 + (homeSeed % 41);
+  const awayStrength = 45 + (awaySeed % 41);
+  const total = homeStrength + awayStrength;
+  const home = Math.round((homeStrength / total) * 70);
+  const away = Math.round((awayStrength / total) * 70);
+  const draw = Math.max(18, 100 - home - away);
+
+  return {
+    home,
+    draw,
+    away,
+    confidence: 54,
+    chaos: 62,
+    projected: home >= away ? "1-1 / 2-1" : "1-1 / 1-2",
+    factors: [
+      {
+        label: "Provider fixture synced",
+        weight: 1,
+        explanation: "The match shell came from the external football data feed.",
+      },
+      {
+        label: "Ratings pending enrichment",
+        weight: 0.7,
+        explanation: "Team strength is a baseline until advanced form and player stats are connected.",
+      },
+      {
+        label: "AI readout available",
+        weight: 0.5,
+        explanation: "Ask the Seer to generate a fresh interpretation from the current row.",
+      },
+    ],
+  };
+}
+
+function baselineInterpretationCopy(language: Language, projected: string) {
+  const copy = {
+    en: {
+      headline: "Provider synced forecast",
+      summary:
+        "Fresh fixture data is in. Ask the Seer for a richer readout once team stats and weather are layered in.",
+      toneLine: `Baseline projection sits at ${projected}.`,
+    },
+    es: {
+      headline: "Pronóstico sincronizado",
+      summary:
+        "Ya entraron datos reales del calendario. Pregunta al Vidente para una lectura más rica cuando sumemos estadísticas y clima.",
+      toneLine: `La proyección base queda en ${projected}.`,
+    },
+    fr: {
+      headline: "Prévision synchronisée",
+      summary:
+        "Les données réelles du calendrier sont arrivées. Demande au voyant une lecture plus riche avec les stats et la météo.",
+      toneLine: `La projection de base est ${projected}.`,
+    },
+  };
+
+  return copy[language];
 }
