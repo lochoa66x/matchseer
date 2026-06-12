@@ -1,5 +1,7 @@
 import type { Language, MatchStatus, MatchSummary } from "./domain";
 import type { FootballDataSnapshot } from "./providers/football-data";
+import { fetchCurrentVenueWeather } from "./providers/open-meteo";
+import { worldCupVenues } from "./providers/world-cup-venues";
 import { sampleMatches } from "./sample-data";
 
 export type DataSourceStatus = "sample" | "database" | "database-unavailable";
@@ -24,6 +26,15 @@ export type RealDataSyncResult = {
   matches: number;
   forecasts: number;
   fetchedAt: string;
+};
+
+export type WeatherSyncResult = {
+  source: "open-meteo";
+  venuesSeeded: number;
+  venuesWithMatches: number;
+  matchesUpdated: number;
+  fetchedAt: string;
+  skippedReason?: string;
 };
 
 type NeonQuery = (
@@ -84,6 +95,13 @@ type DatabaseMatchRow = {
     spark: number | null;
     note: string | null;
   }> | null;
+};
+
+type WeatherVenueRow = {
+  match_id: string;
+  venue_slug: string;
+  latitude: string | number;
+  longitude: string | number;
 };
 
 const fallbackNote =
@@ -175,7 +193,7 @@ export async function syncFootballDataSnapshot(
   }
 
   const sql = connection.sql;
-  const venueSlug = "provider-venue-tbd";
+  const fallbackVenueSlug = "provider-venue-tbd";
 
   await sql`
     insert into competitions (slug, name, sport, season)
@@ -191,14 +209,7 @@ export async function syncFootballDataSnapshot(
       season = excluded.season;
   `;
 
-  await sql`
-    insert into venues (slug, name, city, country)
-    values (${venueSlug}, 'Venue TBD', 'City TBD', null)
-    on conflict (slug) do update set
-      name = excluded.name,
-      city = excluded.city,
-      country = excluded.country;
-  `;
+  await upsertWorldCupVenues(sql);
 
   for (const team of snapshot.teams) {
     const ratings = teamRatings(team.id);
@@ -278,7 +289,7 @@ export async function syncFootballDataSnapshot(
         (select id from competitions where slug = ${snapshot.competition.slug}),
         (select id from teams where slug = ${homeSlug}),
         (select id from teams where slug = ${awaySlug}),
-        (select id from venues where slug = ${venueSlug}),
+        (select id from venues where slug = ${match.venueSlug ?? fallbackVenueSlug}),
         ${match.stage},
         ${match.groupName},
         ${match.startsAt},
@@ -407,6 +418,121 @@ export async function syncFootballDataSnapshot(
     forecasts,
     fetchedAt: snapshot.fetchedAt,
   };
+}
+
+export async function syncWorldCupWeather(): Promise<WeatherSyncResult> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for weather sync.");
+  }
+
+  const sql = connection.sql;
+  const venuesSeeded = await upsertWorldCupVenues(sql);
+  const rows = (await sql`
+    select
+      matches.id as match_id,
+      venues.slug as venue_slug,
+      venues.latitude,
+      venues.longitude
+    from matches
+    join venues on venues.id = matches.venue_id
+    where venues.latitude is not null
+      and venues.longitude is not null;
+  `) as unknown as WeatherVenueRow[];
+
+  if (rows.length === 0) {
+    return {
+      source: "open-meteo",
+      venuesSeeded,
+      venuesWithMatches: 0,
+      matchesUpdated: 0,
+      fetchedAt: new Date().toISOString(),
+      skippedReason:
+        "No synced matches have a known World Cup venue yet. Run football-data sync again when venue fields are available.",
+    };
+  }
+
+  const rowsByVenue = new Map<string, WeatherVenueRow[]>();
+
+  for (const row of rows) {
+    const venueRows = rowsByVenue.get(row.venue_slug) ?? [];
+    venueRows.push(row);
+    rowsByVenue.set(row.venue_slug, venueRows);
+  }
+
+  let matchesUpdated = 0;
+
+  for (const venueRows of rowsByVenue.values()) {
+    const firstRow = venueRows[0];
+    const weather = await fetchCurrentVenueWeather({
+      latitude: Number(firstRow.latitude),
+      longitude: Number(firstRow.longitude),
+    });
+
+    for (const row of venueRows) {
+      await sql`
+        insert into weather_snapshots (
+          match_id,
+          temperature_c,
+          wind_kph,
+          rain_probability,
+          humidity,
+          summary
+        )
+        values (
+          ${row.match_id},
+          ${weather.temperatureC},
+          ${weather.windKph},
+          ${weather.precipitationMm},
+          ${weather.humidity},
+          ${weather.summary}
+        );
+      `;
+      matchesUpdated += 1;
+    }
+  }
+
+  return {
+    source: "open-meteo",
+    venuesSeeded,
+    venuesWithMatches: rowsByVenue.size,
+    matchesUpdated,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function upsertWorldCupVenues(sql: NeonQuery) {
+  await sql`
+    insert into venues (slug, name, city, country)
+    values ('provider-venue-tbd', 'Venue TBD', 'City TBD', null)
+    on conflict (slug) do update set
+      name = excluded.name,
+      city = excluded.city,
+      country = excluded.country;
+  `;
+
+  for (const venue of worldCupVenues) {
+    await sql`
+      insert into venues (slug, name, city, country, latitude, longitude)
+      values (
+        ${venue.slug},
+        ${venue.name},
+        ${venue.city},
+        ${venue.country},
+        ${venue.latitude},
+        ${venue.longitude}
+      )
+      on conflict (slug) do update set
+        name = excluded.name,
+        city = excluded.city,
+        country = excluded.country,
+        latitude = excluded.latitude,
+        longitude = excluded.longitude;
+    `;
+  }
+
+  return worldCupVenues.length + 1;
 }
 
 export function getDatabaseReadiness() {

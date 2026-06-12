@@ -1,3 +1,5 @@
+import { findWorldCupVenue } from "./world-cup-venues";
+
 export type FootballDataTeam = {
   id: number;
   slug: string;
@@ -18,6 +20,8 @@ export type FootballDataMatch = {
   awayScore: number | null;
   homeTeamProviderId: number;
   awayTeamProviderId: number;
+  venueSlug: string | null;
+  venueName: string | null;
 };
 
 export type FootballDataSnapshot = {
@@ -68,6 +72,9 @@ type FootballDataMatchesResponse = {
     group?: string | null;
     homeTeam?: FootballDataMatchTeam | null;
     awayTeam?: FootballDataMatchTeam | null;
+    venue?: string | { name?: string | null } | null;
+    venueName?: string | null;
+    stadium?: string | { name?: string | null } | null;
     score?: {
       fullTime?: {
         home?: number | null;
@@ -192,6 +199,8 @@ function toFootballDataMatch(
 ) {
   const homeTeamProviderId = match.homeTeam?.id;
   const awayTeamProviderId = match.awayTeam?.id;
+  const venueName = readVenueName(match);
+  const venue = findWorldCupVenue(venueName);
 
   if (!homeTeamProviderId || !awayTeamProviderId) {
     return null;
@@ -208,7 +217,33 @@ function toFootballDataMatch(
     awayScore: match.score?.fullTime?.away ?? null,
     homeTeamProviderId,
     awayTeamProviderId,
+    venueSlug: venue?.slug ?? null,
+    venueName,
   };
+}
+
+function readVenueName(
+  match: NonNullable<FootballDataMatchesResponse["matches"]>[number],
+) {
+  const venueValues = [match.venue, match.venueName, match.stadium];
+
+  for (const venueValue of venueValues) {
+    if (typeof venueValue === "string" && venueValue.trim()) {
+      return venueValue;
+    }
+
+    if (
+      venueValue &&
+      typeof venueValue === "object" &&
+      "name" in venueValue &&
+      typeof venueValue.name === "string" &&
+      venueValue.name.trim()
+    ) {
+      return venueValue.name;
+    }
+  }
+
+  return null;
 }
 
 function toMatchStatus(status: string | null | undefined) {
