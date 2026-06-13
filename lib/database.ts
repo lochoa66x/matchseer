@@ -429,9 +429,6 @@ export async function syncFootballDataSnapshot(
       awayTeam,
       homeRatings,
       awayRatings,
-      status: match.status,
-      homeScore: match.homeScore,
-      awayScore: match.awayScore,
       venueSlug: match.venueSlug,
     });
     const forecastRows = await sql`
@@ -1210,51 +1207,14 @@ function baselineForecast({
   awayTeam,
   homeRatings,
   awayRatings,
-  status,
-  homeScore,
-  awayScore,
   venueSlug,
 }: {
   homeTeam: FootballDataTeam;
   awayTeam: FootballDataTeam;
   homeRatings: TeamRatings;
   awayRatings: TeamRatings;
-  status: string;
-  homeScore: number | null;
-  awayScore: number | null;
   venueSlug: string | null;
 }) {
-  if (status === "final" && homeScore !== null && awayScore !== null) {
-    const homeWon = homeScore > awayScore;
-    const awayWon = awayScore > homeScore;
-
-    return {
-      home: homeWon ? 72 : awayWon ? 12 : 26,
-      draw: homeScore === awayScore ? 48 : 16,
-      away: awayWon ? 72 : homeWon ? 12 : 26,
-      confidence: 76,
-      chaos: Math.min(82, 40 + Math.abs(homeScore - awayScore) * 12),
-      projected: `${homeScore}-${awayScore}`,
-      factors: [
-        {
-          label: "Final score confirmed",
-          weight: 1,
-          explanation: "The provider feed has the finished score in Neon.",
-        },
-        {
-          label: "Fixture state synced",
-          weight: 0.7,
-          explanation: "Match status and score came from the external data provider.",
-        },
-        {
-          label: "AI readout available",
-          weight: 0.5,
-          explanation: "Ask the Seer to turn the synced data into a fresh interpretation.",
-        },
-      ],
-    };
-  }
-
   const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
   const awayVenueBoost = venueCountryBoost(awayTeam, venueSlug);
   const homePower = teamPower(homeRatings) + homeVenueBoost;
