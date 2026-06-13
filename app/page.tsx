@@ -2026,7 +2026,7 @@ function CupCandidateCard({
             marginLeft: "4px",
           }}
         >
-          \u25be
+          {"\u25be"}
         </span>
       </button>
       {expanded && (

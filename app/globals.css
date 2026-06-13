@@ -1471,6 +1471,36 @@ h1 {
   margin: 0;
 }
 
+.cup-analysis-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid rgba(143, 162, 196, 0.25);
+  border-radius: 999px;
+  background: rgba(143, 162, 196, 0.08);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.cup-analysis-toggle:hover {
+  background: rgba(143, 162, 196, 0.16);
+  border-color: rgba(143, 162, 196, 0.4);
+  color: var(--ink);
+}
+
+.cup-analysis-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(143, 162, 196, 0.15);
+}
+
 .match-rail {
   gap: 10px;
 }
