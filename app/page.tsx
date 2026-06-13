@@ -1624,7 +1624,7 @@ function buildForecastReceipt(
   language: Language,
   t: Record<string, string>,
 ): ForecastReceipt {
-  const predictedSide = getForecastSide(match);
+  const predictedSide = getProjectedForecastSide(match);
   const predictedLabel = sideLabel(match, predictedSide);
   const projectedOptions = parseProjectedScores(match.forecast.projected);
 
@@ -1656,7 +1656,7 @@ function buildForecastReceipt(
 
   const actualSide = getScoreSide(finalScore.home, finalScore.away);
   const exactScore = `${finalScore.home}-${finalScore.away}`;
-  const exact = projectedOptions.includes(exactScore);
+  const exact = projectedOptions[0] === exactScore;
   const winnerHit = predictedSide === actualSide;
   const outcome: ForecastReceiptOutcome = exact ? "exact" : winnerHit ? "hit" : "miss";
 
@@ -1680,6 +1680,16 @@ function getForecastSide(match: Match): ForecastSide {
     { side: "draw" as const, value: match.forecast.draw },
     { side: "away" as const, value: match.forecast.away },
   ].sort((left, right) => right.value - left.value)[0].side;
+}
+
+function getProjectedForecastSide(match: Match): ForecastSide {
+  const primaryProjection = parsePrimaryProjectedScore(match.forecast.projected);
+
+  if (primaryProjection) {
+    return getScoreSide(primaryProjection.home, primaryProjection.away);
+  }
+
+  return getForecastSide(match);
 }
 
 function sideLabel(match: Match, side: ForecastSide) {
@@ -1725,6 +1735,18 @@ function parseProjectedScores(value: string) {
     .map((part) => parseScoreline(part.trim()))
     .filter((score): score is { home: number; away: number } => Boolean(score))
     .map((score) => `${score.home}-${score.away}`);
+}
+
+function parsePrimaryProjectedScore(value: string) {
+  for (const part of value.split(/[\/|,]/)) {
+    const score = parseScoreline(part.trim());
+
+    if (score) {
+      return score;
+    }
+  }
+
+  return null;
 }
 
 function receiptSortTime(match: Match) {
@@ -1784,7 +1806,7 @@ function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language:
   const home = match.home.code;
   const away = match.away.code;
   const score = parseScoreline(match.score);
-  const predicted = getForecastSide(match);
+  const predicted = getProjectedForecastSide(match);
 
   if (outcome === "exact") {
     if (!score) return "Scoreline landed clean: the receipt goes in the bright pile.";
@@ -1801,7 +1823,7 @@ function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language:
 
   if (outcome === "hit") {
     if (predicted === "draw") {
-      return `Not a draw in the end, but the Seer's read on ${home} vs ${away} was still close. Direction nearly held.`;
+      return `${home} and ${away} finished level. The exact score moved, but the Seer's draw lean held.`;
     }
     const predictedWinner = predicted === "home" ? home : away;
     return `${predictedWinner} came through even if the scoreline didn't land exactly as written. The Seer's lean held.`;
