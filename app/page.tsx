@@ -170,6 +170,11 @@ const copy = {
     cupSignal: "Finalist signal",
     seerVerdict: "Seer verdict",
     riskCloud: "Risk cloud",
+    signalNotes: "Signal notes",
+    hideNotes: "Hide notes",
+    seerEdge: "Edge",
+    seerPath: "Path",
+    seerWatch: "Watch",
     noCupCandidates: "The cup lens needs real synced teams before it can wake up.",
     seerLenses: "How the Seer thinks",
     seerLensesDetail: "Five lenses. One smarter match read.",
@@ -284,6 +289,11 @@ const copy = {
     cupSignal: "Señal finalista",
     seerVerdict: "Veredicto vidente",
     riskCloud: "Nube de riesgo",
+    signalNotes: "Notas de señal",
+    hideNotes: "Ocultar notas",
+    seerEdge: "Ventaja",
+    seerPath: "Ruta",
+    seerWatch: "Vigilar",
     noCupCandidates: "La lente de copa necesita equipos reales sincronizados para despertar.",
     seerLenses: "Cómo piensa el Vidente",
     seerLensesDetail: "Cinco lentes. Una lectura más inteligente.",
@@ -398,6 +408,11 @@ const copy = {
     cupSignal: "Signal finaliste",
     seerVerdict: "Verdict du voyant",
     riskCloud: "Nuage de risque",
+    signalNotes: "Notes du signal",
+    hideNotes: "Masquer",
+    seerEdge: "Atout",
+    seerPath: "Parcours",
+    seerWatch: "À surveiller",
     noCupCandidates: "La lentille coupe a besoin d’équipes réelles synchronisées pour se réveiller.",
     seerLenses: "Comment pense le voyant",
     seerLensesDetail: "Cinq lentilles. Une lecture plus intelligente.",
@@ -1317,88 +1332,56 @@ function cupVerdict(
   pathSignal: number,
   language: Language,
 ) {
-  const bestTrait = cupTraits(team, pathSignal)[0]?.toLowerCase() ?? "balance";
+  const [primaryTrait, secondaryTrait] = cupTraits(team, pathSignal);
+  const bestTrait = primaryTrait?.toLowerCase() ?? "balance";
+  const supportTrait = secondaryTrait?.toLowerCase() ?? "depth";
   const expectedText = pointsPerMatch.toFixed(1);
-  const isAttackHeavy = team.attack > team.defense + 5;
-  const isDefenseHeavy = team.defense > team.attack + 5;
-  const cleanPath = pathSignal > 76;
-  const highSignal = signal >= 72;
-  const lowSignal = signal < 52;
-  const strongScoring = pointsPerMatch >= 2.0;
-  const weakScoring = pointsPerMatch < 1.5;
 
   if (language === "es") {
-    if (highSignal && strongScoring && cleanPath) {
-      return `${team.name} es uno de los favoritos reales: ${signal}% de señal, ${expectedText} puntos por partido y una ruta que favorece a los que llegan en forma. ${bestTrait} es la ventaja que los separa.`;
+    if (bestTrait === "attack") {
+      return `El filo está arriba: ${signal}% de señal, ${expectedText} xPts por partido y ${supportTrait} sosteniendo la lectura.`;
     }
-    if (highSignal && isAttackHeavy) {
-      return `${team.name} tiene colmillo: ${signal}% de señal y poder de ataque como punto diferencial. Con ${expectedText} puntos esperados por partido, el marcador debería hablar por ellos.`;
+    if (bestTrait === "control") {
+      return `La señal viene del mando: control del ritmo, ${expectedText} xPts por partido y ${supportTrait} como segunda capa.`;
     }
-    if (highSignal && isDefenseHeavy) {
-      return `${team.name} construye desde atrás. Con ${signal}% de señal y ${bestTrait} como escudo, ${expectedText} puntos por partido puede sonar discreto — pero este equipo no regala nada.`;
+    if (bestTrait === "defense") {
+      return `La lectura es de blindaje: ${signal}% de señal, defensa como ancla y ${supportTrait} para sobrevivir noches cerradas.`;
     }
-    if (highSignal && !cleanPath) {
-      return `${team.name} tiene la señal (${signal}%) pero el camino está enredado. ${expectedText} puntos por partido y ${bestTrait} serán la clave para salir del grupo.`;
+    if (bestTrait === "set pieces") {
+      return `El balón quieto abre la puerta: ${signal}% de señal y una ruta donde cada falta cerca del área pesa.`;
     }
-    if (!highSignal && !lowSignal && cleanPath) {
-      return `${team.name} no es favorito, pero la ruta juega a su favor. Con ${signal}% de señal y ${expectedText} puntos por partido, ${bestTrait} puede ser el factor sorpresa.`;
-    }
-    if (lowSignal && strongScoring) {
-      return `Los números de ${team.name} son contradictorios: ${expectedText} puntos por partido pero solo ${signal}% de señal. Si el modelo los subestima, ${bestTrait} será la señal de alarma.`;
-    }
-    if (weakScoring) {
-      return `${team.name} llega con ${signal}% de señal pero la producción ofensiva preocupa — solo ${expectedText} puntos por partido. ${bestTrait} tendrá que compensar en los momentos clave.`;
-    }
-    return `${team.name} aparece en el radar con ${signal}% de señal y ${expectedText} puntos esperados por partido. ${bestTrait} es el argumento más sólido que tiene el Vidente.`;
+    return `La ruta es el argumento: ${signal}% de señal y ${expectedText} xPts si el cuadro no se vuelve raro demasiado pronto.`;
   }
 
   if (language === "fr") {
-    if (highSignal && strongScoring && cleanPath) {
-      return `${team.name} est parmi les vrais favoris : ${signal} % de signal, ${expectedText} points par match et une route qui sourit aux équipes en forme. ${bestTrait} est l'avantage qui les distingue.`;
+    if (bestTrait === "attack") {
+      return `Le tranchant est devant : ${signal} % de signal, ${expectedText} xPts par match et ${supportTrait} en soutien.`;
     }
-    if (highSignal && isAttackHeavy) {
-      return `${team.name} a du mordant : ${signal} % de signal et une attaque tranchante. Avec ${expectedText} points attendus par match, le score devrait parler pour eux.`;
+    if (bestTrait === "control") {
+      return `Le signal vient du contrôle : rythme maîtrisé, ${expectedText} xPts par match et ${supportTrait} comme seconde couche.`;
     }
-    if (highSignal && isDefenseHeavy) {
-      return `${team.name} construit depuis l'arrière. ${signal} % de signal et ${bestTrait} comme rempart — ${expectedText} points par match peut sembler discret, mais cette équipe ne donne rien.`;
+    if (bestTrait === "defense") {
+      return `Lecture de verrou : ${signal} % de signal, défense en ancre et ${supportTrait} pour survivre aux matchs fermés.`;
     }
-    if (highSignal && !cleanPath) {
-      return `${team.name} a le signal (${signal} %) mais le chemin est tortueux. ${expectedText} points par match et ${bestTrait} seront décisifs pour passer la phase de groupes.`;
+    if (bestTrait === "set pieces") {
+      return `Les coups de pied arrêtés ouvrent la porte : ${signal} % de signal et une route où chaque faute proche de la surface compte.`;
     }
-    if (!highSignal && !lowSignal && cleanPath) {
-      return `${team.name} n'est pas favori, mais le tirage joue en sa faveur. Avec ${signal} % de signal et ${expectedText} points par match, ${bestTrait} peut créer la surprise.`;
-    }
-    if (lowSignal && strongScoring) {
-      return `Les chiffres de ${team.name} sont contradictoires : ${expectedText} points par match mais seulement ${signal} % de signal. Si le modèle les sous-estime, ${bestTrait} sera le signal d'alerte.`;
-    }
-    if (weakScoring) {
-      return `${team.name} arrive avec ${signal} % de signal, mais la production offensive inquiète — seulement ${expectedText} points par match. ${bestTrait} devra compenser dans les moments clés.`;
-    }
-    return `${team.name} apparaît sur le radar avec ${signal} % de signal et ${expectedText} points attendus par match. ${bestTrait} est l'argument le plus solide que le voyant peut avancer.`;
+    return `Le parcours porte la lecture : ${signal} % de signal et ${expectedText} xPts si le tableau ne devient pas trop étrange trop tôt.`;
   }
 
-  if (highSignal && strongScoring && cleanPath) {
-    return `${team.name} is one of the real contenders: ${signal}% signal, ${expectedText} points per match, and a draw that rewards teams arriving in form. ${bestTrait} is the edge that sets them apart.`;
+  if (bestTrait === "attack") {
+    return `Chance creation is the loud signal: ${signal}% with ${expectedText} xPts per match, while ${supportTrait} keeps the read from feeling one-note.`;
   }
-  if (highSignal && isAttackHeavy) {
-    return `${team.name} has teeth: ${signal}% signal and attacking weight as the differentiator. At ${expectedText} expected points per match, the scoreboard should do the talking.`;
+  if (bestTrait === "control") {
+    return `The lane runs through control: tempo, ball security, ${expectedText} xPts per match, and ${supportTrait} as the second signal.`;
   }
-  if (highSignal && isDefenseHeavy) {
-    return `${team.name} builds from the back. ${signal}% signal and ${bestTrait} as the shield — ${expectedText} points per match sounds modest, but this team doesn't give easy games.`;
+  if (bestTrait === "defense") {
+    return `The shield is doing the talking: ${signal}% signal, defense as the anchor, and ${supportTrait} helping them survive tight nights.`;
   }
-  if (highSignal && !cleanPath) {
-    return `${team.name} has the signal (${signal}%) but the path is knotted. ${expectedText} points per match and ${bestTrait} will be the key to getting out of the group.`;
+  if (bestTrait === "set pieces") {
+    return `Set pieces are the hidden doorway: ${signal}% signal and enough dead-ball pressure to bend a close bracket.`;
   }
-  if (!highSignal && !lowSignal && cleanPath) {
-    return `${team.name} isn't the favourite, but the draw works in their favour. At ${signal}% signal and ${expectedText} points per match, ${bestTrait} could be the surprise factor.`;
-  }
-  if (lowSignal && strongScoring) {
-    return `${team.name}'s numbers tell a mixed story: ${expectedText} points per match but only ${signal}% signal. If the model is underrating them, ${bestTrait} is where to watch.`;
-  }
-  if (weakScoring) {
-    return `${team.name} arrives with ${signal}% signal but the offensive output is thin — just ${expectedText} points per match. ${bestTrait} will need to carry the load at the sharp end.`;
-  }
-  return `${team.name} registers on the radar: ${signal}% signal and ${expectedText} expected points per match. ${bestTrait} is the strongest case the Seer can make for them.`;
+  return `The path is the argument: ${signal}% signal and ${expectedText} xPts if the bracket does not get weird too early.`;
 }
 
 function cupRisk(
@@ -1407,65 +1390,67 @@ function cupRisk(
   pathSignal: number,
   language: Language,
 ) {
-  const isDefensiveWeakness = team.defense < team.attack;
+  const isDefensiveWeakness = team.defense + 4 < team.attack;
+  const isChanceLight = team.attack < 74;
+  const isSetPieceReliant = team.setPieces > team.attack + 4;
   const cleanPath = pathSignal > 76;
   const highChaos = chaos > 60;
   const veryHighChaos = chaos > 75;
 
   if (language === "es") {
     if (veryHighChaos && isDefensiveWeakness) {
-      return `Volatilidad alta (${chaos.toFixed(0)}%) y una defensa expuesta — combinación peligrosa. Si el partido se abre, pueden perder el control.`;
+      return `Demasiado ida y vuelta: ${chaos.toFixed(0)}% de caos y una espalda que puede quedar expuesta.`;
     }
-    if (veryHighChaos && !isDefensiveWeakness) {
-      return `El caos ronda alto (${chaos.toFixed(0)}%), pero la solidez defensiva les da margen. El riesgo está en que los partidos se vuelvan loterías.`;
+    if (isChanceLight) {
+      return `La creación puede secarse; si no golpean pronto, la ruta se vuelve pesada.`;
+    }
+    if (isSetPieceReliant) {
+      return `Mucho depende del balón parado. Si el árbitro deja jugar, se apaga una ruta clave.`;
     }
     if (highChaos && !cleanPath) {
-      return `Ruta enredada más volatilidad media (${chaos.toFixed(0)}%) — no es el escenario ideal. Necesitan resultados limpios para no depender de la diferencia de goles.`;
+      return `Ruta con tráfico y ${chaos.toFixed(0)}% de caos: una noche rara cambia el cuadro.`;
     }
-    if (highChaos && cleanPath) {
-      return `La ruta es más limpia, pero la volatilidad (${chaos.toFixed(0)}%) sigue siendo un factor. Un partido malo en el momento equivocado puede torcerlo todo.`;
+    if (!cleanPath) {
+      return `El talento está, pero el carril no es limpio. Un empate incómodo cambia el pulso.`;
     }
-    if (!highChaos && !cleanPath) {
-      return `La volatilidad es manejable (${chaos.toFixed(0)}%), pero el camino está enredado. La consistencia, no el talento, decidirá si pasan.`;
-    }
-    return `Señales tranquilas: volatilidad baja (${chaos.toFixed(0)}%) y ruta favorable. El riesgo principal es la autocomplacencia.`;
+    return `Señal alta, riesgo simple: gestionar piernas, rotaciones y exceso de confianza.`;
   }
 
   if (language === "fr") {
     if (veryHighChaos && isDefensiveWeakness) {
-      return `Volatilité forte (${chaos.toFixed(0)} %) et défense exposée — combinaison dangereuse. Si le match s'ouvre, ils peuvent perdre le contrôle.`;
+      return `Trop de transitions : ${chaos.toFixed(0)} % de chaos et un dos qui peut s'exposer.`;
     }
-    if (veryHighChaos && !isDefensiveWeakness) {
-      return `Le chaos est élevé (${chaos.toFixed(0)} %), mais la solidité défensive leur donne une marge. Le risque : que les matchs deviennent des loteries.`;
+    if (isChanceLight) {
+      return `La création peut sécher; sans but tôt, la route devient lourde.`;
+    }
+    if (isSetPieceReliant) {
+      return `Beaucoup dépend des coups de pied arrêtés. Si l'arbitre laisse jouer, une route clé s'éteint.`;
     }
     if (highChaos && !cleanPath) {
-      return `Route nouée et volatilité moyenne (${chaos.toFixed(0)} %) — pas le scénario idéal. Ils ont besoin de résultats nets pour ne pas dépendre de la différence de buts.`;
+      return `Route chargée et ${chaos.toFixed(0)} % de chaos : une soirée étrange peut déplacer le tableau.`;
     }
-    if (highChaos && cleanPath) {
-      return `La route est plus dégagée, mais la volatilité (${chaos.toFixed(0)} %) reste un facteur. Un mauvais match au mauvais moment peut tout faire basculer.`;
+    if (!cleanPath) {
+      return `Le talent est là, mais le couloir n'est pas net. Un nul gênant change le pulse.`;
     }
-    if (!highChaos && !cleanPath) {
-      return `La volatilité est maîtrisable (${chaos.toFixed(0)} %), mais le chemin reste semé d'embûches. C'est la régularité, pas le talent, qui décidera.`;
-    }
-    return `Signaux calmes : faible volatilité (${chaos.toFixed(0)} %) et route favorable. Le principal risque, c'est la complaisance.`;
+    return `Gros signal, risque simple : gérer les jambes, les rotations et l'excès de confiance.`;
   }
 
   if (veryHighChaos && isDefensiveWeakness) {
-    return `High volatility (${chaos.toFixed(0)}%) and a defensive soft spot — a dangerous mix. If games open up, they risk losing the plot.`;
+    return `Too much transition weather: ${chaos.toFixed(0)}% chaos and a back line that can get stretched.`;
   }
-  if (veryHighChaos && !isDefensiveWeakness) {
-    return `Chaos is loud (${chaos.toFixed(0)}%), but the defensive structure gives them a buffer. The risk is matches turning into coin flips.`;
+  if (isChanceLight) {
+    return `Chance creation can dry up; if the first goal does not arrive early, the lane gets heavy.`;
+  }
+  if (isSetPieceReliant) {
+    return `A lot rides on dead balls. If the referee lets contact go, one key route gets quieter.`;
   }
   if (highChaos && !cleanPath) {
-    return `Knotted path plus medium volatility (${chaos.toFixed(0)}%) — not ideal. They'll need clean results to avoid relying on goal difference.`;
+    return `Traffic in the lane plus ${chaos.toFixed(0)}% chaos: one strange night can reshuffle the bracket.`;
   }
-  if (highChaos && cleanPath) {
-    return `The path is cleaner, but volatility (${chaos.toFixed(0)}%) is still a factor. One bad performance at the wrong moment and the whole picture shifts.`;
+  if (!cleanPath) {
+    return `The talent is there, but the lane is not clean. One awkward draw changes the pulse.`;
   }
-  if (!highChaos && !cleanPath) {
-    return `Volatility is manageable (${chaos.toFixed(0)}%), but the path is knotted. Consistency, not talent, will decide if they make it through.`;
-  }
-  return `Quiet signals: low volatility (${chaos.toFixed(0)}%) and a favourable lane. The main risk is complacency.`;
+  return `Big signal, simple risk: manage legs, rotations, and the temptation to cruise.`;
 }
 
 
@@ -1954,30 +1939,27 @@ function SeerScoreboardBoard({
 
 function CupCandidateCard({
   candidate,
+  expanded,
   index,
   language,
+  onToggleAnalysis,
   onSelectTeam,
   t,
 }: {
   candidate: CupCandidate;
+  expanded: boolean;
   index: number;
   language: Language;
+  onToggleAnalysis: () => void;
   onSelectTeam: (teamName: string) => void;
   t: Record<string, string>;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const showLabel =
+  const pathNote =
     language === "es"
-      ? "Ver an\u00e1lisis"
+      ? `${candidate.expectedPoints.toFixed(1)} xPts en ${candidate.matches} partidos; la ruta pesa tanto como el talento.`
       : language === "fr"
-        ? "Voir l'analyse"
-        : "Show analysis";
-  const hideLabel =
-    language === "es"
-      ? "Ocultar an\u00e1lisis"
-      : language === "fr"
-        ? "Masquer l'analyse"
-        : "Hide analysis";
+        ? `${candidate.expectedPoints.toFixed(1)} xPts sur ${candidate.matches} matchs; le parcours compte autant que le talent.`
+        : `${candidate.expectedPoints.toFixed(1)} xPts across ${candidate.matches} matches; the route matters as much as the talent.`;
 
   return (
     <div
@@ -2032,31 +2014,30 @@ function CupCandidateCard({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setExpanded((prev) => !prev);
+          onToggleAnalysis();
         }}
         aria-expanded={expanded}
+        aria-label={`${expanded ? t.hideNotes : t.signalNotes}: ${candidate.team.name}`}
       >
-        <span>{expanded ? hideLabel : showLabel}</span>
-        <span
-          style={{
-            display: "inline-block",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s",
-            marginLeft: "4px",
-          }}
-        >
+        <span>{expanded ? t.hideNotes : t.signalNotes}</span>
+        <span className="cup-analysis-caret" aria-hidden="true">
           {"\u25be"}
         </span>
       </button>
       {expanded && (
         <div className="cup-analysis-panel">
-          <p>
-            <strong>{t.seerVerdict}: </strong>
-            {candidate.verdict}
-          </p>
-          <small>
-            {t.riskCloud}: {candidate.risk}
-          </small>
+          <div className="cup-analysis-row">
+            <span>{t.seerEdge}</span>
+            <strong>{candidate.verdict}</strong>
+          </div>
+          <div className="cup-analysis-row">
+            <span>{t.seerPath}</span>
+            <strong>{pathNote}</strong>
+          </div>
+          <div className="cup-analysis-row">
+            <span>{t.seerWatch}</span>
+            <strong>{candidate.risk}</strong>
+          </div>
         </div>
       )}
     </div>
@@ -2077,11 +2058,18 @@ function CupSeerBoard({
   t: Record<string, string>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const leader = candidates[0];
 
   const toggleCupSeer = () => {
     navigator.vibrate?.(12);
-    setIsOpen((current) => !current);
+    setIsOpen((current) => {
+      const next = !current;
+      if (!next) {
+        setExpandedCandidate(null);
+      }
+      return next;
+    });
   };
 
   return (
@@ -2137,8 +2125,14 @@ function CupSeerBoard({
           <CupCandidateCard
             key={candidate.team.name}
             candidate={candidate}
+            expanded={expandedCandidate === candidate.team.name}
             index={index}
             language={language}
+            onToggleAnalysis={() =>
+              setExpandedCandidate((current) =>
+                current === candidate.team.name ? null : candidate.team.name,
+              )
+            }
             onSelectTeam={onSelectTeam}
             t={t}
           />
