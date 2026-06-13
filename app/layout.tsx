@@ -11,6 +11,20 @@ export const metadata: Metadata = {
     "Playful World Cup match forecasts powered by real stats, AI readouts, weather, team form, and player sparks. No betting advice.",
   applicationName: "MatchSeer",
   authors: [{ name: "MatchSeer" }],
+  icons: {
+    icon: [
+      {
+        url: "/brand/matchseer-app-icon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+    apple: [
+      {
+        url: "/brand/matchseer-app-icon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+  },
   keywords: [
     "MatchSeer",
     "World Cup",

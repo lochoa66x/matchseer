@@ -656,7 +656,12 @@ export default function Home() {
         <section className="topbar" aria-label="MatchSeer header">
           <div className="brand-lockup">
             <div className="brand-mark">
-              <Sparkles size={20} />
+              <img
+                className="brand-mark-image"
+                src="/brand/matchseer-app-icon.svg"
+                alt=""
+                aria-hidden="true"
+              />
             </div>
             <div>
               <p className="eyebrow">MatchSeer</p>
@@ -751,7 +756,12 @@ export default function Home() {
       <section className="topbar" aria-label="MatchSeer header">
         <div className="brand-lockup">
           <div className="brand-mark">
-            <span className="brand-ball" aria-hidden="true" />
+            <img
+              className="brand-mark-image"
+              src="/brand/matchseer-app-icon.svg"
+              alt=""
+              aria-hidden="true"
+            />
           </div>
           <div>
             <p className="eyebrow">MatchSeer</p>
