@@ -164,6 +164,9 @@ const copy = {
     cupSeerTitle: "Who is in the final-six lane?",
     cupSeerIntro: "Pre-round pulse: the Seer treats every group match as unplayed, forecasts each team path, and ranks the six strongest cup lanes.",
     cupPulse: "Weekly pulse",
+    cupLeader: "Top signal",
+    cupOpen: "Open weekly cup pulse",
+    cupClose: "Hide weekly cup pulse",
     cupSignal: "Finalist signal",
     seerVerdict: "Seer verdict",
     riskCloud: "Risk cloud",
@@ -275,6 +278,9 @@ const copy = {
     cupSeerTitle: "¿Quién entra en la vía de los seis finalistas?",
     cupSeerIntro: "Pulso previo: el Vidente trata cada partido de grupo como no jugado, proyecta el camino de cada equipo y ordena las seis rutas más fuertes.",
     cupPulse: "Pulso semanal",
+    cupLeader: "Señal líder",
+    cupOpen: "Abrir pulso semanal",
+    cupClose: "Ocultar pulso semanal",
     cupSignal: "Señal finalista",
     seerVerdict: "Veredicto vidente",
     riskCloud: "Nube de riesgo",
@@ -386,6 +392,9 @@ const copy = {
     cupSeerTitle: "Qui entre dans la voie des six finalistes ?",
     cupSeerIntro: "Pulse d’avant-tour : le voyant traite chaque match de groupe comme non joué, projette le chemin de chaque équipe et classe les six routes les plus fortes.",
     cupPulse: "Pulse hebdo",
+    cupLeader: "Signal leader",
+    cupOpen: "Ouvrir le pulse hebdo",
+    cupClose: "Masquer le pulse hebdo",
     cupSignal: "Signal finaliste",
     seerVerdict: "Verdict du voyant",
     riskCloud: "Nuage de risque",
@@ -2057,22 +2066,60 @@ function CupSeerBoard({
   pulseLabel: string;
   t: Record<string, string>;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const leader = candidates[0];
+
+  const toggleCupSeer = () => {
+    navigator.vibrate?.(12);
+    setIsOpen((current) => !current);
+  };
+
   return (
-    <section className="cup-seer-board" id="cup-seer" aria-label={t.cupSeer}>
-      <div className="cup-seer-copy">
-        <div className="cup-seer-heading-row">
-          <div className="section-heading">
-            <Trophy size={18} />
-            <span>{t.cupSeer}</span>
+    <section
+      className={cx("cup-seer-board", !isOpen && "is-collapsed")}
+      id="cup-seer"
+      aria-label={t.cupSeer}
+    >
+      <div className="cup-seer-summary">
+        <div className="cup-seer-copy">
+          <div className="cup-seer-heading-row">
+            <div className="section-heading">
+              <Trophy size={18} />
+              <span>{t.cupSeer}</span>
+            </div>
+            <span className="cup-pulse-chip">
+              {t.cupPulse} · {pulseLabel}
+            </span>
           </div>
-          <span className="cup-pulse-chip">
-            {t.cupPulse} · {pulseLabel}
-          </span>
+          <h2>{t.cupSeerTitle}</h2>
+          <p>{t.cupSeerIntro}</p>
         </div>
-        <h2>{t.cupSeerTitle}</h2>
-        <p>{t.cupSeerIntro}</p>
+        <div className="cup-seer-actions">
+          {leader && (
+            <div className="cup-seer-snapshot" aria-label={`${t.cupLeader}: ${leader.team.name}`}>
+              <span>{t.cupLeader}</span>
+              <div>
+                <TeamFlag team={leader.team} compact />
+                <strong>{leader.team.name}</strong>
+                <b>{leader.signal}%</b>
+              </div>
+            </div>
+          )}
+          <button
+            aria-controls="cup-seer-candidates"
+            aria-expanded={isOpen}
+            className="cup-seer-toggle"
+            onClick={toggleCupSeer}
+            type="button"
+          >
+            <span>{isOpen ? t.cupClose : t.cupOpen}</span>
+            <span aria-hidden="true" className="cup-seer-toggle-icon">
+              {isOpen ? "-" : "+"}
+            </span>
+          </button>
+        </div>
       </div>
-      <div className="cup-candidate-grid">
+      <div className="cup-candidate-grid" hidden={!isOpen} id="cup-seer-candidates">
         {candidates.length === 0 && (
           <div className="empty-match-state">{t.noCupCandidates}</div>
         )}
@@ -2087,11 +2134,13 @@ function CupSeerBoard({
           />
         ))}
       </div>
-      <p className="disclaimer cup-disclaimer">
-        {language === "en" && "Cup signals are playful tournament analysis, not betting advice or certainty."}
-        {language === "es" && "Las señales de copa son análisis deportivo divertido, no consejos de apuestas ni certezas."}
-        {language === "fr" && "Les signaux coupe sont une analyse sportive ludique, pas des conseils de pari ni des certitudes."}
-      </p>
+      {isOpen && (
+        <p className="disclaimer cup-disclaimer">
+          {language === "en" && "Cup signals are playful tournament analysis, not betting advice or certainty."}
+          {language === "es" && "Las señales de copa son análisis deportivo divertido, no consejos de apuestas ni certezas."}
+          {language === "fr" && "Les signaux coupe sont une analyse sportive ludique, pas des conseils de pari ni des certitudes."}
+        </p>
+      )}
     </section>
   );
 }
@@ -2273,6 +2322,7 @@ const fifaCodeToFlagCode: Record<string, string> = {
   DEN: "dk",
   ECU: "ec",
   ENG: "gb-eng",
+  ESP: "es",
   FRA: "fr",
   GER: "de",
   GHA: "gh",
@@ -2293,6 +2343,7 @@ const fifaCodeToFlagCode: Record<string, string> = {
   SEN: "sn",
   SRB: "rs",
   SUI: "ch",
+  SWE: "se",
   TUN: "tn",
   URU: "uy",
   USA: "us",
@@ -2338,6 +2389,7 @@ const teamNameToFlagCode: Record<string, string> = {
   serbia: "rs",
   "south africa": "za",
   spain: "es",
+  sweden: "se",
   switzerland: "ch",
   tunisia: "tn",
   uruguay: "uy",

@@ -5365,3 +5365,111 @@ body {
     flex-direction: column;
   }
 }
+
+/* Cup Seer drawer: keep the weekly tournament pulse available without making it the main stage. */
+.cup-seer-summary {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 18px;
+}
+
+.cup-seer-board.is-collapsed {
+  padding: 18px;
+}
+
+.cup-seer-board.is-collapsed .cup-seer-copy h2 {
+  max-width: 760px;
+  font-size: clamp(1.6rem, 3vw, 2.45rem);
+}
+
+.cup-seer-actions {
+  display: grid;
+  justify-items: stretch;
+  gap: 10px;
+}
+
+.cup-seer-snapshot {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(143, 160, 189, 0.22);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+}
+
+.cup-seer-snapshot > span {
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.cup-seer-snapshot div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cup-seer-snapshot strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.02rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cup-seer-snapshot b {
+  margin-left: auto;
+  color: var(--gold);
+  font-size: 1.15rem;
+}
+
+.cup-seer-toggle {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: #080b12;
+  background: linear-gradient(100deg, var(--gold), var(--red));
+  border: 1px solid rgba(247, 197, 29, 0.34);
+  border-radius: 999px;
+  box-shadow: 0 12px 30px rgba(247, 197, 29, 0.1);
+  cursor: pointer;
+  font-weight: 950;
+}
+
+.cup-seer-toggle-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  background: rgba(8, 11, 18, 0.12);
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.cup-candidate-grid[hidden] {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .cup-seer-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .cup-seer-heading-row {
+    align-items: flex-start;
+  }
+
+  .cup-seer-actions,
+  .cup-seer-toggle {
+    width: 100%;
+  }
+}
