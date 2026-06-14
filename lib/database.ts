@@ -249,6 +249,26 @@ type ForecastContextRow = {
   temperature_c: string | number | null;
   wind_kph: string | number | null;
   weather_summary: string | null;
+  home_rest_hours: string | number | null;
+  away_rest_hours: string | number | null;
+  player_availability: ForecastPlayerContext[] | null;
+};
+
+type ForecastPlayerContext = {
+  teamSide: "home" | "away";
+  teamCode: string;
+  teamName: string;
+  name: string;
+  role: string;
+  spark: string | number | null;
+  importance: string | number | null;
+  availabilityStatus: string | null;
+  availabilityNote: string | null;
+  yellowCards: string | number | null;
+  redCards: string | number | null;
+  isSuspended: boolean | null;
+  age: string | number | null;
+  minutesRecent: string | number | null;
 };
 
 type WeatherVenueRow = {
@@ -400,6 +420,7 @@ export async function getMatch(matchId: string) {
 }
 
 let trafficSchemaPromise: Promise<void> | null = null;
+let playerModelSchemaPromise: Promise<void> | null = null;
 
 export async function recordTrafficEvent(
   input: TrafficEventInput,
@@ -637,6 +658,344 @@ async function ensureTrafficSchema(sql: NeonQuery) {
   return trafficSchemaPromise;
 }
 
+async function ensurePlayerModelSchema(sql: NeonQuery) {
+  if (!playerModelSchemaPromise) {
+    playerModelSchemaPromise = (async () => {
+      await sql`
+        alter table players
+        add column if not exists importance integer not null default 50;
+      `;
+      await sql`
+        alter table players
+        add column if not exists availability_status text not null default 'available';
+      `;
+      await sql`
+        alter table players
+        add column if not exists availability_note text;
+      `;
+      await sql`
+        alter table players
+        add column if not exists yellow_cards integer not null default 0;
+      `;
+      await sql`
+        alter table players
+        add column if not exists red_cards integer not null default 0;
+      `;
+      await sql`
+        alter table players
+        add column if not exists is_suspended boolean not null default false;
+      `;
+      await sql`
+        alter table players
+        add column if not exists age integer;
+      `;
+      await sql`
+        alter table players
+        add column if not exists minutes_recent integer not null default 0;
+      `;
+      await sql`
+        alter table players
+        add column if not exists is_key_player boolean not null default false;
+      `;
+      await sql`
+        create index if not exists players_team_id_idx
+        on players (team_id);
+      `;
+    })().catch((error) => {
+      playerModelSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  return playerModelSchemaPromise;
+}
+
+type KeyPlayerProfile = {
+  teamCode: string;
+  teamSlug: string;
+  slug: string;
+  name: string;
+  role: string;
+  club: string;
+  league: string;
+  spark: number;
+  importance: number;
+  age: number;
+  note: string;
+};
+
+const keyPlayerWatchlist: KeyPlayerProfile[] = [
+  {
+    teamCode: "ARG",
+    teamSlug: "arg",
+    slug: "lionel-messi",
+    name: "Lionel Messi",
+    role: "Creator",
+    club: "Club profile pending",
+    league: "International",
+    spark: 96,
+    importance: 99,
+    age: 39,
+    note: "Gravity player",
+  },
+  {
+    teamCode: "POR",
+    teamSlug: "por",
+    slug: "cristiano-ronaldo",
+    name: "Cristiano Ronaldo",
+    role: "Forward",
+    club: "Club profile pending",
+    league: "International",
+    spark: 91,
+    importance: 94,
+    age: 41,
+    note: "Box gravity",
+  },
+  {
+    teamCode: "BRA",
+    teamSlug: "bra",
+    slug: "vinicius-junior",
+    name: "Vinicius Junior",
+    role: "Winger",
+    club: "Club profile pending",
+    league: "International",
+    spark: 94,
+    importance: 94,
+    age: 25,
+    note: "Left-lane lightning",
+  },
+  {
+    teamCode: "FRA",
+    teamSlug: "fra",
+    slug: "kylian-mbappe",
+    name: "Kylian Mbappe",
+    role: "Forward",
+    club: "Club profile pending",
+    league: "International",
+    spark: 96,
+    importance: 96,
+    age: 27,
+    note: "Depth breaker",
+  },
+  {
+    teamCode: "GER",
+    teamSlug: "ger",
+    slug: "florian-wirtz",
+    name: "Florian Wirtz",
+    role: "Creator",
+    club: "Club profile pending",
+    league: "International",
+    spark: 89,
+    importance: 88,
+    age: 23,
+    note: "Between-line spark",
+  },
+  {
+    teamCode: "ESP",
+    teamSlug: "esp",
+    slug: "lamine-yamal",
+    name: "Lamine Yamal",
+    role: "Winger",
+    club: "Club profile pending",
+    league: "International",
+    spark: 91,
+    importance: 89,
+    age: 18,
+    note: "Wide-lane voltage",
+  },
+  {
+    teamCode: "ENG",
+    teamSlug: "eng",
+    slug: "jude-bellingham",
+    name: "Jude Bellingham",
+    role: "Midfielder",
+    club: "Club profile pending",
+    league: "International",
+    spark: 93,
+    importance: 92,
+    age: 23,
+    note: "Box-to-box magnet",
+  },
+  {
+    teamCode: "MEX",
+    teamSlug: "mex",
+    slug: "santiago-gimenez",
+    name: "Santiago Gimenez",
+    role: "Forward",
+    club: "Club profile pending",
+    league: "International",
+    spark: 82,
+    importance: 82,
+    age: 25,
+    note: "Box gravity",
+  },
+  {
+    teamCode: "USA",
+    teamSlug: "usa",
+    slug: "christian-pulisic",
+    name: "Christian Pulisic",
+    role: "Winger",
+    club: "Club profile pending",
+    league: "International",
+    spark: 88,
+    importance: 89,
+    age: 27,
+    note: "Final-third switch",
+  },
+  {
+    teamCode: "CAN",
+    teamSlug: "can",
+    slug: "alphonso-davies",
+    name: "Alphonso Davies",
+    role: "Wingback",
+    club: "Club profile pending",
+    league: "International",
+    spark: 90,
+    importance: 91,
+    age: 25,
+    note: "Left-side ignition",
+  },
+  {
+    teamCode: "MAR",
+    teamSlug: "mar",
+    slug: "achraf-hakimi",
+    name: "Achraf Hakimi",
+    role: "Fullback",
+    club: "Club profile pending",
+    league: "International",
+    spark: 88,
+    importance: 87,
+    age: 27,
+    note: "Two-way engine",
+  },
+  {
+    teamCode: "KOR",
+    teamSlug: "kor",
+    slug: "son-heung-min",
+    name: "Son Heung-min",
+    role: "Forward",
+    club: "Club profile pending",
+    league: "International",
+    spark: 90,
+    importance: 93,
+    age: 33,
+    note: "Transition blade",
+  },
+  {
+    teamCode: "JPN",
+    teamSlug: "jpn",
+    slug: "takefusa-kubo",
+    name: "Takefusa Kubo",
+    role: "Creator",
+    club: "Club profile pending",
+    league: "International",
+    spark: 86,
+    importance: 84,
+    age: 25,
+    note: "Pocket mischief",
+  },
+  {
+    teamCode: "URU",
+    teamSlug: "uru",
+    slug: "federico-valverde",
+    name: "Federico Valverde",
+    role: "Midfielder",
+    club: "Club profile pending",
+    league: "International",
+    spark: 91,
+    importance: 90,
+    age: 27,
+    note: "Midfield engine",
+  },
+  {
+    teamCode: "NED",
+    teamSlug: "ned",
+    slug: "virgil-van-dijk",
+    name: "Virgil van Dijk",
+    role: "Defender",
+    club: "Club profile pending",
+    league: "International",
+    spark: 88,
+    importance: 86,
+    age: 34,
+    note: "Back-line anchor",
+  },
+  {
+    teamCode: "RSA",
+    teamSlug: "rsa",
+    slug: "teboho-mokoena",
+    name: "Teboho Mokoena",
+    role: "Midfielder",
+    club: "Club profile pending",
+    league: "International",
+    spark: 78,
+    importance: 72,
+    age: 29,
+    note: "Long-range spark",
+  },
+];
+
+async function seedKeyPlayerWatchlist(sql: NeonQuery) {
+  for (const player of keyPlayerWatchlist) {
+    await sql`
+      insert into players (
+        team_id,
+        slug,
+        name,
+        role,
+        club,
+        league,
+        spark_rating,
+        importance,
+        availability_status,
+        availability_note,
+        yellow_cards,
+        red_cards,
+        is_suspended,
+        age,
+        minutes_recent,
+        is_key_player,
+        note
+      )
+      select
+        teams.id,
+        ${player.slug},
+        ${player.name},
+        ${player.role},
+        ${player.club},
+        ${player.league},
+        ${player.spark},
+        ${player.importance},
+        'available',
+        'Availability feed pending',
+        0,
+        0,
+        false,
+        ${player.age},
+        0,
+        true,
+        ${player.note}
+      from teams
+      where upper(teams.code) = ${player.teamCode}
+         or teams.slug = ${player.teamSlug}
+      order by case when upper(teams.code) = ${player.teamCode} then 0 else 1 end
+      limit 1
+      on conflict (slug) do update set
+        team_id = excluded.team_id,
+        name = excluded.name,
+        role = excluded.role,
+        club = excluded.club,
+        league = excluded.league,
+        spark_rating = excluded.spark_rating,
+        importance = excluded.importance,
+        age = excluded.age,
+        is_key_player = excluded.is_key_player,
+        note = excluded.note,
+        availability_note = coalesce(players.availability_note, excluded.availability_note);
+    `;
+  }
+}
+
 function emptyTrafficDashboard(
   reason: DataSourceReason,
   generatedAt: string,
@@ -801,6 +1160,7 @@ export async function syncFootballDataSnapshot(
   `;
 
   await upsertWorldCupVenues(sql);
+  await ensurePlayerModelSchema(sql);
 
   const teamByProviderId = new Map(
     snapshot.teams.map((team) => [team.id, team] as const),
@@ -852,6 +1212,8 @@ export async function syncFootballDataSnapshot(
         set_pieces = excluded.set_pieces;
     `;
   }
+
+  await seedKeyPlayerWatchlist(sql);
 
   const teamSlugByProviderId = new Map(
     snapshot.teams.map((team) => [team.id, team.slug] as const),
@@ -978,7 +1340,18 @@ export async function syncFootballDataSnapshot(
     }
 
     const forecastContextRows = (await sql`
-      with latest_weather as (
+      with current_match as (
+        select
+          matches.id,
+          matches.home_team_id,
+          matches.away_team_id,
+          matches.referee_id,
+          matches.starts_at
+        from matches
+        where matches.external_id = ${match.externalId}
+        limit 1
+      ),
+      latest_weather as (
         select distinct on (weather_snapshots.match_id)
           weather_snapshots.match_id,
           weather_snapshots.temperature_c,
@@ -992,11 +1365,80 @@ export async function syncFootballDataSnapshot(
         referees.cards_per_match,
         latest_weather.temperature_c,
         latest_weather.wind_kph,
-        latest_weather.summary as weather_summary
-      from matches
-      left join referees on referees.id = matches.referee_id
-      left join latest_weather on latest_weather.match_id = matches.id
-      where matches.external_id = ${match.externalId}
+        latest_weather.summary as weather_summary,
+        (
+          select extract(epoch from (current_match.starts_at - max(previous_match.starts_at))) / 3600
+          from matches previous_match
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and (
+              previous_match.home_team_id = current_match.home_team_id
+              or previous_match.away_team_id = current_match.home_team_id
+            )
+        ) as home_rest_hours,
+        (
+          select extract(epoch from (current_match.starts_at - max(previous_match.starts_at))) / 3600
+          from matches previous_match
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and (
+              previous_match.home_team_id = current_match.away_team_id
+              or previous_match.away_team_id = current_match.away_team_id
+            )
+        ) as away_rest_hours,
+        coalesce(
+          (
+            select jsonb_agg(
+              jsonb_build_object(
+                'teamSide',
+                case
+                  when players.team_id = current_match.home_team_id then 'home'
+                  else 'away'
+                end,
+                'teamCode',
+                player_team.code,
+                'teamName',
+                player_team.name,
+                'name',
+                players.name,
+                'role',
+                players.role,
+                'spark',
+                players.spark_rating,
+                'importance',
+                players.importance,
+                'availabilityStatus',
+                players.availability_status,
+                'availabilityNote',
+                players.availability_note,
+                'yellowCards',
+                players.yellow_cards,
+                'redCards',
+                players.red_cards,
+                'isSuspended',
+                players.is_suspended,
+                'age',
+                players.age,
+                'minutesRecent',
+                players.minutes_recent
+              )
+              order by players.importance desc, players.spark_rating desc nulls last, players.name
+            )
+            from players
+            join teams player_team on player_team.id = players.team_id
+            where players.team_id in (
+              current_match.home_team_id,
+              current_match.away_team_id
+            )
+              and players.is_key_player = true
+          ),
+          '[]'::jsonb
+        ) as player_availability
+      from current_match
+      left join referees on referees.id = current_match.referee_id
+      left join latest_weather on latest_weather.match_id = current_match.id
       limit 1;
     `) as unknown as ForecastContextRow[];
     const forecastContext = forecastContextRows[0] ?? null;
@@ -1038,7 +1480,7 @@ export async function syncFootballDataSnapshot(
           homeRatings,
           awayRatings,
           modifiers: forecast.modifiers,
-          note: "Dynamic forecast from team profiles, venue, weather, referee rhythm, and spotlight gravity. Player availability and fatigue hooks are ready for richer data.",
+          note: "Dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, and fatigue signals.",
         })}::jsonb
       )
       on conflict (match_id, version) do update set
@@ -1902,8 +2344,9 @@ function matchseerV3Forecast({
   const weather = weatherForecastModifier(context, homeRatings, awayRatings);
   const referee = refereeForecastModifier(context, homeRatings, awayRatings);
   const spotlight = spotlightGravityModifier(homeTeam, awayTeam);
-  const availability = availabilityForecastModifier();
-  const fatigue = fatigueForecastModifier();
+  const playerContext = forecastPlayerContexts(context);
+  const availability = availabilityForecastModifier(playerContext);
+  const fatigue = fatigueForecastModifier(playerContext, context);
   const homePower =
     homeBasePower +
     homeVenueBoost +
@@ -2000,7 +2443,11 @@ function matchseerV3Forecast({
       : awayVenueBoost > homeVenueBoost
         ? `${awayTeam.name} get a small venue familiarity lift.`
         : "The venue profile stays close to neutral for this dynamic read.";
-  const dynamicDrag = Math.abs(weather.chaosDelta) + Math.abs(referee.chaosDelta);
+  const dynamicDrag =
+    Math.abs(weather.chaosDelta) +
+    Math.abs(referee.chaosDelta) +
+    Math.abs(availability.chaosDelta) +
+    Math.abs(fatigue.chaosDelta);
   const factors = [
     {
       label: favorite ? "Team profile signal" : "Balanced profile signal",
@@ -2012,6 +2459,8 @@ function matchseerV3Forecast({
     weather.factor,
     referee.factor,
     spotlight.factor,
+    availability.factor,
+    fatigue.factor,
     {
       label: "Venue context",
       weight: 0.55,
@@ -2304,40 +2753,337 @@ function spotlightGravityModifier(
   };
 }
 
-function availabilityForecastModifier() {
+function forecastPlayerContexts(context: ForecastContextRow | null) {
+  if (!Array.isArray(context?.player_availability)) {
+    return [];
+  }
+
+  return context.player_availability.filter(
+    (player): player is ForecastPlayerContext =>
+      (player.teamSide === "home" || player.teamSide === "away") &&
+      typeof player.name === "string" &&
+      player.name.trim().length > 0,
+  );
+}
+
+function availabilityForecastModifier(players: ForecastPlayerContext[]) {
+  const homeImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+  const awayImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+  let homePenalty = 0;
+  let awayPenalty = 0;
+  let homeXgPenalty = 0;
+  let awayXgPenalty = 0;
+  let chaosDelta = 0;
+
+  for (const player of players) {
+    const severity = availabilitySeverity(player);
+    const cardRisk = playerCardRisk(player);
+
+    if (severity === 0 && cardRisk === 0) {
+      continue;
+    }
+
+    const impact = playerImpactScore(player);
+    const penalty = clampNumber(severity * impact + cardRisk * impact, 0.15, 4.2);
+    const xgPenalty = clampNumber(penalty * 0.04, 0.01, 0.24);
+    const reason = playerAvailabilityReason(player, severity, cardRisk);
+    const bucket = player.teamSide === "home" ? homeImpacts : awayImpacts;
+
+    bucket.push({ name: player.name, reason, penalty });
+    chaosDelta += severity >= 2 ? 2 : cardRisk > 0 ? 1 : 0;
+
+    if (player.teamSide === "home") {
+      homePenalty += penalty;
+      homeXgPenalty += xgPenalty;
+    } else {
+      awayPenalty += penalty;
+      awayXgPenalty += xgPenalty;
+    }
+  }
+
+  homePenalty = clampNumber(homePenalty, 0, 7);
+  awayPenalty = clampNumber(awayPenalty, 0, 7);
+  homeXgPenalty = clampNumber(homeXgPenalty, 0, 0.42);
+  awayXgPenalty = clampNumber(awayXgPenalty, 0, 0.42);
+  chaosDelta = clamp(Math.round(chaosDelta), 0, 6);
+
+  const impacted = [...homeImpacts, ...awayImpacts]
+    .sort((a, b) => b.penalty - a.penalty)
+    .slice(0, 3);
+  const factor =
+    impacted.length > 0
+      ? {
+          label: "Availability watch",
+          weight: 0.65,
+          explanation: `Key-player board moved: ${sentenceList(
+            impacted.map((player) => `${player.name} ${player.reason}`),
+          )}.`,
+        }
+      : null;
+
   return {
-    awayPenalty: 0,
-    awayXgPenalty: 0,
-    chaosDelta: 0,
-    homePenalty: 0,
-    homeXgPenalty: 0,
+    awayPenalty,
+    awayXgPenalty,
+    chaosDelta,
+    factor,
+    homePenalty,
+    homeXgPenalty,
     payload: {
-      status: "pending-player-availability-feed",
-      homePenalty: 0,
-      awayPenalty: 0,
-      homeXgPenalty: 0,
-      awayXgPenalty: 0,
-      chaosDelta: 0,
+      status:
+        players.length > 0
+          ? impacted.length > 0
+            ? "availability-signals-active"
+            : "watchlist-clear"
+          : "pending-player-availability-feed",
+      watchedPlayers: players.length,
+      impactedPlayers: impacted.map((player) => ({
+        name: player.name,
+        reason: player.reason,
+        penalty: roundModifier(player.penalty),
+      })),
+      homePenalty: roundModifier(homePenalty),
+      awayPenalty: roundModifier(awayPenalty),
+      homeXgPenalty: roundModifier(homeXgPenalty),
+      awayXgPenalty: roundModifier(awayXgPenalty),
+      chaosDelta,
     },
   };
 }
 
-function fatigueForecastModifier() {
+function fatigueForecastModifier(
+  players: ForecastPlayerContext[],
+  context: ForecastContextRow | null,
+) {
+  const homeRestHours = toOptionalNumber(context?.home_rest_hours);
+  const awayRestHours = toOptionalNumber(context?.away_rest_hours);
+  const homeImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+  const awayImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+  let homePenalty = 0;
+  let awayPenalty = 0;
+  let homeXgPenalty = 0;
+  let awayXgPenalty = 0;
+  let chaosDelta = 0;
+
+  for (const player of players) {
+    const minutesRecent = toOptionalNumber(player.minutesRecent) ?? 0;
+    const restHours = player.teamSide === "home" ? homeRestHours : awayRestHours;
+    const restStress = fatigueRestStress(restHours);
+
+    if (minutesRecent <= 0 || restStress <= 0) {
+      continue;
+    }
+
+    const age = toOptionalNumber(player.age);
+    const minuteLoad = clampNumber(minutesRecent / 270, 0.15, 1.2);
+    const impact = playerImpactScore(player);
+    const ageMultiplier = fatigueAgeMultiplier(age);
+    const penalty = clampNumber(impact * minuteLoad * restStress * ageMultiplier, 0, 2.8);
+
+    if (penalty < 0.18) {
+      continue;
+    }
+
+    const reason =
+      restHours === null
+        ? "carries recent-minute fatigue"
+        : `carries recent-minute fatigue on ${Math.round(restHours)}h rest`;
+    const bucket = player.teamSide === "home" ? homeImpacts : awayImpacts;
+
+    bucket.push({ name: player.name, reason, penalty });
+    chaosDelta += penalty >= 1 ? 1 : 0;
+
+    if (player.teamSide === "home") {
+      homePenalty += penalty;
+      homeXgPenalty += penalty * 0.035;
+    } else {
+      awayPenalty += penalty;
+      awayXgPenalty += penalty * 0.035;
+    }
+  }
+
+  homePenalty = clampNumber(homePenalty, 0, 4);
+  awayPenalty = clampNumber(awayPenalty, 0, 4);
+  homeXgPenalty = clampNumber(homeXgPenalty, 0, 0.26);
+  awayXgPenalty = clampNumber(awayXgPenalty, 0, 0.26);
+  chaosDelta = clamp(Math.round(chaosDelta), 0, 4);
+
+  const impacted = [...homeImpacts, ...awayImpacts]
+    .sort((a, b) => b.penalty - a.penalty)
+    .slice(0, 3);
+  const factor =
+    impacted.length > 0
+      ? {
+          label: "Legs and recovery",
+          weight: 0.45,
+          explanation: `Fatigue nudges the read: ${sentenceList(
+            impacted.map((player) => `${player.name} ${player.reason}`),
+          )}.`,
+        }
+      : null;
+
   return {
-    awayPenalty: 0,
-    awayXgPenalty: 0,
-    chaosDelta: 0,
-    homePenalty: 0,
-    homeXgPenalty: 0,
+    awayPenalty,
+    awayXgPenalty,
+    chaosDelta,
+    factor,
+    homePenalty,
+    homeXgPenalty,
     payload: {
-      status: "pending-minutes-age-travel-feed",
-      homePenalty: 0,
-      awayPenalty: 0,
-      homeXgPenalty: 0,
-      awayXgPenalty: 0,
-      chaosDelta: 0,
+      status:
+        players.length > 0
+          ? impacted.length > 0
+            ? "fatigue-signals-active"
+            : "watchlist-clear"
+          : "pending-minutes-age-travel-feed",
+      homeRestHours:
+        homeRestHours === null ? null : Math.round(homeRestHours * 10) / 10,
+      awayRestHours:
+        awayRestHours === null ? null : Math.round(awayRestHours * 10) / 10,
+      impactedPlayers: impacted.map((player) => ({
+        name: player.name,
+        reason: player.reason,
+        penalty: roundModifier(player.penalty),
+      })),
+      homePenalty: roundModifier(homePenalty),
+      awayPenalty: roundModifier(awayPenalty),
+      homeXgPenalty: roundModifier(homeXgPenalty),
+      awayXgPenalty: roundModifier(awayXgPenalty),
+      chaosDelta,
     },
   };
+}
+
+function availabilitySeverity(player: ForecastPlayerContext) {
+  const status = normalizedPlayerStatus(player.availabilityStatus);
+  const redCards = toOptionalNumber(player.redCards) ?? 0;
+
+  if (player.isSuspended || redCards > 0 || status.includes("suspend")) {
+    return 3.4;
+  }
+
+  if (
+    status.includes("out") ||
+    status.includes("injur") ||
+    status.includes("unavailable") ||
+    hasRedCardStatus(status)
+  ) {
+    return 3;
+  }
+
+  if (
+    status.includes("doubt") ||
+    status.includes("sick") ||
+    status.includes("ill") ||
+    status.includes("knock") ||
+    status.includes("limited") ||
+    status.includes("question")
+  ) {
+    return 1.7;
+  }
+
+  return 0;
+}
+
+function playerCardRisk(player: ForecastPlayerContext) {
+  const yellowCards = toOptionalNumber(player.yellowCards) ?? 0;
+
+  if (yellowCards >= 2) {
+    return 0.75;
+  }
+
+  if (yellowCards === 1) {
+    return 0.3;
+  }
+
+  return 0;
+}
+
+function playerAvailabilityReason(
+  player: ForecastPlayerContext,
+  severity: number,
+  cardRisk: number,
+) {
+  const status = normalizedPlayerStatus(player.availabilityStatus);
+
+  if (player.isSuspended || status.includes("suspend")) {
+    return "is suspended";
+  }
+
+  if ((toOptionalNumber(player.redCards) ?? 0) > 0 || hasRedCardStatus(status)) {
+    return "is red-card flagged";
+  }
+
+  if (status.includes("injur") || status.includes("out") || status.includes("unavailable")) {
+    return "is not fully available";
+  }
+
+  if (severity > 0) {
+    return "is limited";
+  }
+
+  return cardRisk >= 0.75
+    ? "is close to suspension risk"
+    : "is carrying card risk";
+}
+
+function normalizedPlayerStatus(value: string | null) {
+  return (value ?? "available").toLowerCase().trim();
+}
+
+function hasRedCardStatus(status: string) {
+  return (
+    status === "red" ||
+    status.includes("red card") ||
+    status.includes("red-card")
+  );
+}
+
+function playerImpactScore(player: ForecastPlayerContext) {
+  const importance = toOptionalNumber(player.importance);
+  const spark = toOptionalNumber(player.spark);
+  const rawImpact = importance ?? spark ?? 50;
+
+  return clampNumber((rawImpact - 42) / 44, 0.18, 1.35);
+}
+
+function fatigueRestStress(restHours: number | null) {
+  if (restHours === null) {
+    return 0.25;
+  }
+
+  if (restHours < 72) {
+    return 1.25;
+  }
+
+  if (restHours < 96) {
+    return 0.85;
+  }
+
+  if (restHours < 120) {
+    return 0.45;
+  }
+
+  return 0;
+}
+
+function fatigueAgeMultiplier(age: number | null) {
+  if (age === null) {
+    return 1;
+  }
+
+  if (age >= 36) {
+    return 1.45;
+  }
+
+  if (age >= 32) {
+    return 1.18;
+  }
+
+  if (age <= 23) {
+    return 0.78;
+  }
+
+  return 1;
 }
 
 function spotlightGravity(team: FootballDataTeam) {

@@ -35,9 +35,21 @@ create table if not exists players (
   club text,
   league text,
   spark_rating integer check (spark_rating between 0 and 100),
+  importance integer not null default 50 check (importance between 0 and 100),
+  availability_status text not null default 'available',
+  availability_note text,
+  yellow_cards integer not null default 0 check (yellow_cards >= 0),
+  red_cards integer not null default 0 check (red_cards >= 0),
+  is_suspended boolean not null default false,
+  age integer check (age between 15 and 50),
+  minutes_recent integer not null default 0 check (minutes_recent >= 0),
+  is_key_player boolean not null default false,
   note text,
   created_at timestamptz not null default now()
 );
+
+create index if not exists players_team_id_idx
+  on players (team_id);
 
 create table if not exists venues (
   id uuid primary key default gen_random_uuid(),
