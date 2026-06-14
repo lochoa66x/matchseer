@@ -243,6 +243,14 @@ type ExistingForecastLockRow = {
   away_score: number | null;
 };
 
+type ForecastContextRow = {
+  referee_name: string | null;
+  cards_per_match: string | number | null;
+  temperature_c: string | number | null;
+  wind_kph: string | number | null;
+  weather_summary: string | null;
+};
+
 type WeatherVenueRow = {
   match_id: string;
   venue_slug: string;
@@ -969,12 +977,36 @@ export async function syncFootballDataSnapshot(
       continue;
     }
 
-    const forecast = baselineForecast({
+    const forecastContextRows = (await sql`
+      with latest_weather as (
+        select distinct on (weather_snapshots.match_id)
+          weather_snapshots.match_id,
+          weather_snapshots.temperature_c,
+          weather_snapshots.wind_kph,
+          weather_snapshots.summary
+        from weather_snapshots
+        order by weather_snapshots.match_id, weather_snapshots.captured_at desc
+      )
+      select
+        referees.name as referee_name,
+        referees.cards_per_match,
+        latest_weather.temperature_c,
+        latest_weather.wind_kph,
+        latest_weather.summary as weather_summary
+      from matches
+      left join referees on referees.id = matches.referee_id
+      left join latest_weather on latest_weather.match_id = matches.id
+      where matches.external_id = ${match.externalId}
+      limit 1;
+    `) as unknown as ForecastContextRow[];
+    const forecastContext = forecastContextRows[0] ?? null;
+    const forecast = matchseerV3Forecast({
       homeTeam,
       awayTeam,
       homeRatings,
       awayRatings,
       venueSlug: match.venueSlug,
+      context: forecastContext,
     });
     const forecastRows = await sql`
       insert into forecasts (
@@ -1001,10 +1033,12 @@ export async function syncFootballDataSnapshot(
           provider: snapshot.provider,
           providerMatchId: match.providerId,
           fetchedAt: snapshot.fetchedAt,
-          forecastEngine: "baseline-v2",
+          forecastEngine: "matchseer-v3",
+          modelVersion: "matchseer-v3",
           homeRatings,
           awayRatings,
-          note: "Baseline forecast from provider fixture state and starter team profiles. AI interpretation remains user-triggered.",
+          modifiers: forecast.modifiers,
+          note: "Dynamic forecast from team profiles, venue, weather, referee rhythm, and spotlight gravity. Player availability and fatigue hooks are ready for richer data.",
         })}::jsonb
       )
       on conflict (match_id, version) do update set
@@ -1773,6 +1807,20 @@ function toNumber(value: string | number | null) {
   return typeof value === "number" ? value : Number(value);
 }
 
+function toOptionalNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numberValue = typeof value === "number" ? value : Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function roundModifier(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 const teamRatingProfiles: Record<string, TeamRatings> = {
   ALG: { attack: 72, control: 72, defense: 74, setPieces: 75 },
   ARG: { attack: 88, control: 87, defense: 83, setPieces: 81 },
@@ -1832,38 +1880,68 @@ function teamRatings(team: FootballDataTeam): TeamRatings {
   };
 }
 
-function baselineForecast({
+function matchseerV3Forecast({
   homeTeam,
   awayTeam,
   homeRatings,
   awayRatings,
   venueSlug,
+  context,
 }: {
   homeTeam: FootballDataTeam;
   awayTeam: FootballDataTeam;
   homeRatings: TeamRatings;
   awayRatings: TeamRatings;
   venueSlug: string | null;
+  context: ForecastContextRow | null;
 }) {
   const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
   const awayVenueBoost = venueCountryBoost(awayTeam, venueSlug);
-  const homePower = teamPower(homeRatings) + homeVenueBoost;
-  const awayPower = teamPower(awayRatings) + awayVenueBoost;
+  const homeBasePower = teamPower(homeRatings);
+  const awayBasePower = teamPower(awayRatings);
+  const weather = weatherForecastModifier(context, homeRatings, awayRatings);
+  const referee = refereeForecastModifier(context, homeRatings, awayRatings);
+  const spotlight = spotlightGravityModifier(homeTeam, awayTeam);
+  const availability = availabilityForecastModifier();
+  const fatigue = fatigueForecastModifier();
+  const homePower =
+    homeBasePower +
+    homeVenueBoost +
+    weather.homePower +
+    referee.homePower +
+    spotlight.homePower -
+    availability.homePenalty -
+    fatigue.homePenalty;
+  const awayPower =
+    awayBasePower +
+    awayVenueBoost +
+    weather.awayPower +
+    referee.awayPower +
+    spotlight.awayPower -
+    availability.awayPenalty -
+    fatigue.awayPenalty;
   const powerGap = homePower - awayPower;
+  const baseChaos =
+    64 -
+    Math.abs(powerGap) * 0.9 +
+    Math.abs(homeRatings.attack - awayRatings.defense) * 0.05 +
+    Math.abs(awayRatings.attack - homeRatings.defense) * 0.05;
   const chaos = clamp(
     Math.round(
-      64 -
-        Math.abs(powerGap) * 0.9 +
-        Math.abs(homeRatings.attack - awayRatings.defense) * 0.05 +
-        Math.abs(awayRatings.attack - homeRatings.defense) * 0.05,
+      baseChaos +
+        weather.chaosDelta +
+        referee.chaosDelta +
+        spotlight.chaosDelta +
+        availability.chaosDelta +
+        fatigue.chaosDelta,
     ),
-    38,
-    76,
+    36,
+    82,
   );
   const draw = clamp(
-    Math.round(29 + (chaos - 58) * 0.08 - Math.abs(powerGap) * 0.42),
-    16,
-    32,
+    Math.round(28 + (chaos - 58) * 0.09 - Math.abs(powerGap) * 0.4),
+    15,
+    34,
   );
   const nonDrawPool = 100 - draw;
   const homeShare = 1 / (1 + Math.exp(-powerGap / 10));
@@ -1880,8 +1958,24 @@ function baselineForecast({
     away = 100 - draw - home;
   }
 
-  const homeXg = expectedGoals(homeRatings, awayRatings, homeVenueBoost);
-  const awayXg = expectedGoals(awayRatings, homeRatings, awayVenueBoost);
+  const homeXg = expectedGoals(
+    homeRatings,
+    awayRatings,
+    homeVenueBoost,
+    weather.xgDelta +
+      referee.homeXgDelta -
+      availability.homeXgPenalty -
+      fatigue.homeXgPenalty,
+  );
+  const awayXg = expectedGoals(
+    awayRatings,
+    homeRatings,
+    awayVenueBoost,
+    weather.xgDelta +
+      referee.awayXgDelta -
+      availability.awayXgPenalty -
+      fatigue.awayXgPenalty,
+  );
   const projected = projectedScoreline({
     homeProbability: home,
     drawProbability: draw,
@@ -1906,38 +2000,68 @@ function baselineForecast({
       : awayVenueBoost > homeVenueBoost
         ? `${awayTeam.name} get a small venue familiarity lift.`
         : "The venue profile stays close to neutral for this baseline read.";
+  const dynamicDrag = Math.abs(weather.chaosDelta) + Math.abs(referee.chaosDelta);
+  const factors = [
+    {
+      label: favorite ? "Team profile signal" : "Balanced profile signal",
+      weight: 1,
+      explanation: favorite
+        ? `${favorite.team.name} carry the stronger v3 profile at ${favorite.probability}%.`
+        : "The v3 team profiles are close enough to keep the match balanced.",
+    },
+    weather.factor,
+    referee.factor,
+    spotlight.factor,
+    {
+      label: "Venue context",
+      weight: 0.55,
+      explanation: venueExplanation,
+    },
+    {
+      label: "Attack and defense shape",
+      weight: 0.7,
+      explanation: `The sharpest matchup is ${pressurePoint}.`,
+    },
+  ].filter((factor): factor is { label: string; weight: number; explanation: string } =>
+    Boolean(factor),
+  );
 
   return {
     home,
     draw,
     away,
-    confidence: clamp(Math.round(51 + Math.abs(powerGap) * 1.1 + (76 - chaos) * 0.08), 48, 78),
+    confidence: clamp(
+      Math.round(
+        50 +
+          Math.abs(powerGap) * 1.04 +
+          (78 - chaos) * 0.08 -
+          dynamicDrag * 0.24,
+      ),
+      45,
+      80,
+    ),
     chaos,
     projected,
-    factors: [
-      {
-        label: favorite ? "Team profile signal" : "Balanced profile signal",
-        weight: 1,
-        explanation: favorite
-          ? `${favorite.team.name} carry the stronger starter profile at ${favorite.probability}%.`
-          : "The starter profiles are close enough to keep the match balanced.",
+    modifiers: {
+      basePower: {
+        home: roundModifier(homeBasePower),
+        away: roundModifier(awayBasePower),
       },
-      {
-        label: "Attack and defense shape",
-        weight: 0.7,
-        explanation: `The sharpest early matchup is ${pressurePoint}.`,
+      adjustedPower: {
+        home: roundModifier(homePower),
+        away: roundModifier(awayPower),
       },
-      {
-        label: "Venue context",
-        weight: 0.55,
-        explanation: venueExplanation,
+      venue: {
+        home: homeVenueBoost,
+        away: awayVenueBoost,
       },
-      {
-        label: "AI readout available",
-        weight: 0.5,
-        explanation: "Ask the Seer to generate a fresh interpretation from the current row.",
-      },
-    ],
+      weather: weather.payload,
+      referee: referee.payload,
+      spotlight: spotlight.payload,
+      availability: availability.payload,
+      fatigue: fatigue.payload,
+    },
+    factors,
   };
 }
 
@@ -1990,17 +2114,310 @@ function venueCountryBoost(team: FootballDataTeam, venueSlug: string | null) {
   return 0;
 }
 
+function weatherForecastModifier(
+  context: ForecastContextRow | null,
+  homeRatings: TeamRatings,
+  awayRatings: TeamRatings,
+) {
+  const temperature = toOptionalNumber(context?.temperature_c);
+  const wind = toOptionalNumber(context?.wind_kph);
+  const summary = context?.weather_summary ?? null;
+  let chaosDelta = 0;
+  let xgDelta = 0;
+  let homePower = 0;
+  let awayPower = 0;
+  const notes: string[] = [];
+
+  if (temperature !== null) {
+    if (temperature >= 30) {
+      chaosDelta += 3;
+      xgDelta -= 0.08;
+      notes.push("heat can thin legs and make late defending messy");
+    } else if (temperature <= 4) {
+      chaosDelta += 2;
+      xgDelta -= 0.04;
+      notes.push("cold air can make the touch a little heavier");
+    } else if (temperature >= 16 && temperature <= 24) {
+      xgDelta += 0.03;
+      notes.push("the temperature sits in a clean football window");
+    }
+  }
+
+  if (wind !== null && wind >= 18) {
+    chaosDelta += wind >= 28 ? 4 : 2;
+    xgDelta -= wind >= 28 ? 0.12 : 0.06;
+    notes.push("wind adds noise to diagonals and dead balls");
+    const setPiecePower = setPieceModifier(homeRatings, awayRatings, wind >= 28 ? 0.55 : 0.3);
+    homePower += setPiecePower.home;
+    awayPower += setPiecePower.away;
+  }
+
+  const summaryText = summary?.toLowerCase() ?? "";
+
+  if (
+    summaryText.includes("rain") ||
+    summaryText.includes("shower") ||
+    summaryText.includes("slick")
+  ) {
+    chaosDelta += 4;
+    xgDelta -= 0.06;
+    notes.push("a slick surface can turn rebounds into little emergencies");
+    const setPiecePower = setPieceModifier(homeRatings, awayRatings, 0.45);
+    homePower += setPiecePower.home;
+    awayPower += setPiecePower.away;
+  } else if (summaryText.includes("clear") || summaryText.includes("clean")) {
+    chaosDelta -= 1;
+    notes.push("clear conditions give the cleaner passers a little more oxygen");
+  } else if (summaryText.includes("fog")) {
+    chaosDelta += 3;
+    xgDelta -= 0.05;
+    notes.push("foggy edges make long balls and second balls harder to read");
+  }
+
+  const hasWeather = temperature !== null || wind !== null || summary !== null;
+  const factor = hasWeather
+    ? {
+        label: "Weather drift",
+        weight: 0.5,
+        explanation:
+          notes.length > 0
+            ? `Weather nudges the read: ${sentenceList(notes)}.`
+            : "Weather is synced but not forceful enough to move the forecast lane.",
+      }
+    : null;
+
+  return {
+    chaosDelta,
+    factor,
+    homePower,
+    awayPower,
+    xgDelta,
+    payload: {
+      temperatureC: temperature,
+      windKph: wind,
+      summary,
+      homePower: roundModifier(homePower),
+      awayPower: roundModifier(awayPower),
+      chaosDelta,
+      xgDelta: roundModifier(xgDelta),
+    },
+  };
+}
+
+function refereeForecastModifier(
+  context: ForecastContextRow | null,
+  homeRatings: TeamRatings,
+  awayRatings: TeamRatings,
+) {
+  const cardsPerMatch = toOptionalNumber(context?.cards_per_match);
+  const refereeName = context?.referee_name ?? null;
+  let chaosDelta = 0;
+  let homePower = 0;
+  let awayPower = 0;
+  let homeXgDelta = 0;
+  let awayXgDelta = 0;
+  let explanation: string | null = null;
+
+  if (cardsPerMatch !== null) {
+    if (cardsPerMatch >= 4.2) {
+      chaosDelta += 4;
+      const setPiecePower = setPieceModifier(homeRatings, awayRatings, 0.55);
+      homePower += setPiecePower.home;
+      awayPower += setPiecePower.away;
+      homeXgDelta += setPiecePower.home > 0 ? 0.04 : 0;
+      awayXgDelta += setPiecePower.away > 0 ? 0.04 : 0;
+      explanation =
+        "the assigned referee profile points to a choppier match, so set pieces and cards get louder";
+    } else if (cardsPerMatch >= 3.3) {
+      chaosDelta += 1;
+      explanation =
+        "the referee rhythm is active enough to keep contact and restarts in the read";
+    } else {
+      chaosDelta -= 2;
+      explanation =
+        "the referee profile looks calmer, which trims some card noise from the forecast";
+    }
+  }
+
+  const factor =
+    refereeName && refereeName !== "Assignment pending" && explanation
+      ? {
+          label: "Referee rhythm",
+          weight: 0.45,
+          explanation: `${refereeName}: ${explanation}.`,
+        }
+      : null;
+
+  return {
+    awayPower,
+    awayXgDelta,
+    chaosDelta,
+    factor,
+    homePower,
+    homeXgDelta,
+    payload: {
+      refereeName,
+      cardsPerMatch,
+      homePower: roundModifier(homePower),
+      awayPower: roundModifier(awayPower),
+      homeXgDelta: roundModifier(homeXgDelta),
+      awayXgDelta: roundModifier(awayXgDelta),
+      chaosDelta,
+    },
+  };
+}
+
+function spotlightGravityModifier(
+  homeTeam: FootballDataTeam,
+  awayTeam: FootballDataTeam,
+) {
+  const homePower = spotlightGravity(homeTeam);
+  const awayPower = spotlightGravity(awayTeam);
+  const gap = Math.abs(homePower - awayPower);
+  const chaosDelta = gap >= 1.4 ? 1 : 0;
+  const strongerTeam =
+    homePower === awayPower
+      ? null
+      : homePower > awayPower
+        ? homeTeam.name
+        : awayTeam.name;
+  const factor =
+    strongerTeam && gap >= 1
+      ? {
+          label: "Spotlight gravity",
+          weight: 0.35,
+          explanation:
+            `${strongerTeam} carry more global attention and neutral fan pull, a small nudge that matters most in tight rooms.`,
+        }
+      : null;
+
+  return {
+    awayPower,
+    chaosDelta,
+    factor,
+    homePower,
+    payload: {
+      home: roundModifier(homePower),
+      away: roundModifier(awayPower),
+      chaosDelta,
+    },
+  };
+}
+
+function availabilityForecastModifier() {
+  return {
+    awayPenalty: 0,
+    awayXgPenalty: 0,
+    chaosDelta: 0,
+    homePenalty: 0,
+    homeXgPenalty: 0,
+    payload: {
+      status: "pending-player-availability-feed",
+      homePenalty: 0,
+      awayPenalty: 0,
+      homeXgPenalty: 0,
+      awayXgPenalty: 0,
+      chaosDelta: 0,
+    },
+  };
+}
+
+function fatigueForecastModifier() {
+  return {
+    awayPenalty: 0,
+    awayXgPenalty: 0,
+    chaosDelta: 0,
+    homePenalty: 0,
+    homeXgPenalty: 0,
+    payload: {
+      status: "pending-minutes-age-travel-feed",
+      homePenalty: 0,
+      awayPenalty: 0,
+      homeXgPenalty: 0,
+      awayXgPenalty: 0,
+      chaosDelta: 0,
+    },
+  };
+}
+
+function spotlightGravity(team: FootballDataTeam) {
+  const byCode: Record<string, number> = {
+    ARG: 2.5,
+    BRA: 2.45,
+    FRA: 2.35,
+    ESP: 2.15,
+    ENG: 2.1,
+    GER: 2,
+    POR: 1.95,
+    NED: 1.7,
+    MEX: 1.6,
+    USA: 1.4,
+    ITA: 1.35,
+    MAR: 1.05,
+    CAN: 0.85,
+    JPN: 0.8,
+    KOR: 0.78,
+  };
+  const byName: Record<string, number> = {
+    argentina: 2.5,
+    brazil: 2.45,
+    brasil: 2.45,
+    france: 2.35,
+    spain: 2.15,
+    england: 2.1,
+    germany: 2,
+    portugal: 1.95,
+    netherlands: 1.7,
+    mexico: 1.6,
+    usa: 1.4,
+    "united states": 1.4,
+  };
+  const code = team.code.toUpperCase();
+  const name = team.name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return clampNumber(byCode[code] ?? byName[name] ?? 0, 0, 2.5);
+}
+
+function setPieceModifier(
+  homeRatings: TeamRatings,
+  awayRatings: TeamRatings,
+  scale: number,
+) {
+  const gap = homeRatings.setPieces - awayRatings.setPieces;
+
+  if (Math.abs(gap) < 5) {
+    return { home: 0, away: 0 };
+  }
+
+  const boost = clampNumber((Math.abs(gap) / 20) * scale, 0.1, scale);
+
+  return gap > 0 ? { home: boost, away: 0 } : { home: 0, away: boost };
+}
+
+function sentenceList(values: string[]) {
+  if (values.length <= 1) {
+    return values[0] ?? "";
+  }
+
+  return `${values.slice(0, -1).join(", ")} and ${values[values.length - 1]}`;
+}
+
 function expectedGoals(
   attackingTeam: TeamRatings,
   defendingTeam: TeamRatings,
   venueBoost: number,
+  dynamicXgModifier = 0,
 ) {
   return clampNumber(
     1.08 +
       (attackingTeam.attack - defendingTeam.defense) * 0.026 +
       (attackingTeam.control - defendingTeam.control) * 0.01 +
       (attackingTeam.setPieces - defendingTeam.setPieces) * 0.008 +
-      venueBoost * 0.035,
+      venueBoost * 0.035 +
+      dynamicXgModifier,
     0.35,
     3.2,
   );
