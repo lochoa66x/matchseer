@@ -965,7 +965,7 @@ export default function Home() {
 
           <div className="seer-share-row">
             <button
-              className="share-button seer-share-button whatsapp-share-button"
+              className="share-button seer-share-button seer-send-button"
               onClick={() => shareToWhatsApp(activeMatch)}
               type="button"
             >
@@ -1561,11 +1561,25 @@ function splitMeterShares(home: number, away: number) {
 }
 
 function displayConfidence(match: Match) {
-  return match.forecast.marketPulse?.adjustedConfidence ?? match.forecast.confidence;
+  return (
+    usableMarketPulse(match.forecast.marketPulse)?.adjustedConfidence ??
+    match.forecast.confidence
+  );
 }
 
 function displayChaos(match: Match) {
-  return match.forecast.marketPulse?.adjustedChaos ?? match.forecast.chaos;
+  return (
+    usableMarketPulse(match.forecast.marketPulse)?.adjustedChaos ??
+    match.forecast.chaos
+  );
+}
+
+function usableMarketPulse(marketPulse: Match["forecast"]["marketPulse"]) {
+  if (!marketPulse || marketPulse.home + marketPulse.draw + marketPulse.away <= 0) {
+    return null;
+  }
+
+  return marketPulse;
 }
 
 function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
@@ -2631,7 +2645,7 @@ function ForecastView({
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
-  const marketPulse = match.forecast.marketPulse;
+  const marketPulse = usableMarketPulse(match.forecast.marketPulse);
   const isFinal = match.status === "Final";
   const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
   const readLabel = isFinal

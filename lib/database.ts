@@ -1399,6 +1399,11 @@ function normalizeMarketPulseUpdate(
   }
 
   const normalized = normalizePulseProbabilities(home, draw, away);
+
+  if (!hasUsablePulse(normalized)) {
+    return null;
+  }
+
   const source = update.source === "manual" ? "manual" : "polymarket";
 
   return {
@@ -3169,6 +3174,11 @@ function toMarketPulse(
   }
 
   const normalized = normalizePulseProbabilities(rawHome, rawDraw, rawAway);
+
+  if (!hasUsablePulse(normalized)) {
+    return null;
+  }
+
   const liquidityScore = clampNumber(
     readPayloadNumber(rawPulse.liquidityScore) ??
       liquidityToTrust(
@@ -3251,6 +3261,18 @@ function normalizePulseProbabilities(home: number, draw: number, away: number) {
     draw: normalizedDraw,
     away: normalizedAway,
   };
+}
+
+function hasUsablePulse({
+  home,
+  draw,
+  away,
+}: {
+  home: number;
+  draw: number;
+  away: number;
+}) {
+  return home + draw + away > 0;
 }
 
 function liquidityToTrust(liquidity: number | null, volume: number | null) {

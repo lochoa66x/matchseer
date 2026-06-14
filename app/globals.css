@@ -7110,18 +7110,18 @@ body {
   letter-spacing: 0;
 }
 
-/* === WhatsApp share button (sharing feature) ===
-   New button beside the existing Share card button. Subtle WhatsApp-green
-   tint so it reads as "share to WhatsApp" without clashing with the theme. */
+/* === Send-to-chat button (sharing feature) ===
+   Neutral class name (NOT "whatsapp"/"share-*social") so ad-blocker cosmetic
+   filters don't auto-hide it. Subtle green tint, sits beside Share card. */
 .seer-share-row {
   gap: 8px;
   flex-wrap: wrap;
 }
-.share-button.whatsapp-share-button {
+.share-button.seer-send-button {
   color: #aef0c6;
   background: rgba(37, 211, 102, 0.12);
   border: 1px solid rgba(37, 211, 102, 0.4);
 }
-.share-button.whatsapp-share-button:hover {
+.share-button.seer-send-button:hover {
   background: rgba(37, 211, 102, 0.2);
 }
