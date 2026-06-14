@@ -136,6 +136,7 @@ const copy = {
     chaos: "Chaos",
     marketPulse: "Market pulse",
     crowdSignal: "Crowd signal",
+    marketPending: "Crowd signal waiting for sync; confidence is still the base Seer read.",
     projected: "Projected",
     teamEdge: "Team edge",
     compareTeams: "Compare teams",
@@ -257,6 +258,7 @@ const copy = {
     chaos: "Caos",
     marketPulse: "Pulso público",
     crowdSignal: "Señal de la gente",
+    marketPending: "La señal de la gente espera sincronización; la confianza sigue siendo la base del Vidente.",
     projected: "Proyectado",
     teamEdge: "Ventaja",
     compareTeams: "Comparar equipos",
@@ -378,6 +380,7 @@ const copy = {
     chaos: "Chaos",
     marketPulse: "Pouls public",
     crowdSignal: "Signal du public",
+    marketPending: "Le signal du public attend la synchro; la confiance reste la base du voyant.",
     projected: "Projeté",
     teamEdge: "Avantage",
     compareTeams: "Comparer les équipes",
@@ -1539,6 +1542,10 @@ function displayChaos(match: Match) {
   return match.forecast.marketPulse?.adjustedChaos ?? match.forecast.chaos;
 }
 
+function formatSigned(value: number) {
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
 function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
   return [
     {
@@ -2670,18 +2677,28 @@ function ForecastView({
           <Meter label={t.confidence} value={displayConfidence(match)} />
           <Meter label={t.chaos} value={displayChaos(match)} hot />
         </div>
-        {marketPulse && (
-          <div className={cx("market-pulse-note", marketPulse.alignment)}>
-            <span>
-              <Activity size={15} />
-              {t.crowdSignal}
-            </span>
-            <strong>
-              {marketPulse.home}/{marketPulse.draw}/{marketPulse.away}
-            </strong>
-            <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
-          </div>
-        )}
+        <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
+          <span>
+            <Activity size={15} />
+            {t.crowdSignal}
+          </span>
+          <strong>
+            {marketPulse
+              ? `${marketPulse.home}/${marketPulse.draw}/${marketPulse.away}`
+              : t.pendingMode}
+          </strong>
+          {marketPulse ? (
+            <>
+              <em>
+                {t.confidence} {formatSigned(marketPulse.confidenceDelta)} ·{" "}
+                {t.chaos} {formatSigned(marketPulse.chaosDelta)}
+              </em>
+              <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
+            </>
+          ) : (
+            <p>{t.marketPending}</p>
+          )}
+        </div>
         <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
       <div className={cx("match-insight-stack", showSupportDetails && "mobile-expanded")}>
