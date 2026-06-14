@@ -5568,6 +5568,66 @@ body {
   overflow: hidden;
 }
 
+.market-pulse-panel {
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.market-pulse-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(360px, 1.15fr);
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.market-pulse-status-card {
+  min-width: 0;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.market-pulse-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.market-pulse-stats div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  background: rgba(237, 241, 247, 0.8);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.market-pulse-stats span,
+.market-pulse-form label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.market-pulse-stats strong {
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.market-pulse-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(74px, 0.6fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.market-pulse-form label {
+  display: grid;
+  gap: 5px;
+}
+
 .traffic-generated,
 .traffic-section-title {
   display: inline-flex;
@@ -5995,6 +6055,7 @@ body {
 
   .traffic-overview,
   .traffic-recent-grid,
+  .market-pulse-grid,
   .model-control-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6035,8 +6096,18 @@ body {
 
   .traffic-overview,
   .traffic-recent-grid,
+  .market-pulse-grid,
   .model-control-grid {
     grid-template-columns: 1fr;
+  }
+
+  .market-pulse-stats,
+  .market-pulse-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-pulse-form .admin-select {
+    grid-column: 1 / -1;
   }
 
   .traffic-chart-head {

@@ -27,6 +27,25 @@ type AdminStatus = {
   envStatus?: Record<string, boolean>;
 };
 
+type MarketPulseSyncResult = {
+  source: "polymarket" | "manual";
+  updatesReceived: number;
+  pulsesSaved: number;
+  skipped: number;
+  fetchedAt: string;
+  targets?: number;
+  marketsScanned?: number;
+  error?: string;
+};
+
+type MarketPulseManualDraft = {
+  matchId: string;
+  home: string;
+  draw: string;
+  away: string;
+  liquidityScore: string;
+};
+
 type VenueCandidate = {
   matchId: string;
   home: string;
@@ -208,6 +227,8 @@ export default function AdminPage() {
   const [footballStatus, setFootballStatus] = useState<AdminStatus | null>(null);
   const [weatherStatus, setWeatherStatus] = useState<AdminStatus | null>(null);
   const [marketStatus, setMarketStatus] = useState<AdminStatus | null>(null);
+  const [lastMarketSync, setLastMarketSync] =
+    useState<MarketPulseSyncResult | null>(null);
   const [candidateData, setCandidateData] =
     useState<VenueCandidatesResponse | null>(null);
   const [matchesResponse, setMatchesResponse] = useState<MatchesResponse | null>(
@@ -222,6 +243,13 @@ export default function AdminPage() {
   const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>(
     {},
   );
+  const [marketDraft, setMarketDraft] = useState<MarketPulseManualDraft>({
+    matchId: "",
+    home: "",
+    draw: "",
+    away: "",
+    liquidityScore: "0.7",
+  });
   const [showMapped, setShowMapped] = useState(false);
   const [loadStatus, setLoadStatus] = useState<ActionStatus>("idle");
   const [actionStatus, setActionStatus] = useState<ActionStatus>("idle");
@@ -257,6 +285,18 @@ export default function AdminPage() {
       (match) => match.currentVenue.slug === "provider-venue-tbd",
     );
   }, [candidateData, showMapped]);
+  const marketPulseMatches = useMemo(
+    () =>
+      [...(candidateData?.matches ?? [])]
+        .filter((match) => match.status !== "Final")
+        .sort((left, right) => {
+          const leftTime = left.startsAt ? new Date(left.startsAt).getTime() : 0;
+          const rightTime = right.startsAt ? new Date(right.startsAt).getTime() : 0;
+
+          return leftTime - rightTime;
+        }),
+    [candidateData],
+  );
 
   const mappedCount =
     candidateData?.matches.filter(
@@ -376,6 +416,108 @@ export default function AdminPage() {
       setActionStatus("error");
       setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "Request failed.");
+    }
+  }
+
+  async function runMarketPulseSync() {
+    if (!secret) {
+      setMessage("Add the admin secret first.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    setActionStatus("loading");
+    setMessageStatus("loading");
+
+    try {
+      const response = await fetch("/api/admin/sync-market-pulse", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+        },
+      });
+      const payload = (await response.json()) as MarketPulseSyncResult & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Market pulse sync failed.");
+      }
+
+      setLastMarketSync(payload);
+      setActionStatus("success");
+      setMessageStatus(payload.pulsesSaved > 0 ? "success" : "idle");
+      setMessage(summarizeMarketSyncPayload(payload));
+      await refreshDashboard();
+    } catch (error) {
+      setActionStatus("error");
+      setMessageStatus("error");
+      setMessage(error instanceof Error ? error.message : "Market pulse sync failed.");
+    }
+  }
+
+  async function saveManualMarketPulse() {
+    if (!secret) {
+      setMessage("Add the admin secret first.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    const home = parsePulseInput(marketDraft.home);
+    const draw = parsePulseInput(marketDraft.draw);
+    const away = parsePulseInput(marketDraft.away);
+    const liquidityScore = parseLiquidityInput(marketDraft.liquidityScore);
+
+    if (!marketDraft.matchId || home === null || draw === null || away === null) {
+      setMessage("Pick a match and add home/draw/away crowd signal numbers.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    setActionStatus("loading");
+    setMessageStatus("loading");
+
+    try {
+      const response = await fetch("/api/admin/sync-market-pulse", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          updates: [
+            {
+              matchId: marketDraft.matchId,
+              home,
+              draw,
+              away,
+              liquidityScore,
+            },
+          ],
+        }),
+      });
+      const payload = (await response.json()) as MarketPulseSyncResult & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Manual market pulse save failed.");
+      }
+
+      setLastMarketSync(payload);
+      setActionStatus("success");
+      setMessageStatus(payload.pulsesSaved > 0 ? "success" : "error");
+      setMessage(summarizeMarketSyncPayload(payload));
+      await refreshDashboard();
+    } catch (error) {
+      setActionStatus("error");
+      setMessageStatus("error");
+      setMessage(
+        error instanceof Error ? error.message : "Manual market pulse save failed.",
+      );
     }
   }
 
@@ -615,12 +757,7 @@ export default function AdminPage() {
         <button
           className="admin-command"
           type="button"
-          onClick={() =>
-            void runProtectedAction({
-              path: "/api/admin/sync-market-pulse",
-              success: "Market pulse sync complete.",
-            })
-          }
+          onClick={() => void runMarketPulseSync()}
         >
           <Activity size={18} />
           Sync market pulse
@@ -636,6 +773,16 @@ export default function AdminPage() {
       </section>
 
       <p className={`admin-message ${messageStatus}`}>{message}</p>
+
+      <MarketPulsePanel
+        candidateMatches={marketPulseMatches}
+        draft={marketDraft}
+        lastSync={lastMarketSync}
+        onDraftChange={setMarketDraft}
+        onManualSave={() => void saveManualMarketPulse()}
+        actionStatus={actionStatus}
+        hasSecret={Boolean(secret)}
+      />
 
       <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
 
@@ -717,6 +864,171 @@ export default function AdminPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function MarketPulsePanel({
+  candidateMatches,
+  draft,
+  lastSync,
+  onDraftChange,
+  onManualSave,
+  actionStatus,
+  hasSecret,
+}: {
+  candidateMatches: VenueCandidate[];
+  draft: MarketPulseManualDraft;
+  lastSync: MarketPulseSyncResult | null;
+  onDraftChange: Dispatch<SetStateAction<MarketPulseManualDraft>>;
+  onManualSave: () => void;
+  actionStatus: ActionStatus;
+  hasSecret: boolean;
+}) {
+  const selectedMatch = candidateMatches.find(
+    (match) => match.matchId === draft.matchId,
+  );
+
+  function updateDraft(patch: Partial<MarketPulseManualDraft>) {
+    onDraftChange((current) => ({
+      ...current,
+      ...patch,
+    }));
+  }
+
+  return (
+    <section className="admin-panel market-pulse-panel">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Crowd signal</p>
+          <h2>Market pulse bench</h2>
+        </div>
+        <div className="traffic-generated">
+          <Activity size={16} />
+          {lastSync ? formatAdminTime(lastSync.fetchedAt) : "No sync yet"}
+        </div>
+      </div>
+
+      {!hasSecret ? (
+        <div className="traffic-empty">
+          <Activity size={22} />
+          <strong>Market pulse locked</strong>
+          <span>Add the admin secret to sync or save a manual crowd signal.</span>
+        </div>
+      ) : (
+        <div className="market-pulse-grid">
+          <div className="market-pulse-status-card">
+            <div className="model-card-title">
+              <Activity size={16} />
+              <span>Last sync</span>
+              <em>{lastSync?.source ?? "waiting"}</em>
+            </div>
+            <div className="market-pulse-stats">
+              <div>
+                <span>Saved</span>
+                <strong>{lastSync?.pulsesSaved ?? 0}</strong>
+              </div>
+              <div>
+                <span>Found</span>
+                <strong>{lastSync?.updatesReceived ?? 0}</strong>
+              </div>
+              <div>
+                <span>Fixtures</span>
+                <strong>{lastSync?.targets ?? candidateMatches.length}</strong>
+              </div>
+              <div>
+                <span>Markets</span>
+                <strong>{lastSync?.marketsScanned ?? 0}</strong>
+              </div>
+            </div>
+            <p className="admin-muted">
+              If saved is zero, the public market scan finished but did not find a
+              clean three-way crowd signal for our fixture names.
+            </p>
+          </div>
+
+          <div className="market-pulse-status-card">
+            <div className="model-card-title">
+              <Save size={16} />
+              <span>Manual crowd signal</span>
+              <em>{selectedMatch?.matchId ?? "pick match"}</em>
+            </div>
+            <div className="market-pulse-form">
+              <select
+                className="admin-select"
+                value={draft.matchId}
+                onChange={(event) => updateDraft({ matchId: event.target.value })}
+              >
+                <option value="">Pick fixture</option>
+                {candidateMatches.map((match) => (
+                  <option key={match.matchId} value={match.matchId}>
+                    {match.home} vs {match.away} · {formatKickoff(match.startsAt)}
+                  </option>
+                ))}
+              </select>
+              <label>
+                Home
+                <input
+                  className="admin-input"
+                  inputMode="decimal"
+                  value={draft.home}
+                  onChange={(event) => updateDraft({ home: event.target.value })}
+                  placeholder="50"
+                />
+              </label>
+              <label>
+                Draw
+                <input
+                  className="admin-input"
+                  inputMode="decimal"
+                  value={draft.draw}
+                  onChange={(event) => updateDraft({ draw: event.target.value })}
+                  placeholder="26"
+                />
+              </label>
+              <label>
+                Away
+                <input
+                  className="admin-input"
+                  inputMode="decimal"
+                  value={draft.away}
+                  onChange={(event) => updateDraft({ away: event.target.value })}
+                  placeholder="24"
+                />
+              </label>
+              <label>
+                Trust
+                <input
+                  className="admin-input"
+                  inputMode="decimal"
+                  value={draft.liquidityScore}
+                  onChange={(event) =>
+                    updateDraft({ liquidityScore: event.target.value })
+                  }
+                  placeholder="0.7"
+                />
+              </label>
+            </div>
+            <button
+              className="admin-command primary model-save-button"
+              type="button"
+              onClick={onManualSave}
+              disabled={actionStatus === "loading"}
+            >
+              {actionStatus === "loading" ? (
+                <LoaderCircle size={18} className="spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              Save crowd signal
+            </button>
+            <p className="admin-muted">
+              Manual pulse only moves confidence and chaos. It does not rewrite the
+              Seer pick or the core percentages.
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1327,6 +1639,26 @@ function toAdminInteger(value: string) {
   return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : 0;
 }
 
+function parsePulseInput(value: string) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue) || numberValue < 0) {
+    return null;
+  }
+
+  return numberValue;
+}
+
+function parseLiquidityInput(value: string) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return 0.4;
+  }
+
+  return Math.min(1, Math.max(0, numberValue));
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
@@ -1384,6 +1716,29 @@ function summarizePayload(payload: Record<string, unknown>) {
   }
 
   return "";
+}
+
+function summarizeMarketSyncPayload(payload: MarketPulseSyncResult) {
+  const scanned =
+    typeof payload.marketsScanned === "number"
+      ? ` Scanned ${payload.marketsScanned} public markets across ${
+          payload.targets ?? 0
+        } fixtures.`
+      : "";
+
+  if (payload.pulsesSaved > 0) {
+    return `Saved ${payload.pulsesSaved} crowd signal${
+      payload.pulsesSaved === 1 ? "" : "s"
+    }.${scanned}`;
+  }
+
+  if (payload.updatesReceived > 0) {
+    return `Found ${payload.updatesReceived} crowd signal${
+      payload.updatesReceived === 1 ? "" : "s"
+    }, but none matched a stored forecast. Use the manual lane with the real fixture id.${scanned}`;
+  }
+
+  return `Market pulse ran, but no clean crowd signal was found. Use the manual lane for today's match.${scanned}`;
 }
 
 function formatKickoff(startsAt: string | null) {
