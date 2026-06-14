@@ -346,40 +346,126 @@ function createFallbackInterpretation(
   usingDatabase: boolean,
   officialModelCall: OfficialModelCall,
 ): ForecastInterpretation {
-  const lead =
-    officialModelCall.pick === "draw"
-      ? `MatchSeer models ${match.home.name} and ${match.away.name} on a draw lane around ${officialModelCall.projectedScore}.`
-      : `MatchSeer models ${officialModelCall.pickLabel} ahead around ${officialModelCall.projectedScore}.`;
   const context =
     match.forecast.reasons[language]?.[0] ?? match.forecast.tone[language];
+  const favoriteName =
+    officialModelCall.pick === "home"
+      ? match.home.name
+      : officialModelCall.pick === "away"
+        ? match.away.name
+        : null;
+  const fallbackCopy = createSeerFallbackCopy({
+    context: cleanExplanation(context),
+    favoriteName,
+    language,
+    match,
+    officialModelCall,
+    usingDatabase,
+  });
 
   return {
     language,
-    headline: `${match.home.name} vs ${match.away.name}`,
-    summary: `${lead} The Seer read explains why that model forecast could happen.`,
-    toneLine: `The Seer follows the model's ${officialModelCall.projectedScore} trail and reads the match from there.`,
+    headline: fallbackCopy.headline,
+    summary: fallbackCopy.summary,
+    toneLine: fallbackCopy.toneLine,
     keyFactors: [
       {
-        label: "Model forecast",
-        explanation:
-          `${officialModelCall.pickLabel} is the stored public call with ${officialModelCall.confidence}% confidence.`,
+        label: fallbackCopy.forecastLabel,
+        explanation: fallbackCopy.forecastFactor,
       },
       {
-        label: "Forecast shape",
-        explanation:
-          `Probabilities sit at ${officialModelCall.probabilities.home}% home, ${officialModelCall.probabilities.draw}% draw, and ${officialModelCall.probabilities.away}% away.`,
+        label: fallbackCopy.shapeLabel,
+        explanation: fallbackCopy.shapeFactor,
       },
       {
-        label: "Context",
-        explanation: cleanExplanation(context),
+        label: fallbackCopy.contextLabel,
+        explanation: fallbackCopy.contextFactor,
       },
     ],
-    missingDataNotes: [
-      usingDatabase
-        ? "This read explains the stored MatchSeer model forecast."
-        : "Live forecast data is unavailable for this match.",
-    ],
+    missingDataNotes: [fallbackCopy.missingDataNote],
     disclaimer,
+  };
+}
+
+function createSeerFallbackCopy({
+  context,
+  favoriteName,
+  language,
+  match,
+  officialModelCall,
+  usingDatabase,
+}: {
+  context: string;
+  favoriteName: string | null;
+  language: Language;
+  match: MatchSummary;
+  officialModelCall: OfficialModelCall;
+  usingDatabase: boolean;
+}) {
+  const score = officialModelCall.projectedScore;
+  const home = officialModelCall.probabilities.home;
+  const draw = officialModelCall.probabilities.draw;
+  const away = officialModelCall.probabilities.away;
+
+  if (language === "es") {
+    return {
+      headline: `${match.home.name} contra ${match.away.name}`,
+      summary: favoriteName
+        ? `El Vidente ve a ${favoriteName} con el filo más claro, pero no como paseo: el rastro marca ${score} y pide cuidar cada rebote. ${context}`
+        : `El Vidente no encuentra dueño claro todavía: el rastro apunta a ${score}, con el partido caminando sobre una cuerda tensa. ${context}`,
+      toneLine: `La lectura sigue el sendero ${score}: fútbol de margen corto, un giro y el guion cambia.`,
+      forecastLabel: "Rastro del Vidente",
+      forecastFactor: favoriteName
+        ? `${favoriteName} aparece delante en la lectura guardada, con ${officialModelCall.confidence}% de confianza.`
+        : `La lectura guardada deja el empate como carril principal, con ${officialModelCall.confidence}% de confianza.`,
+      shapeLabel: "Pulso del partido",
+      shapeFactor: `El mapa queda en ${home}% local, ${draw}% empate y ${away}% visitante.`,
+      contextLabel: "La pista",
+      contextFactor: context,
+      missingDataNote: usingDatabase
+        ? "Lectura segura desde el pronóstico guardado de MatchSeer."
+        : "Faltan datos en vivo para completar la lectura.",
+    };
+  }
+
+  if (language === "fr") {
+    return {
+      headline: `${match.home.name} contre ${match.away.name}`,
+      summary: favoriteName
+        ? `Le voyant voit ${favoriteName} avec le tranchant le plus net, mais pas une promenade : la trace indique ${score} et chaque rebond compte. ${context}`
+        : `Le voyant ne donne pas encore les clés du match : la trace pointe vers ${score}, sur un fil très serré. ${context}`,
+      toneLine: `La lecture suit le chemin ${score} : marge courte, un détail, et le script bouge.`,
+      forecastLabel: "Trace du voyant",
+      forecastFactor: favoriteName
+        ? `${favoriteName} ressort devant dans la lecture gardée, avec ${officialModelCall.confidence} % de confiance.`
+        : `La lecture gardée laisse le nul comme couloir principal, avec ${officialModelCall.confidence} % de confiance.`,
+      shapeLabel: "Pouls du match",
+      shapeFactor: `La carte affiche ${home} % domicile, ${draw} % nul et ${away} % extérieur.`,
+      contextLabel: "L'indice",
+      contextFactor: context,
+      missingDataNote: usingDatabase
+        ? "Lecture sûre depuis la prévision MatchSeer enregistrée."
+        : "Les données en direct manquent pour compléter la lecture.",
+    };
+  }
+
+  return {
+    headline: `${match.home.name} vs ${match.away.name}`,
+    summary: favoriteName
+      ? `The Seer sees ${favoriteName} carrying the sharper blade, but not a clean walk: the trail points to ${score}, with every loose bounce still mattering. ${context}`
+      : `The Seer does not see a clean owner yet: the trail bends toward ${score}, a tightrope match where one strange bounce can write the story. ${context}`,
+    toneLine: `The Seer follows the ${score} trail: short margins, live nerves, and one moment ready to tilt the room.`,
+    forecastLabel: "Seer trail",
+    forecastFactor: favoriteName
+      ? `${favoriteName} sits ahead on the stored read, with ${officialModelCall.confidence}% confidence.`
+      : `The stored read keeps the draw lane alive, with ${officialModelCall.confidence}% confidence.`,
+    shapeLabel: "Match pulse",
+    shapeFactor: `The board leans ${home}% home, ${draw}% draw, and ${away}% away.`,
+    contextLabel: "The clue",
+    contextFactor: context,
+    missingDataNote: usingDatabase
+      ? "Safe read from the stored MatchSeer forecast."
+      : "Live forecast data is unavailable for this match.",
   };
 }
 
@@ -399,7 +485,7 @@ function createOpenAiRequest(
           {
             type: "input_text",
             text:
-              "You write MatchSeer Seer reads for fans. The official public call is the stored Model Forecast supplied by the app. Explain that model forecast; do not create an independent prediction. If you mention a winner, draw, score, probability, or confidence, it must match officialModelForecast exactly. Never invent another winner, scoreline, or certainty. Keep it concise and playful through football, weather, venue, and tactical imagery. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, guarantees, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into neutral sports-analysis language while preserving the official model forecast.",
+              "You are the MatchSeer: a playful football oracle translating the app's stored forecast into vivid fan language. Keep the exact stored forecast, winner/draw direction, projected score, probabilities, confidence, and chaos unchanged, but do not sound like a spreadsheet. Do not lead the summary with 'official model', raw percentages, or compliance-style wording. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. Never create an independent prediction, winner, scoreline, probability, certainty, or guarantee. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into neutral but lively sports-analysis language while preserving the stored forecast.",
           },
         ],
       },
@@ -426,12 +512,14 @@ function createOpenAiRequest(
                 players: match.players,
               },
               outputRules: {
-                headline: "Use the teams or a short match title.",
+                headline:
+                  "Use the teams or a short match title. No percentages in the headline.",
                 summary:
-                  "One or two sentences explaining why the official model forecast could happen. Do not predict a different outcome.",
+                  "One or two vivid sentences explaining why the stored forecast could happen. Start with the Seer, a match image, tactical pressure, weather, or venue. Do not start with 'The official model' or a raw percentage list. Do not predict a different outcome.",
                 toneLine:
-                  "One playful sentence that matches the official model forecast exactly. Do not use cultural stereotypes or cultural props.",
-                keyFactors: "Three factors max.",
+                  "One playful sentence that matches the stored forecast exactly. Do not use cultural stereotypes or cultural props.",
+                keyFactors:
+                  "Three factors max. Keep labels short and fan-friendly, such as Sharp edge, Midfield glue, Weather bite, Set-piece door, or Chaos lever.",
                 disclaimer,
               },
               repair: repairContext
@@ -439,7 +527,7 @@ function createOpenAiRequest(
                     safetyIssue: repairContext.safetyIssue,
                     previousDraft: repairContext.blockedInterpretation,
                     instruction:
-                      "Rewrite the previous draft so it remains vivid fan analysis but avoids the blocked language category. Keep the same official model forecast and return a clean JSON object.",
+                      "Rewrite the previous draft so it remains vivid fan analysis but avoids the blocked language category. Keep the same stored forecast, avoid stiff phrasing, and return a clean JSON object.",
                     avoidTerms:
                       repairContext.safetyIssue === "betting-language"
                         ? restrictedBettingTerms

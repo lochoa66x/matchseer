@@ -2087,22 +2087,22 @@ function clampNumber(value: number, min: number, max: number) {
 function baselineInterpretationCopy(language: Language, projected: string) {
   const copy = {
     en: {
-      headline: "Provider synced forecast",
+      headline: "The Seer is warming the lens",
       summary:
-        "Fresh fixture data is in. Ask the Seer for a richer readout once team stats and weather are layered in.",
-      toneLine: `Baseline projection sits at ${projected}.`,
+        "Fresh fixture data is in. Ask the Seer to turn the team shape, venue mood, and weather into a proper match trail.",
+      toneLine: `The early trail sketches ${projected}, but the richer read wakes up when the Seer is called.`,
     },
     es: {
-      headline: "Pronóstico sincronizado",
+      headline: "El Vidente calienta la lente",
       summary:
-        "Ya entraron datos reales del calendario. Pregunta al Vidente para una lectura más rica cuando sumemos estadísticas y clima.",
-      toneLine: `La proyección base queda en ${projected}.`,
+        "Ya entraron datos reales del calendario. Pregunta al Vidente para convertir forma, sede y clima en una lectura con filo.",
+      toneLine: `El rastro temprano dibuja ${projected}, pero la lectura rica despierta cuando llamas al Vidente.`,
     },
     fr: {
-      headline: "Prévision synchronisée",
+      headline: "Le voyant chauffe la lentille",
       summary:
-        "Les données réelles du calendrier sont arrivées. Demande au voyant une lecture plus riche avec les stats et la météo.",
-      toneLine: `La projection de base est ${projected}.`,
+        "Les données réelles du calendrier sont arrivées. Demande au voyant de transformer forme, stade et météo en vraie trace de match.",
+      toneLine: `La trace initiale dessine ${projected}, mais la lecture riche s'allume quand le voyant est appelé.`,
     },
   };
 
