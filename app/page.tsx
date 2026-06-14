@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   MapPin,
   RefreshCcw,
+  MessageCircle,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -143,6 +144,8 @@ const copy = {
     comparePlayers: "Player sparks",
     referee: "Referee",
     share: "Share card",
+    shareWhatsapp: "WhatsApp",
+    shareHook: "See the Seer's full read 🔮",
     copied: "Copied",
     shareError: "Copy failed",
     review: "Forecasts are for entertainment and sports analysis only. No betting advice.",
@@ -265,6 +268,8 @@ const copy = {
     comparePlayers: "Chispas de jugadores",
     referee: "Árbitro",
     share: "Compartir carta",
+    shareWhatsapp: "WhatsApp",
+    shareHook: "Mira la predicción completa del Vidente 🔮",
     copied: "Copiado",
     shareError: "No se copió",
     review: "Pronósticos solo para entretenimiento y análisis deportivo. No son consejos de apuestas.",
@@ -387,6 +392,8 @@ const copy = {
     comparePlayers: "Étincelles joueurs",
     referee: "Arbitre",
     share: "Partager",
+    shareWhatsapp: "WhatsApp",
+    shareHook: "Découvrez la lecture complète du Voyant 🔮",
     copied: "Copié",
     shareError: "Échec copie",
     review: "Prévisions à des fins de divertissement et d’analyse sportive seulement. Aucun conseil de pari.",
@@ -642,17 +649,28 @@ export default function Home() {
     }
   }
 
-  async function shareMatch(match: Match) {
+  function buildShareContent(match: Match) {
     const shareUrl = new URL(window.location.href);
     shareUrl.searchParams.set("match", match.id);
     shareUrl.searchParams.set("lang", language);
     shareUrl.hash = "";
 
-    const shareText = `${match.home.name} vs ${match.away.name}: ${match.forecast.projected} on MatchSeer. ${t.review}`;
+    const text = `${match.home.name} ${match.forecast.projected} ${match.away.name} — ${t.shareHook}`;
+    return { url: shareUrl.toString(), text };
+  }
+
+  function shareToWhatsApp(match: Match) {
+    const { url, text } = buildShareContent(match);
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function shareMatch(match: Match) {
+    const { url, text } = buildShareContent(match);
     const shareData = {
       title: `MatchSeer: ${match.home.name} vs ${match.away.name}`,
-      text: shareText,
-      url: shareUrl.toString(),
+      text,
+      url,
     };
 
     try {
@@ -687,9 +705,9 @@ export default function Home() {
                 aria-hidden="true"
               />
             </div>
-            <div>
-              <p className="eyebrow">MatchSeer</p>
-              <h1>{t.subtitle}</h1>
+            <div className="brand-text">
+              <p className="brand-wordmark">MatchSeer</p>
+              <h1 className="brand-tagline">{t.subtitle}</h1>
             </div>
           </div>
           <div className="language-switcher" aria-label="Language selector">
@@ -761,9 +779,9 @@ export default function Home() {
               aria-hidden="true"
             />
           </div>
-          <div>
-            <p className="eyebrow">MatchSeer</p>
-            <h1>{t.subtitle}</h1>
+          <div className="brand-text">
+            <p className="brand-wordmark">MatchSeer</p>
+            <h1 className="brand-tagline">{t.subtitle}</h1>
           </div>
         </div>
         <nav className="main-nav" aria-label="Primary navigation">
@@ -946,6 +964,14 @@ export default function Home() {
           />
 
           <div className="seer-share-row">
+            <button
+              className="share-button seer-share-button whatsapp-share-button"
+              onClick={() => shareToWhatsApp(activeMatch)}
+              type="button"
+            >
+              <MessageCircle size={17} />
+              {t.shareWhatsapp}
+            </button>
             <button className="share-button seer-share-button" onClick={() => shareMatch(activeMatch)} type="button">
               {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
               {shareStatus === "copied" && t.copied}
