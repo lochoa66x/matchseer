@@ -2022,7 +2022,14 @@ function SeerScoreboardBoard({
         onClick={() => setShowMobileReceipts((current) => !current)}
         type="button"
       >
-        <span>{showMobileReceipts ? t.hideReceipts : t.showAllReceipts}</span>
+        <span className="scoreboard-toggle-copy">
+          <em>{showMobileReceipts ? t.hideReceipts : t.showAllReceipts}</em>
+          <small>
+            {scoreboard.reviewed} {t.reviewedMatches.toLowerCase()} ·{" "}
+            {scoreboard.winnerHits}/{scoreboard.reviewed} ·{" "}
+            {scoreboard.reviewed > 0 ? `${scoreboard.survivalRate}%` : "0%"}
+          </small>
+        </span>
         <strong>{scoreboard.receipts.length}</strong>
         <ChevronDown size={16} />
       </button>

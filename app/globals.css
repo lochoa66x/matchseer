@@ -5028,6 +5028,36 @@ body {
   display: none;
 }
 
+@media (max-width: 1440px) {
+  .seer-scoreboard {
+    padding: 18px;
+  }
+
+  .seer-scoreboard-header {
+    gap: 14px;
+  }
+
+  .seer-scoreboard h2 {
+    font-size: clamp(1.4rem, 2vw, 2.12rem);
+  }
+
+  .scoreboard-metric {
+    min-height: 84px;
+    padding: 10px;
+  }
+
+  .scoreboard-metric strong {
+    margin: 6px 0 4px;
+    font-size: clamp(1.3rem, 2vw, 1.78rem);
+  }
+
+  .receipt-card,
+  .receipt-empty {
+    min-height: 150px;
+    padding: 12px;
+  }
+}
+
 @media (max-width: 1180px) {
   .hero-matchroom {
     grid-template-columns: 1fr;
@@ -5110,10 +5140,34 @@ body {
 }
 
 @media (max-width: 640px) {
+  .seer-scoreboard {
+    margin-top: 14px;
+    padding: 14px;
+  }
+
+  .seer-scoreboard-header {
+    display: block;
+  }
+
+  .seer-scoreboard h2 {
+    margin: 6px 0 8px;
+    font-size: clamp(1.28rem, 7vw, 1.76rem);
+    line-height: 1.08;
+  }
+
+  .seer-scoreboard p {
+    font-size: 0.84rem;
+    line-height: 1.34;
+  }
+
+  .seer-scoreboard .scoreboard-metrics {
+    display: none;
+  }
+
   .scoreboard-mobile-toggle {
     display: grid;
     width: 100%;
-    min-height: 46px;
+    min-height: 58px;
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 10px;
@@ -5126,6 +5180,33 @@ body {
     border-radius: 10px;
     cursor: pointer;
     font-weight: 950;
+  }
+
+  .scoreboard-toggle-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .scoreboard-toggle-copy em,
+  .scoreboard-toggle-copy small {
+    min-width: 0;
+    overflow: hidden;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .scoreboard-toggle-copy em {
+    color: #f8fbff;
+    font-size: 0.94rem;
+    line-height: 1;
+  }
+
+  .scoreboard-toggle-copy small {
+    color: #aeb9cc;
+    font-size: 0.72rem;
+    line-height: 1.1;
   }
 
   .scoreboard-mobile-toggle strong {
