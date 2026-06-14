@@ -2451,7 +2451,6 @@ function ForecastView({
     : oracleRead?.source === "openai"
       ? t.freshRead
       : t.seededRead;
-  const accents = matchAccentColors(match);
 
   return (
     <div className={cx("forecast-layout", compact && "compact")}>
@@ -2508,7 +2507,6 @@ function ForecastView({
           </div>
         )}
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
-        <TensionBar match={match} accents={accents} />
         <div className="metric-row">
           <Meter label={t.confidence} value={match.forecast.confidence} />
           <Meter label={t.chaos} value={match.forecast.chaos} hot />
@@ -2518,44 +2516,6 @@ function ForecastView({
       <div className="match-insight-stack">
         <TeamsView match={match} t={t} />
         <WeatherView match={match} t={t} language={language} />
-      </div>
-    </div>
-  );
-}
-
-function TensionBar({ match, accents }: { match: Match; accents: { home: string; away: string } }) {
-  const { home, draw, away } = match.forecast;
-  const lean = getMatchLean(match, accents);
-
-  return (
-    <div className="probability-lane">
-      <div className="probability-lane-topline">
-        <span className="probability-team-label">
-          <TeamFlag team={match.home} compact accentColor={accents.home} />
-          <span style={{ color: accents.home }}>{match.home.code}</span>
-          <strong>{home}%</strong>
-        </span>
-        <span className="probability-lean-chip" style={{ color: lean.color }}>
-          {lean.label} {lean.value}%
-        </span>
-        <span className="probability-team-label away">
-          <strong>{away}%</strong>
-          <span style={{ color: accents.away }}>{match.away.code}</span>
-          <TeamFlag team={match.away} compact accentColor={accents.away} />
-        </span>
-      </div>
-      <div
-        className="probability-track"
-        aria-label={`${match.home.code} ${home}%, draw ${draw}%, ${match.away.code} ${away}%`}
-      >
-        <span className="probability-segment home" style={{ width: `${home}%`, background: accents.home }} />
-        <span className="probability-segment draw" style={{ width: `${draw}%` }} />
-        <span className="probability-segment away" style={{ width: `${away}%`, background: accents.away }} />
-      </div>
-      <div className="probability-lane-baseline">
-        <span>{match.home.code}</span>
-        <span>Draw {draw}%</span>
-        <span>{match.away.code}</span>
       </div>
     </div>
   );
