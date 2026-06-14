@@ -707,7 +707,7 @@ h1 {
 
 .market-pulse-note {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   margin-top: 12px;
@@ -733,6 +733,14 @@ h1 {
   font-weight: 950;
 }
 
+.market-pulse-note em {
+  color: rgba(220, 230, 247, 0.78);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .market-pulse-note p {
   min-width: 0;
   margin: 0;
@@ -752,6 +760,15 @@ h1 {
 
 .market-pulse-note.thin {
   border-color: rgba(143, 160, 189, 0.18);
+}
+
+.market-pulse-note.pending {
+  color: rgba(196, 207, 226, 0.78);
+  border-color: rgba(143, 160, 189, 0.14);
+}
+
+.market-pulse-note.pending strong {
+  color: rgba(226, 235, 250, 0.72);
 }
 
 .reason-list {
@@ -6277,6 +6294,10 @@ body {
 @media (max-width: 700px) {
   .market-pulse-note {
     grid-template-columns: 1fr auto;
+  }
+
+  .market-pulse-note em {
+    grid-column: 1 / -1;
   }
 
   .market-pulse-note p {
