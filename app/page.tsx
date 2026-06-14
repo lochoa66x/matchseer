@@ -134,6 +134,8 @@ const copy = {
     weather: "Weather",
     confidence: "Confidence",
     chaos: "Chaos",
+    marketPulse: "Market pulse",
+    crowdSignal: "Crowd signal",
     projected: "Projected",
     teamEdge: "Team edge",
     compareTeams: "Compare teams",
@@ -253,6 +255,8 @@ const copy = {
     weather: "Clima",
     confidence: "Confianza",
     chaos: "Caos",
+    marketPulse: "Pulso público",
+    crowdSignal: "Señal de la gente",
     projected: "Proyectado",
     teamEdge: "Ventaja",
     compareTeams: "Comparar equipos",
@@ -372,6 +376,8 @@ const copy = {
     weather: "Météo",
     confidence: "Confiance",
     chaos: "Chaos",
+    marketPulse: "Pouls public",
+    crowdSignal: "Signal du public",
     projected: "Projeté",
     teamEdge: "Avantage",
     compareTeams: "Comparer les équipes",
@@ -883,8 +889,8 @@ export default function Home() {
                   <div className="hero-card-footer">
                     <span>{match.group}</span>
                     <span>{match.venue}</span>
-                    <span>{t.confidence}: {match.forecast.confidence}%</span>
-                    <span>{t.chaos}: {match.forecast.chaos}%</span>
+                    <span>{t.confidence}: {displayConfidence(match)}%</span>
+                    <span>{t.chaos}: {displayChaos(match)}%</span>
                     <span>{t.projected}: {match.forecast.projected}</span>
                   </div>
                 </button>
@@ -1522,6 +1528,14 @@ function splitMeterShares(home: number, away: number) {
   };
 }
 
+function displayConfidence(match: Match) {
+  return match.forecast.marketPulse?.adjustedConfidence ?? match.forecast.confidence;
+}
+
+function displayChaos(match: Match) {
+  return match.forecast.marketPulse?.adjustedChaos ?? match.forecast.chaos;
+}
+
 function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
   return [
     {
@@ -1554,11 +1568,11 @@ function getMatchCardMood(match: Match, t: Record<string, string>) {
   const spread = Math.max(match.forecast.home, match.forecast.draw, match.forecast.away) -
     Math.min(match.forecast.home, match.forecast.draw, match.forecast.away);
 
-  if (match.forecast.chaos >= 64) {
+  if (displayChaos(match) >= 64) {
     return t.chaosWatch;
   }
 
-  if (match.forecast.confidence >= 70 && spread >= 14) {
+  if (displayConfidence(match) >= 70 && spread >= 14) {
     return t.strongSignal;
   }
 
@@ -2583,6 +2597,7 @@ function ForecastView({
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
+  const marketPulse = match.forecast.marketPulse;
   const isFinal = match.status === "Final";
   const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
   const readLabel = isFinal
@@ -2647,9 +2662,21 @@ function ForecastView({
         )}
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
         <div className="metric-row">
-          <Meter label={t.confidence} value={match.forecast.confidence} />
-          <Meter label={t.chaos} value={match.forecast.chaos} hot />
+          <Meter label={t.confidence} value={displayConfidence(match)} />
+          <Meter label={t.chaos} value={displayChaos(match)} hot />
         </div>
+        {marketPulse && (
+          <div className={cx("market-pulse-note", marketPulse.alignment)}>
+            <span>
+              <Activity size={15} />
+              {t.crowdSignal}
+            </span>
+            <strong>
+              {marketPulse.home}/{marketPulse.draw}/{marketPulse.away}
+            </strong>
+            <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
+          </div>
+        )}
         <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
       <div className={cx("match-insight-stack", showSupportDetails && "mobile-expanded")}>

@@ -207,6 +207,7 @@ export default function AdminPage() {
   const [secret, setSecret] = useState("");
   const [footballStatus, setFootballStatus] = useState<AdminStatus | null>(null);
   const [weatherStatus, setWeatherStatus] = useState<AdminStatus | null>(null);
+  const [marketStatus, setMarketStatus] = useState<AdminStatus | null>(null);
   const [candidateData, setCandidateData] =
     useState<VenueCandidatesResponse | null>(null);
   const [matchesResponse, setMatchesResponse] = useState<MatchesResponse | null>(
@@ -295,10 +296,19 @@ export default function AdminPage() {
               error instanceof Error ? error.message : "Model controls failed.",
           }))
         : Promise.resolve<ModelControlDashboard | null>(null);
-      const [football, weather, candidates, matches, traffic, modelControls] =
+      const [
+        football,
+        weather,
+        market,
+        candidates,
+        matches,
+        traffic,
+        modelControls,
+      ] =
         await Promise.all([
           fetchJson<AdminStatus>("/api/admin/sync-football-data"),
           fetchJson<AdminStatus>("/api/admin/sync-weather"),
+          fetchJson<AdminStatus>("/api/admin/sync-market-pulse"),
           fetchJson<VenueCandidatesResponse>("/api/admin/venue-candidates?all=1"),
           fetchJson<MatchesResponse>("/api/matches"),
           trafficPromise,
@@ -307,6 +317,7 @@ export default function AdminPage() {
 
       setFootballStatus(football);
       setWeatherStatus(weather);
+      setMarketStatus(market);
       setCandidateData(candidates);
       setMatchesResponse(matches);
       setTrafficData(traffic);
@@ -532,6 +543,12 @@ export default function AdminPage() {
           note={weatherStatus?.provider ?? "open-meteo"}
         />
         <AdminMetric
+          icon={<Activity size={18} />}
+          label="Market pulse"
+          value={marketStatus?.ready ? "Free" : "Locked"}
+          note={marketStatus?.provider ?? "polymarket"}
+        />
+        <AdminMetric
           icon={<MapPin size={18} />}
           label="Venues mapped"
           value={`${mappedCount}/${candidateData?.matches.length ?? 0}`}
@@ -594,6 +611,19 @@ export default function AdminPage() {
         >
           <CloudSun size={18} />
           Sync weather
+        </button>
+        <button
+          className="admin-command"
+          type="button"
+          onClick={() =>
+            void runProtectedAction({
+              path: "/api/admin/sync-market-pulse",
+              success: "Market pulse sync complete.",
+            })
+          }
+        >
+          <Activity size={18} />
+          Sync market pulse
         </button>
         <button
           className="admin-command primary"

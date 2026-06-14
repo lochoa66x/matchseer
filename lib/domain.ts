@@ -38,6 +38,23 @@ export type MatchForecast = ForecastCopy & {
   confidence: number;
   chaos: number;
   projected: string;
+  marketPulse?: MarketPulse | null;
+};
+
+export type MarketPulse = {
+  source: "polymarket" | "manual";
+  capturedAt?: string | null;
+  home: number;
+  draw: number;
+  away: number;
+  liquidityScore: number;
+  confidenceDelta: number;
+  chaosDelta: number;
+  adjustedConfidence: number;
+  adjustedChaos: number;
+  alignment: "aligned" | "split" | "thin";
+  leader: "home" | "draw" | "away";
+  summary: Record<Language, string>;
 };
 
 export type MatchSummary = {

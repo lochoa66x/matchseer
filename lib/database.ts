@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import type {
   ForecastInterpretation,
   Language,
+  MarketPulse,
   MatchStatus,
   MatchSummary,
 } from "./domain";
@@ -46,6 +47,29 @@ export type WeatherSyncResult = {
   matchesUpdated: number;
   fetchedAt: string;
   skippedReason?: string;
+};
+
+export type MarketPulseUpdate = {
+  matchId: string;
+  source?: "polymarket" | "manual";
+  home: number;
+  draw: number;
+  away: number;
+  liquidityScore?: number | null;
+  liquidity?: number | null;
+  volume?: number | null;
+  capturedAt?: string | null;
+  marketId?: string | null;
+  marketSlug?: string | null;
+  question?: string | null;
+};
+
+export type MarketPulseSyncResult = {
+  source: "polymarket" | "manual";
+  updatesReceived: number;
+  pulsesSaved: number;
+  skipped: number;
+  fetchedAt: string;
 };
 
 export type VenueOverride = {
@@ -344,6 +368,7 @@ type DatabaseMatchRow = {
   projected_score: string | null;
   confidence: number | null;
   chaos: number | null;
+  source_payload: Record<string, unknown> | string | null;
   tone: Record<Language, string> | null;
   factors: string[] | null;
   players: Array<{
@@ -1354,6 +1379,55 @@ function normalizePlayerAvailabilityUpdate(
   };
 }
 
+function normalizeMarketPulseUpdate(
+  update: MarketPulseUpdate,
+): MarketPulseUpdate | null {
+  const matchId =
+    typeof update.matchId === "string" ? update.matchId.trim().slice(0, 120) : "";
+  const home = readPayloadNumber(update.home);
+  const draw = readPayloadNumber(update.draw);
+  const away = readPayloadNumber(update.away);
+
+  if (!matchId || home === null || draw === null || away === null) {
+    return null;
+  }
+
+  const normalized = normalizePulseProbabilities(home, draw, away);
+  const source = update.source === "manual" ? "manual" : "polymarket";
+
+  return {
+    matchId,
+    source,
+    home: normalized.home,
+    draw: normalized.draw,
+    away: normalized.away,
+    liquidityScore: clampNumber(
+      readPayloadNumber(update.liquidityScore) ??
+        liquidityToTrust(
+          readPayloadNumber(update.liquidity),
+          readPayloadNumber(update.volume),
+        ),
+      0,
+      1,
+    ),
+    liquidity: readPayloadNumber(update.liquidity),
+    volume: readPayloadNumber(update.volume),
+    capturedAt:
+      typeof update.capturedAt === "string" && update.capturedAt.trim()
+        ? update.capturedAt
+        : new Date().toISOString(),
+    marketId: normalizeMarketText(update.marketId, 120),
+    marketSlug: normalizeMarketText(update.marketSlug, 160),
+    question: normalizeMarketText(update.question, 260),
+  };
+}
+
+function normalizeMarketText(value: unknown, maxLength: number) {
+  return typeof value === "string" && value.trim()
+    ? value.replace(/\s+/g, " ").trim().slice(0, maxLength)
+    : null;
+}
+
 function normalizePlayerSlug(value: unknown) {
   return typeof value === "string"
     ? value.trim().toLowerCase().slice(0, 120)
@@ -2314,6 +2388,65 @@ export async function applyPlayerAvailabilityUpdates(
   };
 }
 
+export async function applyMarketPulseUpdates(
+  updates: MarketPulseUpdate[],
+  source: "polymarket" | "manual" = "polymarket",
+): Promise<MarketPulseSyncResult> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for market pulse updates.");
+  }
+
+  const sql = connection.sql;
+  let pulsesSaved = 0;
+  let skipped = 0;
+
+  await ensureForecastLedgerSchema(sql);
+
+  for (const update of updates) {
+    const normalized = normalizeMarketPulseUpdate({
+      ...update,
+      source: update.source ?? source,
+    });
+
+    if (!normalized) {
+      skipped += 1;
+      continue;
+    }
+
+    const rows = await sql`
+      update forecasts
+      set source_payload =
+        coalesce(source_payload, '{}'::jsonb) ||
+        jsonb_build_object('marketPulse', ${JSON.stringify(normalized)}::jsonb)
+      where id = (
+        select forecasts.id
+        from forecasts
+        join matches on matches.id = forecasts.match_id
+        where matches.external_id = ${normalized.matchId}
+        order by forecasts.version desc, forecasts.created_at desc
+        limit 1
+      )
+      returning id;
+    `;
+
+    if (rows.length === 0) {
+      skipped += 1;
+    } else {
+      pulsesSaved += rows.length;
+    }
+  }
+
+  return {
+    source,
+    updatesReceived: updates.length,
+    pulsesSaved,
+    skipped,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export async function listVenueMappingCandidates({
   includeMapped = false,
 }: {
@@ -2519,6 +2652,7 @@ async function fetchMatchRows(sql: NeonQuery) {
         projected_score,
         confidence,
         chaos,
+        source_payload,
         created_at
       from forecasts
       order by match_id, version desc, created_at desc
@@ -2577,6 +2711,7 @@ async function fetchMatchRows(sql: NeonQuery) {
       latest_forecast.projected_score,
       latest_forecast.confidence,
       latest_forecast.chaos,
+      latest_forecast.source_payload,
       interpretation_groups.tone,
       forecast_reason_groups.factors,
       coalesce(
@@ -2644,6 +2779,7 @@ async function fetchMatchRows(sql: NeonQuery) {
       latest_forecast.projected_score,
       latest_forecast.confidence,
       latest_forecast.chaos,
+      latest_forecast.source_payload,
       interpretation_groups.tone,
       forecast_reason_groups.factors
     order by matches.starts_at nulls last, matches.external_id;
@@ -2777,6 +2913,20 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const projectedScore = normalizeProjectedScore(
     publishedProjectedScoreCorrections[row.id] ?? row.projected_score,
   );
+  const homeForecast = toNumber(row.home_win_probability);
+  const drawForecast = toNumber(row.draw_probability);
+  const awayForecast = toNumber(row.away_win_probability);
+  const confidence = toNumber(row.confidence);
+  const chaos = toNumber(row.chaos);
+  const marketPulse = toMarketPulse(row.source_payload, {
+    homeForecast,
+    drawForecast,
+    awayForecast,
+    confidence,
+    chaos,
+    homeName: row.home_name,
+    awayName: row.away_name,
+  });
 
   return {
     id: row.id,
@@ -2813,16 +2963,17 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       setPieces: toNumber(row.away_set_pieces),
     },
     forecast: {
-      home: toNumber(row.home_win_probability),
-      draw: toNumber(row.draw_probability),
-      away: toNumber(row.away_win_probability),
+      home: homeForecast,
+      draw: drawForecast,
+      away: awayForecast,
       version: toNumber(row.forecast_version),
       generatedAt: row.forecast_created_at
         ? new Date(row.forecast_created_at).toISOString()
         : null,
-      confidence: toNumber(row.confidence),
-      chaos: toNumber(row.chaos),
+      confidence,
+      chaos,
       projected: projectedScore,
+      marketPulse,
       tone: {
         ...toLanguageRecord("Forecast copy pending."),
         ...(row.tone ?? {}),
@@ -2855,6 +3006,177 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
           note: player.note ?? "Spark pending",
         }))
       : [],
+  };
+}
+
+function toMarketPulse(
+  sourcePayload: DatabaseMatchRow["source_payload"],
+  base: {
+    homeForecast: number;
+    drawForecast: number;
+    awayForecast: number;
+    confidence: number;
+    chaos: number;
+    homeName: string;
+    awayName: string;
+  },
+): MarketPulse | null {
+  const payload = parseJsonPayload(sourcePayload);
+  const rawPulse = readPayloadRecord(payload?.marketPulse);
+
+  if (!rawPulse) {
+    return null;
+  }
+
+  const rawHome = readPayloadNumber(rawPulse.home);
+  const rawDraw = readPayloadNumber(rawPulse.draw);
+  const rawAway = readPayloadNumber(rawPulse.away);
+
+  if (rawHome === null || rawDraw === null || rawAway === null) {
+    return null;
+  }
+
+  const normalized = normalizePulseProbabilities(rawHome, rawDraw, rawAway);
+  const liquidityScore = clampNumber(
+    readPayloadNumber(rawPulse.liquidityScore) ??
+      liquidityToTrust(
+        readPayloadNumber(rawPulse.liquidity),
+        readPayloadNumber(rawPulse.volume),
+      ),
+    0,
+    1,
+  );
+  const marketLeader = leadingSide(normalized.home, normalized.draw, normalized.away);
+  const modelLeader = leadingSide(
+    base.homeForecast,
+    base.drawForecast,
+    base.awayForecast,
+  );
+  const sortedMarket = [normalized.home, normalized.draw, normalized.away].sort(
+    (left, right) => right - left,
+  );
+  const marketGap = sortedMarket[0] - sortedMarket[1];
+  const marketStrength = clampNumber(marketGap / 18, 0.2, 1);
+  const trust = liquidityScore * marketStrength;
+  const isThin = liquidityScore < 0.25;
+  const aligned = marketLeader === modelLeader;
+  const confidenceDelta = isThin
+    ? 0
+    : aligned
+      ? Math.round(2 + trust * 8)
+      : -Math.round(2 + trust * 7);
+  const chaosDelta = isThin
+    ? Math.round(1 + marketStrength * 2)
+    : aligned
+      ? -Math.round(1 + trust * 5)
+      : Math.round(2 + trust * 8);
+  const adjustedConfidence = clamp(base.confidence + confidenceDelta, 35, 90);
+  const adjustedChaos = clamp(base.chaos + chaosDelta, 30, 90);
+  const alignment = isThin ? "thin" : aligned ? "aligned" : "split";
+  const source =
+    rawPulse.source === "manual" || rawPulse.source === "polymarket"
+      ? rawPulse.source
+      : "polymarket";
+
+  return {
+    source,
+    capturedAt: readPayloadString(rawPulse.capturedAt),
+    home: normalized.home,
+    draw: normalized.draw,
+    away: normalized.away,
+    liquidityScore: Math.round(liquidityScore * 100) / 100,
+    confidenceDelta,
+    chaosDelta,
+    adjustedConfidence,
+    adjustedChaos,
+    alignment,
+    leader: marketLeader,
+    summary: marketPulseSummary({
+      alignment,
+      leader: marketLeader,
+      homeName: base.homeName,
+      awayName: base.awayName,
+    }),
+  };
+}
+
+function normalizePulseProbabilities(home: number, draw: number, away: number) {
+  const values = [home, draw, away].map((value) =>
+    value <= 1 ? value * 100 : value,
+  );
+  const total = values.reduce((sum, value) => sum + value, 0);
+
+  if (total <= 0) {
+    return { home: 0, draw: 0, away: 0 };
+  }
+
+  const normalizedHome = Math.round((values[0] / total) * 100);
+  const normalizedDraw = Math.round((values[1] / total) * 100);
+  const normalizedAway = clamp(100 - normalizedHome - normalizedDraw, 0, 100);
+
+  return {
+    home: normalizedHome,
+    draw: normalizedDraw,
+    away: normalizedAway,
+  };
+}
+
+function liquidityToTrust(liquidity: number | null, volume: number | null) {
+  const signal = Math.max(liquidity ?? 0, volume ?? 0);
+
+  if (signal <= 0) {
+    return 0.35;
+  }
+
+  return clampNumber(Math.log10(signal + 1) / 5, 0.12, 1);
+}
+
+function leadingSide(
+  home: number,
+  draw: number,
+  away: number,
+): "home" | "draw" | "away" {
+  if (draw >= home && draw >= away) {
+    return "draw";
+  }
+
+  return home >= away ? "home" : "away";
+}
+
+function marketPulseSummary({
+  alignment,
+  leader,
+  homeName,
+  awayName,
+}: {
+  alignment: MarketPulse["alignment"];
+  leader: MarketPulse["leader"];
+  homeName: string;
+  awayName: string;
+}): Record<Language, string> {
+  const leaderLabel =
+    leader === "home" ? homeName : leader === "away" ? awayName : "a draw";
+
+  if (alignment === "thin") {
+    return {
+      en: "Crowd signal is thin, so the Seer barely lets it touch the read.",
+      es: "La señal de la gente viene floja, así que el Vidente apenas la roza.",
+      fr: "Le signal du public est léger, donc le voyant le laisse à peine peser.",
+    };
+  }
+
+  if (alignment === "aligned") {
+    return {
+      en: `Crowd signal leans ${leaderLabel}; it backs the Seer without changing the pick.`,
+      es: `La señal de la gente se inclina por ${leaderLabel}; acompaña al Vidente sin cambiar la lectura.`,
+      fr: `Le signal du public penche vers ${leaderLabel}; il soutient le voyant sans changer la lecture.`,
+    };
+  }
+
+  return {
+    en: `Crowd signal leans ${leaderLabel}; the Seer keeps the pick, but chaos gets louder.`,
+    es: `La señal de la gente se inclina por ${leaderLabel}; el Vidente mantiene la lectura, pero sube el caos.`,
+    fr: `Le signal du public penche vers ${leaderLabel}; le voyant garde sa lecture, mais le chaos monte.`,
   };
 }
 
@@ -3009,7 +3331,10 @@ function readForecastFingerprint(
 }
 
 function parseJsonPayload(
-  payload: ExistingForecastLockRow["source_payload"] | undefined,
+  payload:
+    | ExistingForecastLockRow["source_payload"]
+    | DatabaseMatchRow["source_payload"]
+    | undefined,
 ) {
   if (!payload) {
     return null;
