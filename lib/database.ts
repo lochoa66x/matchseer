@@ -1210,7 +1210,7 @@ async function seedKeyPlayerWatchlist(sql: NeonQuery) {
         ${player.spark},
         ${player.importance},
         'available',
-        'Availability feed pending',
+        null,
         0,
         0,
         false,
@@ -1234,7 +1234,7 @@ async function seedKeyPlayerWatchlist(sql: NeonQuery) {
         age = excluded.age,
         is_key_player = excluded.is_key_player,
         note = excluded.note,
-        availability_note = coalesce(players.availability_note, excluded.availability_note);
+        availability_note = nullif(players.availability_note, 'Availability feed pending');
     `;
   }
 }
@@ -1284,7 +1284,7 @@ function toModelControlPlayer(row: ModelControlPlayerRow): ModelControlPlayer {
     spark: toNumber(row.spark_rating),
     importance: toNumber(row.importance),
     availabilityStatus: row.availability_status ?? "available",
-    availabilityNote: row.availability_note,
+    availabilityNote: normalizeStoredAvailabilityNote(row.availability_note),
     yellowCards: toNumber(row.yellow_cards),
     redCards: toNumber(row.red_cards),
     isSuspended: Boolean(row.is_suspended),
@@ -1313,7 +1313,7 @@ function toModelControlForecastVersion(
     homeWin: toNumber(row.home_win_probability),
     draw: toNumber(row.draw_probability),
     awayWin: toNumber(row.away_win_probability),
-    projected: row.projected_score ?? "Pending",
+    projected: normalizeProjectedScore(row.projected_score),
     confidence: toNumber(row.confidence),
     chaos: toNumber(row.chaos),
     modelVersion: readPayloadString(payload?.modelVersion) ?? "unknown-model",
@@ -1378,6 +1378,22 @@ function normalizeAvailabilityNote(value: unknown) {
   const trimmed = value.replace(/\s+/g, " ").trim();
 
   return trimmed ? trimmed.slice(0, 180) : null;
+}
+
+function normalizeStoredAvailabilityNote(value: string | null) {
+  if (value === "Availability feed pending") {
+    return null;
+  }
+
+  return value;
+}
+
+function normalizeProjectedScore(value: string | null | undefined) {
+  if (!value) {
+    return "Pending";
+  }
+
+  return value.split("/")[0]?.trim() || "Pending";
 }
 
 function clampInteger(value: unknown, min: number, max: number) {
@@ -2758,8 +2774,9 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const weatherMood = toLanguageRecord(
     row.weather_summary ?? "Weather data pending.",
   );
-  const projectedScore =
-    publishedProjectedScoreCorrections[row.id] ?? row.projected_score ?? "Pending";
+  const projectedScore = normalizeProjectedScore(
+    publishedProjectedScoreCorrections[row.id] ?? row.projected_score,
+  );
 
   return {
     id: row.id,
@@ -3957,7 +3974,7 @@ function projectedScoreline({
   if (isDrawish) {
     const drawGoals = homeXg + awayXg >= 2.9 ? 2 : homeXg + awayXg <= 1.7 ? 0 : 1;
 
-    return drawGoals === 1 ? "1-1" : `${drawGoals}-${drawGoals} / 1-1`;
+    return `${drawGoals}-${drawGoals}`;
   }
 
   if (probabilityGap >= 14 && homeGoals <= awayGoals) {
@@ -3976,17 +3993,7 @@ function projectedScoreline({
     homeGoals -= 1;
   }
 
-  const primary = `${homeGoals}-${awayGoals}`;
-  const alternate =
-    Math.abs(probabilityGap) < 18
-      ? probabilityGap > 0
-        ? `${Math.max(homeGoals - 1, 1)}-${awayGoals}`
-        : `${homeGoals}-${Math.max(awayGoals - 1, 1)}`
-      : probabilityGap > 0
-        ? `${Math.max(homeGoals, 2)}-${Math.max(awayGoals, 1)}`
-        : `${Math.max(homeGoals, 1)}-${Math.max(awayGoals, 2)}`;
-
-  return alternate === primary ? primary : `${primary} / ${alternate}`;
+  return `${homeGoals}-${awayGoals}`;
 }
 
 function goalsFromXg(xg: number) {
