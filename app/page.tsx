@@ -1542,10 +1542,6 @@ function displayChaos(match: Match) {
   return match.forecast.marketPulse?.adjustedChaos ?? match.forecast.chaos;
 }
 
-function formatSigned(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
 function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
   return [
     {
@@ -2688,13 +2684,7 @@ function ForecastView({
               : t.pendingMode}
           </strong>
           {marketPulse ? (
-            <>
-              <em>
-                {t.confidence} {formatSigned(marketPulse.confidenceDelta)} ·{" "}
-                {t.chaos} {formatSigned(marketPulse.chaosDelta)}
-              </em>
-              <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
-            </>
+            <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
           ) : (
             <p>{t.marketPending}</p>
           )}
