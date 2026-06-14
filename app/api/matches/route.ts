@@ -8,7 +8,7 @@ import { fetchFootballDataSnapshot } from "../../../lib/providers/football-data"
 
 export const dynamic = "force-dynamic";
 
-const LIVE_SYNC_INTERVAL_MS = 55_000;
+const LIVE_SYNC_INTERVAL_MS = 12_000;
 
 let lastPublicLiveSyncAt = 0;
 let publicLiveSyncPromise: Promise<unknown> | null = null;

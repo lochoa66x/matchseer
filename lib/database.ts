@@ -1,4 +1,9 @@
-import type { Language, MatchStatus, MatchSummary } from "./domain";
+import type {
+  ForecastInterpretation,
+  Language,
+  MatchStatus,
+  MatchSummary,
+} from "./domain";
 import type {
   FootballDataSnapshot,
   FootballDataTeam,
@@ -1011,6 +1016,70 @@ export async function recordAiRequestAudit({
     return true;
   } catch (error) {
     console.error("MatchSeer AI audit write failed", error);
+    return false;
+  }
+}
+
+export async function saveForecastInterpretation({
+  matchId,
+  interpretation,
+}: {
+  matchId: string;
+  interpretation: ForecastInterpretation;
+}) {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    return false;
+  }
+
+  try {
+    const rows = await connection.sql`
+      insert into forecast_interpretations (
+        forecast_id,
+        language,
+        headline,
+        summary,
+        tone_line,
+        missing_data_notes,
+        disclaimer
+      )
+      values (
+        (
+          select forecasts.id
+          from forecasts
+          join matches on matches.id = forecasts.match_id
+          where matches.external_id = ${matchId}
+          order by forecasts.version desc, forecasts.created_at desc
+          limit 1
+        ),
+        ${interpretation.language},
+        ${interpretation.headline},
+        ${interpretation.summary},
+        ${interpretation.toneLine},
+        coalesce(
+          (
+            select array_agg(note)
+            from jsonb_array_elements_text(
+              ${JSON.stringify(interpretation.missingDataNotes)}::jsonb
+            ) as notes(note)
+          ),
+          array[]::text[]
+        ),
+        ${interpretation.disclaimer}
+      )
+      on conflict (forecast_id, language) do update set
+        headline = excluded.headline,
+        summary = excluded.summary,
+        tone_line = excluded.tone_line,
+        missing_data_notes = excluded.missing_data_notes,
+        disclaimer = excluded.disclaimer
+      returning id;
+    `;
+
+    return rows.length > 0;
+  } catch (error) {
+    console.error("MatchSeer forecast interpretation save failed", error);
     return false;
   }
 }

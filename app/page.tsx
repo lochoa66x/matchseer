@@ -27,7 +27,7 @@ import type {
   TeamRating as Team,
 } from "../lib/domain";
 
-type Tab = "forecast" | "teams" | "players" | "weather";
+type Tab = "forecast" | "players";
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
@@ -74,6 +74,9 @@ type OracleResponse = {
   interpretation: ForecastInterpretation;
 };
 
+const collapsedReceiptCount = 4;
+const liveRefreshIntervalMs = 12_000;
+
 const copy = {
   en: {
     matchday: "Matchday forecast",
@@ -84,7 +87,7 @@ const copy = {
     noBetting: "No betting energy",
     realStats: "Real stats",
     seerHub: "Seer command center",
-    supportingDetails: "Supporting details",
+    supportingDetails: "Match intelligence",
     today: "Today",
     next: "Next",
     all: "All",
@@ -106,7 +109,7 @@ const copy = {
     exactScores: "Exact scores",
     publishedReads: "Published reads",
     modelSurvival: "Model hit rate",
-    latestReceipts: "Latest receipts",
+    latestReceipts: "All receipts",
     waitingForFinals: "Waiting for final whistles",
     called: "Model forecast",
     finished: "Finished",
@@ -116,6 +119,8 @@ const copy = {
     liveReview: "Live check",
     awaitingResult: "Awaiting result",
     scoreboardEmpty: "Receipts wake up as soon as final scores arrive.",
+    showAllReceipts: "Show all receipts",
+    hideReceipts: "Show fewer receipts",
     quickRead: "Quick read",
     seerLean: "Seer lean",
     tightRead: "Tight read",
@@ -123,7 +128,7 @@ const copy = {
     strongSignal: "Strong signal",
     liveSwing: "Live swing",
     finalRead: "Final read",
-    forecast: "Forecast",
+    forecast: "Match read",
     teams: "Teams",
     players: "Players",
     weather: "Weather",
@@ -145,6 +150,11 @@ const copy = {
     reading: "Reading",
     freshRead: "Fresh read",
     seededRead: "Early signal",
+    savedRead: "Saved read",
+    finalReceipt: "Final receipt locked",
+    noReplay: "Completed games cannot be re-read.",
+    actual: "Actual",
+    matchContext: "Match context",
     oracleError: "The Seer blinked. Try again.",
     pendingMode: "Live data pending",
     fallbackMode: "Live data pending",
@@ -196,7 +206,7 @@ const copy = {
     noBetting: "Cero energía de apuestas",
     realStats: "Datos reales",
     seerHub: "Centro del Vidente",
-    supportingDetails: "Detalles de apoyo",
+    supportingDetails: "Inteligencia del partido",
     today: "Hoy",
     next: "Siguiente",
     all: "Todos",
@@ -218,7 +228,7 @@ const copy = {
     exactScores: "Marcadores exactos",
     publishedReads: "Lecturas publicadas",
     modelSurvival: "Acierto del modelo",
-    latestReceipts: "Últimos recibos",
+    latestReceipts: "Todos los recibos",
     waitingForFinals: "Esperando finales",
     called: "Pronóstico del modelo",
     finished: "Terminó",
@@ -228,6 +238,8 @@ const copy = {
     liveReview: "Chequeo en vivo",
     awaitingResult: "Esperando resultado",
     scoreboardEmpty: "Los recibos despiertan cuando llegan marcadores finales.",
+    showAllReceipts: "Ver todos los recibos",
+    hideReceipts: "Ver menos recibos",
     quickRead: "Lectura rápida",
     seerLean: "Señal vidente",
     tightRead: "Lectura cerrada",
@@ -235,7 +247,7 @@ const copy = {
     strongSignal: "Señal fuerte",
     liveSwing: "Giro en vivo",
     finalRead: "Lectura final",
-    forecast: "Pronóstico",
+    forecast: "Lectura",
     teams: "Equipos",
     players: "Jugadores",
     weather: "Clima",
@@ -257,6 +269,11 @@ const copy = {
     reading: "Leyendo",
     freshRead: "Lectura nueva",
     seededRead: "Señal inicial",
+    savedRead: "Lectura guardada",
+    finalReceipt: "Recibo final fijo",
+    noReplay: "Los partidos terminados no se pueden volver a leer.",
+    actual: "Real",
+    matchContext: "Contexto del partido",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
     pendingMode: "Datos reales pendientes",
     fallbackMode: "Datos reales pendientes",
@@ -308,7 +325,7 @@ const copy = {
     noBetting: "Zéro énergie pari",
     realStats: "Vraies stats",
     seerHub: "Centre du voyant",
-    supportingDetails: "Détails d’appui",
+    supportingDetails: "Lecture du match",
     today: "Aujourd’hui",
     next: "Prochain",
     all: "Tous",
@@ -330,7 +347,7 @@ const copy = {
     exactScores: "Scores exacts",
     publishedReads: "Lectures publiées",
     modelSurvival: "Taux du modèle",
-    latestReceipts: "Derniers reçus",
+    latestReceipts: "Tous les reçus",
     waitingForFinals: "En attente des scores finaux",
     called: "Prévision du modèle",
     finished: "Terminé",
@@ -340,6 +357,8 @@ const copy = {
     liveReview: "Contrôle en direct",
     awaitingResult: "Résultat attendu",
     scoreboardEmpty: "Les reçus s’activent dès que les scores finaux arrivent.",
+    showAllReceipts: "Voir tous les reçus",
+    hideReceipts: "Voir moins de reçus",
     quickRead: "Lecture rapide",
     seerLean: "Signal voyant",
     tightRead: "Lecture serrée",
@@ -347,7 +366,7 @@ const copy = {
     strongSignal: "Signal fort",
     liveSwing: "Virage en direct",
     finalRead: "Lecture finale",
-    forecast: "Prévision",
+    forecast: "Lecture",
     teams: "Équipes",
     players: "Joueurs",
     weather: "Météo",
@@ -369,6 +388,11 @@ const copy = {
     reading: "Lecture",
     freshRead: "Lecture fraîche",
     seededRead: "Signal précoce",
+    savedRead: "Lecture enregistrée",
+    finalReceipt: "Reçu final verrouillé",
+    noReplay: "Les matchs terminés ne peuvent pas être relus.",
+    actual: "Réel",
+    matchContext: "Contexte du match",
     oracleError: "Le voyant a cligné. Réessaie.",
     pendingMode: "Données réelles en attente",
     fallbackMode: "Données réelles en attente",
@@ -459,8 +483,15 @@ export default function Home() {
 
   useEffect(() => {
     let ignore = false;
+    let loadingMatches = false;
 
     async function loadMatches(refreshLiveData = false) {
+      if (loadingMatches) {
+        return;
+      }
+
+      loadingMatches = true;
+
       try {
         const response = await fetch(
           refreshLiveData ? "/api/matches?refresh=live" : "/api/matches",
@@ -490,17 +521,27 @@ export default function Home() {
           setMatches([]);
           setActiveMatchId("");
         }
+      } finally {
+        loadingMatches = false;
       }
     }
 
-    void loadMatches();
+    void loadMatches(true);
     const liveRefresh = window.setInterval(() => {
       void loadMatches(true);
-    }, 60_000);
+    }, liveRefreshIntervalMs);
+    const refreshOnFocus = () => {
+      if (!document.hidden) {
+        void loadMatches(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", refreshOnFocus);
 
     return () => {
       ignore = true;
       window.clearInterval(liveRefresh);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
     };
   }, []);
 
@@ -513,13 +554,12 @@ export default function Home() {
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
   const detailTabs = useMemo<Tab[]>(() => {
-    const tabs: Tab[] = ["forecast", "teams"];
+    const tabs: Tab[] = ["forecast"];
 
     if ((activeMatch?.players.length ?? 0) > 0) {
       tabs.push("players");
     }
 
-    tabs.push("weather");
     return tabs;
   }, [activeMatch?.players.length]);
   const todayKey = useMemo(() => toDateKey(new Date()), []);
@@ -711,6 +751,8 @@ export default function Home() {
   }
 
   const activeAccents = matchAccentColors(activeMatch);
+  const activeMatchIsFinal = activeMatch.status === "Final";
+  const activeReceipt = buildForecastReceipt(activeMatch, language, t);
 
   return (
     <main className="app-shell">
@@ -899,22 +941,30 @@ export default function Home() {
           </div>
 
           <div className="seer-action-row">
-            <button
-              className="seer-primary-button"
-              disabled={activeOracleStatus === "loading"}
-              onClick={() => {
-                setActiveTab("forecast");
-                void requestOracleRead(activeMatch.id, language);
-              }}
-              type="button"
-            >
-              {activeOracleStatus === "loading" ? (
-                <LoaderCircle className="spin-icon" size={17} />
-              ) : (
-                <Sparkles size={17} />
-              )}
-              {activeOracleStatus === "loading" ? t.reading : t.askSeer}
-            </button>
+            {activeMatchIsFinal ? (
+              <div className="seer-locked-result" role="status">
+                <Check size={17} />
+                <span>{t.finalReceipt}</span>
+                <strong>{activeReceipt.shortLabel}</strong>
+              </div>
+            ) : (
+              <button
+                className="seer-primary-button"
+                disabled={activeOracleStatus === "loading"}
+                onClick={() => {
+                  setActiveTab("forecast");
+                  void requestOracleRead(activeMatch.id, language);
+                }}
+                type="button"
+              >
+                {activeOracleStatus === "loading" ? (
+                  <LoaderCircle className="spin-icon" size={17} />
+                ) : (
+                  <Sparkles size={17} />
+                )}
+                {activeOracleStatus === "loading" ? t.reading : t.askSeer}
+              </button>
+            )}
             <button className="share-button seer-share-button" onClick={() => shareMatch(activeMatch)} type="button">
               {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
               {shareStatus === "copied" && t.copied}
@@ -968,9 +1018,7 @@ export default function Home() {
                 type="button"
               >
                 {tab === "forecast" && <Sparkles size={16} />}
-                {tab === "teams" && <UsersRound size={16} />}
                 {tab === "players" && <Zap size={16} />}
-                {tab === "weather" && <CloudSun size={16} />}
                 {t[tab]}
               </button>
             ))}
@@ -984,11 +1032,10 @@ export default function Home() {
               oracleRead={activeOracleRead}
               oracleStatus={activeOracleStatus}
               onAskSeer={() => requestOracleRead(activeMatch.id, language)}
+              showAsk={!activeMatchIsFinal}
             />
           )}
-          {activeTab === "teams" && <TeamsView match={activeMatch} t={t} />}
           {activeTab === "players" && <PlayersView match={activeMatch} t={t} />}
-          {activeTab === "weather" && <WeatherView match={activeMatch} t={t} language={language} />}
         </section>
       </section>
 
@@ -1515,8 +1562,8 @@ function buildSeerScoreboard(
   t: Record<string, string>,
 ): SeerScoreboard {
   const receipts = matches
+    .filter((match) => match.status === "Final" && Boolean(parseScoreline(match.score)))
     .map((match) => buildForecastReceipt(match, language, t))
-    .filter((receipt) => receipt.outcome !== "pending")
     .sort((left, right) => receiptSortTime(right.match) - receiptSortTime(left.match));
   const reviewedReceipts = receipts.filter((receipt) =>
     receipt.outcome === "exact" || receipt.outcome === "hit" || receipt.outcome === "miss",
@@ -1534,7 +1581,7 @@ function buildSeerScoreboard(
     winnerHits,
     exactHits,
     survivalRate: reviewed > 0 ? Math.round((winnerHits / reviewed) * 100) : 0,
-    receipts: receipts.slice(0, 4),
+    receipts: reviewedReceipts,
   };
 }
 
@@ -1543,18 +1590,30 @@ function buildForecastReceipt(
   language: Language,
   t: Record<string, string>,
 ): ForecastReceipt {
-  const predictedSide = getProjectedForecastSide(match);
-  const predictedLabel = sideLabel(match, predictedSide);
+  const primaryPredictedSide = getForecastSide(match);
   const projectedOptions = parseProjectedScores(match.forecast.projected);
-  const modelLabel = modelForecastLabel(match, predictedSide, projectedOptions);
+  const projectedSides = projectedOptions.map((score) => {
+    const scoreline = parseScoreline(score);
+    return scoreline ? getScoreSide(scoreline.home, scoreline.away) : null;
+  });
+  const forecastSignals = uniqueForecastSides([
+    primaryPredictedSide,
+    ...projectedSides,
+  ]);
+  const initialModelLabel = modelForecastLabel(
+    match,
+    primaryPredictedSide,
+    projectedOptions,
+  );
+  const initialPredictedLabel = sideLabel(match, primaryPredictedSide);
 
   if (match.status === "Live") {
     return {
       match,
       outcome: "live",
-      predictedSide,
-      predictedLabel,
-      modelLabel,
+      predictedSide: primaryPredictedSide,
+      predictedLabel: initialPredictedLabel,
+      modelLabel: initialModelLabel,
       projectedOptions,
       summary: receiptSummary("live", match, language),
       shortLabel: t.liveReview,
@@ -1567,9 +1626,9 @@ function buildForecastReceipt(
     return {
       match,
       outcome: "pending",
-      predictedSide,
-      predictedLabel,
-      modelLabel,
+      predictedSide: primaryPredictedSide,
+      predictedLabel: initialPredictedLabel,
+      modelLabel: initialModelLabel,
       projectedOptions,
       summary: receiptSummary("pending", match, language),
       shortLabel: t.awaitingResult,
@@ -1578,9 +1637,12 @@ function buildForecastReceipt(
 
   const actualSide = getScoreSide(finalScore.home, finalScore.away);
   const exactScore = `${finalScore.home}-${finalScore.away}`;
-  const exact = projectedOptions[0] === exactScore;
-  const winnerHit = predictedSide === actualSide;
+  const exact = projectedOptions.includes(exactScore);
+  const winnerHit = forecastSignals.includes(actualSide);
   const outcome: ForecastReceiptOutcome = exact ? "exact" : winnerHit ? "hit" : "miss";
+  const predictedSide = winnerHit ? actualSide : primaryPredictedSide;
+  const predictedLabel = sideLabel(match, predictedSide);
+  const modelLabel = modelForecastLabel(match, predictedSide, projectedOptions);
 
   return {
     match,
@@ -1605,14 +1667,16 @@ function getForecastSide(match: Match): ForecastSide {
   ].sort((left, right) => right.value - left.value)[0].side;
 }
 
-function getProjectedForecastSide(match: Match): ForecastSide {
-  const primaryProjection = parsePrimaryProjectedScore(match.forecast.projected);
+function uniqueForecastSides(sides: Array<ForecastSide | null>) {
+  const unique: ForecastSide[] = [];
 
-  if (primaryProjection) {
-    return getScoreSide(primaryProjection.home, primaryProjection.away);
+  for (const side of sides) {
+    if (side && !unique.includes(side)) {
+      unique.push(side);
+    }
   }
 
-  return getForecastSide(match);
+  return unique;
 }
 
 function sideLabel(match: Match, side: ForecastSide) {
@@ -1635,7 +1699,15 @@ function modelForecastLabel(
   const score = projectedOptions[0];
   const label = sideLabel(match, side);
 
-  return score ? `${label} ${score}` : label;
+  if (!score) {
+    return label;
+  }
+
+  const scoreSide = parseScoreline(score);
+
+  return scoreSide && getScoreSide(scoreSide.home, scoreSide.away) === side
+    ? `${label} ${score}`
+    : label;
 }
 
 function sideName(match: Match, side: ForecastSide, language: Language) {
@@ -1713,7 +1785,7 @@ function receiptSortTime(match: Match) {
 
 function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language: Language) {
   const score = parseScoreline(match.score);
-  const predicted = getProjectedForecastSide(match);
+  const predicted = getForecastSide(match);
   const actual = score ? getScoreSide(score.home, score.away) : undefined;
   const predictedName = sideName(match, predicted, language);
   const actualName = actual ? sideName(match, actual, language) : "";
@@ -1848,6 +1920,14 @@ function SeerScoreboardBoard({
   onSelectMatch: (matchId: string) => void;
   t: Record<string, string>;
 }) {
+  const [showAllReceipts, setShowAllReceipts] = useState(false);
+  const visibleReceipts = showAllReceipts
+    ? scoreboard.receipts
+    : scoreboard.receipts.slice(0, collapsedReceiptCount);
+  const hiddenReceiptCount = Math.max(
+    scoreboard.receipts.length - visibleReceipts.length,
+    0,
+  );
   const metrics = [
     {
       label: t.reviewedMatches,
@@ -1897,7 +1977,7 @@ function SeerScoreboardBoard({
         {scoreboard.receipts.length === 0 && (
           <div className="receipt-empty">{t.scoreboardEmpty}</div>
         )}
-        {scoreboard.receipts.map((receipt) => (
+        {visibleReceipts.map((receipt) => (
           <button
             className={cx("receipt-card", receipt.outcome)}
             key={receipt.match.id}
@@ -1934,6 +2014,19 @@ function SeerScoreboardBoard({
             <p>{receipt.summary}</p>
           </button>
         ))}
+        {scoreboard.receipts.length > collapsedReceiptCount && (
+          <button
+            aria-expanded={showAllReceipts}
+            className="receipt-expand-button"
+            onClick={() => setShowAllReceipts((current) => !current)}
+            type="button"
+          >
+            {showAllReceipts ? t.hideReceipts : t.showAllReceipts}
+            {!showAllReceipts && hiddenReceiptCount > 0 && (
+              <span>{hiddenReceiptCount}</span>
+            )}
+          </button>
+        )}
       </div>
     </section>
   );
@@ -2331,6 +2424,7 @@ const fifaCodeToFlagCode: Record<string, string> = {
   SUI: "ch",
   SWE: "se",
   TUN: "tn",
+  TUR: "tr",
   URU: "uy",
   USA: "us",
   WAL: "gb-wls",
@@ -2378,6 +2472,9 @@ const teamNameToFlagCode: Record<string, string> = {
   sweden: "se",
   switzerland: "ch",
   tunisia: "tn",
+  turkey: "tr",
+  turkiye: "tr",
+  türkiye: "tr",
   uruguay: "uy",
   usa: "us",
   "united states": "us",
@@ -2405,7 +2502,13 @@ function ForecastView({
 }) {
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
-  const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
+  const isFinal = match.status === "Final";
+  const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
+  const readLabel = isFinal
+    ? t.savedRead
+    : oracleRead?.source === "openai"
+      ? t.freshRead
+      : t.seededRead;
   const accents = matchAccentColors(match);
 
   return (
@@ -2417,10 +2520,16 @@ function ForecastView({
             <span>{t.signal}</span>
           </div>
           <div className="oracle-actions">
-            <span className={cx("oracle-source", oracleRead?.source === "openai" && "fresh")}>
+            <span
+              className={cx(
+                "oracle-source",
+                oracleRead?.source === "openai" && "fresh",
+                isFinal && "locked",
+              )}
+            >
               {readLabel}
             </span>
-            {showAsk && (
+            {showAsk && !isFinal && (
               <button
                 className="oracle-button"
                 disabled={oracleStatus === "loading"}
@@ -2439,6 +2548,23 @@ function ForecastView({
         </div>
         {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}
         <p className="seer-line">{signalCopy}</p>
+        {receipt && (
+          <div className="final-receipt-panel" role="status">
+            <div className="final-receipt-grid">
+              <span>
+                <small>{t.called}</small>
+                <strong>{receipt.modelLabel}</strong>
+              </span>
+              <span>
+                <small>{t.actual}</small>
+                <strong>{receipt.finalScore ?? match.score ?? t.final}</strong>
+              </span>
+              <em className={cx("receipt-chip", receipt.outcome)}>{receipt.shortLabel}</em>
+            </div>
+            <p>{receipt.summary}</p>
+            <small>{t.noReplay}</small>
+          </div>
+        )}
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
         <TensionBar match={match} accents={accents} />
         <div className="metric-row">
@@ -2446,6 +2572,10 @@ function ForecastView({
           <Meter label={t.chaos} value={match.forecast.chaos} hot />
         </div>
         <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
+      </div>
+      <div className="match-insight-stack">
+        <TeamsView match={match} t={t} />
+        <WeatherView match={match} t={t} language={language} />
       </div>
     </div>
   );

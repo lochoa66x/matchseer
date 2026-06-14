@@ -4996,6 +4996,34 @@ body {
   font-weight: 850;
 }
 
+.receipt-expand-button {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #080b12;
+  background: linear-gradient(100deg, #f7c51d, #ff6a3d);
+  border: 1px solid rgba(247, 197, 29, 0.34);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(247, 197, 29, 0.1);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.receipt-expand-button span {
+  display: inline-grid;
+  min-width: 24px;
+  min-height: 24px;
+  place-items: center;
+  color: #fff;
+  background: rgba(8, 11, 18, 0.8);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
 @media (max-width: 1180px) {
   .hero-matchroom {
     grid-template-columns: 1fr;
@@ -5601,5 +5629,200 @@ body {
   .cup-analysis-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+}
+
+/* Compact match read: forecast, teams, weather, and result in one panel. */
+.content-grid-support .forecast-layout {
+  grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
+  gap: 14px;
+  margin: 0;
+}
+
+.match-insight-stack {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+}
+
+.match-insight-stack .comparison-card,
+.match-insight-stack .weather-grid {
+  margin: 0;
+}
+
+.match-insight-stack .comparison-card {
+  padding: 14px;
+}
+
+.match-insight-stack .team-comparison-header {
+  margin: 12px 0;
+}
+
+.match-insight-stack .comparison-rows {
+  gap: 10px;
+}
+
+.match-insight-stack .comparison-row {
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 9px;
+}
+
+.match-insight-stack .comparison-row span {
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+}
+
+.match-insight-stack .team-badge strong {
+  font-size: 0.9rem;
+}
+
+.match-insight-stack .weather-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.match-insight-stack .weather-card {
+  min-height: 88px;
+  padding: 12px;
+}
+
+.match-insight-stack .weather-card.wide {
+  grid-column: span 2;
+  min-height: 92px;
+}
+
+.match-insight-stack .weather-card svg {
+  width: 18px;
+  height: 18px;
+}
+
+.match-insight-stack .weather-card span {
+  font-size: 0.72rem;
+}
+
+.match-insight-stack .weather-card strong {
+  font-size: 1rem;
+}
+
+.seer-locked-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 9px;
+  min-height: 48px;
+  align-items: center;
+  padding: 10px 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(143, 160, 189, 0.2);
+  border-radius: 10px;
+}
+
+.seer-locked-result svg {
+  grid-row: span 2;
+  color: #6ee7b7;
+}
+
+.seer-locked-result span,
+.seer-locked-result strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seer-locked-result span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.seer-locked-result strong {
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.oracle-source.locked {
+  color: #080b12;
+  background: #6ee7b7;
+  border-color: rgba(110, 231, 183, 0.5);
+}
+
+.final-receipt-panel {
+  display: grid;
+  gap: 9px;
+  margin: 12px 0 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 10px;
+}
+
+.final-receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.final-receipt-grid span {
+  min-width: 0;
+}
+
+.final-receipt-grid small,
+.final-receipt-panel > small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.final-receipt-grid strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.final-receipt-grid .receipt-chip {
+  justify-self: end;
+}
+
+.final-receipt-panel p {
+  margin: 0;
+  color: #dce6f7;
+  font-size: 0.86rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+@media (max-width: 980px) {
+  .content-grid-support .forecast-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .final-receipt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .final-receipt-grid .receipt-chip {
+    justify-self: start;
+  }
+
+  .match-insight-stack .weather-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .match-insight-stack .weather-card.wide {
+    grid-column: auto;
   }
 }

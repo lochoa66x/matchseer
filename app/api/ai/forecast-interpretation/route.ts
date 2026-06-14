@@ -7,7 +7,11 @@ import {
   type ForecastInterpretationRequest,
   type MatchSummary,
 } from "../../../../lib/domain";
-import { getMatch, recordAiRequestAudit } from "../../../../lib/database";
+import {
+  getMatch,
+  recordAiRequestAudit,
+  saveForecastInterpretation,
+} from "../../../../lib/database";
 
 const disclaimer =
   "Forecasts are for entertainment and sports analysis only. No betting advice.";
@@ -56,6 +60,7 @@ export async function POST(request: Request) {
   }
 
   const language = body.language;
+  const model = process.env.OPENAI_MODEL ?? "gpt-5.5";
   const officialModelCall = createOfficialModelCall(match);
   const fallback = createFallbackInterpretation(
     match,
@@ -64,16 +69,38 @@ export async function POST(request: Request) {
     officialModelCall,
   );
 
+  if (match.status === "Final") {
+    await recordAiRequestAudit({
+      matchId: match.id,
+      model,
+      requestPayload: {
+        matchId: match.id,
+        language,
+        reason: "completed-match",
+      },
+      responsePayload: null,
+      status: "blocked-completed-match",
+    });
+
+    return NextResponse.json(
+      {
+        error: "Completed matches cannot be re-read.",
+        reason: "completed-match",
+        interpretation: fallback,
+      },
+      { status: 409 },
+    );
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
       source: "seeded-fallback",
       reason: "missing-openai-api-key",
-      model: process.env.OPENAI_MODEL ?? "gpt-5.5",
+      model,
       interpretation: fallback,
     });
   }
 
-  const model = process.env.OPENAI_MODEL ?? "gpt-5.5";
   const openAiRequest = createOpenAiRequest(
     match,
     language,
@@ -157,11 +184,16 @@ export async function POST(request: Request) {
       responsePayload,
       status: "ok",
     });
+    const saved = await saveForecastInterpretation({
+      matchId: match.id,
+      interpretation,
+    });
 
     return NextResponse.json({
       source: "openai",
       model,
       audited,
+      saved,
       interpretation,
     });
   } catch (error) {
