@@ -1,14 +1,19 @@
 "use client";
 
 import {
+  Activity,
   CloudSun,
   DatabaseZap,
+  Eye,
+  Globe2,
   KeyRound,
   LoaderCircle,
   MapPin,
+  MonitorSmartphone,
   RefreshCcw,
   Save,
   ShieldCheck,
+  UsersRound,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -56,6 +61,49 @@ type MatchesResponse = {
   matches: unknown[];
 };
 
+type TrafficDashboard = {
+  source: string;
+  reason: string;
+  generatedAt: string;
+  windows: {
+    last24h: {
+      views: number;
+      visitors: number;
+    };
+    last7d: {
+      views: number;
+      visitors: number;
+    };
+  };
+  topPaths: Array<{
+    path: string;
+    views: number;
+    visitors: number;
+  }>;
+  topReferrers: Array<{
+    referrer: string;
+    views: number;
+  }>;
+  devices: Array<{
+    device: string;
+    views: number;
+  }>;
+  timeline: Array<{
+    bucket: string;
+    views: number;
+    visitors: number;
+  }>;
+  recent: Array<{
+    occurredAt: string;
+    path: string;
+    referrer: string;
+    device: string;
+    language: string | null;
+    matchId: string | null;
+  }>;
+  error?: string;
+};
+
 type ActionStatus = "idle" | "loading" | "success" | "error";
 
 export default function AdminPage() {
@@ -67,6 +115,7 @@ export default function AdminPage() {
   const [matchesResponse, setMatchesResponse] = useState<MatchesResponse | null>(
     null,
   );
+  const [trafficData, setTrafficData] = useState<TrafficDashboard | null>(null);
   const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>(
     {},
   );
@@ -83,7 +132,7 @@ export default function AdminPage() {
       setSecret(storedSecret);
     }
 
-    void refreshDashboard();
+    void refreshDashboard(storedSecret ?? "");
   }, []);
 
   useEffect(() => {
@@ -119,25 +168,41 @@ export default function AdminPage() {
     },
   ).length;
 
-  async function refreshDashboard() {
+  async function refreshDashboard(adminSecret = secret) {
     setLoadStatus("loading");
 
     try {
-      const [football, weather, candidates, matches] = await Promise.all([
+      const trafficPromise = adminSecret
+        ? fetchJson<TrafficDashboard>("/api/admin/traffic", {
+            headers: {
+              Authorization: `Bearer ${adminSecret}`,
+            },
+          }).catch((error) => ({
+            ...emptyTrafficDashboard(),
+            error: error instanceof Error ? error.message : "Traffic failed.",
+          }))
+        : Promise.resolve<TrafficDashboard | null>(null);
+      const [football, weather, candidates, matches, traffic] = await Promise.all([
         fetchJson<AdminStatus>("/api/admin/sync-football-data"),
         fetchJson<AdminStatus>("/api/admin/sync-weather"),
         fetchJson<VenueCandidatesResponse>("/api/admin/venue-candidates?all=1"),
         fetchJson<MatchesResponse>("/api/matches"),
+        trafficPromise,
       ]);
 
       setFootballStatus(football);
       setWeatherStatus(weather);
       setCandidateData(candidates);
       setMatchesResponse(matches);
+      setTrafficData(traffic);
       setSelectedVenues({});
       setLoadStatus("success");
       setMessageStatus("success");
-      setMessage("Dashboard refreshed.");
+      setMessage(
+        !adminSecret
+          ? "Dashboard refreshed. Add the admin secret to unlock traffic."
+          : "Dashboard refreshed.",
+      );
     } catch (error) {
       setLoadStatus("error");
       setMessageStatus("error");
@@ -309,6 +374,18 @@ export default function AdminPage() {
             matchesResponse?.database?.driver ?? matchesResponse?.reason,
           ].filter(Boolean).join(" · ")}
         />
+        <AdminMetric
+          icon={<Eye size={18} />}
+          label="Views 24h"
+          value={formatNumber(trafficData?.windows.last24h.views ?? 0)}
+          note={`${formatNumber(trafficData?.windows.last7d.views ?? 0)} in 7 days`}
+        />
+        <AdminMetric
+          icon={<UsersRound size={18} />}
+          label="Visitors 24h"
+          value={formatNumber(trafficData?.windows.last24h.visitors ?? 0)}
+          note={`${formatNumber(trafficData?.windows.last7d.visitors ?? 0)} in 7 days`}
+        />
       </section>
 
       <section className="admin-actions">
@@ -349,6 +426,8 @@ export default function AdminPage() {
       </section>
 
       <p className={`admin-message ${messageStatus}`}>{message}</p>
+
+      <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
 
       <section className="admin-panel">
         <div className="admin-table-header">
@@ -422,6 +501,155 @@ export default function AdminPage() {
   );
 }
 
+function TrafficPanel({
+  traffic,
+  hasSecret,
+}: {
+  traffic: TrafficDashboard | null;
+  hasSecret: boolean;
+}) {
+  const ready = hasSecret && traffic && !traffic.error;
+  const maxViews = Math.max(
+    1,
+    ...(traffic?.timeline.map((point) => point.views) ?? [0]),
+  );
+
+  return (
+    <section className="admin-panel traffic-panel">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Traffic monitor</p>
+          <h2>Page pulse</h2>
+        </div>
+        <div className="traffic-generated">
+          <Activity size={16} />
+          {traffic ? formatAdminTime(traffic.generatedAt) : "Locked"}
+        </div>
+      </div>
+
+      {!ready ? (
+        <div className="traffic-empty">
+          <Globe2 size={22} />
+          <strong>{hasSecret ? "Traffic unavailable" : "Traffic locked"}</strong>
+          <span>
+            {traffic?.error ??
+              "Add the admin secret and refresh to load private traffic metrics."}
+          </span>
+        </div>
+      ) : (
+        <>
+          <div className="traffic-overview">
+            <div className="traffic-chart-card">
+              <div className="traffic-chart-head">
+                <span>Last 24 hours</span>
+                <strong>{formatNumber(traffic.windows.last24h.views)} views</strong>
+              </div>
+              <div className="traffic-bars" aria-label="Views by hour">
+                {traffic.timeline.map((point) => (
+                  <span
+                    key={point.bucket}
+                    style={{
+                      height: `${Math.max(6, (point.views / maxViews) * 100)}%`,
+                    }}
+                    title={`${formatTrafficHour(point.bucket)} · ${point.views} views`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <TrafficRankList
+              title="Top pages"
+              items={traffic.topPaths.map((item) => ({
+                label: item.path,
+                value: `${formatNumber(item.views)} views`,
+                note: `${formatNumber(item.visitors)} visitors`,
+              }))}
+              emptyLabel="No page views yet."
+            />
+
+            <TrafficRankList
+              title="Referrers"
+              items={traffic.topReferrers.map((item) => ({
+                label: item.referrer,
+                value: `${formatNumber(item.views)} views`,
+              }))}
+              emptyLabel="No referrers yet."
+            />
+
+            <TrafficRankList
+              title="Devices"
+              items={traffic.devices.map((item) => ({
+                label: item.device,
+                value: `${formatNumber(item.views)} views`,
+              }))}
+              emptyLabel="No devices yet."
+            />
+          </div>
+
+          <div className="traffic-recent">
+            <div className="traffic-section-title">
+              <MonitorSmartphone size={16} />
+              <span>Recent visits</span>
+            </div>
+            <div className="traffic-recent-grid">
+              {traffic.recent.length === 0 ? (
+                <div className="traffic-empty compact">No visits recorded yet.</div>
+              ) : (
+                traffic.recent.map((event) => (
+                  <article className="traffic-visit" key={`${event.occurredAt}-${event.path}`}>
+                    <strong>{event.path}</strong>
+                    <span>
+                      {formatAdminTime(event.occurredAt)} · {event.device}
+                      {event.language ? ` · ${event.language}` : ""}
+                    </span>
+                    <em>{event.referrer}</em>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function TrafficRankList({
+  title,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  items: Array<{
+    label: string;
+    value: string;
+    note?: string;
+  }>;
+  emptyLabel: string;
+}) {
+  return (
+    <div className="traffic-rank-card">
+      <div className="traffic-section-title">
+        <Globe2 size={16} />
+        <span>{title}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="admin-muted">{emptyLabel}</p>
+      ) : (
+        <div className="traffic-rank-list">
+          {items.map((item) => (
+            <div className="traffic-rank-row" key={`${title}-${item.label}`}>
+              <strong>{item.label}</strong>
+              <span>{item.value}</span>
+              {item.note && <em>{item.note}</em>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminMetric({
   icon,
   label,
@@ -443,8 +671,8 @@ function AdminMetric({
   );
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { cache: "no-store" });
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { ...init, cache: "no-store" });
   const payload = await response.json();
 
   if (!response.ok) {
@@ -452,6 +680,46 @@ async function fetchJson<T>(path: string): Promise<T> {
   }
 
   return payload as T;
+}
+
+function emptyTrafficDashboard(): TrafficDashboard {
+  return {
+    source: "database-unavailable",
+    reason: "database-query-failed",
+    generatedAt: new Date().toISOString(),
+    windows: {
+      last24h: { views: 0, visitors: 0 },
+      last7d: { views: 0, visitors: 0 },
+    },
+    topPaths: [],
+    topReferrers: [],
+    devices: [],
+    timeline: [],
+    recent: [],
+  };
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatAdminTime(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Toronto",
+  }).format(new Date(value));
+}
+
+function formatTrafficHour(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    timeZone: "America/Toronto",
+  }).format(new Date(value));
 }
 
 function summarizePayload(payload: Record<string, unknown>) {

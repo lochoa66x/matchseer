@@ -135,3 +135,27 @@ create table if not exists ai_request_audits (
   status text not null,
   created_at timestamptz not null default now()
 );
+
+create table if not exists traffic_events (
+  id uuid primary key default gen_random_uuid(),
+  occurred_at timestamptz not null default now(),
+  path text not null,
+  referrer text not null default 'Direct',
+  language text,
+  match_id text,
+  visitor_hash text not null,
+  user_agent_hash text,
+  device text not null default 'Desktop',
+  viewport_width integer,
+  viewport_height integer,
+  timezone text
+);
+
+create index if not exists traffic_events_occurred_at_idx
+  on traffic_events (occurred_at desc);
+
+create index if not exists traffic_events_path_idx
+  on traffic_events (path);
+
+create index if not exists traffic_events_visitor_hash_idx
+  on traffic_events (visitor_hash);

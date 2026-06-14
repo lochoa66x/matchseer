@@ -480,6 +480,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    trackPageTraffic(language);
+  }, []);
+
+  useEffect(() => {
     let ignore = false;
     let loadingMatches = false;
 
@@ -983,6 +987,67 @@ export default function Home() {
       <SeerLensStrip t={t} />
     </main>
   );
+}
+
+function trackPageTraffic(fallbackLanguage: Language) {
+  const params = new URLSearchParams(window.location.search);
+  const linkedLanguage = params.get("lang");
+  const payload = {
+    path: `${window.location.pathname}${window.location.search}`,
+    referrer: document.referrer,
+    language: isLanguageOption(linkedLanguage) ? linkedLanguage : fallbackLanguage,
+    matchId: params.get("match"),
+    visitorId: getTrafficVisitorId(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+  };
+  const body = JSON.stringify(payload);
+
+  if (navigator.sendBeacon) {
+    const queued = navigator.sendBeacon(
+      "/api/traffic",
+      new Blob([body], { type: "application/json" }),
+    );
+
+    if (queued) {
+      return;
+    }
+  }
+
+  void fetch("/api/traffic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {
+    // Traffic collection should never interrupt the page experience.
+  });
+}
+
+function getTrafficVisitorId() {
+  const storageKey = "matchseer-traffic-visitor";
+
+  try {
+    const stored = window.localStorage.getItem(storageKey);
+
+    if (stored) {
+      return stored;
+    }
+
+    const id =
+      typeof window.crypto?.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    window.localStorage.setItem(storageKey, id);
+
+    return id;
+  } catch {
+    return "storage-unavailable";
+  }
 }
 
 function oracleReadKey(match: Match, language: Language) {

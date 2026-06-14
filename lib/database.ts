@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type {
   ForecastInterpretation,
   Language,
@@ -61,6 +62,68 @@ export type VenueOverrideResult = {
   fetchedAt: string;
 };
 
+export type TrafficEventInput = {
+  path?: unknown;
+  referrer?: unknown;
+  language?: unknown;
+  matchId?: unknown;
+  visitorId?: unknown;
+  timezone?: unknown;
+  viewport?: {
+    width?: unknown;
+    height?: unknown;
+  } | null;
+  userAgent?: string | null;
+  requestHost?: string | null;
+};
+
+export type TrafficRecordResult = {
+  recorded: boolean;
+  reason: "recorded" | DataSourceReason;
+};
+
+export type TrafficDashboard = {
+  source: DataSourceStatus;
+  reason: DataSourceReason;
+  generatedAt: string;
+  windows: {
+    last24h: {
+      views: number;
+      visitors: number;
+    };
+    last7d: {
+      views: number;
+      visitors: number;
+    };
+  };
+  topPaths: Array<{
+    path: string;
+    views: number;
+    visitors: number;
+  }>;
+  topReferrers: Array<{
+    referrer: string;
+    views: number;
+  }>;
+  devices: Array<{
+    device: string;
+    views: number;
+  }>;
+  timeline: Array<{
+    bucket: string;
+    views: number;
+    visitors: number;
+  }>;
+  recent: Array<{
+    occurredAt: string;
+    path: string;
+    referrer: string;
+    device: string;
+    language: string | null;
+    matchId: string | null;
+  }>;
+};
+
 export type VenueMappingCandidate = {
   matchId: string;
   home: string;
@@ -82,6 +145,44 @@ type NeonQuery = (
 
 type NeonModule = {
   neon: (connectionString: string) => NeonQuery;
+};
+
+type TrafficSummaryRow = {
+  views_24h: string | number | null;
+  visitors_24h: string | number | null;
+  views_7d: string | number | null;
+  visitors_7d: string | number | null;
+};
+
+type TrafficPathRow = {
+  path: string;
+  views: string | number;
+  visitors: string | number;
+};
+
+type TrafficReferrerRow = {
+  referrer: string;
+  views: string | number;
+};
+
+type TrafficDeviceRow = {
+  device: string;
+  views: string | number;
+};
+
+type TrafficTimelineRow = {
+  bucket: Date | string;
+  views: string | number;
+  visitors: string | number;
+};
+
+type TrafficRecentRow = {
+  occurred_at: Date | string;
+  path: string;
+  referrer: string;
+  device: string;
+  language: string | null;
+  match_id: string | null;
 };
 
 type DatabaseMatchRow = {
@@ -288,6 +389,381 @@ export async function getMatch(matchId: string) {
     reason: result.reason,
     match: result.matches.find((match) => match.id === matchId) ?? null,
   };
+}
+
+let trafficSchemaPromise: Promise<void> | null = null;
+
+export async function recordTrafficEvent(
+  input: TrafficEventInput,
+): Promise<TrafficRecordResult> {
+  const connection = await getSql();
+
+  if (!connection) {
+    return { recorded: false, reason: "missing-database-url" };
+  }
+
+  if (!connection.sql) {
+    return { recorded: false, reason: connection.reason };
+  }
+
+  const sql = connection.sql;
+
+  try {
+    await ensureTrafficSchema(sql);
+
+    const userAgent = input.userAgent ?? "";
+    const visitorSource =
+      typeof input.visitorId === "string" && input.visitorId.trim()
+        ? input.visitorId.trim()
+        : `${userAgent}:${new Date().toISOString().slice(0, 10)}`;
+    const path = normalizeTrafficPath(input.path);
+    const referrer = normalizeTrafficReferrer(input.referrer, input.requestHost);
+    const device = deviceFromUserAgent(userAgent);
+    const viewport = normalizeViewport(input.viewport);
+    const language =
+      typeof input.language === "string" && input.language.trim()
+        ? input.language.trim().slice(0, 12)
+        : null;
+    const matchId =
+      typeof input.matchId === "string" && input.matchId.trim()
+        ? input.matchId.trim().slice(0, 80)
+        : null;
+    const timezone =
+      typeof input.timezone === "string" && input.timezone.trim()
+        ? input.timezone.trim().slice(0, 80)
+        : null;
+
+    await sql`
+      insert into traffic_events (
+        path,
+        referrer,
+        language,
+        match_id,
+        visitor_hash,
+        user_agent_hash,
+        device,
+        viewport_width,
+        viewport_height,
+        timezone
+      )
+      values (
+        ${path},
+        ${referrer},
+        ${language},
+        ${matchId},
+        ${hashTrafficValue(visitorSource)},
+        ${hashTrafficValue(userAgent)},
+        ${device},
+        ${viewport.width},
+        ${viewport.height},
+        ${timezone}
+      );
+    `;
+
+    return { recorded: true, reason: "database" };
+  } catch (error) {
+    console.error("MatchSeer traffic record failed", error);
+    return { recorded: false, reason: "database-query-failed" };
+  }
+}
+
+export async function getTrafficDashboard(): Promise<TrafficDashboard> {
+  const connection = await getSql();
+  const generatedAt = new Date().toISOString();
+
+  if (!connection) {
+    return emptyTrafficDashboard("missing-database-url", generatedAt);
+  }
+
+  if (!connection.sql) {
+    return emptyTrafficDashboard(connection.reason, generatedAt);
+  }
+
+  const sql = connection.sql;
+
+  try {
+    await ensureTrafficSchema(sql);
+
+    const [summaryRow] = (await sql`
+      select
+        count(*) filter (where occurred_at >= now() - interval '24 hours') as views_24h,
+        count(distinct visitor_hash) filter (where occurred_at >= now() - interval '24 hours') as visitors_24h,
+        count(*) filter (where occurred_at >= now() - interval '7 days') as views_7d,
+        count(distinct visitor_hash) filter (where occurred_at >= now() - interval '7 days') as visitors_7d
+      from traffic_events;
+    `) as unknown as TrafficSummaryRow[];
+    const topPathRows = (await sql`
+      select
+        path,
+        count(*) as views,
+        count(distinct visitor_hash) as visitors
+      from traffic_events
+      where occurred_at >= now() - interval '7 days'
+      group by path
+      order by views desc, path asc
+      limit 8;
+    `) as unknown as TrafficPathRow[];
+    const referrerRows = (await sql`
+      select
+        referrer,
+        count(*) as views
+      from traffic_events
+      where occurred_at >= now() - interval '7 days'
+      group by referrer
+      order by views desc, referrer asc
+      limit 8;
+    `) as unknown as TrafficReferrerRow[];
+    const deviceRows = (await sql`
+      select
+        device,
+        count(*) as views
+      from traffic_events
+      where occurred_at >= now() - interval '7 days'
+      group by device
+      order by views desc, device asc;
+    `) as unknown as TrafficDeviceRow[];
+    const timelineRows = (await sql`
+      select
+        date_trunc('hour', occurred_at) as bucket,
+        count(*) as views,
+        count(distinct visitor_hash) as visitors
+      from traffic_events
+      where occurred_at >= now() - interval '24 hours'
+      group by bucket
+      order by bucket asc;
+    `) as unknown as TrafficTimelineRow[];
+    const recentRows = (await sql`
+      select
+        occurred_at,
+        path,
+        referrer,
+        device,
+        language,
+        match_id
+      from traffic_events
+      order by occurred_at desc
+      limit 12;
+    `) as unknown as TrafficRecentRow[];
+
+    return {
+      source: "database",
+      reason: "database",
+      generatedAt,
+      windows: {
+        last24h: {
+          views: toNumber(summaryRow?.views_24h ?? 0),
+          visitors: toNumber(summaryRow?.visitors_24h ?? 0),
+        },
+        last7d: {
+          views: toNumber(summaryRow?.views_7d ?? 0),
+          visitors: toNumber(summaryRow?.visitors_7d ?? 0),
+        },
+      },
+      topPaths: topPathRows.map((row) => ({
+        path: row.path,
+        views: toNumber(row.views),
+        visitors: toNumber(row.visitors),
+      })),
+      topReferrers: referrerRows.map((row) => ({
+        referrer: row.referrer,
+        views: toNumber(row.views),
+      })),
+      devices: deviceRows.map((row) => ({
+        device: row.device,
+        views: toNumber(row.views),
+      })),
+      timeline: fillTrafficTimeline(timelineRows),
+      recent: recentRows.map((row) => ({
+        occurredAt: new Date(row.occurred_at).toISOString(),
+        path: row.path,
+        referrer: row.referrer,
+        device: row.device,
+        language: row.language,
+        matchId: row.match_id,
+      })),
+    };
+  } catch (error) {
+    console.error("MatchSeer traffic dashboard failed", error);
+    return emptyTrafficDashboard("database-query-failed", generatedAt);
+  }
+}
+
+async function ensureTrafficSchema(sql: NeonQuery) {
+  if (!trafficSchemaPromise) {
+    trafficSchemaPromise = (async () => {
+      await sql`create extension if not exists pgcrypto;`;
+      await sql`
+        create table if not exists traffic_events (
+          id uuid primary key default gen_random_uuid(),
+          occurred_at timestamptz not null default now(),
+          path text not null,
+          referrer text not null default 'Direct',
+          language text,
+          match_id text,
+          visitor_hash text not null,
+          user_agent_hash text,
+          device text not null default 'Desktop',
+          viewport_width integer,
+          viewport_height integer,
+          timezone text
+        );
+      `;
+      await sql`
+        create index if not exists traffic_events_occurred_at_idx
+        on traffic_events (occurred_at desc);
+      `;
+      await sql`
+        create index if not exists traffic_events_path_idx
+        on traffic_events (path);
+      `;
+      await sql`
+        create index if not exists traffic_events_visitor_hash_idx
+        on traffic_events (visitor_hash);
+      `;
+    })().catch((error) => {
+      trafficSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  return trafficSchemaPromise;
+}
+
+function emptyTrafficDashboard(
+  reason: DataSourceReason,
+  generatedAt: string,
+): TrafficDashboard {
+  return {
+    source: "database-unavailable",
+    reason,
+    generatedAt,
+    windows: {
+      last24h: { views: 0, visitors: 0 },
+      last7d: { views: 0, visitors: 0 },
+    },
+    topPaths: [],
+    topReferrers: [],
+    devices: [],
+    timeline: fillTrafficTimeline([]),
+    recent: [],
+  };
+}
+
+function normalizeTrafficPath(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "/";
+  }
+
+  try {
+    const url = new URL(value, "https://matchseer.local");
+    return `${url.pathname}${url.search}`.slice(0, 220) || "/";
+  } catch {
+    return value.startsWith("/") ? value.slice(0, 220) : "/";
+  }
+}
+
+function normalizeTrafficReferrer(value: unknown, requestHost: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "Direct";
+  }
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "");
+    const currentHost =
+      typeof requestHost === "string"
+        ? requestHost.split(":")[0].replace(/^www\./, "")
+        : "";
+
+    if (host === currentHost || host === "matchseer.com") {
+      return "Internal";
+    }
+
+    return host.slice(0, 120);
+  } catch {
+    return value.slice(0, 120);
+  }
+}
+
+function normalizeViewport(value: TrafficEventInput["viewport"]) {
+  const width = toBoundedInteger(value?.width, 0, 10000);
+  const height = toBoundedInteger(value?.height, 0, 10000);
+
+  return {
+    width: width === 0 ? null : width,
+    height: height === 0 ? null : height,
+  };
+}
+
+function toBoundedInteger(value: unknown, min: number, max: number) {
+  const numeric = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return min;
+  }
+
+  return Math.round(Math.min(max, Math.max(min, numeric)));
+}
+
+function deviceFromUserAgent(userAgent: string) {
+  const value = userAgent.toLowerCase();
+
+  if (/bot|crawler|spider|preview|facebookexternalhit|slackbot/.test(value)) {
+    return "Bot";
+  }
+
+  if (/ipad|tablet/.test(value)) {
+    return "Tablet";
+  }
+
+  if (/mobi|android|iphone|ipod/.test(value)) {
+    return "Mobile";
+  }
+
+  return "Desktop";
+}
+
+function hashTrafficValue(value: string) {
+  const salt =
+    process.env.MATCHSEER_TRAFFIC_SALT ??
+    process.env.MATCHSEER_SYNC_SECRET ??
+    "matchseer-traffic";
+
+  return createHash("sha256")
+    .update(`${salt}:${value}`)
+    .digest("hex")
+    .slice(0, 40);
+}
+
+function fillTrafficTimeline(rows: TrafficTimelineRow[]) {
+  const byBucket = new Map(
+    rows.map((row) => [
+      new Date(row.bucket).toISOString().slice(0, 13),
+      {
+        views: toNumber(row.views),
+        visitors: toNumber(row.visitors),
+      },
+    ]),
+  );
+  const points: TrafficDashboard["timeline"] = [];
+  const now = new Date();
+
+  now.setMinutes(0, 0, 0);
+
+  for (let index = 23; index >= 0; index -= 1) {
+    const bucketDate = new Date(now);
+    bucketDate.setHours(now.getHours() - index);
+
+    const key = bucketDate.toISOString().slice(0, 13);
+    const values = byBucket.get(key) ?? { views: 0, visitors: 0 };
+
+    points.push({
+      bucket: bucketDate.toISOString(),
+      ...values,
+    });
+  }
+
+  return points;
 }
 
 export async function syncFootballDataSnapshot(
