@@ -48,6 +48,7 @@ type VenueCandidatesResponse = {
 
 type MatchesResponse = {
   source: string;
+  reason?: string;
   database?: {
     hasDatabaseUrl: boolean;
     driver: string;
@@ -303,7 +304,10 @@ export default function AdminPage() {
           icon={<ShieldCheck size={18} />}
           label="Public feed"
           value={matchesResponse?.source ?? "Loading"}
-          note={`${matchesResponse?.matches.length ?? 0} matches`}
+          note={[
+            `${matchesResponse?.matches.length ?? 0} matches`,
+            matchesResponse?.database?.driver ?? matchesResponse?.reason,
+          ].filter(Boolean).join(" · ")}
         />
       </section>
 

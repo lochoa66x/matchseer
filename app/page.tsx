@@ -129,7 +129,6 @@ const copy = {
     confidence: "Confidence",
     chaos: "Chaos",
     projected: "Projected",
-    keyReasons: "Why the Seer leans this way",
     teamEdge: "Team edge",
     compareTeams: "Compare teams",
     comparePlayers: "Player sparks",
@@ -146,20 +145,13 @@ const copy = {
     freshRead: "Fresh read",
     seededRead: "Early signal",
     oracleError: "The Seer blinked. Try again.",
-    dataStatus: "Data status",
-    liveDatabase: "Live database",
     pendingMode: "Live data pending",
     fallbackMode: "Live data pending",
-    dataDepth: "Data depth",
-    realFixtures: "Real fixture feed",
     noDemoFixtures: "No demo data",
-    venueWeather: "Venue + weather",
     connected: "Connected",
     mapping: "Mapping underway",
     pending: "Pending",
     refereePending: "Assignment pending",
-    aiLayer: "AI layer",
-    aiReady: "Ready on demand",
     cupSeer: "Weekly Cup Seer",
     cupSeerTitle: "Who is in the final-six lane?",
     cupSeerIntro: "Pre-round pulse: the Seer treats every group match as unplayed, forecasts each team path, and ranks the six strongest cup lanes.",
@@ -248,7 +240,6 @@ const copy = {
     confidence: "Confianza",
     chaos: "Caos",
     projected: "Proyectado",
-    keyReasons: "Por qué el Vidente se inclina así",
     teamEdge: "Ventaja",
     compareTeams: "Comparar equipos",
     comparePlayers: "Chispas de jugadores",
@@ -265,20 +256,13 @@ const copy = {
     freshRead: "Lectura nueva",
     seededRead: "Señal inicial",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
-    dataStatus: "Estado de datos",
-    liveDatabase: "Base en vivo",
     pendingMode: "Datos reales pendientes",
     fallbackMode: "Datos reales pendientes",
-    dataDepth: "Nivel de datos",
-    realFixtures: "Calendario real",
     noDemoFixtures: "Sin datos demo",
-    venueWeather: "Estadio + clima",
     connected: "Conectado",
     mapping: "Mapeo en curso",
     pending: "Pendiente",
     refereePending: "Asignación pendiente",
-    aiLayer: "Capa IA",
-    aiReady: "Lista al pedir",
     cupSeer: "Vidente semanal de la copa",
     cupSeerTitle: "¿Quién entra en la vía de los seis finalistas?",
     cupSeerIntro: "Pulso previo: el Vidente trata cada partido de grupo como no jugado, proyecta el camino de cada equipo y ordena las seis rutas más fuertes.",
@@ -367,7 +351,6 @@ const copy = {
     confidence: "Confiance",
     chaos: "Chaos",
     projected: "Projeté",
-    keyReasons: "Pourquoi le voyant penche ainsi",
     teamEdge: "Avantage",
     compareTeams: "Comparer les équipes",
     comparePlayers: "Étincelles joueurs",
@@ -384,20 +367,13 @@ const copy = {
     freshRead: "Lecture fraîche",
     seededRead: "Signal précoce",
     oracleError: "Le voyant a cligné. Réessaie.",
-    dataStatus: "État des données",
-    liveDatabase: "Base en direct",
     pendingMode: "Données réelles en attente",
     fallbackMode: "Données réelles en attente",
-    dataDepth: "Niveau données",
-    realFixtures: "Calendrier réel",
     noDemoFixtures: "Aucune donnée démo",
-    venueWeather: "Stade + météo",
     connected: "Connecté",
     mapping: "Mappage en cours",
     pending: "En attente",
     refereePending: "Affectation en attente",
-    aiLayer: "Couche IA",
-    aiReady: "Prête à la demande",
     cupSeer: "Voyant hebdo de la coupe",
     cupSeerTitle: "Qui entre dans la voie des six finalistes ?",
     cupSeerIntro: "Pulse d’avant-tour : le voyant traite chaque match de groupe comme non joué, projette le chemin de chaque équipe et classe les six routes les plus fortes.",
@@ -459,10 +435,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("forecast");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
-  const [dataInfo, setDataInfo] = useState<Pick<MatchesResponse, "source" | "reason" | "database">>({
-    source: "database-unavailable",
-    reason: "loading",
-  });
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
   const [oracleStatus, setOracleStatus] = useState<Record<string, OracleStatus>>({});
   const [shareStatus, setShareStatus] = useState<ShareStatus>("idle");
@@ -498,11 +470,6 @@ export default function Home() {
         const payload = (await response.json()) as MatchesResponse;
 
         if (!ignore) {
-          setDataInfo({
-            source: payload.source,
-            reason: payload.reason,
-            database: payload.database,
-          });
           setMatches(payload.matches);
           setActiveMatchId((current) => {
             if (payload.matches.length === 0) {
@@ -516,10 +483,6 @@ export default function Home() {
         }
       } catch {
         if (!ignore) {
-          setDataInfo({
-            source: "database-unavailable",
-            reason: "database-query-failed",
-          });
           setMatches([]);
           setActiveMatchId("");
         }
@@ -586,16 +549,6 @@ export default function Home() {
     () => buildSeerScoreboard(matches, language, t),
     [language, matches, t],
   );
-  const hasPendingWeather =
-    !activeMatch ||
-    activeMatch.weather.temp === "Pending" ||
-    activeMatch.weather.wind === "Pending" ||
-    activeMatch.weather.mood[language].toLowerCase().includes("pending");
-  const dataSourceLabel =
-    dataInfo.source === "database"
-      ? t.liveDatabase
-      : t.fallbackMode;
-
   useEffect(() => {
     if (
       visibleMatches.length > 0 &&
@@ -696,33 +649,6 @@ export default function Home() {
               </button>
             ))}
           </div>
-        </section>
-
-        <section className="data-status-grid" aria-label={t.dataStatus}>
-          <DataStatusCard
-            label={t.dataStatus}
-            value={dataSourceLabel}
-            detail={dataInfo.source === "database" ? dataInfo.database?.driver ?? "Neon" : dataInfo.reason}
-            tone={dataInfo.source === "database" ? "good" : "watch"}
-          />
-          <DataStatusCard
-            label={t.dataDepth}
-            value={t.noDemoFixtures}
-            detail={`0 ${t.matches}`}
-            tone="watch"
-          />
-          <DataStatusCard
-            label={t.venueWeather}
-            value={t.mapping}
-            detail={t.noMatches}
-            tone="watch"
-          />
-          <DataStatusCard
-            label={t.aiLayer}
-            value={t.aiReady}
-            detail="OpenAI"
-            tone="neutral"
-          />
         </section>
 
         <section className="content-grid">
@@ -1002,33 +928,6 @@ export default function Home() {
           setActiveTab("forecast");
         }}
       />
-
-      <section className="data-status-grid" aria-label={t.dataStatus}>
-        <DataStatusCard
-          label={t.dataStatus}
-          value={dataSourceLabel}
-          detail={dataInfo.source === "database" ? dataInfo.database?.driver ?? "Neon" : dataInfo.reason}
-          tone={dataInfo.source === "database" ? "good" : "watch"}
-        />
-        <DataStatusCard
-          label={t.dataDepth}
-          value={dataInfo.source === "database" ? t.realFixtures : t.noDemoFixtures}
-          detail={`${matches.length} matches`}
-          tone={dataInfo.source === "database" ? "good" : "watch"}
-        />
-        <DataStatusCard
-          label={t.venueWeather}
-          value={hasPendingWeather ? t.mapping : t.connected}
-          detail={`${activeMatch.venue} · ${activeMatch.weather.temp}`}
-          tone={hasPendingWeather ? "watch" : "good"}
-        />
-        <DataStatusCard
-          label={t.aiLayer}
-          value={activeOracleRead?.source === "openai" ? t.freshRead : t.aiReady}
-          detail={activeOracleRead?.model ?? "OpenAI"}
-          tone={activeOracleRead?.source === "openai" ? "good" : "neutral"}
-        />
-      </section>
 
       <section className="content-grid content-grid-support">
         <section className="detail-panel">
@@ -2257,26 +2156,6 @@ function formatMatchSchedule(match: Match) {
   }).format(new Date(match.startsAt));
 }
 
-function DataStatusCard({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "good" | "watch" | "neutral";
-}) {
-  return (
-    <div className={cx("data-status-card", tone)}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
-  );
-}
-
 function TeamBadge({ team, accentColor }: { team: Team; accentColor?: string }) {
   const displayColor = accentColor ?? teamAccentColor(team);
 
@@ -2445,15 +2324,6 @@ function ForecastView({
 }) {
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
-  const reasons =
-    interpretation?.keyFactors.map((factor) =>
-      typeof factor.explanation === "string"
-        ? factor.explanation.replace(/^explanation:\s*/i, "").trim()
-        : String(factor.explanation ?? ""),
-    ) ??
-    match.forecast.reasons[language].map((r) =>
-      typeof r === "string" ? r.replace(/^explanation:\s*/i, "").trim() : r,
-    );
   const readLabel = oracleRead?.source === "openai" ? t.freshRead : t.seededRead;
   const accents = matchAccentColors(match);
 
@@ -2494,19 +2364,7 @@ function ForecastView({
           <Meter label={t.confidence} value={match.forecast.confidence} />
           <Meter label={t.chaos} value={match.forecast.chaos} hot />
         </div>
-      </div>
-
-      <div className="forecast-card">
-        <div className="section-heading">
-          <BarChart3 size={18} />
-          <span>{t.keyReasons}</span>
-        </div>
-        <ul className="reason-list">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-        <p className="disclaimer">{interpretation?.disclaimer ?? t.review}</p>
+        <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
     </div>
   );
