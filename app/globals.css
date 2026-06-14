@@ -5509,12 +5509,85 @@ body {
 }
 
 .traffic-chart-card,
-.traffic-rank-card {
+.traffic-rank-card,
+.traffic-revenue-card {
   min-width: 0;
   padding: 14px;
   background: rgba(255, 255, 255, 0.64);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.traffic-revenue-card {
+  display: grid;
+  gap: 12px;
+  background:
+    linear-gradient(135deg, rgba(245, 197, 24, 0.14), rgba(37, 99, 235, 0.08)),
+    rgba(255, 255, 255, 0.68);
+}
+
+.revenue-primary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.revenue-primary span,
+.revenue-grid span,
+.revenue-range span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 880;
+}
+
+.revenue-primary strong {
+  color: var(--ink);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.revenue-range,
+.revenue-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.revenue-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.revenue-range span {
+  padding: 8px 9px;
+  background: rgba(237, 241, 247, 0.78);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.revenue-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.revenue-grid div {
+  display: grid;
+  gap: 2px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.revenue-grid strong {
+  color: var(--blue);
+  font-size: 1rem;
+}
+
+.traffic-revenue-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.45;
 }
 
 .traffic-chart-head {

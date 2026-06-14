@@ -122,6 +122,35 @@ export type TrafficDashboard = {
     language: string | null;
     matchId: string | null;
   }>;
+  revenue: TrafficRevenueEstimate;
+};
+
+export type TrafficRevenueEstimate = {
+  currency: "USD";
+  formula: string;
+  assumptions: {
+    adSlotsPerPage: number;
+    fillRate: number;
+    viewability: number;
+    ecpms: {
+      low: number;
+      base: number;
+      high: number;
+    };
+  };
+  windows: {
+    last24h: TrafficRevenueWindow;
+    last7d: TrafficRevenueWindow;
+    projected30d: TrafficRevenueWindow;
+  };
+};
+
+type TrafficRevenueWindow = {
+  views: number;
+  estimatedImpressions: number;
+  low: number;
+  base: number;
+  high: number;
 };
 
 export type VenueMappingCandidate = {
@@ -584,6 +613,10 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
       order by occurred_at desc
       limit 12;
     `) as unknown as TrafficRecentRow[];
+    const views24h = toNumber(summaryRow?.views_24h ?? 0);
+    const visitors24h = toNumber(summaryRow?.visitors_24h ?? 0);
+    const views7d = toNumber(summaryRow?.views_7d ?? 0);
+    const visitors7d = toNumber(summaryRow?.visitors_7d ?? 0);
 
     return {
       source: "database",
@@ -591,12 +624,12 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
       generatedAt,
       windows: {
         last24h: {
-          views: toNumber(summaryRow?.views_24h ?? 0),
-          visitors: toNumber(summaryRow?.visitors_24h ?? 0),
+          views: views24h,
+          visitors: visitors24h,
         },
         last7d: {
-          views: toNumber(summaryRow?.views_7d ?? 0),
-          visitors: toNumber(summaryRow?.visitors_7d ?? 0),
+          views: views7d,
+          visitors: visitors7d,
         },
       },
       topPaths: topPathRows.map((row) => ({
@@ -621,6 +654,10 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
         language: row.language,
         matchId: row.match_id,
       })),
+      revenue: estimateTrafficRevenue({
+        views24h,
+        views7d,
+      }),
     };
   } catch (error) {
     console.error("MatchSeer traffic dashboard failed", error);
@@ -1040,7 +1077,72 @@ function emptyTrafficDashboard(
     devices: [],
     timeline: fillTrafficTimeline([]),
     recent: [],
+    revenue: estimateTrafficRevenue({ views24h: 0, views7d: 0 }),
   };
+}
+
+function estimateTrafficRevenue({
+  views24h,
+  views7d,
+}: {
+  views24h: number;
+  views7d: number;
+}): TrafficRevenueEstimate {
+  const assumptions = {
+    adSlotsPerPage: readEnvNumber("MATCHSEER_AD_SLOTS_PER_PAGE", 2),
+    fillRate: readEnvNumber("MATCHSEER_AD_FILL_RATE", 0.82),
+    viewability: readEnvNumber("MATCHSEER_AD_VIEWABILITY", 0.68),
+    ecpms: {
+      low: readEnvNumber("MATCHSEER_AD_ECPM_LOW", 1.25),
+      base: readEnvNumber("MATCHSEER_AD_ECPM_BASE", 3.5),
+      high: readEnvNumber("MATCHSEER_AD_ECPM_HIGH", 7.5),
+    },
+  };
+  const last24h = estimateRevenueWindow(views24h, assumptions);
+  const last7d = estimateRevenueWindow(views7d, assumptions);
+  const projected30d = estimateRevenueWindow((views7d / 7) * 30, assumptions);
+
+  return {
+    currency: "USD",
+    formula:
+      "views * ad slots per page * fill rate * viewability * eCPM / 1000",
+    assumptions,
+    windows: {
+      last24h,
+      last7d,
+      projected30d,
+    },
+  };
+}
+
+function estimateRevenueWindow(
+  views: number,
+  assumptions: TrafficRevenueEstimate["assumptions"],
+): TrafficRevenueWindow {
+  const normalizedViews = Math.max(0, Math.round(views));
+  const estimatedImpressions =
+    normalizedViews *
+    assumptions.adSlotsPerPage *
+    assumptions.fillRate *
+    assumptions.viewability;
+
+  return {
+    views: normalizedViews,
+    estimatedImpressions: Math.round(estimatedImpressions),
+    low: roundMoney((estimatedImpressions * assumptions.ecpms.low) / 1000),
+    base: roundMoney((estimatedImpressions * assumptions.ecpms.base) / 1000),
+    high: roundMoney((estimatedImpressions * assumptions.ecpms.high) / 1000),
+  };
+}
+
+function readEnvNumber(name: string, fallback: number) {
+  const value = Number(process.env[name]);
+
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function normalizeTrafficPath(value: unknown) {

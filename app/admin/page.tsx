@@ -4,6 +4,7 @@ import {
   Activity,
   CloudSun,
   DatabaseZap,
+  DollarSign,
   Eye,
   Globe2,
   KeyRound,
@@ -101,7 +102,34 @@ type TrafficDashboard = {
     language: string | null;
     matchId: string | null;
   }>;
+  revenue: {
+    currency: "USD";
+    formula: string;
+    assumptions: {
+      adSlotsPerPage: number;
+      fillRate: number;
+      viewability: number;
+      ecpms: {
+        low: number;
+        base: number;
+        high: number;
+      };
+    };
+    windows: {
+      last24h: TrafficRevenueWindow;
+      last7d: TrafficRevenueWindow;
+      projected30d: TrafficRevenueWindow;
+    };
+  };
   error?: string;
+};
+
+type TrafficRevenueWindow = {
+  views: number;
+  estimatedImpressions: number;
+  low: number;
+  base: number;
+  high: number;
 };
 
 type ActionStatus = "idle" | "loading" | "success" | "error";
@@ -386,6 +414,14 @@ export default function AdminPage() {
           value={formatNumber(trafficData?.windows.last24h.visitors ?? 0)}
           note={`${formatNumber(trafficData?.windows.last7d.visitors ?? 0)} in 7 days`}
         />
+        <AdminMetric
+          icon={<DollarSign size={18} />}
+          label="Ad estimate"
+          value={formatMoney(trafficData?.revenue.windows.last7d.base ?? 0)}
+          note={`${formatMoney(
+            trafficData?.revenue.windows.projected30d.base ?? 0,
+          )} 30d pace`}
+        />
       </section>
 
       <section className="admin-actions">
@@ -557,6 +593,8 @@ function TrafficPanel({
               </div>
             </div>
 
+            <RevenueEstimateCard revenue={traffic.revenue} />
+
             <TrafficRankList
               title="Top pages"
               items={traffic.topPaths.map((item) => ({
@@ -611,6 +649,46 @@ function TrafficPanel({
         </>
       )}
     </section>
+  );
+}
+
+function RevenueEstimateCard({
+  revenue,
+}: {
+  revenue: TrafficDashboard["revenue"];
+}) {
+  return (
+    <div className="traffic-revenue-card">
+      <div className="traffic-section-title">
+        <DollarSign size={16} />
+        <span>Ad estimate</span>
+      </div>
+      <div className="revenue-primary">
+        <span>7-day base</span>
+        <strong>{formatMoney(revenue.windows.last7d.base)}</strong>
+      </div>
+      <div className="revenue-range">
+        <span>{formatMoney(revenue.windows.last7d.low)} low</span>
+        <span>{formatMoney(revenue.windows.last7d.high)} high</span>
+      </div>
+      <div className="revenue-grid">
+        <div>
+          <span>24h</span>
+          <strong>{formatMoney(revenue.windows.last24h.base)}</strong>
+        </div>
+        <div>
+          <span>30d pace</span>
+          <strong>{formatMoney(revenue.windows.projected30d.base)}</strong>
+        </div>
+      </div>
+      <p>
+        {formatNumber(revenue.windows.last7d.estimatedImpressions)} estimated ad
+        impressions · {revenue.assumptions.adSlotsPerPage} slots ·{" "}
+        {formatPercent(revenue.assumptions.fillRate)} fill ·{" "}
+        {formatPercent(revenue.assumptions.viewability)} viewable ·{" "}
+        {formatMoney(revenue.assumptions.ecpms.base)} eCPM
+      </p>
+    </div>
   );
 }
 
@@ -696,12 +774,58 @@ function emptyTrafficDashboard(): TrafficDashboard {
     devices: [],
     timeline: [],
     recent: [],
+    revenue: {
+      currency: "USD",
+      formula:
+        "views * ad slots per page * fill rate * viewability * eCPM / 1000",
+      assumptions: {
+        adSlotsPerPage: 2,
+        fillRate: 0.82,
+        viewability: 0.68,
+        ecpms: {
+          low: 1.25,
+          base: 3.5,
+          high: 7.5,
+        },
+      },
+      windows: {
+        last24h: emptyRevenueWindow(),
+        last7d: emptyRevenueWindow(),
+        projected30d: emptyRevenueWindow(),
+      },
+    },
+  };
+}
+
+function emptyRevenueWindow(): TrafficRevenueWindow {
+  return {
+    views: 0,
+    estimatedImpressions: 0,
+    low: 0,
+    base: 0,
+    high: 0,
   };
 }
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: value >= 100 ? 0 : 2,
+    minimumFractionDigits: value >= 100 ? 0 : 2,
+    style: "currency",
+  }).format(value);
+}
+
+function formatPercent(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+    style: "percent",
   }).format(value);
 }
 
