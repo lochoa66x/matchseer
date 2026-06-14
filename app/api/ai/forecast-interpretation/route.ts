@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   hasRestrictedBettingLanguage,
   hasRestrictedToneLanguage,
+  restrictedBettingTerms,
+  restrictedToneTerms,
   type Language,
   type ForecastInterpretation,
   type ForecastInterpretationRequest,
@@ -38,6 +40,13 @@ function cleanExplanation(raw: unknown): string {
   const s = typeof raw === "string" ? raw : String(raw ?? "");
   return s.replace(/^explanation:\s*/i, "").trim();
 }
+
+type SafetyIssue = "betting-language" | "tone-language";
+
+type RepairContext = {
+  blockedInterpretation: ForecastInterpretation;
+  safetyIssue: SafetyIssue;
+};
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<ForecastInterpretationRequest>;
@@ -143,16 +152,42 @@ export async function POST(request: Request) {
       fallback,
       officialModelCall,
     );
-    const serialized = JSON.stringify(interpretation);
+    const safetyIssue = getInterpretationSafetyIssue(interpretation);
 
-    if (hasRestrictedBettingLanguage(serialized.replace(disclaimer, ""))) {
+    if (safetyIssue) {
       await recordAiRequestAudit({
         matchId: match.id,
         model,
         requestPayload: openAiRequest,
         responsePayload,
-        status: "blocked-betting-language",
+        status: `blocked-${safetyIssue}`,
       });
+
+      const repaired = await requestRepairedInterpretation({
+        fallback,
+        language,
+        match,
+        model,
+        officialModelCall,
+        safetyIssue,
+        blockedInterpretation: interpretation,
+      });
+
+      if (repaired) {
+        const saved = await saveForecastInterpretation({
+          matchId: match.id,
+          interpretation: repaired.interpretation,
+        });
+
+        return NextResponse.json({
+          source: "openai",
+          reason: `rewritten-${safetyIssue}`,
+          model,
+          audited: repaired.audited,
+          saved,
+          interpretation: repaired.interpretation,
+        });
+      }
 
       await saveForecastInterpretation({
         matchId: match.id,
@@ -161,24 +196,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         source: "seeded-fallback",
-        reason: "blocked-betting-language",
-        model,
-        interpretation: fallback,
-      });
-    }
-
-    if (hasRestrictedToneLanguage(serialized)) {
-      await recordAiRequestAudit({
-        matchId: match.id,
-        model,
-        requestPayload: openAiRequest,
-        responsePayload,
-        status: "blocked-tone-language",
-      });
-
-      return NextResponse.json({
-        source: "seeded-fallback",
-        reason: "blocked-tone-language",
+        reason: `blocked-${safetyIssue}`,
         model,
         interpretation: fallback,
       });
@@ -220,6 +238,105 @@ export async function POST(request: Request) {
       model,
       interpretation: fallback,
     });
+  }
+}
+
+async function requestRepairedInterpretation({
+  blockedInterpretation,
+  fallback,
+  language,
+  match,
+  model,
+  officialModelCall,
+  safetyIssue,
+}: {
+  blockedInterpretation: ForecastInterpretation;
+  fallback: ForecastInterpretation;
+  language: Language;
+  match: MatchSummary;
+  model: string;
+  officialModelCall: OfficialModelCall;
+  safetyIssue: SafetyIssue;
+}) {
+  const repairRequest = createOpenAiRequest(
+    match,
+    language,
+    model,
+    officialModelCall,
+    {
+      blockedInterpretation,
+      safetyIssue,
+    },
+  );
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(repairRequest),
+    });
+
+    const responsePayload = (await response.json()) as unknown;
+
+    if (!response.ok) {
+      await recordAiRequestAudit({
+        matchId: match.id,
+        model,
+        requestPayload: repairRequest,
+        responsePayload,
+        status: `repair-openai-error-${safetyIssue}`,
+      });
+
+      return null;
+    }
+
+    const interpretation = parseOpenAiInterpretation(
+      responsePayload,
+      language,
+      fallback,
+      officialModelCall,
+    );
+    const repairSafetyIssue = getInterpretationSafetyIssue(interpretation);
+
+    if (repairSafetyIssue) {
+      await recordAiRequestAudit({
+        matchId: match.id,
+        model,
+        requestPayload: repairRequest,
+        responsePayload,
+        status: `repair-blocked-${repairSafetyIssue}`,
+      });
+
+      return null;
+    }
+
+    const audited = await recordAiRequestAudit({
+      matchId: match.id,
+      model,
+      requestPayload: repairRequest,
+      responsePayload,
+      status: `repaired-${safetyIssue}`,
+    });
+
+    return {
+      audited,
+      interpretation,
+    };
+  } catch (error) {
+    await recordAiRequestAudit({
+      matchId: match.id,
+      model,
+      requestPayload: repairRequest,
+      responsePayload: {
+        error: error instanceof Error ? error.message : "Unknown OpenAI error",
+      },
+      status: `repair-request-failed-${safetyIssue}`,
+    });
+
+    return null;
   }
 }
 
@@ -271,6 +388,7 @@ function createOpenAiRequest(
   language: Language,
   model: string,
   officialModelCall: OfficialModelCall,
+  repairContext?: RepairContext,
 ) {
   return {
     model,
@@ -281,7 +399,7 @@ function createOpenAiRequest(
           {
             type: "input_text",
             text:
-              "You write MatchSeer Seer reads for fans. The official public call is the stored Model Forecast supplied by the app. Explain that model forecast; do not create an independent prediction. If you mention a winner, draw, score, probability, or confidence, it must match officialModelForecast exactly. Never invent another winner, scoreline, or certainty. Keep it concise and playful through football, weather, venue, and tactical imagery. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, guarantees, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures.",
+              "You write MatchSeer Seer reads for fans. The official public call is the stored Model Forecast supplied by the app. Explain that model forecast; do not create an independent prediction. If you mention a winner, draw, score, probability, or confidence, it must match officialModelForecast exactly. Never invent another winner, scoreline, or certainty. Keep it concise and playful through football, weather, venue, and tactical imagery. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, guarantees, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into neutral sports-analysis language while preserving the official model forecast.",
           },
         ],
       },
@@ -316,6 +434,18 @@ function createOpenAiRequest(
                 keyFactors: "Three factors max.",
                 disclaimer,
               },
+              repair: repairContext
+                ? {
+                    safetyIssue: repairContext.safetyIssue,
+                    previousDraft: repairContext.blockedInterpretation,
+                    instruction:
+                      "Rewrite the previous draft so it remains vivid fan analysis but avoids the blocked language category. Keep the same official model forecast and return a clean JSON object.",
+                    avoidTerms:
+                      repairContext.safetyIssue === "betting-language"
+                        ? restrictedBettingTerms
+                        : restrictedToneTerms,
+                  }
+                : null,
             }),
           },
         ],
@@ -367,6 +497,22 @@ function createOpenAiRequest(
       },
     },
   };
+}
+
+function getInterpretationSafetyIssue(
+  interpretation: ForecastInterpretation,
+): SafetyIssue | null {
+  const serialized = JSON.stringify(interpretation);
+
+  if (hasRestrictedBettingLanguage(serialized.replace(disclaimer, ""))) {
+    return "betting-language";
+  }
+
+  if (hasRestrictedToneLanguage(serialized)) {
+    return "tone-language";
+  }
+
+  return null;
 }
 
 function parseOpenAiInterpretation(

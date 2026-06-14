@@ -908,9 +908,42 @@ export async function syncFootballDataSnapshot(
         stage = excluded.stage,
         group_name = excluded.group_name,
         starts_at = excluded.starts_at,
-        status = excluded.status,
-        home_score = excluded.home_score,
-        away_score = excluded.away_score,
+        status = case
+          when matches.status = 'final'
+           and matches.home_score is not null
+           and matches.away_score is not null
+           and (
+             excluded.status <> 'final'
+             or excluded.home_score is null
+             or excluded.away_score is null
+           )
+            then matches.status
+          else excluded.status
+        end,
+        home_score = case
+          when matches.status = 'final'
+           and matches.home_score is not null
+           and matches.away_score is not null
+           and (
+             excluded.status <> 'final'
+             or excluded.home_score is null
+             or excluded.away_score is null
+           )
+            then matches.home_score
+          else excluded.home_score
+        end,
+        away_score = case
+          when matches.status = 'final'
+           and matches.home_score is not null
+           and matches.away_score is not null
+           and (
+             excluded.status <> 'final'
+             or excluded.home_score is null
+             or excluded.away_score is null
+           )
+            then matches.away_score
+          else excluded.away_score
+        end,
         updated_at = now();
     `;
 
