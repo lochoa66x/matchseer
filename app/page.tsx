@@ -50,6 +50,7 @@ type ForecastReceipt = {
   predictedSide: ForecastSide;
   actualSide?: ForecastSide;
   predictedLabel: string;
+  modelLabel: string;
   actualLabel?: string;
   finalScore?: string;
   projectedOptions: string[];
@@ -97,20 +98,20 @@ const copy = {
     noMatches: "No matches in this view yet.",
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
-    seerScoreboard: "Seer scoreboard",
-    seerScoreboardTitle: "Did the Seer survive the whistle?",
-    seerScoreboardIntro: "Every final score gets a receipt: what MatchSeer called, what actually happened, and whether the model earned a clean nod or a humble notebook entry.",
+    seerScoreboard: "Model receipts",
+    seerScoreboardTitle: "Did the model survive the whistle?",
+    seerScoreboardIntro: "Every final score gets a receipt: the model forecast, what happened, and whether the call held up. Live matches stay open and do not count yet.",
     reviewedMatches: "Reviewed matches",
-    winnerCalls: "Direction calls",
+    winnerCalls: "Direction hits",
     exactScores: "Exact scores",
     publishedReads: "Published reads",
-    modelSurvival: "Survival rate",
+    modelSurvival: "Model hit rate",
     latestReceipts: "Latest receipts",
     waitingForFinals: "Waiting for final whistles",
-    called: "Called",
+    called: "Model forecast",
     finished: "Finished",
     seerHit: "Direction hit",
-    seerMiss: "Needs review",
+    seerMiss: "Model missed",
     exactHit: "Exact score",
     liveReview: "Live check",
     awaitingResult: "Awaiting result",
@@ -209,20 +210,20 @@ const copy = {
     noMatches: "Aún no hay partidos en esta vista.",
     matchExplorer: "Explorar partidos",
     selectedMatch: "Partido seleccionado",
-    seerScoreboard: "Marcador del Vidente",
-    seerScoreboardTitle: "¿El Vidente sobrevivió al silbatazo?",
-    seerScoreboardIntro: "Cada marcador final deja recibo: qué leyó MatchSeer, qué pasó de verdad y si el modelo merece asentir o apuntar tarea.",
+    seerScoreboard: "Recibos del modelo",
+    seerScoreboardTitle: "¿El modelo sobrevivió al silbatazo?",
+    seerScoreboardIntro: "Cada marcador final deja recibo: el pronóstico del modelo, lo que pasó y si la dirección aguantó. Los partidos en vivo quedan abiertos y aún no cuentan.",
     reviewedMatches: "Partidos revisados",
-    winnerCalls: "Dirección acertada",
+    winnerCalls: "Direcciones correctas",
     exactScores: "Marcadores exactos",
     publishedReads: "Lecturas publicadas",
-    modelSurvival: "Supervivencia",
+    modelSurvival: "Acierto del modelo",
     latestReceipts: "Últimos recibos",
     waitingForFinals: "Esperando finales",
-    called: "Leyó",
+    called: "Pronóstico del modelo",
     finished: "Terminó",
     seerHit: "Dirección bien",
-    seerMiss: "A revisar",
+    seerMiss: "Falló el modelo",
     exactHit: "Marcador exacto",
     liveReview: "Chequeo en vivo",
     awaitingResult: "Esperando resultado",
@@ -321,20 +322,20 @@ const copy = {
     noMatches: "Aucun match dans cette vue pour le moment.",
     matchExplorer: "Explorer les matchs",
     selectedMatch: "Match sélectionné",
-    seerScoreboard: "Tableau du voyant",
-    seerScoreboardTitle: "Le voyant a-t-il survécu au coup de sifflet ?",
-    seerScoreboardIntro: "Chaque score final reçoit un reçu : ce que MatchSeer a annoncé, ce qui s’est vraiment passé, et si le modèle mérite un signe de tête ou une note d’humilité.",
+    seerScoreboard: "Reçus du modèle",
+    seerScoreboardTitle: "Le modèle a-t-il survécu au coup de sifflet ?",
+    seerScoreboardIntro: "Chaque score final reçoit un reçu : la prévision du modèle, ce qui s’est passé, et si la direction a tenu. Les matchs en direct restent ouverts et ne comptent pas encore.",
     reviewedMatches: "Matchs revus",
     winnerCalls: "Directions justes",
     exactScores: "Scores exacts",
     publishedReads: "Lectures publiées",
-    modelSurvival: "Taux de survie",
+    modelSurvival: "Taux du modèle",
     latestReceipts: "Derniers reçus",
     waitingForFinals: "En attente des scores finaux",
-    called: "Annoncé",
+    called: "Prévision du modèle",
     finished: "Terminé",
     seerHit: "Direction juste",
-    seerMiss: "À revoir",
+    seerMiss: "Modèle raté",
     exactHit: "Score exact",
     liveReview: "Contrôle en direct",
     awaitingResult: "Résultat attendu",
@@ -1545,6 +1546,7 @@ function buildForecastReceipt(
   const predictedSide = getProjectedForecastSide(match);
   const predictedLabel = sideLabel(match, predictedSide);
   const projectedOptions = parseProjectedScores(match.forecast.projected);
+  const modelLabel = modelForecastLabel(match, predictedSide, projectedOptions);
 
   if (match.status === "Live") {
     return {
@@ -1552,6 +1554,7 @@ function buildForecastReceipt(
       outcome: "live",
       predictedSide,
       predictedLabel,
+      modelLabel,
       projectedOptions,
       summary: receiptSummary("live", match, language),
       shortLabel: t.liveReview,
@@ -1566,6 +1569,7 @@ function buildForecastReceipt(
       outcome: "pending",
       predictedSide,
       predictedLabel,
+      modelLabel,
       projectedOptions,
       summary: receiptSummary("pending", match, language),
       shortLabel: t.awaitingResult,
@@ -1584,6 +1588,7 @@ function buildForecastReceipt(
     predictedSide,
     actualSide,
     predictedLabel,
+    modelLabel,
     actualLabel: sideLabel(match, actualSide),
     finalScore: exactScore,
     projectedOptions,
@@ -1620,6 +1625,37 @@ function sideLabel(match: Match, side: ForecastSide) {
   }
 
   return "DRAW";
+}
+
+function modelForecastLabel(
+  match: Match,
+  side: ForecastSide,
+  projectedOptions: string[],
+) {
+  const score = projectedOptions[0];
+  const label = sideLabel(match, side);
+
+  return score ? `${label} ${score}` : label;
+}
+
+function sideName(match: Match, side: ForecastSide, language: Language) {
+  if (side === "home") {
+    return match.home.name;
+  }
+
+  if (side === "away") {
+    return match.away.name;
+  }
+
+  if (language === "es") {
+    return "el empate";
+  }
+
+  if (language === "fr") {
+    return "le nul";
+  }
+
+  return "the draw";
 }
 
 function getScoreSide(home: number, away: number): ForecastSide {
@@ -1676,86 +1712,112 @@ function receiptSortTime(match: Match) {
 }
 
 function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language: Language) {
-  const base =
-    match.forecast.reasons[language]?.[0] ??
-    match.forecast.tone[language] ??
-    "";
+  const score = parseScoreline(match.score);
+  const predicted = getProjectedForecastSide(match);
+  const actual = score ? getScoreSide(score.home, score.away) : undefined;
+  const predictedName = sideName(match, predicted, language);
+  const actualName = actual ? sideName(match, actual, language) : "";
+  const spoiler =
+    predicted === "home"
+      ? match.away.name
+      : predicted === "away"
+        ? match.home.name
+        : actualName;
+  const fixture = `${match.home.name} vs ${match.away.name}`;
 
   if (language === "es") {
     if (outcome === "exact") {
-      return "Marcador clavado: la lectura queda con recibo limpio.";
+      return "El pronóstico del modelo clavó el marcador exacto. Recibo limpio.";
     }
 
     if (outcome === "hit") {
-      return "La dirección aguantó, aunque el marcador se movió un poco.";
+      if (predicted === "draw") {
+        return "El modelo leyó empate. El marcador cambió, pero la dirección aguantó.";
+      }
+
+      return `${predictedName} cumplió aunque el marcador se movió. La dirección del modelo aguantó.`;
     }
 
     if (outcome === "miss") {
-      return "El Vidente falló esta lectura; se guarda el recibo para ajustar el modelo.";
+      if (actual === "draw" && predicted !== "draw") {
+        return `El modelo se inclinó por ${predictedName}, pero ${spoiler} sostuvo la línea. Falló la dirección; sobrevivió el empate.`;
+      }
+
+      if (predicted === "draw" && actual) {
+        return `El modelo vio una ruta de empate, pero ${actualName} la rompió. Falló la dirección; recibo guardado.`;
+      }
+
+      return `El modelo se inclinó por ${predictedName}, pero ${actualName} se llevó el recibo. Falló la dirección; toca tomar nota.`;
     }
 
     if (outcome === "live") {
-      return "Partido en vivo: la lectura sigue respirando hasta el silbatazo.";
+      return `${fixture} está en vivo. El recibo del modelo sigue abierto hasta el silbatazo.`;
     }
 
-    return "Esperando el marcador final para revisar la lectura.";
+    return "Esperando el marcador final para calificar el pronóstico del modelo.";
   }
 
   if (language === "fr") {
     if (outcome === "exact") {
-      return "Score exact : la lecture garde un reçu propre.";
+      return "La prévision du modèle a trouvé le score exact. Reçu propre.";
     }
 
     if (outcome === "hit") {
-      return "La direction a tenu, même si le score a bougé.";
+      if (predicted === "draw") {
+        return "Le modèle a vu le nul. Le score a bougé, mais la direction a tenu.";
+      }
+
+      return `${predictedName} est passé malgré un score différent. La direction du modèle a tenu.`;
     }
 
     if (outcome === "miss") {
-      return "Le voyant a raté cette lecture ; reçu gardé pour ajuster le modèle.";
+      if (actual === "draw" && predicted !== "draw") {
+        return `Le modèle penchait pour ${predictedName}, mais ${spoiler} a tenu la ligne. Direction manquée ; le nul a survécu.`;
+      }
+
+      if (predicted === "draw" && actual) {
+        return `Le modèle voyait une voie vers le nul, mais ${actualName} l’a ouverte autrement. Direction manquée ; reçu classé.`;
+      }
+
+      return `Le modèle penchait pour ${predictedName}, mais ${actualName} prend le reçu. Direction manquée ; note prise.`;
     }
 
     if (outcome === "live") {
-      return "Match en direct : la lecture respire encore jusqu’au coup de sifflet.";
+      return `${fixture} est en direct. Le reçu du modèle reste ouvert jusqu’au coup de sifflet.`;
     }
 
-    return "En attente du score final pour vérifier la lecture.";
+    return "En attente du score final pour noter la prévision du modèle.";
   }
 
-  const home = match.home.code;
-  const away = match.away.code;
-  const score = parseScoreline(match.score);
-  const predicted = getProjectedForecastSide(match);
-
   if (outcome === "exact") {
-    if (!score) return "Scoreline landed clean: the receipt goes in the bright pile.";
-    if (score.home === score.away) {
-      return `${home} and ${away} split the points. The Seer read the draw — and the draw delivered.`;
-    }
-    const winner = score.home > score.away ? home : away;
-    const margin = Math.abs(score.home - score.away);
-    if (margin >= 2) {
-      return `${winner} made it look straightforward. The Seer called it and the scoreline confirmed it with room to spare.`;
-    }
-    return `${winner} walked the line the Seer drew. Clean direction, receipt filed.`;
+    return "The model forecast landed on the exact score. Clean receipt.";
   }
 
   if (outcome === "hit") {
     if (predicted === "draw") {
-      return `${home} and ${away} finished level. The exact score moved, but the Seer's draw lean held.`;
+      return "The model called the draw. The scoreline moved, but the direction held.";
     }
-    const predictedWinner = predicted === "home" ? home : away;
-    return `${predictedWinner} came through even if the scoreline didn't land exactly as written. The Seer's lean held.`;
+
+    return `${predictedName} came through even if the scoreline moved. The model direction held.`;
   }
 
   if (outcome === "miss") {
-    return `${home} vs ${away} didn't follow the Seer's script. Receipt filed — the model takes note and moves on.`;
+    if (actual === "draw" && predicted !== "draw") {
+      return `The model leaned ${predictedName}, but ${spoiler} held the line. Direction missed; draw survived.`;
+    }
+
+    if (predicted === "draw" && actual) {
+      return `The model saw a draw lane, but ${actualName} broke it open. Direction missed; receipt filed.`;
+    }
+
+    return `The model leaned ${predictedName}, but ${actualName} took the receipt. Direction missed; model takes the note.`;
   }
 
   if (outcome === "live") {
-    return `${home} vs ${away} is still live. The Seer's read is still breathing until the whistle.`;
+    return `${fixture} is live. The model receipt stays open until the final whistle.`;
   }
 
-  return base || "Awaiting the final score before the receipt wakes up.";
+  return "Waiting for the final score to grade the model forecast.";
 }
 
 function getCupPulseLabel(language: Language) {
@@ -1861,7 +1923,7 @@ function SeerScoreboardBoard({
             </div>
             <div className="receipt-call-row">
               <span>
-                {t.called}: <strong>{receipt.predictedLabel}</strong>
+                {t.called}: <strong>{receipt.modelLabel}</strong>
               </span>
               {receipt.actualLabel && (
                 <span>

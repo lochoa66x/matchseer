@@ -130,6 +130,13 @@ type DatabaseMatchRow = {
   }> | null;
 };
 
+type ExistingForecastLockRow = {
+  forecast_id: string;
+  status: string | null;
+  home_score: number | null;
+  away_score: number | null;
+};
+
 type WeatherVenueRow = {
   match_id: string;
   venue_slug: string;
@@ -426,6 +433,28 @@ export async function syncFootballDataSnapshot(
         updated_at = now();
     `;
 
+    const existingForecastRows = (await sql`
+      select
+        forecasts.id as forecast_id,
+        matches.status,
+        matches.home_score,
+        matches.away_score
+      from matches
+      join forecasts
+        on forecasts.match_id = matches.id
+       and forecasts.version = 1
+      where matches.external_id = ${match.externalId}
+      limit 1;
+    `) as unknown as ExistingForecastLockRow[];
+
+    if (
+      existingForecastRows[0] &&
+      shouldPreserveModelForecast(existingForecastRows[0])
+    ) {
+      forecasts += 1;
+      continue;
+    }
+
     const forecast = baselineForecast({
       homeTeam,
       awayTeam,
@@ -536,6 +565,19 @@ export async function syncFootballDataSnapshot(
     forecasts,
     fetchedAt: snapshot.fetchedAt,
   };
+}
+
+function shouldPreserveModelForecast(row: ExistingForecastLockRow) {
+  const status = row.status?.toLowerCase();
+
+  return (
+    row.home_score !== null ||
+    row.away_score !== null ||
+    status === "live" ||
+    status === "final" ||
+    status === "finished" ||
+    status === "ft"
+  );
 }
 
 export async function applyVenueOverrides(
