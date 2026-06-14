@@ -27,7 +27,6 @@ import type {
   TeamRating as Team,
 } from "../lib/domain";
 
-type Tab = "forecast" | "players";
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
 type ShareStatus = "idle" | "copied" | "error";
@@ -460,7 +459,6 @@ export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
   const [matches, setMatches] = useState<Match[]>([]);
   const [activeMatchId, setActiveMatchId] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("forecast");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
@@ -553,15 +551,6 @@ export default function Home() {
   const oracleKey = activeMatch ? oracleReadKey(activeMatch, language) : "";
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
-  const detailTabs = useMemo<Tab[]>(() => {
-    const tabs: Tab[] = ["forecast"];
-
-    if ((activeMatch?.players.length ?? 0) > 0) {
-      tabs.push("players");
-    }
-
-    return tabs;
-  }, [activeMatch?.players.length]);
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const groups = useMemo(
     () => Array.from(new Set(matches.map((match) => match.group))).sort(),
@@ -609,15 +598,8 @@ export default function Home() {
       !visibleMatches.some((match) => match.id === activeMatchId)
     ) {
       setActiveMatchId(visibleMatches[0].id);
-      setActiveTab("forecast");
     }
   }, [activeMatchId, visibleMatches]);
-
-  useEffect(() => {
-    if (activeTab === "players" && (activeMatch?.players.length ?? 0) === 0) {
-      setActiveTab("forecast");
-    }
-  }, [activeMatch?.players.length, activeTab]);
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const match = matches.find((item) => item.id === matchId);
@@ -752,7 +734,6 @@ export default function Home() {
 
   const activeAccents = matchAccentColors(activeMatch);
   const activeMatchIsFinal = activeMatch.status === "Final";
-  const activeReceipt = buildForecastReceipt(activeMatch, language, t);
 
   return (
     <main className="app-shell">
@@ -857,10 +838,7 @@ export default function Home() {
                 <button
                   className={cx("hero-match-card", activeMatch.id === match.id && "selected")}
                   key={match.id}
-                  onClick={() => {
-                    setActiveMatchId(match.id);
-                    setActiveTab("forecast");
-                  }}
+                  onClick={() => setActiveMatchId(match.id)}
                   type="button"
                 >
                   <div className="hero-card-status">
@@ -940,31 +918,20 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="seer-action-row">
-            {activeMatchIsFinal ? (
-              <div className="seer-locked-result" role="status">
-                <Check size={17} />
-                <span>{t.finalReceipt}</span>
-                <strong>{activeReceipt.shortLabel}</strong>
-              </div>
-            ) : (
-              <button
-                className="seer-primary-button"
-                disabled={activeOracleStatus === "loading"}
-                onClick={() => {
-                  setActiveTab("forecast");
-                  void requestOracleRead(activeMatch.id, language);
-                }}
-                type="button"
-              >
-                {activeOracleStatus === "loading" ? (
-                  <LoaderCircle className="spin-icon" size={17} />
-                ) : (
-                  <Sparkles size={17} />
-                )}
-                {activeOracleStatus === "loading" ? t.reading : t.askSeer}
-              </button>
-            )}
+          <ForecastView
+            match={activeMatch}
+            t={t}
+            language={language}
+            oracleRead={activeOracleRead}
+            oracleStatus={activeOracleStatus}
+            onAskSeer={() => {
+              void requestOracleRead(activeMatch.id, language);
+            }}
+            showAsk={!activeMatchIsFinal}
+            compact
+          />
+
+          <div className="seer-share-row">
             <button className="share-button seer-share-button" onClick={() => shareMatch(activeMatch)} type="button">
               {shareStatus === "copied" ? <Check size={17} /> : <Share2 size={17} />}
               {shareStatus === "copied" && t.copied}
@@ -972,72 +939,29 @@ export default function Home() {
               {shareStatus === "idle" && t.share}
             </button>
           </div>
-
-          <div className="hero-selected-metrics">
-            <span>
-              <small>{t.confidence}</small>
-              <strong>{activeMatch.forecast.confidence}%</strong>
-            </span>
-            <span>
-              <small>{t.weather}</small>
-              <strong>{activeMatch.weather.temp}</strong>
-            </span>
-            <span>
-              <small>{t.projected}</small>
-              <strong>{activeMatch.forecast.projected}</strong>
-            </span>
-          </div>
         </div>
       </section>
 
       <SeerScoreboardBoard
         scoreboard={seerScoreboard}
         t={t}
-        onSelectMatch={(matchId) => {
-          setActiveMatchId(matchId);
-          setActiveTab("forecast");
-        }}
+        onSelectMatch={(matchId) => setActiveMatchId(matchId)}
       />
 
-      <section className="content-grid content-grid-support">
-        <section className="detail-panel">
-          <div className="detail-support-header">
-            <div className="section-heading">
-              <BarChart3 size={18} />
-              <span>{t.supportingDetails}</span>
+      {activeMatch.players.length > 0 && (
+        <section className="content-grid content-grid-support player-detail-only">
+          <section className="detail-panel">
+            <div className="detail-support-header">
+              <div className="section-heading">
+                <Zap size={18} />
+                <span>{t.comparePlayers}</span>
+              </div>
+              <p>{activeMatch.venue} · {activeMatch.city} · {formatMatchSchedule(activeMatch)}</p>
             </div>
-            <p>{activeMatch.venue} · {activeMatch.city} · {formatMatchSchedule(activeMatch)}</p>
-          </div>
-
-          <nav className="tabs" aria-label="Match detail tabs">
-            {detailTabs.map((tab) => (
-              <button
-                className={cx("tab", activeTab === tab && "active")}
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                type="button"
-              >
-                {tab === "forecast" && <Sparkles size={16} />}
-                {tab === "players" && <Zap size={16} />}
-                {t[tab]}
-              </button>
-            ))}
-          </nav>
-
-          {activeTab === "forecast" && (
-            <ForecastView
-              match={activeMatch}
-              t={t}
-              language={language}
-              oracleRead={activeOracleRead}
-              oracleStatus={activeOracleStatus}
-              onAskSeer={() => requestOracleRead(activeMatch.id, language)}
-              showAsk={!activeMatchIsFinal}
-            />
-          )}
-          {activeTab === "players" && <PlayersView match={activeMatch} t={t} />}
+            <PlayersView match={activeMatch} t={t} />
+          </section>
         </section>
-      </section>
+      )}
 
       <CupSeerBoard
         candidates={cupCandidates}
@@ -1050,7 +974,6 @@ export default function Home() {
 
           if (candidateMatch) {
             setActiveMatchId(candidateMatch.id);
-            setActiveTab("forecast");
           }
         }}
         pulseLabel={cupPulseLabel}
@@ -2583,27 +2506,37 @@ function ForecastView({
 
 function TensionBar({ match, accents }: { match: Match; accents: { home: string; away: string } }) {
   const { home, draw, away } = match.forecast;
+  const lean = getMatchLean(match, accents);
+
   return (
-    <div style={{ width: "100%", padding: "10px 0 4px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", fontSize: "13px", lineHeight: 1 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+    <div className="probability-lane">
+      <div className="probability-lane-topline">
+        <span className="probability-team-label">
           <TeamFlag team={match.home} compact accentColor={accents.home} />
-          <span style={{ color: accents.home, fontWeight: 700 }}>{match.home.code}</span>
-          <span style={{ fontWeight: 700 }}>{home}%</span>
+          <span style={{ color: accents.home }}>{match.home.code}</span>
+          <strong>{home}%</strong>
         </span>
-        <span style={{ color: "#8b8f98", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Draw&nbsp;<strong style={{ color: "inherit" }}>{draw}%</strong>
+        <span className="probability-lean-chip" style={{ color: lean.color }}>
+          {lean.label} {lean.value}%
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-          <span style={{ fontWeight: 700 }}>{away}%</span>
-          <span style={{ color: accents.away, fontWeight: 700 }}>{match.away.code}</span>
+        <span className="probability-team-label away">
+          <strong>{away}%</strong>
+          <span style={{ color: accents.away }}>{match.away.code}</span>
           <TeamFlag team={match.away} compact accentColor={accents.away} />
         </span>
       </div>
-      <div style={{ display: "flex", width: "100%", height: "10px", borderRadius: "5px", overflow: "hidden", gap: "2px" }}>
-        <div style={{ width: `${home}%`, background: accents.home, borderRadius: "5px 0 0 5px", flexShrink: 0 }} />
-        <div style={{ width: `${draw}%`, background: "#8b8f98", flexShrink: 0 }} />
-        <div style={{ width: `${away}%`, background: accents.away, borderRadius: "0 5px 5px 0", flexShrink: 0 }} />
+      <div
+        className="probability-track"
+        aria-label={`${match.home.code} ${home}%, draw ${draw}%, ${match.away.code} ${away}%`}
+      >
+        <span className="probability-segment home" style={{ width: `${home}%`, background: accents.home }} />
+        <span className="probability-segment draw" style={{ width: `${draw}%` }} />
+        <span className="probability-segment away" style={{ width: `${away}%`, background: accents.away }} />
+      </div>
+      <div className="probability-lane-baseline">
+        <span>{match.home.code}</span>
+        <span>Draw {draw}%</span>
+        <span>{match.away.code}</span>
       </div>
     </div>
   );
