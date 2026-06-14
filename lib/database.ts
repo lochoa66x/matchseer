@@ -220,6 +220,8 @@ type DatabaseMatchRow = {
   home_win_probability: string | number | null;
   draw_probability: string | number | null;
   away_win_probability: string | number | null;
+  forecast_version: string | number | null;
+  forecast_created_at: Date | string | null;
   projected_score: string | null;
   confidence: number | null;
   chaos: number | null;
@@ -238,9 +240,17 @@ type DatabaseMatchRow = {
 
 type ExistingForecastLockRow = {
   forecast_id: string;
+  version: number | string;
   status: string | null;
   home_score: number | null;
   away_score: number | null;
+  home_win_probability: string | number | null;
+  draw_probability: string | number | null;
+  away_win_probability: string | number | null;
+  projected_score: string | null;
+  confidence: number | null;
+  chaos: number | null;
+  source_payload: Record<string, unknown> | string | null;
 };
 
 type ForecastContextRow = {
@@ -421,6 +431,7 @@ export async function getMatch(matchId: string) {
 
 let trafficSchemaPromise: Promise<void> | null = null;
 let playerModelSchemaPromise: Promise<void> | null = null;
+let forecastLedgerSchemaPromise: Promise<void> | null = null;
 
 export async function recordTrafficEvent(
   input: TrafficEventInput,
@@ -708,6 +719,22 @@ async function ensurePlayerModelSchema(sql: NeonQuery) {
   }
 
   return playerModelSchemaPromise;
+}
+
+async function ensureForecastLedgerSchema(sql: NeonQuery) {
+  if (!forecastLedgerSchemaPromise) {
+    forecastLedgerSchemaPromise = (async () => {
+      await sql`
+        create index if not exists forecasts_match_latest_idx
+        on forecasts (match_id, version desc, created_at desc);
+      `;
+    })().catch((error) => {
+      forecastLedgerSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  return forecastLedgerSchemaPromise;
 }
 
 type KeyPlayerProfile = {
@@ -1161,6 +1188,7 @@ export async function syncFootballDataSnapshot(
 
   await upsertWorldCupVenues(sql);
   await ensurePlayerModelSchema(sql);
+  await ensureForecastLedgerSchema(sql);
 
   const teamByProviderId = new Map(
     snapshot.teams.map((team) => [team.id, team] as const),
@@ -1320,14 +1348,22 @@ export async function syncFootballDataSnapshot(
     const existingForecastRows = (await sql`
       select
         forecasts.id as forecast_id,
+        forecasts.version,
         matches.status,
         matches.home_score,
-        matches.away_score
+        matches.away_score,
+        forecasts.home_win_probability,
+        forecasts.draw_probability,
+        forecasts.away_win_probability,
+        forecasts.projected_score,
+        forecasts.confidence,
+        forecasts.chaos,
+        forecasts.source_payload
       from matches
       join forecasts
         on forecasts.match_id = matches.id
-       and forecasts.version = 1
       where matches.external_id = ${match.externalId}
+      order by forecasts.version desc, forecasts.created_at desc
       limit 1;
     `) as unknown as ExistingForecastLockRow[];
 
@@ -1450,6 +1486,52 @@ export async function syncFootballDataSnapshot(
       venueSlug: match.venueSlug,
       context: forecastContext,
     });
+    const forecastFingerprint = createForecastFingerprint({
+      forecast,
+      homeRatings,
+      awayRatings,
+    });
+    const existingForecast = existingForecastRows[0] ?? null;
+    const existingFingerprint = readForecastFingerprint(
+      existingForecast?.source_payload,
+    );
+
+    if (existingForecast && existingFingerprint === forecastFingerprint) {
+      forecasts += 1;
+      continue;
+    }
+
+    const nextVersion = existingForecast
+      ? Math.max(1, toNumber(existingForecast.version) + 1)
+      : 1;
+    const sourcePayload = {
+      provider: snapshot.provider,
+      providerMatchId: match.providerId,
+      fetchedAt: snapshot.fetchedAt,
+      forecastEngine: "matchseer-v3",
+      modelVersion: "matchseer-v3.1-ledger",
+      forecastFingerprint,
+      forecastStatus: "open",
+      supersedesVersion: existingForecast
+        ? toNumber(existingForecast.version)
+        : null,
+      homeRatings,
+      awayRatings,
+      modifiers: forecast.modifiers,
+      previousForecast: existingForecast
+        ? {
+            version: toNumber(existingForecast.version),
+            home: toNumber(existingForecast.home_win_probability),
+            draw: toNumber(existingForecast.draw_probability),
+            away: toNumber(existingForecast.away_win_probability),
+            projected: existingForecast.projected_score,
+            confidence: toNumber(existingForecast.confidence),
+            chaos: toNumber(existingForecast.chaos),
+            fingerprint: existingFingerprint,
+          }
+        : null,
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, and fatigue signals.",
+    };
     const forecastRows = await sql`
       insert into forecasts (
         match_id,
@@ -1464,33 +1546,16 @@ export async function syncFootballDataSnapshot(
       )
       values (
         (select id from matches where external_id = ${match.externalId}),
-        1,
+        ${nextVersion},
         ${forecast.home},
         ${forecast.draw},
         ${forecast.away},
         ${forecast.projected},
         ${forecast.confidence},
         ${forecast.chaos},
-        ${JSON.stringify({
-          provider: snapshot.provider,
-          providerMatchId: match.providerId,
-          fetchedAt: snapshot.fetchedAt,
-          forecastEngine: "matchseer-v3",
-          modelVersion: "matchseer-v3",
-          homeRatings,
-          awayRatings,
-          modifiers: forecast.modifiers,
-          note: "Dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, and fatigue signals.",
-        })}::jsonb
+        ${JSON.stringify(sourcePayload)}::jsonb
       )
-      on conflict (match_id, version) do update set
-        home_win_probability = excluded.home_win_probability,
-        draw_probability = excluded.draw_probability,
-        away_win_probability = excluded.away_win_probability,
-        projected_score = excluded.projected_score,
-        confidence = excluded.confidence,
-        chaos = excluded.chaos,
-        source_payload = excluded.source_payload
+      on conflict (match_id, version) do nothing
       returning id;
     `;
     const forecastId = forecastRows[0]?.id;
@@ -1819,12 +1884,14 @@ async function fetchMatchRows(sql: NeonQuery) {
       select distinct on (match_id)
         id,
         match_id,
+        version,
         home_win_probability,
         draw_probability,
         away_win_probability,
         projected_score,
         confidence,
-        chaos
+        chaos,
+        created_at
       from forecasts
       order by match_id, version desc, created_at desc
     ),
@@ -1877,6 +1944,8 @@ async function fetchMatchRows(sql: NeonQuery) {
       latest_forecast.home_win_probability,
       latest_forecast.draw_probability,
       latest_forecast.away_win_probability,
+      latest_forecast.version as forecast_version,
+      latest_forecast.created_at as forecast_created_at,
       latest_forecast.projected_score,
       latest_forecast.confidence,
       latest_forecast.chaos,
@@ -1942,6 +2011,8 @@ async function fetchMatchRows(sql: NeonQuery) {
       latest_forecast.home_win_probability,
       latest_forecast.draw_probability,
       latest_forecast.away_win_probability,
+      latest_forecast.version,
+      latest_forecast.created_at,
       latest_forecast.projected_score,
       latest_forecast.confidence,
       latest_forecast.chaos,
@@ -2116,6 +2187,10 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       home: toNumber(row.home_win_probability),
       draw: toNumber(row.draw_probability),
       away: toNumber(row.away_win_probability),
+      version: toNumber(row.forecast_version),
+      generatedAt: row.forecast_created_at
+        ? new Date(row.forecast_created_at).toISOString()
+        : null,
       confidence: toNumber(row.confidence),
       chaos: toNumber(row.chaos),
       projected: projectedScore,
@@ -2261,6 +2336,85 @@ function toOptionalNumber(value: string | number | null | undefined) {
 
 function roundModifier(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function createForecastFingerprint({
+  forecast,
+  homeRatings,
+  awayRatings,
+}: {
+  forecast: ReturnType<typeof matchseerV3Forecast>;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+}) {
+  return createHash("sha256")
+    .update(
+      stableStringify({
+        home: forecast.home,
+        draw: forecast.draw,
+        away: forecast.away,
+        confidence: forecast.confidence,
+        chaos: forecast.chaos,
+        projected: forecast.projected,
+        modifiers: forecast.modifiers,
+        factorExplanations: forecast.factors.map((factor) => ({
+          label: factor.label,
+          weight: factor.weight,
+          explanation: factor.explanation,
+        })),
+        homeRatings,
+        awayRatings,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function readForecastFingerprint(
+  payload: ExistingForecastLockRow["source_payload"] | undefined,
+) {
+  const parsedPayload = parseJsonPayload(payload);
+  const fingerprint = parsedPayload?.forecastFingerprint;
+
+  return typeof fingerprint === "string" ? fingerprint : null;
+}
+
+function parseJsonPayload(
+  payload: ExistingForecastLockRow["source_payload"] | undefined,
+) {
+  if (!payload) {
+    return null;
+  }
+
+  if (typeof payload !== "string") {
+    return payload;
+  }
+
+  try {
+    return JSON.parse(payload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function stableStringify(value: unknown) {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nestedValue]) => [key, sortJsonValue(nestedValue)]),
+    );
+  }
+
+  return value;
 }
 
 const teamRatingProfiles: Record<string, TeamRatings> = {

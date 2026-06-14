@@ -115,6 +115,9 @@ create table if not exists forecasts (
   unique (match_id, version)
 );
 
+create index if not exists forecasts_match_latest_idx
+  on forecasts (match_id, version desc, created_at desc);
+
 create table if not exists forecast_factors (
   id uuid primary key default gen_random_uuid(),
   forecast_id uuid references forecasts(id) on delete cascade,

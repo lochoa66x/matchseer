@@ -33,6 +33,8 @@ export type MatchForecast = ForecastCopy & {
   home: number;
   draw: number;
   away: number;
+  version?: number;
+  generatedAt?: string | null;
   confidence: number;
   chaos: number;
   projected: string;
