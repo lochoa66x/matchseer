@@ -965,7 +965,7 @@ export default function Home() {
 
           <div className="seer-share-row">
             <button
-              className="share-button seer-share-button whatsapp-share-button"
+              className="share-button seer-share-button seer-send-button"
               onClick={() => shareToWhatsApp(activeMatch)}
               type="button"
             >
