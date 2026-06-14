@@ -405,6 +405,12 @@ type ForecastContextRow = {
   weather_summary: string | null;
   home_rest_hours: string | number | null;
   away_rest_hours: string | number | null;
+  home_tournament_matches: string | number | null;
+  home_tournament_points: string | number | null;
+  home_tournament_goal_diff: string | number | null;
+  away_tournament_matches: string | number | null;
+  away_tournament_points: string | number | null;
+  away_tournament_goal_diff: string | number | null;
   player_availability: ForecastPlayerContext[] | null;
 };
 
@@ -1992,6 +1998,132 @@ export async function syncFootballDataSnapshot(
               or previous_match.away_team_id = current_match.away_team_id
             )
         ) as away_rest_hours,
+        (
+          select count(*)
+          from matches previous_match
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and previous_match.status = 'final'
+            and previous_match.home_score is not null
+            and previous_match.away_score is not null
+            and (
+              previous_match.home_team_id = current_match.home_team_id
+              or previous_match.away_team_id = current_match.home_team_id
+            )
+        ) as home_tournament_matches,
+        coalesce(
+          (
+            select sum(
+              case
+                when previous_match.home_score = previous_match.away_score then 1
+                when previous_match.home_team_id = current_match.home_team_id
+                  and previous_match.home_score > previous_match.away_score then 3
+                when previous_match.away_team_id = current_match.home_team_id
+                  and previous_match.away_score > previous_match.home_score then 3
+                else 0
+              end
+            )
+            from matches previous_match
+            where current_match.starts_at is not null
+              and previous_match.starts_at is not null
+              and previous_match.starts_at < current_match.starts_at
+              and previous_match.status = 'final'
+              and previous_match.home_score is not null
+              and previous_match.away_score is not null
+              and (
+                previous_match.home_team_id = current_match.home_team_id
+                or previous_match.away_team_id = current_match.home_team_id
+              )
+          ),
+          0
+        ) as home_tournament_points,
+        coalesce(
+          (
+            select sum(
+              case
+                when previous_match.home_team_id = current_match.home_team_id
+                  then previous_match.home_score - previous_match.away_score
+                else previous_match.away_score - previous_match.home_score
+              end
+            )
+            from matches previous_match
+            where current_match.starts_at is not null
+              and previous_match.starts_at is not null
+              and previous_match.starts_at < current_match.starts_at
+              and previous_match.status = 'final'
+              and previous_match.home_score is not null
+              and previous_match.away_score is not null
+              and (
+                previous_match.home_team_id = current_match.home_team_id
+                or previous_match.away_team_id = current_match.home_team_id
+              )
+          ),
+          0
+        ) as home_tournament_goal_diff,
+        (
+          select count(*)
+          from matches previous_match
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and previous_match.status = 'final'
+            and previous_match.home_score is not null
+            and previous_match.away_score is not null
+            and (
+              previous_match.home_team_id = current_match.away_team_id
+              or previous_match.away_team_id = current_match.away_team_id
+            )
+        ) as away_tournament_matches,
+        coalesce(
+          (
+            select sum(
+              case
+                when previous_match.home_score = previous_match.away_score then 1
+                when previous_match.home_team_id = current_match.away_team_id
+                  and previous_match.home_score > previous_match.away_score then 3
+                when previous_match.away_team_id = current_match.away_team_id
+                  and previous_match.away_score > previous_match.home_score then 3
+                else 0
+              end
+            )
+            from matches previous_match
+            where current_match.starts_at is not null
+              and previous_match.starts_at is not null
+              and previous_match.starts_at < current_match.starts_at
+              and previous_match.status = 'final'
+              and previous_match.home_score is not null
+              and previous_match.away_score is not null
+              and (
+                previous_match.home_team_id = current_match.away_team_id
+                or previous_match.away_team_id = current_match.away_team_id
+              )
+          ),
+          0
+        ) as away_tournament_points,
+        coalesce(
+          (
+            select sum(
+              case
+                when previous_match.home_team_id = current_match.away_team_id
+                  then previous_match.home_score - previous_match.away_score
+                else previous_match.away_score - previous_match.home_score
+              end
+            )
+            from matches previous_match
+            where current_match.starts_at is not null
+              and previous_match.starts_at is not null
+              and previous_match.starts_at < current_match.starts_at
+              and previous_match.status = 'final'
+              and previous_match.home_score is not null
+              and previous_match.away_score is not null
+              and (
+                previous_match.home_team_id = current_match.away_team_id
+                or previous_match.away_team_id = current_match.away_team_id
+              )
+          ),
+          0
+        ) as away_tournament_goal_diff,
         coalesce(
           (
             select jsonb_agg(
@@ -2098,7 +2230,7 @@ export async function syncFootballDataSnapshot(
             fingerprint: existingFingerprint,
           }
         : null,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, and fatigue signals.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, fatigue signals, and tournament-floor score pressure.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -3384,6 +3516,7 @@ const teamRatingProfiles: Record<string, TeamRatings> = {
   CIV: { attack: 79, control: 75, defense: 74, setPieces: 77 },
   COL: { attack: 82, control: 80, defense: 76, setPieces: 78 },
   CRO: { attack: 79, control: 86, defense: 80, setPieces: 77 },
+  CUW: { attack: 62, control: 66, defense: 59, setPieces: 64 },
   CZE: { attack: 73, control: 73, defense: 76, setPieces: 79 },
   DEN: { attack: 78, control: 82, defense: 81, setPieces: 80 },
   ECU: { attack: 78, control: 79, defense: 77, setPieces: 73 },
@@ -3401,6 +3534,7 @@ const teamRatingProfiles: Record<string, TeamRatings> = {
   MEX: { attack: 75, control: 74, defense: 71, setPieces: 78 },
   NED: { attack: 85, control: 86, defense: 83, setPieces: 81 },
   NGA: { attack: 80, control: 74, defense: 73, setPieces: 76 },
+  NZL: { attack: 63, control: 62, defense: 66, setPieces: 70 },
   PAR: { attack: 72, control: 71, defense: 76, setPieces: 78 },
   POR: { attack: 87, control: 85, defense: 81, setPieces: 83 },
   QAT: { attack: 68, control: 70, defense: 67, setPieces: 72 },
@@ -3409,6 +3543,8 @@ const teamRatingProfiles: Record<string, TeamRatings> = {
   SEN: { attack: 80, control: 77, defense: 79, setPieces: 78 },
   SUI: { attack: 79, control: 81, defense: 80, setPieces: 79 },
   TUN: { attack: 70, control: 71, defense: 77, setPieces: 76 },
+  TUR: { attack: 75, control: 77, defense: 72, setPieces: 74 },
+  URU: { attack: 84, control: 83, defense: 82, setPieces: 82 },
   URY: { attack: 84, control: 83, defense: 82, setPieces: 82 },
   USA: { attack: 79, control: 77, defense: 75, setPieces: 76 },
 };
@@ -3527,12 +3663,25 @@ function matchseerV3Forecast({
       availability.awayXgPenalty -
       fatigue.awayXgPenalty,
   );
+  const tournamentReality = tournamentRealityScoreModifier({
+    homeTeam,
+    awayTeam,
+    homeRatings,
+    awayRatings,
+    homePower,
+    awayPower,
+    homeProbability: home,
+    awayProbability: away,
+    chaos,
+    context,
+  });
   const projected = projectedScoreline({
     homeProbability: home,
     drawProbability: draw,
     awayProbability: away,
     homeXg,
     awayXg,
+    tournamentReality,
   });
   const favorite =
     home === away
@@ -3569,6 +3718,7 @@ function matchseerV3Forecast({
     spotlight.factor,
     availability.factor,
     fatigue.factor,
+    tournamentReality.factor,
     {
       label: "Venue context",
       weight: 0.55,
@@ -3617,6 +3767,7 @@ function matchseerV3Forecast({
       spotlight: spotlight.payload,
       availability: availability.payload,
       fatigue: fatigue.payload,
+      tournamentReality: tournamentReality.payload,
     },
     factors,
   };
@@ -4235,6 +4386,231 @@ function spotlightGravity(team: FootballDataTeam) {
   return clampNumber(byCode[code] ?? byName[name] ?? 0, 0, 2.5);
 }
 
+type TournamentRealityModifier = {
+  side: "home" | "away" | null;
+  severity: number;
+  favoriteMinGoals: number;
+  underdogMaxGoals: number | null;
+  minMargin: number;
+  factor: { label: string; weight: number; explanation: string } | null;
+  payload: Record<string, unknown>;
+};
+
+function tournamentRealityScoreModifier({
+  homeTeam,
+  awayTeam,
+  homeRatings,
+  awayRatings,
+  homePower,
+  awayPower,
+  homeProbability,
+  awayProbability,
+  chaos,
+  context,
+}: {
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  homePower: number;
+  awayPower: number;
+  homeProbability: number;
+  awayProbability: number;
+  chaos: number;
+  context: ForecastContextRow | null;
+}): TournamentRealityModifier {
+  const homePrior = tournamentFloorPower(homeTeam, homeRatings);
+  const awayPrior = tournamentFloorPower(awayTeam, awayRatings);
+  const probabilityGap = homeProbability - awayProbability;
+  const powerGap = homePower - awayPower;
+  const clearHomeFavorite = probabilityGap >= 18 || powerGap >= 14;
+  const clearAwayFavorite = probabilityGap <= -18 || powerGap <= -14;
+
+  if (!clearHomeFavorite && !clearAwayFavorite) {
+    return inactiveTournamentReality({
+      homePrior,
+      awayPrior,
+      status: "balanced-matchup",
+    });
+  }
+
+  const side = clearHomeFavorite ? "home" : "away";
+  const favorite =
+    side === "home"
+      ? { team: homeTeam, ratings: homeRatings, power: homePower, prior: homePrior }
+      : { team: awayTeam, ratings: awayRatings, power: awayPower, prior: awayPrior };
+  const underdog =
+    side === "home"
+      ? { team: awayTeam, ratings: awayRatings, power: awayPower, prior: awayPrior }
+      : { team: homeTeam, ratings: homeRatings, power: homePower, prior: homePrior };
+  const powerSeparation = favorite.power - underdog.power;
+  const priorSeparation = favorite.prior - underdog.prior;
+  const underdogWeakness = tournamentFloorWeakness(
+    underdog.team,
+    underdog.ratings,
+    underdog.prior,
+  );
+  const favoriteStrength =
+    clampNumber((powerSeparation - 10) / 18, 0, 1) +
+    clampNumber((priorSeparation - 16) / 28, 0, 0.55);
+  const surpriseCredit = tournamentSurpriseCredit(side === "home" ? "away" : "home", context);
+  const chaosRelief = clampNumber((chaos - 62) / 34, 0, 0.4);
+  const severity = clampNumber(
+    underdogWeakness * 0.9 + favoriteStrength * 0.72 - surpriseCredit - chaosRelief,
+    0,
+    1.6,
+  );
+
+  if (severity < 0.35) {
+    return inactiveTournamentReality({
+      homePrior,
+      awayPrior,
+      status: surpriseCredit > 0 ? "surprise-credit-softened" : "floor-clear",
+      side,
+      severity,
+      surpriseCredit,
+    });
+  }
+
+  const favoriteMinGoals = severity >= 1.05 ? 3 : severity >= 0.55 ? 2 : 0;
+  const underdogMaxGoals = severity >= 0.72 ? 0 : severity >= 0.45 ? 1 : null;
+  const minMargin = severity >= 0.95 ? 2 : 1;
+  const softened = surpriseCredit > 0.25;
+  const explanation = softened
+    ? `${underdog.team.name} still carry a low tournament floor against ${favorite.team.name}, but earlier proof softens the scoreline tax.`
+    : `${underdog.team.name} carry a low tournament floor against ${favorite.team.name}; the scoreline gets less polite until they prove otherwise.`;
+
+  return {
+    side,
+    severity: roundModifier(severity),
+    favoriteMinGoals,
+    underdogMaxGoals,
+    minMargin,
+    factor: {
+      label: "Tournament floor",
+      weight: 0.68,
+      explanation,
+    },
+    payload: {
+      status: "active",
+      side,
+      favorite: favorite.team.code,
+      underdog: underdog.team.code,
+      homePrior: roundModifier(homePrior),
+      awayPrior: roundModifier(awayPrior),
+      underdogWeakness: roundModifier(underdogWeakness),
+      favoriteStrength: roundModifier(favoriteStrength),
+      surpriseCredit: roundModifier(surpriseCredit),
+      chaosRelief: roundModifier(chaosRelief),
+      severity: roundModifier(severity),
+      favoriteMinGoals,
+      underdogMaxGoals,
+      minMargin,
+    },
+  };
+}
+
+function inactiveTournamentReality(payload: Record<string, unknown>): TournamentRealityModifier {
+  return {
+    side: null,
+    severity: 0,
+    favoriteMinGoals: 0,
+    underdogMaxGoals: null,
+    minMargin: 0,
+    factor: null,
+    payload: {
+      status: "inactive",
+      ...payload,
+    },
+  };
+}
+
+function tournamentFloorPower(team: FootballDataTeam, ratings: TeamRatings) {
+  const code = team.code.toUpperCase();
+  const nameKey = normalizeModelTeamKey(team.name);
+  const profile =
+    tournamentFloorProfilesByCode[code] ?? tournamentFloorProfilesByName[nameKey];
+  const ratingsPower = teamPower(ratings);
+
+  return clampNumber(profile?.power ?? ratingsPower, 35, 96);
+}
+
+function tournamentFloorWeakness(
+  team: FootballDataTeam,
+  ratings: TeamRatings,
+  prior: number,
+) {
+  const code = team.code.toUpperCase();
+  const nameKey = normalizeModelTeamKey(team.name);
+  const profile =
+    tournamentFloorProfilesByCode[code] ?? tournamentFloorProfilesByName[nameKey];
+  const ratingsPower = teamPower(ratings);
+  const ratingsWeakness = clampNumber((68 - ratingsPower) / 18, 0, 1);
+  const priorWeakness = clampNumber((62 - prior) / 20, 0, 1);
+
+  return clampNumber(
+    Math.max(ratingsWeakness, priorWeakness) + (profile?.tax ?? 0),
+    0,
+    1.55,
+  );
+}
+
+function tournamentSurpriseCredit(
+  side: "home" | "away",
+  context: ForecastContextRow | null,
+) {
+  const matches = toOptionalNumber(
+    side === "home"
+      ? context?.home_tournament_matches
+      : context?.away_tournament_matches,
+  ) ?? 0;
+  const points = toOptionalNumber(
+    side === "home"
+      ? context?.home_tournament_points
+      : context?.away_tournament_points,
+  ) ?? 0;
+  const goalDiff = toOptionalNumber(
+    side === "home"
+      ? context?.home_tournament_goal_diff
+      : context?.away_tournament_goal_diff,
+  ) ?? 0;
+
+  if (matches <= 0) {
+    return 0;
+  }
+
+  const pointsPerMatch = points / matches;
+  const pointsCredit =
+    pointsPerMatch >= 3 ? 0.95 : pointsPerMatch >= 1 ? 0.48 : 0;
+  const goalCredit = goalDiff >= 2 ? 0.28 : goalDiff > 0 ? 0.16 : 0;
+  const consistencyCredit = matches >= 2 && points >= 4 ? 0.32 : 0;
+
+  return clampNumber(pointsCredit + goalCredit + consistencyCredit, 0, 1.35);
+}
+
+function normalizeModelTeamKey(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const tournamentFloorProfilesByCode: Record<string, { power: number; tax: number }> = {
+  CUW: { power: 49, tax: 0.42 },
+  HAI: { power: 52, tax: 0.26 },
+  NZL: { power: 50, tax: 0.52 },
+  QAT: { power: 54, tax: 0.22 },
+};
+
+const tournamentFloorProfilesByName: Record<string, { power: number; tax: number }> = {
+  curacao: tournamentFloorProfilesByCode.CUW,
+  "new zealand": tournamentFloorProfilesByCode.NZL,
+  haiti: tournamentFloorProfilesByCode.HAI,
+  qatar: tournamentFloorProfilesByCode.QAT,
+};
+
 function setPieceModifier(
   homeRatings: TeamRatings,
   awayRatings: TeamRatings,
@@ -4283,12 +4659,14 @@ function projectedScoreline({
   awayProbability,
   homeXg,
   awayXg,
+  tournamentReality,
 }: {
   homeProbability: number;
   drawProbability: number;
   awayProbability: number;
   homeXg: number;
   awayXg: number;
+  tournamentReality?: TournamentRealityModifier;
 }) {
   const isDrawish =
     drawProbability >= Math.max(homeProbability, awayProbability) - 3;
@@ -4318,7 +4696,46 @@ function projectedScoreline({
     homeGoals -= 1;
   }
 
+  if (tournamentReality?.side === "home") {
+    homeGoals = applyFavoriteFloor(homeGoals, tournamentReality.favoriteMinGoals);
+    awayGoals = applyUnderdogCap(awayGoals, awayXg, tournamentReality.underdogMaxGoals);
+
+    if (tournamentReality.minMargin > 0 && homeGoals - awayGoals < tournamentReality.minMargin) {
+      homeGoals = awayGoals + tournamentReality.minMargin;
+    }
+  }
+
+  if (tournamentReality?.side === "away") {
+    awayGoals = applyFavoriteFloor(awayGoals, tournamentReality.favoriteMinGoals);
+    homeGoals = applyUnderdogCap(homeGoals, homeXg, tournamentReality.underdogMaxGoals);
+
+    if (tournamentReality.minMargin > 0 && awayGoals - homeGoals < tournamentReality.minMargin) {
+      awayGoals = homeGoals + tournamentReality.minMargin;
+    }
+  }
+
+  homeGoals = clamp(homeGoals, 0, 5);
+  awayGoals = clamp(awayGoals, 0, 5);
+
   return `${homeGoals}-${awayGoals}`;
+}
+
+function applyFavoriteFloor(goals: number, favoriteMinGoals: number) {
+  return favoriteMinGoals > 0 ? Math.max(goals, favoriteMinGoals) : goals;
+}
+
+function applyUnderdogCap(
+  goals: number,
+  xg: number,
+  underdogMaxGoals: number | null,
+) {
+  if (underdogMaxGoals === null) {
+    return goals;
+  }
+
+  const capRelief = xg >= 1.18 ? 1 : 0;
+
+  return Math.min(goals, underdogMaxGoals + capRelief);
 }
 
 function goalsFromXg(xg: number) {
