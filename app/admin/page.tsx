@@ -91,6 +91,14 @@ type TrafficDashboard = {
     device: string;
     views: number;
   }>;
+  topLocations: Array<{
+    label: string;
+    country: string | null;
+    region: string | null;
+    city: string | null;
+    views: number;
+    visitors: number;
+  }>;
   timeline: Array<{
     bucket: string;
     views: number;
@@ -103,6 +111,7 @@ type TrafficDashboard = {
     device: string;
     language: string | null;
     matchId: string | null;
+    location: string;
   }>;
   revenue: {
     currency: "USD";
@@ -992,6 +1001,16 @@ function TrafficPanel({
             />
 
             <TrafficRankList
+              title="Locations"
+              items={traffic.topLocations.map((item) => ({
+                label: item.label,
+                value: `${formatNumber(item.views)} views`,
+                note: `${formatNumber(item.visitors)} visitors`,
+              }))}
+              emptyLabel="No location headers yet."
+            />
+
+            <TrafficRankList
               title="Devices"
               items={traffic.devices.map((item) => ({
                 label: item.device,
@@ -1016,6 +1035,9 @@ function TrafficPanel({
                     <span>
                       {formatAdminTime(event.occurredAt)} · {event.device}
                       {event.language ? ` · ${event.language}` : ""}
+                      {event.location && event.location !== "Unknown"
+                        ? ` · ${event.location}`
+                        : ""}
                     </span>
                     <em>{event.referrer}</em>
                   </article>
@@ -1149,6 +1171,7 @@ function emptyTrafficDashboard(): TrafficDashboard {
     topPaths: [],
     topReferrers: [],
     devices: [],
+    topLocations: [],
     timeline: [],
     recent: [],
     revenue: {

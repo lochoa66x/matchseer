@@ -2196,6 +2196,17 @@ body {
   gap: 8px;
 }
 
+.seer-lens-toggle {
+  display: contents;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.seer-lens-toggle > svg {
+  display: none;
+}
+
 .seer-lens-copy p,
 .seer-lens-card p {
   margin: 0;
@@ -6878,6 +6889,59 @@ body {
 
   .hero-selected-panel .weather-card.wide {
     grid-column: auto;
+  }
+
+  .seer-lens-strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .seer-lens-toggle {
+    display: grid;
+    width: 100%;
+    min-height: 48px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    color: #f8fbff;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .seer-lens-toggle .section-heading {
+    min-width: 0;
+    margin: 0;
+  }
+
+  .seer-lens-toggle .section-heading span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .seer-lens-toggle > svg {
+    display: block;
+    color: #aeb9cc;
+    transition: transform 0.18s ease;
+  }
+
+  .seer-lens-strip.mobile-expanded .seer-lens-toggle > svg {
+    transform: rotate(180deg);
+  }
+
+  .seer-lens-strip:not(.mobile-expanded) .seer-lens-copy p,
+  .seer-lens-strip:not(.mobile-expanded) .seer-lens-grid {
+    display: none;
+  }
+
+  .seer-lens-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .seer-lens-card::after {
+    display: none;
   }
 
   .seer-share-row,

@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     viewport: readViewport(payload),
     userAgent: headers.get("user-agent"),
     requestHost: headers.get("x-forwarded-host") ?? headers.get("host"),
+    geo: readGeoHeaders(headers),
   });
 
   return NextResponse.json(result, {
@@ -63,5 +64,23 @@ function readViewport(payload: unknown) {
   return {
     width: (viewport as { width?: unknown }).width,
     height: (viewport as { height?: unknown }).height,
+  };
+}
+
+function readGeoHeaders(headers: Headers) {
+  return {
+    country:
+      headers.get("x-vercel-ip-country") ??
+      headers.get("cf-ipcountry") ??
+      headers.get("cloudfront-viewer-country") ??
+      headers.get("x-country-code"),
+    region:
+      headers.get("x-vercel-ip-country-region") ??
+      headers.get("x-region") ??
+      headers.get("x-appengine-region"),
+    city:
+      headers.get("x-vercel-ip-city") ??
+      headers.get("x-city") ??
+      headers.get("x-appengine-city"),
   };
 }

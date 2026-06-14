@@ -75,6 +75,11 @@ export type TrafficEventInput = {
   } | null;
   userAgent?: string | null;
   requestHost?: string | null;
+  geo?: {
+    country?: unknown;
+    region?: unknown;
+    city?: unknown;
+  } | null;
 };
 
 export type TrafficRecordResult = {
@@ -109,6 +114,14 @@ export type TrafficDashboard = {
     device: string;
     views: number;
   }>;
+  topLocations: Array<{
+    label: string;
+    country: string | null;
+    region: string | null;
+    city: string | null;
+    views: number;
+    visitors: number;
+  }>;
   timeline: Array<{
     bucket: string;
     views: number;
@@ -121,6 +134,7 @@ export type TrafficDashboard = {
     device: string;
     language: string | null;
     matchId: string | null;
+    location: string;
   }>;
   revenue: TrafficRevenueEstimate;
 };
@@ -264,6 +278,14 @@ type TrafficDeviceRow = {
   views: string | number;
 };
 
+type TrafficLocationRow = {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  views: string | number;
+  visitors: string | number;
+};
+
 type TrafficTimelineRow = {
   bucket: Date | string;
   views: string | number;
@@ -277,6 +299,9 @@ type TrafficRecentRow = {
   device: string;
   language: string | null;
   match_id: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
 };
 
 type DatabaseMatchRow = {
@@ -603,6 +628,7 @@ export async function recordTrafficEvent(
       typeof input.timezone === "string" && input.timezone.trim()
         ? input.timezone.trim().slice(0, 80)
         : null;
+    const geo = normalizeTrafficGeo(input.geo);
 
     await sql`
       insert into traffic_events (
@@ -615,7 +641,10 @@ export async function recordTrafficEvent(
         device,
         viewport_width,
         viewport_height,
-        timezone
+        timezone,
+        country,
+        region,
+        city
       )
       values (
         ${path},
@@ -627,7 +656,10 @@ export async function recordTrafficEvent(
         ${device},
         ${viewport.width},
         ${viewport.height},
-        ${timezone}
+        ${timezone},
+        ${geo.country},
+        ${geo.region},
+        ${geo.city}
       );
     `;
 
@@ -693,6 +725,20 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
       group by device
       order by views desc, device asc;
     `) as unknown as TrafficDeviceRow[];
+    const locationRows = (await sql`
+      select
+        country,
+        region,
+        city,
+        count(*) as views,
+        count(distinct visitor_hash) as visitors
+      from traffic_events
+      where occurred_at >= now() - interval '7 days'
+        and (country is not null or region is not null or city is not null)
+      group by country, region, city
+      order by views desc, visitors desc
+      limit 8;
+    `) as unknown as TrafficLocationRow[];
     const timelineRows = (await sql`
       select
         date_trunc('hour', occurred_at) as bucket,
@@ -710,7 +756,10 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
         referrer,
         device,
         language,
-        match_id
+        match_id,
+        country,
+        region,
+        city
       from traffic_events
       order by occurred_at desc
       limit 12;
@@ -747,6 +796,14 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
         device: row.device,
         views: toNumber(row.views),
       })),
+      topLocations: locationRows.map((row) => ({
+        label: formatTrafficLocation(row),
+        country: row.country,
+        region: row.region,
+        city: row.city,
+        views: toNumber(row.views),
+        visitors: toNumber(row.visitors),
+      })),
       timeline: fillTrafficTimeline(timelineRows),
       recent: recentRows.map((row) => ({
         occurredAt: new Date(row.occurred_at).toISOString(),
@@ -755,6 +812,7 @@ export async function getTrafficDashboard(): Promise<TrafficDashboard> {
         device: row.device,
         language: row.language,
         matchId: row.match_id,
+        location: formatTrafficLocation(row),
       })),
       revenue: estimateTrafficRevenue({
         views24h,
@@ -784,8 +842,23 @@ async function ensureTrafficSchema(sql: NeonQuery) {
           device text not null default 'Desktop',
           viewport_width integer,
           viewport_height integer,
-          timezone text
+          timezone text,
+          country text,
+          region text,
+          city text
         );
+      `;
+      await sql`
+        alter table traffic_events
+        add column if not exists country text;
+      `;
+      await sql`
+        alter table traffic_events
+        add column if not exists region text;
+      `;
+      await sql`
+        alter table traffic_events
+        add column if not exists city text;
       `;
       await sql`
         create index if not exists traffic_events_occurred_at_idx
@@ -798,6 +871,10 @@ async function ensureTrafficSchema(sql: NeonQuery) {
       await sql`
         create index if not exists traffic_events_visitor_hash_idx
         on traffic_events (visitor_hash);
+      `;
+      await sql`
+        create index if not exists traffic_events_country_idx
+        on traffic_events (country);
       `;
     })().catch((error) => {
       trafficSchemaPromise = null;
@@ -1177,6 +1254,7 @@ function emptyTrafficDashboard(
     topPaths: [],
     topReferrers: [],
     devices: [],
+    topLocations: [],
     timeline: fillTrafficTimeline([]),
     recent: [],
     revenue: estimateTrafficRevenue({ views24h: 0, views7d: 0 }),
@@ -1427,6 +1505,56 @@ function normalizeTrafficReferrer(value: unknown, requestHost: unknown) {
   } catch {
     return value.slice(0, 120);
   }
+}
+
+function normalizeTrafficGeo(value: TrafficEventInput["geo"]) {
+  return {
+    country: normalizeGeoField(value?.country, 48, true),
+    region: normalizeGeoField(value?.region, 80, false),
+    city: normalizeGeoField(value?.city, 80, false),
+  };
+}
+
+function normalizeGeoField(
+  value: unknown,
+  maxLength: number,
+  uppercase: boolean,
+) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  const normalized = decodeGeoHeader(value)
+    .replace(/\+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+
+  return normalized ? (uppercase ? normalized.toUpperCase() : normalized) : null;
+}
+
+function decodeGeoHeader(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function formatTrafficLocation({
+  country,
+  region,
+  city,
+}: {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+}) {
+  const parts = [city, region, country].filter(
+    (part): part is string => Boolean(part),
+  );
+
+  return parts.length > 0 ? parts.join(", ") : "Unknown";
 }
 
 function normalizeViewport(value: TrafficEventInput["viewport"]) {

@@ -2306,6 +2306,7 @@ function CupSeerBoard({
 }
 
 function SeerLensStrip({ t }: { t: Record<string, string> }) {
+  const [showLenses, setShowLenses] = useState(false);
   const lenses = [
     {
       icon: <BarChart3 size={20} />,
@@ -2335,12 +2336,24 @@ function SeerLensStrip({ t }: { t: Record<string, string> }) {
   ];
 
   return (
-    <section className="seer-lens-strip" id="seer-lenses" aria-label={t.seerLenses}>
+    <section
+      className={cx("seer-lens-strip", showLenses && "mobile-expanded")}
+      id="seer-lenses"
+      aria-label={t.seerLenses}
+    >
       <div className="seer-lens-copy">
-        <div className="section-heading">
-          <Sparkles size={18} />
-          <span>{t.seerLenses}</span>
-        </div>
+        <button
+          aria-expanded={showLenses}
+          className="seer-lens-toggle"
+          onClick={() => setShowLenses((current) => !current)}
+          type="button"
+        >
+          <span className="section-heading">
+            <Sparkles size={18} />
+            <span>{t.seerLenses}</span>
+          </span>
+          <ChevronDown size={18} />
+        </button>
         <p>{t.seerLensesDetail}</p>
       </div>
       <div className="seer-lens-grid">
