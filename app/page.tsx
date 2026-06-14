@@ -1513,16 +1513,15 @@ function buildForecastReceipt(
   language: Language,
   t: Record<string, string>,
 ): ForecastReceipt {
-  const primaryPredictedSide = getForecastSide(match);
   const projectedOptions = parseProjectedScores(match.forecast.projected);
+  const primaryPredictedSide = getProjectedForecastSide(match);
   const projectedSides = projectedOptions.map((score) => {
     const scoreline = parseScoreline(score);
     return scoreline ? getScoreSide(scoreline.home, scoreline.away) : null;
   });
-  const forecastSignals = uniqueForecastSides([
-    primaryPredictedSide,
-    ...projectedSides,
-  ]);
+  const forecastSignals = uniqueForecastSides(projectedSides);
+  const judgedForecastSignals =
+    forecastSignals.length > 0 ? forecastSignals : [primaryPredictedSide];
   const initialModelLabel = modelForecastLabel(
     match,
     primaryPredictedSide,
@@ -1538,7 +1537,7 @@ function buildForecastReceipt(
       predictedLabel: initialPredictedLabel,
       modelLabel: initialModelLabel,
       projectedOptions,
-      summary: receiptSummary("live", match, language),
+      summary: receiptSummary("live", match, language, primaryPredictedSide),
       shortLabel: t.liveReview,
     };
   }
@@ -1553,7 +1552,7 @@ function buildForecastReceipt(
       predictedLabel: initialPredictedLabel,
       modelLabel: initialModelLabel,
       projectedOptions,
-      summary: receiptSummary("pending", match, language),
+      summary: receiptSummary("pending", match, language, primaryPredictedSide),
       shortLabel: t.awaitingResult,
     };
   }
@@ -1561,7 +1560,7 @@ function buildForecastReceipt(
   const actualSide = getScoreSide(finalScore.home, finalScore.away);
   const exactScore = `${finalScore.home}-${finalScore.away}`;
   const exact = projectedOptions.includes(exactScore);
-  const winnerHit = forecastSignals.includes(actualSide);
+  const winnerHit = judgedForecastSignals.includes(actualSide);
   const outcome: ForecastReceiptOutcome = exact ? "exact" : winnerHit ? "hit" : "miss";
   const predictedSide = winnerHit ? actualSide : primaryPredictedSide;
   const predictedLabel = sideLabel(match, predictedSide);
@@ -1577,9 +1576,17 @@ function buildForecastReceipt(
     actualLabel: sideLabel(match, actualSide),
     finalScore: exactScore,
     projectedOptions,
-    summary: receiptSummary(outcome, match, language),
+    summary: receiptSummary(outcome, match, language, predictedSide),
     shortLabel: outcome === "exact" ? t.exactHit : outcome === "hit" ? t.seerHit : t.seerMiss,
   };
+}
+
+function getProjectedForecastSide(match: Match): ForecastSide {
+  const primaryProjectedScore = parsePrimaryProjectedScore(match.forecast.projected);
+
+  return primaryProjectedScore
+    ? getScoreSide(primaryProjectedScore.home, primaryProjectedScore.away)
+    : getForecastSide(match);
 }
 
 function getForecastSide(match: Match): ForecastSide {
@@ -1619,8 +1626,13 @@ function modelForecastLabel(
   side: ForecastSide,
   projectedOptions: string[],
 ) {
-  const score = projectedOptions[0];
   const label = sideLabel(match, side);
+  const score =
+    projectedOptions.find((option) => {
+      const scoreSide = parseScoreline(option);
+
+      return scoreSide && getScoreSide(scoreSide.home, scoreSide.away) === side;
+    }) ?? projectedOptions[0];
 
   if (!score) {
     return label;
@@ -1706,9 +1718,14 @@ function receiptSortTime(match: Match) {
   return match.status === "Final" ? 1 : 0;
 }
 
-function receiptSummary(outcome: ForecastReceiptOutcome, match: Match, language: Language) {
+function receiptSummary(
+  outcome: ForecastReceiptOutcome,
+  match: Match,
+  language: Language,
+  predictedOverride?: ForecastSide,
+) {
   const score = parseScoreline(match.score);
-  const predicted = getForecastSide(match);
+  const predicted = predictedOverride ?? getProjectedForecastSide(match);
   const actual = score ? getScoreSide(score.home, score.away) : undefined;
   const predictedName = sideName(match, predicted, language);
   const actualName = actual ? sideName(match, actual, language) : "";
@@ -2320,6 +2337,7 @@ const fifaCodeToFlagCode: Record<string, string> = {
   COL: "co",
   CRC: "cr",
   CRO: "hr",
+  CUW: "cw",
   CZE: "cz",
   DEN: "dk",
   ECU: "ec",
@@ -2367,6 +2385,7 @@ const teamNameToFlagCode: Record<string, string> = {
   colombia: "co",
   "costa rica": "cr",
   croatia: "hr",
+  curacao: "cw",
   czechia: "cz",
   denmark: "dk",
   ecuador: "ec",
