@@ -1090,6 +1090,8 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const weatherMood = toLanguageRecord(
     row.weather_summary ?? "Weather data pending.",
   );
+  const projectedScore =
+    publishedProjectedScoreCorrections[row.id] ?? row.projected_score ?? "Pending";
 
   return {
     id: row.id,
@@ -1131,7 +1133,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       away: toNumber(row.away_win_probability),
       confidence: toNumber(row.confidence),
       chaos: toNumber(row.chaos),
-      projected: row.projected_score ?? "Pending",
+      projected: projectedScore,
       tone: {
         ...toLanguageRecord("Forecast copy pending."),
         ...(row.tone ?? {}),
@@ -1166,6 +1168,10 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       : [],
   };
 }
+
+const publishedProjectedScoreCorrections: Record<string, string> = {
+  "fd-537328": "2-1",
+};
 
 function normalizeGroupName(groupName: string | null) {
   if (!groupName) {

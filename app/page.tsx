@@ -1403,13 +1403,46 @@ function matchAccentColors(match: Match) {
   const homeIndex = teamAccentIndex(match.home);
   let awayIndex = teamAccentIndex(match.away);
 
-  if (awayIndex === homeIndex) {
-    awayIndex = (awayIndex + 3) % teamAccentPalette.length;
+  if (awayIndex === homeIndex || paletteColorsAreTooClose(homeIndex, awayIndex)) {
+    awayIndex = mostContrastingPaletteIndex(homeIndex);
   }
 
   return {
     home: teamAccentPalette[homeIndex],
     away: teamAccentPalette[awayIndex],
+  };
+}
+
+function paletteColorsAreTooClose(leftIndex: number, rightIndex: number) {
+  return colorDistance(teamAccentPalette[leftIndex], teamAccentPalette[rightIndex]) < 120;
+}
+
+function mostContrastingPaletteIndex(anchorIndex: number) {
+  return teamAccentPalette
+    .map((color, index) => ({
+      index,
+      distance: index === anchorIndex
+        ? -1
+        : colorDistance(teamAccentPalette[anchorIndex], color),
+    }))
+    .sort((left, right) => right.distance - left.distance)[0].index;
+}
+
+function colorDistance(leftHex: string, rightHex: string) {
+  const left = hexToRgb(leftHex);
+  const right = hexToRgb(rightHex);
+
+  return Math.hypot(left.r - right.r, left.g - right.g, left.b - right.b);
+}
+
+function hexToRgb(hex: string) {
+  const normalized = hex.replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
   };
 }
 
