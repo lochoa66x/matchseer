@@ -1587,6 +1587,10 @@ h1 {
   line-height: 1.35;
 }
 
+.player-empty-state {
+  grid-column: 1 / -1;
+}
+
 .section-heading {
   color: #1a2027;
 }

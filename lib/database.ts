@@ -6,6 +6,8 @@ import type {
 import { fetchCurrentVenueWeather } from "./providers/open-meteo";
 import { worldCupVenues } from "./providers/world-cup-venues";
 
+const ENABLE_PLAYER_SPARKS = false;
+
 export type DataSourceStatus = "database" | "database-unavailable";
 export type DataSourceReason =
   | "database"
@@ -1040,15 +1042,17 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       name: row.referee_name ?? "TBD",
       cardRisk: toCardRisk(row.cards_per_match),
     },
-    players: (row.players ?? []).map((player) => ({
-      name: player.name,
-      team: player.team,
-      role: player.role,
-      club: player.club ?? "Club pending",
-      league: player.league ?? "League pending",
-      spark: toNumber(player.spark),
-      note: player.note ?? "Spark pending",
-    })),
+    players: ENABLE_PLAYER_SPARKS
+      ? (row.players ?? []).map((player) => ({
+          name: player.name,
+          team: player.team,
+          role: player.role,
+          club: player.club ?? "Club pending",
+          league: player.league ?? "League pending",
+          spark: toNumber(player.spark),
+          note: player.note ?? "Spark pending",
+        }))
+      : [],
   };
 }
 

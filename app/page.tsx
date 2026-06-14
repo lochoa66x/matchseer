@@ -148,6 +148,7 @@ const copy = {
     pendingMode: "Live data pending",
     fallbackMode: "Live data pending",
     noDemoFixtures: "No demo data",
+    noPlayerData: "Verified player data is not connected yet.",
     connected: "Connected",
     mapping: "Mapping underway",
     pending: "Pending",
@@ -259,6 +260,7 @@ const copy = {
     pendingMode: "Datos reales pendientes",
     fallbackMode: "Datos reales pendientes",
     noDemoFixtures: "Sin datos demo",
+    noPlayerData: "Todavía no conectamos datos verificados de jugadores.",
     connected: "Conectado",
     mapping: "Mapeo en curso",
     pending: "Pendiente",
@@ -370,6 +372,7 @@ const copy = {
     pendingMode: "Données réelles en attente",
     fallbackMode: "Données réelles en attente",
     noDemoFixtures: "Aucune donnée démo",
+    noPlayerData: "Les données joueurs vérifiées ne sont pas encore connectées.",
     connected: "Connecté",
     mapping: "Mappage en cours",
     pending: "En attente",
@@ -508,6 +511,16 @@ export default function Home() {
   const oracleKey = activeMatch ? oracleReadKey(activeMatch, language) : "";
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
+  const detailTabs = useMemo<Tab[]>(() => {
+    const tabs: Tab[] = ["forecast", "teams"];
+
+    if ((activeMatch?.players.length ?? 0) > 0) {
+      tabs.push("players");
+    }
+
+    tabs.push("weather");
+    return tabs;
+  }, [activeMatch?.players.length]);
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const groups = useMemo(
     () => Array.from(new Set(matches.map((match) => match.group))).sort(),
@@ -558,6 +571,12 @@ export default function Home() {
       setActiveTab("forecast");
     }
   }, [activeMatchId, visibleMatches]);
+
+  useEffect(() => {
+    if (activeTab === "players" && (activeMatch?.players.length ?? 0) === 0) {
+      setActiveTab("forecast");
+    }
+  }, [activeMatch?.players.length, activeTab]);
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const match = matches.find((item) => item.id === matchId);
@@ -940,7 +959,7 @@ export default function Home() {
           </div>
 
           <nav className="tabs" aria-label="Match detail tabs">
-            {(["forecast", "teams", "players", "weather"] as Tab[]).map((tab) => (
+            {detailTabs.map((tab) => (
               <button
                 className={cx("tab", activeTab === tab && "active")}
                 key={tab}
@@ -2475,23 +2494,27 @@ function PlayersView({ match, t }: { match: Match; t: Record<string, string> }) 
         <Zap size={18} />
         <span>{t.comparePlayers}</span>
       </div>
-      {match.players.map((player) => (
-        <article className="player-card" key={player.name}>
-          <div>
-            <span className="player-team">{player.team}</span>
-            <h3>{player.name}</h3>
-            <p>{player.role} · {player.club}</p>
-          </div>
-          <div className="spark-score">
-            <Sparkles size={16} />
-            {player.spark}
-          </div>
-          <div className="player-meta">
-            <span>{player.league}</span>
-            <span>{player.note}</span>
-          </div>
-        </article>
-      ))}
+      {match.players.length === 0 ? (
+        <div className="empty-match-state player-empty-state">{t.noPlayerData}</div>
+      ) : (
+        match.players.map((player) => (
+          <article className="player-card" key={player.name}>
+            <div>
+              <span className="player-team">{player.team}</span>
+              <h3>{player.name}</h3>
+              <p>{player.role} · {player.club}</p>
+            </div>
+            <div className="spark-score">
+              <Sparkles size={16} />
+              {player.spark}
+            </div>
+            <div className="player-meta">
+              <span>{player.league}</span>
+              <span>{player.note}</span>
+            </div>
+          </article>
+        ))
+      )}
     </div>
   );
 }
