@@ -1999,7 +1999,7 @@ function matchseerV3Forecast({
       ? `${homeTeam.name} get a small venue familiarity lift.`
       : awayVenueBoost > homeVenueBoost
         ? `${awayTeam.name} get a small venue familiarity lift.`
-        : "The venue profile stays close to neutral for this baseline read.";
+        : "The venue profile stays close to neutral for this dynamic read.";
   const dynamicDrag = Math.abs(weather.chaosDelta) + Math.abs(referee.chaosDelta);
   const factors = [
     {
