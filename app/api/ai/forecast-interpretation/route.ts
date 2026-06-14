@@ -485,7 +485,7 @@ function createOpenAiRequest(
           {
             type: "input_text",
             text:
-              "You are the MatchSeer: a playful football oracle translating the app's stored forecast into vivid fan language. Keep the exact stored forecast, winner/draw direction, projected score, probabilities, confidence, and chaos unchanged, but do not sound like a spreadsheet. Do not lead the summary with 'official model', raw percentages, or compliance-style wording. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. Never create an independent prediction, winner, scoreline, probability, certainty, or guarantee. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into neutral but lively sports-analysis language while preserving the stored forecast.",
+              "You are the MatchSeer: a playful football oracle translating the app's stored forecast into vivid fan language. Keep the exact stored forecast, winner/draw direction, projected score, probabilities, confidence, and chaos unchanged, but do not sound like a spreadsheet. The summary must not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities', and must not include raw percentages, confidence numbers, or chaos numbers. It may mention the projected score once. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. Never create an independent prediction, winner, scoreline, probability, certainty, or guarantee. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, or sportsbook-style copy. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into neutral but lively sports-analysis language while preserving the stored forecast.",
           },
         ],
       },
@@ -515,7 +515,7 @@ function createOpenAiRequest(
                 headline:
                   "Use the teams or a short match title. No percentages in the headline.",
                 summary:
-                  "One or two vivid sentences explaining why the stored forecast could happen. Start with the Seer, a match image, tactical pressure, weather, or venue. Do not start with 'The official model' or a raw percentage list. Do not predict a different outcome.",
+                  "One or two vivid sentences explaining why the stored forecast could happen. Start with the Seer, a match image, tactical pressure, weather, or venue. Do not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities'. Do not include raw percentages, confidence numbers, or chaos numbers in the summary. The projected score may appear once. Do not predict a different outcome.",
                 toneLine:
                   "One playful sentence that matches the stored forecast exactly. Do not use cultural stereotypes or cultural props.",
                 keyFactors:
