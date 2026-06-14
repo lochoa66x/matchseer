@@ -2,11 +2,13 @@
 
 import {
   Activity,
+  BrainCircuit,
   CloudSun,
   DatabaseZap,
   DollarSign,
   Eye,
   Globe2,
+  History,
   KeyRound,
   LoaderCircle,
   MapPin,
@@ -16,7 +18,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type AdminStatus = {
@@ -132,6 +134,64 @@ type TrafficRevenueWindow = {
   high: number;
 };
 
+type PlayerControlRow = {
+  slug: string;
+  name: string;
+  team: string;
+  teamCode: string;
+  role: string;
+  spark: number;
+  importance: number;
+  availabilityStatus: string;
+  availabilityNote: string | null;
+  yellowCards: number;
+  redCards: number;
+  isSuspended: boolean;
+  age: number | null;
+  minutesRecent: number;
+};
+
+type ForecastVersionRow = {
+  matchId: string;
+  group: string;
+  status: string;
+  startsAt: string | null;
+  home: string;
+  homeCode: string;
+  away: string;
+  awayCode: string;
+  version: number;
+  createdAt: string | null;
+  homeWin: number;
+  draw: number;
+  awayWin: number;
+  projected: string;
+  confidence: number;
+  chaos: number;
+  modelVersion: string;
+  forecastStatus: string;
+  supersedesVersion: number | null;
+  previousProjected: string | null;
+};
+
+type ModelControlDashboard = {
+  source: string;
+  reason: string;
+  generatedAt: string;
+  players: PlayerControlRow[];
+  forecasts: ForecastVersionRow[];
+  error?: string;
+};
+
+type PlayerDraft = {
+  availabilityStatus: string;
+  availabilityNote: string;
+  yellowCards: number;
+  redCards: number;
+  isSuspended: boolean;
+  minutesRecent: number;
+};
+
 type ActionStatus = "idle" | "loading" | "success" | "error";
 
 export default function AdminPage() {
@@ -144,6 +204,11 @@ export default function AdminPage() {
     null,
   );
   const [trafficData, setTrafficData] = useState<TrafficDashboard | null>(null);
+  const [modelControlData, setModelControlData] =
+    useState<ModelControlDashboard | null>(null);
+  const [playerDrafts, setPlayerDrafts] = useState<Record<string, PlayerDraft>>(
+    {},
+  );
   const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>(
     {},
   );
@@ -210,25 +275,40 @@ export default function AdminPage() {
             error: error instanceof Error ? error.message : "Traffic failed.",
           }))
         : Promise.resolve<TrafficDashboard | null>(null);
-      const [football, weather, candidates, matches, traffic] = await Promise.all([
-        fetchJson<AdminStatus>("/api/admin/sync-football-data"),
-        fetchJson<AdminStatus>("/api/admin/sync-weather"),
-        fetchJson<VenueCandidatesResponse>("/api/admin/venue-candidates?all=1"),
-        fetchJson<MatchesResponse>("/api/matches"),
-        trafficPromise,
-      ]);
+      const modelControlsPromise = adminSecret
+        ? fetchJson<ModelControlDashboard>("/api/admin/model-controls", {
+            headers: {
+              Authorization: `Bearer ${adminSecret}`,
+            },
+          }).catch((error) => ({
+            ...emptyModelControlDashboard(),
+            error:
+              error instanceof Error ? error.message : "Model controls failed.",
+          }))
+        : Promise.resolve<ModelControlDashboard | null>(null);
+      const [football, weather, candidates, matches, traffic, modelControls] =
+        await Promise.all([
+          fetchJson<AdminStatus>("/api/admin/sync-football-data"),
+          fetchJson<AdminStatus>("/api/admin/sync-weather"),
+          fetchJson<VenueCandidatesResponse>("/api/admin/venue-candidates?all=1"),
+          fetchJson<MatchesResponse>("/api/matches"),
+          trafficPromise,
+          modelControlsPromise,
+        ]);
 
       setFootballStatus(football);
       setWeatherStatus(weather);
       setCandidateData(candidates);
       setMatchesResponse(matches);
       setTrafficData(traffic);
+      setModelControlData(modelControls);
+      setPlayerDrafts(createPlayerDrafts(modelControls?.players ?? []));
       setSelectedVenues({});
       setLoadStatus("success");
       setMessageStatus("success");
       setMessage(
         !adminSecret
-          ? "Dashboard refreshed. Add the admin secret to unlock traffic."
+          ? "Dashboard refreshed. Add the admin secret to unlock private controls."
           : "Dashboard refreshed.",
       );
     } catch (error) {
@@ -332,6 +412,61 @@ export default function AdminPage() {
       setActionStatus("error");
       setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "Venue save failed.");
+    }
+  }
+
+  async function savePlayerUpdates() {
+    if (!secret) {
+      setMessage("Add the admin secret first.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    const updates = changedPlayerUpdates(
+      modelControlData?.players ?? [],
+      playerDrafts,
+    );
+
+    if (updates.length === 0) {
+      setMessage("No player controls changed yet.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    setActionStatus("loading");
+    setMessageStatus("loading");
+
+    try {
+      const response = await fetch("/api/admin/model-controls", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ updates }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Player controls save failed.");
+      }
+
+      setActionStatus("success");
+      setMessageStatus("success");
+      setMessage(
+        `Saved ${payload.playersUpdated ?? 0} player control${
+          payload.playersUpdated === 1 ? "" : "s"
+        }. Run football sync when you want fresh versions from the new inputs.`,
+      );
+      await refreshDashboard();
+    } catch (error) {
+      setActionStatus("error");
+      setMessageStatus("error");
+      setMessage(
+        error instanceof Error ? error.message : "Player controls save failed.",
+      );
     }
   }
 
@@ -465,6 +600,15 @@ export default function AdminPage() {
 
       <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
 
+      <ModelControlPanel
+        data={modelControlData}
+        hasSecret={Boolean(secret)}
+        drafts={playerDrafts}
+        onDraftChange={setPlayerDrafts}
+        onSave={() => void savePlayerUpdates()}
+        actionStatus={actionStatus}
+      />
+
       <section className="admin-panel">
         <div className="admin-table-header">
           <div>
@@ -534,6 +678,239 @@ export default function AdminPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function ModelControlPanel({
+  data,
+  hasSecret,
+  drafts,
+  onDraftChange,
+  onSave,
+  actionStatus,
+}: {
+  data: ModelControlDashboard | null;
+  hasSecret: boolean;
+  drafts: Record<string, PlayerDraft>;
+  onDraftChange: Dispatch<SetStateAction<Record<string, PlayerDraft>>>;
+  onSave: () => void;
+  actionStatus: ActionStatus;
+}) {
+  const ready = hasSecret && data && !data.error;
+  const changedCount = countChangedPlayers(data?.players ?? [], drafts);
+
+  function updateDraft(slug: string, patch: Partial<PlayerDraft>) {
+    onDraftChange((current) => ({
+      ...current,
+      [slug]: {
+        ...current[slug],
+        ...patch,
+      },
+    }));
+  }
+
+  return (
+    <section className="admin-panel model-control-panel">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Model controls</p>
+          <h2>Seer tuning bench</h2>
+        </div>
+        <div className="traffic-generated">
+          <BrainCircuit size={16} />
+          {data ? formatAdminTime(data.generatedAt) : "Locked"}
+        </div>
+      </div>
+
+      {!ready ? (
+        <div className="traffic-empty">
+          <BrainCircuit size={22} />
+          <strong>{hasSecret ? "Model controls unavailable" : "Controls locked"}</strong>
+          <span>
+            {data?.error ??
+              "Add the admin secret and refresh to edit key-player availability."}
+          </span>
+        </div>
+      ) : (
+        <div className="model-control-grid">
+          <div className="model-control-card player-controls-card">
+            <div className="model-card-title">
+              <BrainCircuit size={16} />
+              <span>Key-player board</span>
+              <em>{changedCount} changed</em>
+            </div>
+            <div className="player-control-list">
+              {data.players.map((player) => {
+                const draft = drafts[player.slug] ?? playerToDraft(player);
+
+                return (
+                  <article className="player-control-row" key={player.slug}>
+                    <div className="player-control-id">
+                      <strong>{player.name}</strong>
+                      <span>
+                        {player.teamCode} · {player.role} · impact{" "}
+                        {player.importance} · spark {player.spark}
+                      </span>
+                    </div>
+                    <select
+                      className="admin-select player-status-select"
+                      value={draft.availabilityStatus}
+                      onChange={(event) =>
+                        updateDraft(player.slug, {
+                          availabilityStatus: event.target.value,
+                          isSuspended:
+                            event.target.value === "suspended"
+                              ? true
+                              : draft.isSuspended,
+                        })
+                      }
+                    >
+                      {availabilityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="player-mini-fields">
+                      <label>
+                        Y
+                        <input
+                          type="number"
+                          min="0"
+                          max="3"
+                          value={draft.yellowCards}
+                          onChange={(event) =>
+                            updateDraft(player.slug, {
+                              yellowCards: toAdminInteger(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        R
+                        <input
+                          type="number"
+                          min="0"
+                          max="2"
+                          value={draft.redCards}
+                          onChange={(event) =>
+                            updateDraft(player.slug, {
+                              redCards: toAdminInteger(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Min
+                        <input
+                          type="number"
+                          min="0"
+                          max="450"
+                          value={draft.minutesRecent}
+                          onChange={(event) =>
+                            updateDraft(player.slug, {
+                              minutesRecent: toAdminInteger(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="player-check">
+                        <input
+                          type="checkbox"
+                          checked={draft.isSuspended}
+                          onChange={(event) =>
+                            updateDraft(player.slug, {
+                              isSuspended: event.target.checked,
+                              availabilityStatus: event.target.checked
+                                ? "suspended"
+                                : draft.availabilityStatus === "suspended"
+                                  ? "available"
+                                  : draft.availabilityStatus,
+                            })
+                          }
+                        />
+                        Susp
+                      </label>
+                    </div>
+                    <input
+                      className="admin-input player-note-input"
+                      value={draft.availabilityNote}
+                      onChange={(event) =>
+                        updateDraft(player.slug, {
+                          availabilityNote: event.target.value,
+                        })
+                      }
+                      placeholder="Availability note"
+                    />
+                  </article>
+                );
+              })}
+            </div>
+            <button
+              className="admin-command primary model-save-button"
+              type="button"
+              onClick={onSave}
+              disabled={changedCount === 0 || actionStatus === "loading"}
+            >
+              {actionStatus === "loading" ? (
+                <LoaderCircle size={18} className="spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              Save player controls
+            </button>
+          </div>
+
+          <div className="model-control-card forecast-history-card">
+            <div className="model-card-title">
+              <History size={16} />
+              <span>Forecast versions</span>
+              <em>{data.forecasts.length} recent</em>
+            </div>
+            <div className="forecast-version-list">
+              {data.forecasts.length === 0 ? (
+                <p className="admin-muted">No forecast versions recorded yet.</p>
+              ) : (
+                data.forecasts.map((forecast) => (
+                  <article
+                    className="forecast-version-row"
+                    key={`${forecast.matchId}-${forecast.version}-${forecast.createdAt}`}
+                  >
+                    <div>
+                      <strong>
+                        {forecast.homeCode} vs {forecast.awayCode}
+                      </strong>
+                      <span>
+                        v{forecast.version} · {forecast.projected} ·{" "}
+                        {forecast.status}
+                      </span>
+                    </div>
+                    <b>
+                      {forecast.homeWin}/{forecast.draw}/{forecast.awayWin}
+                    </b>
+                    <em>
+                      {forecast.createdAt
+                        ? formatAdminTime(forecast.createdAt)
+                        : "No timestamp"}
+                      {forecast.supersedesVersion
+                        ? ` · replaced v${forecast.supersedesVersion}`
+                        : ""}
+                      {forecast.previousProjected
+                        ? ` · was ${forecast.previousProjected}`
+                        : ""}
+                    </em>
+                  </article>
+                ))
+              )}
+            </div>
+            <p className="admin-muted">
+              Saving players updates the inputs. Run football sync to mint a fresh
+              forecast version when those inputs should move the public read.
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -797,6 +1174,16 @@ function emptyTrafficDashboard(): TrafficDashboard {
   };
 }
 
+function emptyModelControlDashboard(): ModelControlDashboard {
+  return {
+    source: "database-unavailable",
+    reason: "database-query-failed",
+    generatedAt: new Date().toISOString(),
+    players: [],
+    forecasts: [],
+  };
+}
+
 function emptyRevenueWindow(): TrafficRevenueWindow {
   return {
     views: 0,
@@ -805,6 +1192,86 @@ function emptyRevenueWindow(): TrafficRevenueWindow {
     base: 0,
     high: 0,
   };
+}
+
+const availabilityOptions = [
+  { value: "available", label: "Available" },
+  { value: "doubtful", label: "Doubtful" },
+  { value: "limited", label: "Limited" },
+  { value: "sick", label: "Sick" },
+  { value: "injured", label: "Injured" },
+  { value: "suspended", label: "Suspended" },
+  { value: "out", label: "Out" },
+];
+
+function createPlayerDrafts(players: PlayerControlRow[]) {
+  return Object.fromEntries(
+    players.map((player) => [player.slug, playerToDraft(player)]),
+  ) as Record<string, PlayerDraft>;
+}
+
+function playerToDraft(player: PlayerControlRow): PlayerDraft {
+  return {
+    availabilityStatus: player.availabilityStatus,
+    availabilityNote: player.availabilityNote ?? "",
+    yellowCards: player.yellowCards,
+    redCards: player.redCards,
+    isSuspended: player.isSuspended,
+    minutesRecent: player.minutesRecent,
+  };
+}
+
+function changedPlayerUpdates(
+  players: PlayerControlRow[],
+  drafts: Record<string, PlayerDraft>,
+) {
+  return players
+    .map((player) => {
+      const draft = drafts[player.slug];
+
+      if (!draft || !playerDraftChanged(player, draft)) {
+        return null;
+      }
+
+      return {
+        slug: player.slug,
+        availabilityStatus: draft.availabilityStatus,
+        availabilityNote: draft.availabilityNote,
+        yellowCards: draft.yellowCards,
+        redCards: draft.redCards,
+        isSuspended: draft.isSuspended,
+        minutesRecent: draft.minutesRecent,
+      };
+    })
+    .filter((update): update is PlayerDraft & { slug: string } => Boolean(update));
+}
+
+function countChangedPlayers(
+  players: PlayerControlRow[],
+  drafts: Record<string, PlayerDraft>,
+) {
+  return players.filter((player) => {
+    const draft = drafts[player.slug];
+
+    return draft ? playerDraftChanged(player, draft) : false;
+  }).length;
+}
+
+function playerDraftChanged(player: PlayerControlRow, draft: PlayerDraft) {
+  return (
+    draft.availabilityStatus !== player.availabilityStatus ||
+    draft.availabilityNote.trim() !== (player.availabilityNote ?? "") ||
+    draft.yellowCards !== player.yellowCards ||
+    draft.redCards !== player.redCards ||
+    draft.isSuspended !== player.isSuspended ||
+    draft.minutesRecent !== player.minutesRecent
+  );
+}
+
+function toAdminInteger(value: string) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : 0;
 }
 
 function formatNumber(value: number) {
@@ -850,6 +1317,12 @@ function summarizePayload(payload: Record<string, unknown>) {
   if (typeof payload.matchesUpdated === "number") {
     return `${payload.matchesUpdated} match update${
       payload.matchesUpdated === 1 ? "" : "s"
+    }.`;
+  }
+
+  if (typeof payload.playersUpdated === "number") {
+    return `${payload.playersUpdated} player update${
+      payload.playersUpdated === 1 ? "" : "s"
     }.`;
   }
 

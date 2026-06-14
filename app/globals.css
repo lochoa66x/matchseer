@@ -5710,6 +5710,193 @@ body {
   gap: 8px;
 }
 
+.model-control-panel {
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.model-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.model-control-card {
+  min-width: 0;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.model-card-title em {
+  margin-left: auto;
+  color: var(--blue);
+  font-style: normal;
+  text-transform: none;
+}
+
+.player-control-list {
+  display: grid;
+  gap: 8px;
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.player-control-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(126px, 0.5fr) minmax(260px, 0.95fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(237, 241, 247, 0.78);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.player-control-id {
+  min-width: 0;
+}
+
+.player-control-id strong {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-control-id span {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-status-select {
+  min-height: 36px;
+}
+
+.player-mini-fields {
+  display: grid;
+  grid-template-columns: 54px 54px 72px minmax(72px, 0.8fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.player-mini-fields label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.player-mini-fields input[type="number"] {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 7px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.player-check {
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 7px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.player-note-input {
+  grid-column: 1 / -1;
+  min-height: 36px;
+}
+
+.model-save-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.admin-command:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.forecast-version-list {
+  display: grid;
+  gap: 8px;
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.forecast-version-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: start;
+  padding: 10px;
+  background: rgba(237, 241, 247, 0.78);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.forecast-version-row strong,
+.forecast-version-row span,
+.forecast-version-row em {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forecast-version-row strong {
+  color: var(--ink);
+}
+
+.forecast-version-row span,
+.forecast-version-row em {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.forecast-version-row b {
+  color: var(--blue);
+  font-size: 0.9rem;
+}
+
+.forecast-version-row em {
+  grid-column: 1 / -1;
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -5730,8 +5917,22 @@ body {
   }
 
   .traffic-overview,
-  .traffic-recent-grid {
+  .traffic-recent-grid,
+  .model-control-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .player-control-row {
+    grid-template-columns: minmax(0, 1fr) minmax(126px, 180px);
+  }
+
+  .player-mini-fields,
+  .player-note-input {
+    grid-column: 1 / -1;
   }
 }
 
@@ -5756,13 +5957,33 @@ body {
   }
 
   .traffic-overview,
-  .traffic-recent-grid {
+  .traffic-recent-grid,
+  .model-control-grid {
     grid-template-columns: 1fr;
   }
 
   .traffic-chart-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .player-control-list,
+  .forecast-version-list {
+    max-height: none;
+  }
+
+  .player-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .player-status-select,
+  .player-mini-fields,
+  .player-note-input {
+    grid-column: auto;
+  }
+
+  .player-mini-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

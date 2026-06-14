@@ -167,6 +167,71 @@ export type VenueMappingCandidate = {
   };
 };
 
+export type PlayerAvailabilityUpdate = {
+  slug: string;
+  availabilityStatus: string;
+  availabilityNote?: string | null;
+  yellowCards?: number;
+  redCards?: number;
+  isSuspended?: boolean;
+  minutesRecent?: number;
+};
+
+export type PlayerAvailabilityUpdateResult = {
+  updatesReceived: number;
+  playersUpdated: number;
+  skippedPlayers: PlayerAvailabilityUpdate[];
+  fetchedAt: string;
+};
+
+export type ModelControlPlayer = {
+  slug: string;
+  name: string;
+  team: string;
+  teamCode: string;
+  role: string;
+  spark: number;
+  importance: number;
+  availabilityStatus: string;
+  availabilityNote: string | null;
+  yellowCards: number;
+  redCards: number;
+  isSuspended: boolean;
+  age: number | null;
+  minutesRecent: number;
+};
+
+export type ModelControlForecastVersion = {
+  matchId: string;
+  group: string;
+  status: string;
+  startsAt: string | null;
+  home: string;
+  homeCode: string;
+  away: string;
+  awayCode: string;
+  version: number;
+  createdAt: string | null;
+  homeWin: number;
+  draw: number;
+  awayWin: number;
+  projected: string;
+  confidence: number;
+  chaos: number;
+  modelVersion: string;
+  forecastStatus: string;
+  supersedesVersion: number | null;
+  previousProjected: string | null;
+};
+
+export type ModelControlDashboard = {
+  source: DataSourceStatus;
+  reason: DataSourceReason;
+  generatedAt: string;
+  players: ModelControlPlayer[];
+  forecasts: ModelControlForecastVersion[];
+};
+
 type NeonQuery = (
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -327,6 +392,43 @@ type VenueMappingCandidateRow = {
   venue_slug: string;
   venue_name: string;
   venue_city: string;
+};
+
+type ModelControlPlayerRow = {
+  slug: string;
+  name: string;
+  team_name: string;
+  team_code: string;
+  role: string | null;
+  spark_rating: string | number | null;
+  importance: string | number | null;
+  availability_status: string | null;
+  availability_note: string | null;
+  yellow_cards: string | number | null;
+  red_cards: string | number | null;
+  is_suspended: boolean | null;
+  age: string | number | null;
+  minutes_recent: string | number | null;
+};
+
+type ModelControlForecastRow = {
+  match_id: string;
+  group_name: string | null;
+  status: string;
+  starts_at: Date | string | null;
+  home_name: string;
+  home_code: string;
+  away_name: string;
+  away_code: string;
+  version: string | number | null;
+  created_at: Date | string | null;
+  home_win_probability: string | number | null;
+  draw_probability: string | number | null;
+  away_win_probability: string | number | null;
+  projected_score: string | null;
+  confidence: string | number | null;
+  chaos: string | number | null;
+  source_payload: Record<string, unknown> | string | null;
 };
 
 type TeamRatings = {
@@ -1081,6 +1183,152 @@ function emptyTrafficDashboard(
   };
 }
 
+function emptyModelControlDashboard(
+  reason: DataSourceReason,
+  generatedAt: string,
+): ModelControlDashboard {
+  return {
+    source: "database-unavailable",
+    reason,
+    generatedAt,
+    players: [],
+    forecasts: [],
+  };
+}
+
+function toModelControlPlayer(row: ModelControlPlayerRow): ModelControlPlayer {
+  return {
+    slug: row.slug,
+    name: row.name,
+    team: row.team_name,
+    teamCode: row.team_code,
+    role: row.role ?? "Player",
+    spark: toNumber(row.spark_rating),
+    importance: toNumber(row.importance),
+    availabilityStatus: row.availability_status ?? "available",
+    availabilityNote: row.availability_note,
+    yellowCards: toNumber(row.yellow_cards),
+    redCards: toNumber(row.red_cards),
+    isSuspended: Boolean(row.is_suspended),
+    age: toOptionalNumber(row.age),
+    minutesRecent: toNumber(row.minutes_recent),
+  };
+}
+
+function toModelControlForecastVersion(
+  row: ModelControlForecastRow,
+): ModelControlForecastVersion {
+  const payload = parseJsonPayload(row.source_payload);
+  const previousForecast = readPayloadRecord(payload?.previousForecast);
+
+  return {
+    matchId: row.match_id,
+    group: normalizeGroupName(row.group_name),
+    status: row.status,
+    startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
+    home: row.home_name,
+    homeCode: row.home_code,
+    away: row.away_name,
+    awayCode: row.away_code,
+    version: toNumber(row.version),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+    homeWin: toNumber(row.home_win_probability),
+    draw: toNumber(row.draw_probability),
+    awayWin: toNumber(row.away_win_probability),
+    projected: row.projected_score ?? "Pending",
+    confidence: toNumber(row.confidence),
+    chaos: toNumber(row.chaos),
+    modelVersion: readPayloadString(payload?.modelVersion) ?? "unknown-model",
+    forecastStatus: readPayloadString(payload?.forecastStatus) ?? "open",
+    supersedesVersion: readPayloadNumber(payload?.supersedesVersion),
+    previousProjected: readPayloadString(previousForecast?.projected),
+  };
+}
+
+const allowedAvailabilityStatuses = new Set([
+  "available",
+  "doubtful",
+  "limited",
+  "sick",
+  "injured",
+  "suspended",
+  "out",
+]);
+
+function normalizePlayerAvailabilityUpdate(
+  update: PlayerAvailabilityUpdate,
+): PlayerAvailabilityUpdate | null {
+  const slug = normalizePlayerSlug(update.slug);
+  const status = normalizeAvailabilityStatus(update.availabilityStatus);
+
+  if (!slug || !status) {
+    return null;
+  }
+
+  return {
+    slug,
+    availabilityStatus: status,
+    availabilityNote: normalizeAvailabilityNote(update.availabilityNote),
+    yellowCards: clampInteger(update.yellowCards, 0, 3),
+    redCards: clampInteger(update.redCards, 0, 2),
+    isSuspended: Boolean(update.isSuspended) || status === "suspended",
+    minutesRecent: clampInteger(update.minutesRecent, 0, 450),
+  };
+}
+
+function normalizePlayerSlug(value: unknown) {
+  return typeof value === "string"
+    ? value.trim().toLowerCase().slice(0, 120)
+    : "";
+}
+
+function normalizeAvailabilityStatus(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  return allowedAvailabilityStatuses.has(normalized) ? normalized : null;
+}
+
+function normalizeAvailabilityNote(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.replace(/\s+/g, " ").trim();
+
+  return trimmed ? trimmed.slice(0, 180) : null;
+}
+
+function clampInteger(value: unknown, min: number, max: number) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return min;
+  }
+
+  return Math.round(Math.min(max, Math.max(min, numberValue)));
+}
+
+function readPayloadRecord(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readPayloadString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readPayloadNumber(value: unknown) {
+  const numberValue =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function estimateTrafficRevenue({
   views24h,
   views7d,
@@ -1784,6 +2032,140 @@ export async function applyVenueOverrides(
     matchesUpdated,
     invalidVenues,
     missingMatches,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+export async function getModelControlDashboard(): Promise<ModelControlDashboard> {
+  const connection = await getSql();
+  const generatedAt = new Date().toISOString();
+
+  if (!connection) {
+    return emptyModelControlDashboard("missing-database-url", generatedAt);
+  }
+
+  if (!connection.sql) {
+    return emptyModelControlDashboard(connection.reason, generatedAt);
+  }
+
+  const sql = connection.sql;
+
+  try {
+    await ensurePlayerModelSchema(sql);
+    await ensureForecastLedgerSchema(sql);
+    await seedKeyPlayerWatchlist(sql);
+
+    const playerRows = (await sql`
+      select
+        players.slug,
+        players.name,
+        teams.name as team_name,
+        teams.code as team_code,
+        players.role,
+        players.spark_rating,
+        players.importance,
+        players.availability_status,
+        players.availability_note,
+        players.yellow_cards,
+        players.red_cards,
+        players.is_suspended,
+        players.age,
+        players.minutes_recent
+      from players
+      join teams on teams.id = players.team_id
+      where players.is_key_player = true
+      order by teams.name, players.importance desc, players.spark_rating desc nulls last, players.name;
+    `) as unknown as ModelControlPlayerRow[];
+    const forecastRows = (await sql`
+      select
+        matches.external_id as match_id,
+        matches.group_name,
+        matches.status,
+        matches.starts_at,
+        home_team.name as home_name,
+        home_team.code as home_code,
+        away_team.name as away_name,
+        away_team.code as away_code,
+        forecasts.version,
+        forecasts.created_at,
+        forecasts.home_win_probability,
+        forecasts.draw_probability,
+        forecasts.away_win_probability,
+        forecasts.projected_score,
+        forecasts.confidence,
+        forecasts.chaos,
+        forecasts.source_payload
+      from forecasts
+      join matches on matches.id = forecasts.match_id
+      join teams home_team on home_team.id = matches.home_team_id
+      join teams away_team on away_team.id = matches.away_team_id
+      where matches.external_id like 'fd-%'
+      order by forecasts.created_at desc nulls last, matches.starts_at desc nulls last
+      limit 18;
+    `) as unknown as ModelControlForecastRow[];
+
+    return {
+      source: "database",
+      reason: "database",
+      generatedAt,
+      players: playerRows.map(toModelControlPlayer),
+      forecasts: forecastRows.map(toModelControlForecastVersion),
+    };
+  } catch (error) {
+    console.error("MatchSeer model control read failed", error);
+    return emptyModelControlDashboard("database-query-failed", generatedAt);
+  }
+}
+
+export async function applyPlayerAvailabilityUpdates(
+  updates: PlayerAvailabilityUpdate[],
+): Promise<PlayerAvailabilityUpdateResult> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required for player availability updates.");
+  }
+
+  const sql = connection.sql;
+  const skippedPlayers: PlayerAvailabilityUpdate[] = [];
+  let playersUpdated = 0;
+
+  await ensurePlayerModelSchema(sql);
+  await seedKeyPlayerWatchlist(sql);
+
+  for (const update of updates) {
+    const normalized = normalizePlayerAvailabilityUpdate(update);
+
+    if (!normalized) {
+      skippedPlayers.push(update);
+      continue;
+    }
+
+    const updatedRows = await sql`
+      update players
+      set
+        availability_status = ${normalized.availabilityStatus},
+        availability_note = ${normalized.availabilityNote},
+        yellow_cards = ${normalized.yellowCards},
+        red_cards = ${normalized.redCards},
+        is_suspended = ${normalized.isSuspended},
+        minutes_recent = ${normalized.minutesRecent}
+      where slug = ${normalized.slug}
+        and is_key_player = true
+      returning slug;
+    `;
+
+    if (updatedRows.length === 0) {
+      skippedPlayers.push(normalized);
+    } else {
+      playersUpdated += updatedRows.length;
+    }
+  }
+
+  return {
+    updatesReceived: updates.length,
+    playersUpdated,
+    skippedPlayers,
     fetchedAt: new Date().toISOString(),
   };
 }
