@@ -7086,3 +7086,42 @@ body {
     width: 100%;
   }
 }
+
+/* === Header tidy (conservative, Phase 3): prominent wordmark + shrunk tagline ===
+   Scoped with two classes so it wins over the many .brand-lockup h1 rules
+   without touching other .eyebrow uses. Tagline kept as <h1> for semantics. */
+.brand-lockup .brand-text {
+  line-height: 1.25;
+}
+.brand-lockup .brand-wordmark {
+  margin: 0;
+  color: #fff;
+  font-size: 1.18rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.brand-lockup .brand-tagline {
+  margin: 2px 0 0;
+  color: rgba(214, 228, 255, 0.6);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+/* === WhatsApp share button (sharing feature) ===
+   New button beside the existing Share card button. Subtle WhatsApp-green
+   tint so it reads as "share to WhatsApp" without clashing with the theme. */
+.seer-share-row {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.share-button.whatsapp-share-button {
+  color: #aef0c6;
+  background: rgba(37, 211, 102, 0.12);
+  border: 1px solid rgba(37, 211, 102, 0.4);
+}
+.share-button.whatsapp-share-button:hover {
+  background: rgba(37, 211, 102, 0.2);
+}
