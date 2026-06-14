@@ -154,10 +154,17 @@ export async function POST(request: Request) {
         status: "blocked-betting-language",
       });
 
-      return NextResponse.json(
-        { error: "Generated copy included restricted betting language" },
-        { status: 422 },
-      );
+      await saveForecastInterpretation({
+        matchId: match.id,
+        interpretation: fallback,
+      });
+
+      return NextResponse.json({
+        source: "seeded-fallback",
+        reason: "blocked-betting-language",
+        model,
+        interpretation: fallback,
+      });
     }
 
     if (hasRestrictedToneLanguage(serialized)) {
