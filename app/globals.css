@@ -5024,6 +5024,10 @@ body {
   font-size: 0.75rem;
 }
 
+.scoreboard-mobile-toggle {
+  display: none;
+}
+
 @media (max-width: 1180px) {
   .hero-matchroom {
     grid-template-columns: 1fr;
@@ -5102,6 +5106,50 @@ body {
 
   .seer-scoreboard h2 {
     font-size: clamp(1.45rem, 7vw, 2.2rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .scoreboard-mobile-toggle {
+    display: grid;
+    width: 100%;
+    min-height: 46px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 0 12px;
+    color: #f8fbff;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(143, 160, 189, 0.18);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 950;
+  }
+
+  .scoreboard-mobile-toggle strong {
+    display: inline-grid;
+    min-width: 28px;
+    min-height: 28px;
+    place-items: center;
+    color: #080b12;
+    background: #dfe7f7;
+    border-radius: 999px;
+    font-size: 0.78rem;
+  }
+
+  .scoreboard-mobile-toggle svg {
+    color: #aeb9cc;
+    transition: transform 0.18s ease;
+  }
+
+  .seer-scoreboard.mobile-expanded .scoreboard-mobile-toggle svg {
+    transform: rotate(180deg);
+  }
+
+  .seer-scoreboard:not(.mobile-expanded) .receipt-list {
+    display: none;
   }
 }
 
@@ -5812,6 +5860,16 @@ body {
   gap: 10px;
 }
 
+.match-insight-body {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.mobile-support-toggle {
+  display: none;
+}
+
 .match-insight-stack .comparison-card,
 .match-insight-stack .weather-grid {
   margin: 0;
@@ -6188,6 +6246,10 @@ body {
 }
 
 .hero-selected-panel .match-insight-stack {
+  display: block;
+}
+
+.hero-selected-panel .match-insight-body {
   grid-template-columns: minmax(260px, 0.95fr) minmax(220px, 0.7fr);
   gap: 11px;
 }
@@ -6340,6 +6402,10 @@ body {
   }
 
   .hero-selected-panel .match-insight-stack {
+    display: block;
+  }
+
+  .hero-selected-panel .match-insight-body {
     grid-template-columns: 1fr;
   }
 }
@@ -6371,6 +6437,68 @@ body {
   .hero-selected-panel .metric-row,
   .hero-selected-panel .weather-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-support-toggle {
+    display: grid;
+    width: 100%;
+    min-height: 48px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    color: #f8fbff;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(143, 160, 189, 0.18);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .mobile-support-toggle span,
+  .mobile-support-toggle strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-support-toggle span {
+    display: inline-flex;
+    grid-column: 1;
+    grid-row: 1;
+    align-items: center;
+    gap: 7px;
+    color: #f8fbff;
+    font-size: 0.9rem;
+    font-weight: 950;
+  }
+
+  .mobile-support-toggle strong {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    color: #aeb9cc;
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  .mobile-support-toggle svg:last-child {
+    grid-column: 2;
+    grid-row: 1;
+    color: #aeb9cc;
+    transition: transform 0.18s ease;
+  }
+
+  .match-insight-stack.mobile-expanded .mobile-support-toggle svg:last-child {
+    transform: rotate(180deg);
+  }
+
+  .match-insight-stack:not(.mobile-expanded) .match-insight-body {
+    display: none;
+  }
+
+  .hero-selected-panel .match-insight-body {
+    margin-top: 10px;
   }
 
   .hero-selected-panel .weather-card.wide {

@@ -4,6 +4,7 @@ import {
   Activity,
   BarChart3,
   CalendarDays,
+  ChevronDown,
   Check,
   CloudSun,
   Languages,
@@ -1959,6 +1960,7 @@ function SeerScoreboardBoard({
   t: Record<string, string>;
 }) {
   const [showAllReceipts, setShowAllReceipts] = useState(false);
+  const [showMobileReceipts, setShowMobileReceipts] = useState(false);
   const visibleReceipts = showAllReceipts
     ? scoreboard.receipts
     : scoreboard.receipts.slice(0, collapsedReceiptCount);
@@ -1990,7 +1992,10 @@ function SeerScoreboardBoard({
   ];
 
   return (
-    <section className="seer-scoreboard" aria-label={t.seerScoreboard}>
+    <section
+      className={cx("seer-scoreboard", showMobileReceipts && "mobile-expanded")}
+      aria-label={t.seerScoreboard}
+    >
       <div className="seer-scoreboard-header">
         <div>
           <div className="section-heading">
@@ -2010,6 +2015,17 @@ function SeerScoreboardBoard({
           ))}
         </div>
       </div>
+
+      <button
+        aria-expanded={showMobileReceipts}
+        className="scoreboard-mobile-toggle"
+        onClick={() => setShowMobileReceipts((current) => !current)}
+        type="button"
+      >
+        <span>{showMobileReceipts ? t.hideReceipts : t.showAllReceipts}</span>
+        <strong>{scoreboard.receipts.length}</strong>
+        <ChevronDown size={16} />
+      </button>
 
       <div className="receipt-list" aria-label={t.latestReceipts}>
         {scoreboard.receipts.length === 0 && (
@@ -2540,6 +2556,7 @@ function ForecastView({
   showAsk?: boolean;
   compact?: boolean;
 }) {
+  const [showSupportDetails, setShowSupportDetails] = useState(false);
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
   const isFinal = match.status === "Final";
@@ -2611,9 +2628,26 @@ function ForecastView({
         </div>
         <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
-      <div className="match-insight-stack">
-        <TeamsView match={match} t={t} />
-        <WeatherView match={match} t={t} language={language} />
+      <div className={cx("match-insight-stack", showSupportDetails && "mobile-expanded")}>
+        <button
+          aria-expanded={showSupportDetails}
+          className="mobile-support-toggle"
+          onClick={() => setShowSupportDetails((current) => !current)}
+          type="button"
+        >
+          <span>
+            <UsersRound size={16} />
+            {t.teams} & {t.weather}
+          </span>
+          <strong>
+            {match.home.code} vs {match.away.code} · {match.weather.temp}
+          </strong>
+          <ChevronDown size={16} />
+        </button>
+        <div className="match-insight-body">
+          <TeamsView match={match} t={t} />
+          <WeatherView match={match} t={t} language={language} />
+        </div>
       </div>
     </div>
   );
@@ -2733,9 +2767,10 @@ function WeatherView({
   const hasRefereeAssignment =
     match.referee.name !== "TBD" &&
     match.referee.name !== "Assignment pending";
-  const refereeName = hasRefereeAssignment ? match.referee.name : t.refereePending;
-  const cardRisk =
-    match.referee.cardRisk === "Pending" ? t.pending : match.referee.cardRisk;
+  const hasCardRisk = match.referee.cardRisk !== "Pending";
+  const refereeSummary = hasCardRisk
+    ? `${match.referee.name} · ${match.referee.cardRisk}`
+    : match.referee.name;
 
   return (
     <div className="weather-grid">
@@ -2754,11 +2789,13 @@ function WeatherView({
         <span>{t.weather}</span>
         <strong>{match.weather.mood[language]}</strong>
       </div>
-      <div className="weather-card wide">
-        <Trophy size={22} />
-        <span>{t.referee}</span>
-        <strong>{refereeName} · {cardRisk}</strong>
-      </div>
+      {hasRefereeAssignment && (
+        <div className="weather-card wide">
+          <Trophy size={22} />
+          <span>{t.referee}</span>
+          <strong>{refereeSummary}</strong>
+        </div>
+      )}
     </div>
   );
 }
