@@ -238,6 +238,8 @@ export default function AdminPage() {
   const [trafficData, setTrafficData] = useState<TrafficDashboard | null>(null);
   const [modelControlData, setModelControlData] =
     useState<ModelControlDashboard | null>(null);
+  const [calibrationData, setCalibrationData] =
+    useState<CalibrationDashboard | null>(null);
   const [playerDrafts, setPlayerDrafts] = useState<Record<string, PlayerDraft>>(
     {},
   );
@@ -337,6 +339,21 @@ export default function AdminPage() {
               error instanceof Error ? error.message : "Model controls failed.",
           }))
         : Promise.resolve<ModelControlDashboard | null>(null);
+      const calibrationPromise = adminSecret
+        ? fetchJson<CalibrationDashboard>("/api/admin/calibration", {
+            headers: {
+              Authorization: `Bearer ${adminSecret}`,
+            },
+          }).catch((error) => ({
+            sampleSize: 0,
+            accuracy: 0,
+            brierScore: 0,
+            logLoss: 0,
+            byPredictedProbability: [],
+            byConfidence: [],
+            error: error instanceof Error ? error.message : "Calibration failed.",
+          }))
+        : Promise.resolve<CalibrationDashboard | null>(null);
       const [
         football,
         weather,
@@ -345,6 +362,7 @@ export default function AdminPage() {
         matches,
         traffic,
         modelControls,
+        calibration,
       ] =
         await Promise.all([
           fetchJson<AdminStatus>("/api/admin/sync-football-data"),
@@ -354,6 +372,7 @@ export default function AdminPage() {
           fetchJson<MatchesResponse>("/api/matches"),
           trafficPromise,
           modelControlsPromise,
+          calibrationPromise,
         ]);
 
       setFootballStatus(football);
@@ -363,6 +382,7 @@ export default function AdminPage() {
       setMatchesResponse(matches);
       setTrafficData(traffic);
       setModelControlData(modelControls);
+      setCalibrationData(calibration);
       setPlayerDrafts(createPlayerDrafts(modelControls?.players ?? []));
       setSelectedVenues({});
       setLoadStatus("success");
@@ -786,6 +806,8 @@ export default function AdminPage() {
       />
 
       <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
+
+      <CalibrationPanel calibration={calibrationData} hasSecret={Boolean(secret)} />
 
       <ModelControlPanel
         data={modelControlData}
@@ -1762,4 +1784,145 @@ function formatKickoff(startsAt: string | null) {
     minute: "2-digit",
     timeZone: "America/Toronto",
   }).format(new Date(startsAt));
+}
+
+type CalibrationBucketRow = {
+  label: string;
+  count: number;
+  predictedPct: number;
+  actualPct: number;
+  gap: number;
+};
+
+type CalibrationDashboard = {
+  sampleSize: number;
+  accuracy: number;
+  brierScore: number;
+  logLoss: number;
+  byPredictedProbability: CalibrationBucketRow[];
+  byConfidence: CalibrationBucketRow[];
+  completedMatchesConsidered?: number;
+  generatedAt?: string;
+  error?: string;
+};
+
+function CalibrationPanel({
+  calibration,
+  hasSecret,
+}: {
+  calibration: CalibrationDashboard | null;
+  hasSecret: boolean;
+}) {
+  const ready =
+    hasSecret && calibration && !calibration.error && calibration.sampleSize > 0;
+
+  const thStyle: React.CSSProperties = {
+    textAlign: "left",
+    padding: "6px 8px",
+    color: "#8195bd",
+    fontWeight: 500,
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+  };
+  const tdStyle: React.CSSProperties = {
+    padding: "6px 8px",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  };
+
+  function renderTable(rows: CalibrationBucketRow[], firstHeader: string, predictedHeader: string) {
+    return (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          color: "#cfd9f2",
+          fontSize: "0.8rem",
+          marginTop: 8,
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={thStyle}>{firstHeader}</th>
+            <th style={thStyle}>Matches</th>
+            <th style={thStyle}>{predictedHeader}</th>
+            <th style={thStyle}>Actual</th>
+            <th style={thStyle}>Gap</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <td style={tdStyle}>{row.label}</td>
+              <td style={tdStyle}>{row.count}</td>
+              <td style={tdStyle}>{row.predictedPct}%</td>
+              <td style={tdStyle}>{row.actualPct}%</td>
+              <td style={{ ...tdStyle, color: row.gap >= 0 ? "#5dca8f" : "#e2734b" }}>
+                {row.gap > 0 ? "+" : ""}
+                {row.gap}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Model accuracy</p>
+          <h2>Seer calibration</h2>
+        </div>
+        <div className="traffic-generated">
+          <Activity size={16} />
+          {calibration?.generatedAt ? formatAdminTime(calibration.generatedAt) : "Locked"}
+        </div>
+      </div>
+
+      {!ready ? (
+        <div className="traffic-empty">
+          <Activity size={22} />
+          <strong>{hasSecret ? "No scored matches yet" : "Calibration locked"}</strong>
+          <span>
+            {calibration?.error ??
+              (hasSecret
+                ? "Calibration appears once finished matches with results exist."
+                : "Add the admin secret and refresh to load calibration.")}
+          </span>
+        </div>
+      ) : (
+        <>
+          <div className="market-pulse-stats">
+            <div>
+              <span>Matches scored</span>
+              <strong>{calibration.sampleSize}</strong>
+            </div>
+            <div>
+              <span>Accuracy</span>
+              <strong>{calibration.accuracy}%</strong>
+            </div>
+            <div>
+              <span>Brier</span>
+              <strong>{calibration.brierScore}</strong>
+            </div>
+            <div>
+              <span>Log loss</span>
+              <strong>{calibration.logLoss}</strong>
+            </div>
+          </div>
+          <p className="admin-muted">
+            Predicted vs actual by the leaned pick&apos;s probability. A positive gap = the
+            Seer is underconfident; negative = overconfident.
+          </p>
+          {renderTable(calibration.byPredictedProbability, "Probability band", "Predicted")}
+          {calibration.byConfidence.length > 0 ? (
+            <>
+              <p className="admin-muted">By the model&apos;s stated confidence:</p>
+              {renderTable(calibration.byConfidence, "Confidence band", "Stated")}
+            </>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
 }
