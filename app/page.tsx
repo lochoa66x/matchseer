@@ -923,7 +923,26 @@ export default function Home() {
         <div className="seer-access-panel seer-command-panel hero-selected-panel" id="ask-seer">
           <div className="seer-panel-header">
             <div>
-              <p className="eyebrow">{t.seerHub}</p>
+              <p className="eyebrow">
+                {t.seerHub}
+                <span
+                  style={{
+                    marginLeft: 8,
+                    padding: "2px 7px",
+                    borderRadius: 6,
+                    fontSize: "0.72em",
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    textTransform: "none",
+                    color: "#7fe0ff",
+                    background: "rgba(32, 215, 255, 0.16)",
+                    border: "1px solid rgba(32, 215, 255, 0.3)",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  v2
+                </span>
+              </p>
               <h2 className="seer-panel-title">{t.matchday}</h2>
               <div className="seer-teams">
                 <div className="seer-team-name">

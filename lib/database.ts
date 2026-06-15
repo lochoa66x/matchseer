@@ -3623,8 +3623,8 @@ function matchseerV3Forecast({
 }) {
   const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
   const awayVenueBoost = venueCountryBoost(awayTeam, venueSlug);
-  const homeBasePower = teamPower(homeRatings);
-  const awayBasePower = teamPower(awayRatings);
+  const homeBasePower = teamPowerWithStanding(homeTeam, homeRatings);
+  const awayBasePower = teamPowerWithStanding(awayTeam, awayRatings);
   const weather = weatherForecastModifier(context, homeRatings, awayRatings);
   const referee = refereeForecastModifier(context, homeRatings, awayRatings);
   const spotlight = spotlightGravityModifier(homeTeam, awayTeam);
@@ -3819,6 +3819,61 @@ function teamPower(ratings: TeamRatings) {
     ratings.control * 0.24 +
     ratings.defense * 0.28 +
     ratings.setPieces * 0.16
+  );
+}
+
+// World-stage standing prior (0-99): how strong each nation is on the world stage.
+// The match model previously ignored this and ran purely on attack/control/defense/
+// set-piece ratings, which underrated reputation gaps (e.g. Sweden vs Tunisia).
+// This is an interim curated map — replace later with a live FIFA ranking / Elo and
+// validate via the receipts calibration check. Unknown teams fall back to a neutral 58.
+const WORLD_STANDING_BY_NAME: Record<string, number> = {
+  algeria: 63, argentina: 93, australia: 61, austria: 70, belgium: 82,
+  bolivia: 55, brazil: 91, canada: 66, "cape verde": 54, chile: 67,
+  colombia: 80, "costa rica": 62, "cote d ivoire": 71, croatia: 80,
+  curacao: 49, czechia: 69, denmark: 76, ecuador: 72, egypt: 68, england: 90,
+  france: 94, germany: 88, ghana: 66, greece: 69, hungary: 70, iran: 67,
+  italy: 84, "ivory coast": 71, jamaica: 59, japan: 75, jordan: 52,
+  korea: 71, "korea republic": 71, mexico: 73, morocco: 78, netherlands: 87,
+  "new zealand": 50, nigeria: 72, norway: 75, panama: 59, paraguay: 66,
+  peru: 65, poland: 70, portugal: 88, qatar: 58, romania: 66,
+  "saudi arabia": 59, scotland: 68, senegal: 76, serbia: 72,
+  "south africa": 61, spain: 92, sweden: 74, switzerland: 75, tunisia: 62,
+  turkey: 72, turkiye: 72, ukraine: 74, uruguay: 82, usa: 75,
+  "united states": 75, uzbekistan: 57, venezuela: 63,
+};
+
+const WORLD_STANDING_BY_CODE: Record<string, number> = {
+  ARG: 93, BRA: 91, ENG: 90, ESP: 92, FRA: 94, GER: 88, NED: 87, POR: 88,
+  SWE: 74, NZL: 50,
+};
+
+const DEFAULT_WORLD_STANDING = 58;
+const STANDING_WEIGHT = 0.55;
+const RATINGS_WEIGHT = 0.45;
+
+function worldStandingPrior(team: FootballDataTeam): number {
+  const key = team.name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const code = (team.code ?? "").toUpperCase();
+
+  return (
+    WORLD_STANDING_BY_NAME[key] ??
+    WORLD_STANDING_BY_CODE[code] ??
+    DEFAULT_WORLD_STANDING
+  );
+}
+
+// Blend world standing (prior) with the raw ratings-based power so reputation
+// gaps influence the win probability without overriding match-specific ratings.
+function teamPowerWithStanding(team: FootballDataTeam, ratings: TeamRatings) {
+  return (
+    STANDING_WEIGHT * worldStandingPrior(team) +
+    RATINGS_WEIGHT * teamPower(ratings)
   );
 }
 
