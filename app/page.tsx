@@ -2586,6 +2586,17 @@ const fifaCodeToFlagCode: Record<string, string> = {
   URU: "uy",
   USA: "us",
   WAL: "gb-wls",
+  EGY: "eg",
+  IRN: "ir",
+  IRQ: "iq",
+  JOR: "jo",
+  KSA: "sa",
+  SAU: "sa",
+  COD: "cd",
+  DRC: "cd",
+  NOR: "no",
+  PAN: "pa",
+  UZB: "uz",
 };
 
 const teamNameToFlagCode: Record<string, string> = {
@@ -2644,6 +2655,20 @@ const teamNameToFlagCode: Record<string, string> = {
   usa: "us",
   "united states": "us",
   wales: "gb-wls",
+  egypt: "eg",
+  iran: "ir",
+  "ir iran": "ir",
+  iraq: "iq",
+  jordan: "jo",
+  "saudi arabia": "sa",
+  norway: "no",
+  panama: "pa",
+  uzbekistan: "uz",
+  "congo dr": "cd",
+  "dr congo": "cd",
+  "congo democratic republic": "cd",
+  "democratic republic of congo": "cd",
+  "democratic republic of the congo": "cd",
 };
 
 function ForecastView({
