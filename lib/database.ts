@@ -13,6 +13,18 @@ import type {
 } from "./providers/football-data";
 import { fetchCurrentVenueWeather } from "./providers/open-meteo";
 import { worldCupVenues } from "./providers/world-cup-venues";
+import { keyPlayerWatchlist } from "./data/key-players";
+import { publishedProjectedScoreCorrections } from "./data/score-corrections";
+import { teamRatingProfiles } from "./data/team-ratings";
+import {
+  DEFAULT_WORLD_STANDING,
+  WORLD_STANDING_BY_CODE,
+  WORLD_STANDING_BY_NAME,
+} from "./data/world-standings";
+import {
+  tournamentFloorProfilesByCode,
+  tournamentFloorProfilesByName,
+} from "./data/tournament-floors";
 
 const ENABLE_PLAYER_SPARKS = false;
 
@@ -493,7 +505,7 @@ type ModelControlForecastRow = {
   source_payload: Record<string, unknown> | string | null;
 };
 
-type TeamRatings = {
+export type TeamRatings = {
   attack: number;
   control: number;
   defense: number;
@@ -990,230 +1002,6 @@ async function ensureForecastLedgerSchema(sql: NeonQuery) {
   return forecastLedgerSchemaPromise;
 }
 
-type KeyPlayerProfile = {
-  teamCode: string;
-  teamSlug: string;
-  slug: string;
-  name: string;
-  role: string;
-  club: string;
-  league: string;
-  spark: number;
-  importance: number;
-  age: number;
-  note: string;
-};
-
-const keyPlayerWatchlist: KeyPlayerProfile[] = [
-  {
-    teamCode: "ARG",
-    teamSlug: "arg",
-    slug: "lionel-messi",
-    name: "Lionel Messi",
-    role: "Creator",
-    club: "Club profile pending",
-    league: "International",
-    spark: 96,
-    importance: 99,
-    age: 39,
-    note: "Gravity player",
-  },
-  {
-    teamCode: "POR",
-    teamSlug: "por",
-    slug: "cristiano-ronaldo",
-    name: "Cristiano Ronaldo",
-    role: "Forward",
-    club: "Club profile pending",
-    league: "International",
-    spark: 91,
-    importance: 94,
-    age: 41,
-    note: "Box gravity",
-  },
-  {
-    teamCode: "BRA",
-    teamSlug: "bra",
-    slug: "vinicius-junior",
-    name: "Vinicius Junior",
-    role: "Winger",
-    club: "Club profile pending",
-    league: "International",
-    spark: 94,
-    importance: 94,
-    age: 25,
-    note: "Left-lane lightning",
-  },
-  {
-    teamCode: "FRA",
-    teamSlug: "fra",
-    slug: "kylian-mbappe",
-    name: "Kylian Mbappe",
-    role: "Forward",
-    club: "Club profile pending",
-    league: "International",
-    spark: 96,
-    importance: 96,
-    age: 27,
-    note: "Depth breaker",
-  },
-  {
-    teamCode: "GER",
-    teamSlug: "ger",
-    slug: "florian-wirtz",
-    name: "Florian Wirtz",
-    role: "Creator",
-    club: "Club profile pending",
-    league: "International",
-    spark: 89,
-    importance: 88,
-    age: 23,
-    note: "Between-line spark",
-  },
-  {
-    teamCode: "ESP",
-    teamSlug: "esp",
-    slug: "lamine-yamal",
-    name: "Lamine Yamal",
-    role: "Winger",
-    club: "Club profile pending",
-    league: "International",
-    spark: 91,
-    importance: 89,
-    age: 18,
-    note: "Wide-lane voltage",
-  },
-  {
-    teamCode: "ENG",
-    teamSlug: "eng",
-    slug: "jude-bellingham",
-    name: "Jude Bellingham",
-    role: "Midfielder",
-    club: "Club profile pending",
-    league: "International",
-    spark: 93,
-    importance: 92,
-    age: 23,
-    note: "Box-to-box magnet",
-  },
-  {
-    teamCode: "MEX",
-    teamSlug: "mex",
-    slug: "santiago-gimenez",
-    name: "Santiago Gimenez",
-    role: "Forward",
-    club: "Club profile pending",
-    league: "International",
-    spark: 82,
-    importance: 82,
-    age: 25,
-    note: "Box gravity",
-  },
-  {
-    teamCode: "USA",
-    teamSlug: "usa",
-    slug: "christian-pulisic",
-    name: "Christian Pulisic",
-    role: "Winger",
-    club: "Club profile pending",
-    league: "International",
-    spark: 88,
-    importance: 89,
-    age: 27,
-    note: "Final-third switch",
-  },
-  {
-    teamCode: "CAN",
-    teamSlug: "can",
-    slug: "alphonso-davies",
-    name: "Alphonso Davies",
-    role: "Wingback",
-    club: "Club profile pending",
-    league: "International",
-    spark: 90,
-    importance: 91,
-    age: 25,
-    note: "Left-side ignition",
-  },
-  {
-    teamCode: "MAR",
-    teamSlug: "mar",
-    slug: "achraf-hakimi",
-    name: "Achraf Hakimi",
-    role: "Fullback",
-    club: "Club profile pending",
-    league: "International",
-    spark: 88,
-    importance: 87,
-    age: 27,
-    note: "Two-way engine",
-  },
-  {
-    teamCode: "KOR",
-    teamSlug: "kor",
-    slug: "son-heung-min",
-    name: "Son Heung-min",
-    role: "Forward",
-    club: "Club profile pending",
-    league: "International",
-    spark: 90,
-    importance: 93,
-    age: 33,
-    note: "Transition blade",
-  },
-  {
-    teamCode: "JPN",
-    teamSlug: "jpn",
-    slug: "takefusa-kubo",
-    name: "Takefusa Kubo",
-    role: "Creator",
-    club: "Club profile pending",
-    league: "International",
-    spark: 86,
-    importance: 84,
-    age: 25,
-    note: "Pocket mischief",
-  },
-  {
-    teamCode: "URU",
-    teamSlug: "uru",
-    slug: "federico-valverde",
-    name: "Federico Valverde",
-    role: "Midfielder",
-    club: "Club profile pending",
-    league: "International",
-    spark: 91,
-    importance: 90,
-    age: 27,
-    note: "Midfield engine",
-  },
-  {
-    teamCode: "NED",
-    teamSlug: "ned",
-    slug: "virgil-van-dijk",
-    name: "Virgil van Dijk",
-    role: "Defender",
-    club: "Club profile pending",
-    league: "International",
-    spark: 88,
-    importance: 86,
-    age: 34,
-    note: "Back-line anchor",
-  },
-  {
-    teamCode: "RSA",
-    teamSlug: "rsa",
-    slug: "teboho-mokoena",
-    name: "Teboho Mokoena",
-    role: "Midfielder",
-    club: "Club profile pending",
-    league: "International",
-    spark: 78,
-    importance: 72,
-    age: 29,
-    note: "Long-range spark",
-  },
-];
 
 async function seedKeyPlayerWatchlist(sql: NeonQuery) {
   for (const player of keyPlayerWatchlist) {
@@ -3663,9 +3451,6 @@ function readPayloadArray(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
-const publishedProjectedScoreCorrections: Record<string, string> = {
-  "fd-537328": "2-1",
-};
 
 function normalizeGroupName(groupName: string | null) {
   if (!groupName) {
@@ -3877,51 +3662,6 @@ function sortJsonValue(value: unknown): unknown {
   return value;
 }
 
-const teamRatingProfiles: Record<string, TeamRatings> = {
-  ALG: { attack: 72, control: 72, defense: 74, setPieces: 75 },
-  ARG: { attack: 88, control: 87, defense: 83, setPieces: 81 },
-  AUS: { attack: 70, control: 70, defense: 73, setPieces: 78 },
-  AUT: { attack: 78, control: 82, defense: 76, setPieces: 79 },
-  BEL: { attack: 82, control: 82, defense: 77, setPieces: 80 },
-  BIH: { attack: 75, control: 72, defense: 74, setPieces: 78 },
-  BRA: { attack: 90, control: 87, defense: 81, setPieces: 78 },
-  CAN: { attack: 76, control: 72, defense: 68, setPieces: 74 },
-  CHI: { attack: 74, control: 76, defense: 72, setPieces: 73 },
-  CIV: { attack: 79, control: 75, defense: 74, setPieces: 77 },
-  COL: { attack: 82, control: 80, defense: 76, setPieces: 78 },
-  CRO: { attack: 79, control: 86, defense: 80, setPieces: 77 },
-  CUW: { attack: 62, control: 66, defense: 59, setPieces: 64 },
-  CZE: { attack: 73, control: 73, defense: 76, setPieces: 79 },
-  DEN: { attack: 78, control: 82, defense: 81, setPieces: 80 },
-  ECU: { attack: 78, control: 79, defense: 77, setPieces: 73 },
-  EGY: { attack: 78, control: 75, defense: 74, setPieces: 76 },
-  ENG: { attack: 87, control: 84, defense: 83, setPieces: 85 },
-  ESP: { attack: 86, control: 91, defense: 84, setPieces: 78 },
-  FRA: { attack: 91, control: 88, defense: 86, setPieces: 83 },
-  GER: { attack: 85, control: 85, defense: 79, setPieces: 81 },
-  GHA: { attack: 75, control: 73, defense: 72, setPieces: 75 },
-  HAI: { attack: 66, control: 64, defense: 65, setPieces: 68 },
-  ITA: { attack: 81, control: 83, defense: 86, setPieces: 80 },
-  JPN: { attack: 80, control: 84, defense: 78, setPieces: 74 },
-  KOR: { attack: 78, control: 77, defense: 74, setPieces: 72 },
-  MAR: { attack: 80, control: 79, defense: 86, setPieces: 81 },
-  MEX: { attack: 75, control: 74, defense: 71, setPieces: 78 },
-  NED: { attack: 85, control: 86, defense: 83, setPieces: 81 },
-  NGA: { attack: 80, control: 74, defense: 73, setPieces: 76 },
-  NZL: { attack: 63, control: 62, defense: 66, setPieces: 70 },
-  PAR: { attack: 72, control: 71, defense: 76, setPieces: 78 },
-  POR: { attack: 87, control: 85, defense: 81, setPieces: 83 },
-  QAT: { attack: 68, control: 70, defense: 67, setPieces: 72 },
-  RSA: { attack: 71, control: 70, defense: 72, setPieces: 75 },
-  SCO: { attack: 72, control: 73, defense: 75, setPieces: 80 },
-  SEN: { attack: 80, control: 77, defense: 79, setPieces: 78 },
-  SUI: { attack: 79, control: 81, defense: 80, setPieces: 79 },
-  TUN: { attack: 70, control: 71, defense: 77, setPieces: 76 },
-  TUR: { attack: 75, control: 77, defense: 72, setPieces: 74 },
-  URU: { attack: 84, control: 83, defense: 82, setPieces: 82 },
-  URY: { attack: 84, control: 83, defense: 82, setPieces: 82 },
-  USA: { attack: 79, control: 77, defense: 75, setPieces: 76 },
-};
 
 function teamRatings(team: FootballDataTeam): TeamRatings {
   const profile = teamRatingProfiles[team.code.toUpperCase()];
@@ -4170,28 +3910,6 @@ function teamPower(ratings: TeamRatings) {
 // set-piece ratings, which underrated reputation gaps (e.g. Sweden vs Tunisia).
 // This is an interim curated map — replace later with a live FIFA ranking / Elo and
 // validate via the receipts calibration check. Unknown teams fall back to a neutral 58.
-const WORLD_STANDING_BY_NAME: Record<string, number> = {
-  algeria: 63, argentina: 93, australia: 61, austria: 70, belgium: 82,
-  bolivia: 55, brazil: 91, canada: 66, "cape verde": 54, chile: 67,
-  colombia: 80, "costa rica": 62, "cote d ivoire": 71, croatia: 80,
-  curacao: 49, czechia: 69, denmark: 76, ecuador: 72, egypt: 68, england: 90,
-  france: 94, germany: 88, ghana: 66, greece: 69, hungary: 70, iran: 67,
-  italy: 84, "ivory coast": 71, jamaica: 59, japan: 75, jordan: 52,
-  korea: 71, "korea republic": 71, mexico: 73, morocco: 78, netherlands: 87,
-  "new zealand": 50, nigeria: 72, norway: 75, panama: 59, paraguay: 66,
-  peru: 65, poland: 70, portugal: 88, qatar: 58, romania: 66,
-  "saudi arabia": 59, scotland: 68, senegal: 76, serbia: 72,
-  "south africa": 61, spain: 92, sweden: 74, switzerland: 75, tunisia: 62,
-  turkey: 72, turkiye: 72, ukraine: 74, uruguay: 82, usa: 75,
-  "united states": 75, uzbekistan: 57, venezuela: 63,
-};
-
-const WORLD_STANDING_BY_CODE: Record<string, number> = {
-  ARG: 93, BRA: 91, ENG: 90, ESP: 92, FRA: 94, GER: 88, NED: 87, POR: 88,
-  SWE: 74, NZL: 50,
-};
-
-const DEFAULT_WORLD_STANDING = 58;
 const STANDING_WEIGHT = 0.55;
 const RATINGS_WEIGHT = 0.45;
 
@@ -5105,19 +4823,6 @@ function normalizeModelTeamKey(value: string) {
     .trim();
 }
 
-const tournamentFloorProfilesByCode: Record<string, { power: number; tax: number }> = {
-  CUW: { power: 49, tax: 0.42 },
-  HAI: { power: 52, tax: 0.26 },
-  NZL: { power: 50, tax: 0.52 },
-  QAT: { power: 54, tax: 0.22 },
-};
-
-const tournamentFloorProfilesByName: Record<string, { power: number; tax: number }> = {
-  curacao: tournamentFloorProfilesByCode.CUW,
-  "new zealand": tournamentFloorProfilesByCode.NZL,
-  haiti: tournamentFloorProfilesByCode.HAI,
-  qatar: tournamentFloorProfilesByCode.QAT,
-};
 
 function setPieceModifier(
   homeRatings: TeamRatings,
