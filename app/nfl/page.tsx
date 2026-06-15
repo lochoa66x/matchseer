@@ -94,6 +94,17 @@ type ScoutingRow = FantasyPlayer & {
   score: number;
 };
 
+type NflScoutingAnalysis = {
+  headline: string;
+  summary: string;
+  factors: string[];
+  watchlist: string;
+  disclaimer: string;
+  source?: string;
+};
+
+type ScoutStatus = "idle" | "loading" | "ready" | "error";
+
 const scoringLabels: Record<ScoringFormat, string> = {
   standard: "Standard",
   halfPpr: "Half PPR",
@@ -364,6 +375,8 @@ export default function NflPage() {
   const [leftPlayerId, setLeftPlayerId] = useState(playerPair[0].id);
   const [rightPlayerId, setRightPlayerId] = useState(playerPair[1].id);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
+  const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
+  const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const activeMatchup =
     matchups.find((matchup) => matchup.id === activeMatchupId) ?? matchups[0];
   const leftPlayer =
@@ -378,6 +391,50 @@ export default function NflPage() {
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
     [scoringFormat],
   );
+
+  async function requestScoutingRead() {
+    setScoutStatus("loading");
+
+    try {
+      const response = await fetch("/api/ai/nfl-scouting", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          scoringFormat,
+          players: scoutingBoard.map((player, index) => ({
+            name: player.name,
+            team: player.team,
+            position: player.position,
+            opponent: player.opponent,
+            projection: player.fantasy.projection,
+            floor: player.fantasy.floor,
+            ceiling: player.fantasy.ceiling,
+            baselineRank: player.nflRank,
+            seerRank: index + 1,
+            traits: player.traits,
+          })),
+        }),
+      });
+      const payload = (await response.json()) as {
+        source?: string;
+        analysis?: NflScoutingAnalysis;
+      };
+
+      if (!response.ok || !payload.analysis) {
+        throw new Error("Scout read failed");
+      }
+
+      setScoutRead({
+        ...payload.analysis,
+        source: payload.source,
+      });
+      setScoutStatus("ready");
+    } catch {
+      setScoutStatus("error");
+    }
+  }
 
   return (
     <main className="nfl-shell">
@@ -512,7 +569,13 @@ export default function NflPage() {
         </div>
       </section>
 
-      <ScoutingBoard rows={scoutingBoard} scoringFormat={scoringFormat} />
+      <ScoutingBoard
+        analysis={scoutRead}
+        onRequest={requestScoutingRead}
+        rows={scoutingBoard}
+        scoringFormat={scoringFormat}
+        status={scoutStatus}
+      />
 
       <section className="nfl-player-compare" id="player-compare">
         <div className="nfl-player-compare-head">
@@ -783,11 +846,17 @@ function FantasyDuelPlayer({
 }
 
 function ScoutingBoard({
+  analysis,
+  onRequest,
   rows,
   scoringFormat,
+  status,
 }: {
+  analysis: NflScoutingAnalysis | null;
+  onRequest: () => void;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
+  status: ScoutStatus;
 }) {
   return (
     <section className="nfl-scouting-board" id="scouting-board">
@@ -803,8 +872,45 @@ function ScoutingBoard({
             rank is a placeholder until a live external ranking feed is connected.
           </p>
         </div>
-        <strong>{scoringLabels[scoringFormat]}</strong>
+        <div className="nfl-scouting-actions">
+          <strong>{scoringLabels[scoringFormat]}</strong>
+          <button
+            disabled={status === "loading"}
+            onClick={onRequest}
+            type="button"
+          >
+            <Sparkles size={16} />
+            {status === "loading" ? "Reading..." : "Ask AI Scout"}
+          </button>
+        </div>
       </div>
+      {analysis || status === "error" ? (
+        <article className={cx("nfl-ai-scout-read", status === "error" && "error")}>
+          {analysis ? (
+            <>
+              <div>
+                <span>{analysis.source === "openai" ? "OpenAI scout" : "Seer fallback"}</span>
+                <strong>{analysis.headline}</strong>
+              </div>
+              <p>{analysis.summary}</p>
+              <div className="nfl-ai-factor-list">
+                {analysis.factors.map((factor) => (
+                  <span key={factor}>{factor}</span>
+                ))}
+              </div>
+              <em>{analysis.watchlist}</em>
+            </>
+          ) : (
+            <>
+              <div>
+                <span>Scout read</span>
+                <strong>The signal slipped</strong>
+              </div>
+              <p>Try the AI Scout again in a moment. The board below is still live.</p>
+            </>
+          )}
+        </article>
+      ) : null}
       <div className="nfl-scouting-list">
         {rows.map((player, index) => (
           <article className="nfl-scout-row" key={player.id}>
