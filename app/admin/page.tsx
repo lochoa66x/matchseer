@@ -58,6 +58,7 @@ type VenueCandidate = {
     name: string;
     city: string;
   };
+  lastPulse: { capturedAt: string; source: string | null } | null;
 };
 
 type VenueOption = {
@@ -961,10 +962,18 @@ function MarketPulsePanel({
                 <option value="">Pick fixture</option>
                 {candidateMatches.map((match) => (
                   <option key={match.matchId} value={match.matchId}>
-                    {match.home} vs {match.away} · {formatKickoff(match.startsAt)}
+                    {match.lastPulse ? "● " : ""}{match.home} vs {match.away} · {formatKickoff(match.startsAt)}
                   </option>
                 ))}
               </select>
+              {selectedMatch?.lastPulse ? (
+                <p className="admin-muted">
+                  Last saved {formatAdminTime(selectedMatch.lastPulse.capturedAt)} ·{" "}
+                  {selectedMatch.lastPulse.source ?? "manual"}
+                </p>
+              ) : selectedMatch ? (
+                <p className="admin-muted">No crowd signal saved for this match yet.</p>
+              ) : null}
               <label>
                 Home
                 <input

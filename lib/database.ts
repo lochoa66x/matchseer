@@ -203,6 +203,7 @@ export type VenueMappingCandidate = {
     name: string;
     city: string;
   };
+  lastPulse: { capturedAt: string; source: string | null } | null;
 };
 
 export type PlayerAvailabilityUpdate = {
@@ -448,6 +449,8 @@ type VenueMappingCandidateRow = {
   venue_slug: string;
   venue_name: string;
   venue_city: string;
+  pulse_captured_at: string | null;
+  pulse_source: string | null;
 };
 
 type ModelControlPlayerRow = {
@@ -2605,11 +2608,23 @@ export async function listVenueMappingCandidates({
       matches.starts_at,
       venues.slug as venue_slug,
       venues.name as venue_name,
-      venues.city as venue_city
+      venues.city as venue_city,
+      pulse.pulse_captured_at,
+      pulse.pulse_source
     from matches
     join teams home_team on home_team.id = matches.home_team_id
     join teams away_team on away_team.id = matches.away_team_id
     join venues on venues.id = matches.venue_id
+    left join lateral (
+      select
+        forecasts.source_payload -> 'marketPulse' ->> 'capturedAt' as pulse_captured_at,
+        forecasts.source_payload -> 'marketPulse' ->> 'source' as pulse_source
+      from forecasts
+      where forecasts.match_id = matches.id
+        and forecasts.source_payload -> 'marketPulse' is not null
+      order by forecasts.version desc, forecasts.created_at desc
+      limit 1
+    ) pulse on true
     where matches.external_id like 'fd-%'
       and (${includeMapped} or venues.slug = 'provider-venue-tbd')
     order by matches.starts_at nulls last, matches.external_id;
@@ -2627,6 +2642,9 @@ export async function listVenueMappingCandidates({
       name: row.venue_name,
       city: row.venue_city,
     },
+    lastPulse: row.pulse_captured_at
+      ? { capturedAt: row.pulse_captured_at, source: row.pulse_source ?? null }
+      : null,
   })) satisfies VenueMappingCandidate[];
 }
 
