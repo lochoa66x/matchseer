@@ -2226,6 +2226,9 @@ export async function syncFootballDataSnapshot(
       homeRatings,
       awayRatings,
       modifiers: forecast.modifiers,
+      // Carry any saved crowd signal forward so it survives forecast re-versioning
+      // (manual pulses were silently orphaned on old versions before this).
+      marketPulse: extractStoredMarketPulse(existingForecast?.source_payload),
       previousForecast: existingForecast
         ? {
             version: toNumber(existingForecast.version),
@@ -3258,6 +3261,25 @@ function toMarketPulse(
       awayName: base.awayName,
     }),
   };
+}
+
+// Pull the raw stored crowd-signal object out of a forecast's source_payload so
+// it can be carried into a new forecast version (toMarketPulse re-derives the
+// confidence/chaos deltas against the new forecast).
+function extractStoredMarketPulse(
+  sourcePayload: string | Record<string, unknown> | null | undefined,
+): unknown {
+  const payload = parseJsonPayload(sourcePayload);
+
+  if (payload && typeof payload === "object") {
+    const pulse = (payload as Record<string, unknown>).marketPulse;
+
+    if (pulse && typeof pulse === "object") {
+      return pulse;
+    }
+  }
+
+  return undefined;
 }
 
 function normalizePulseProbabilities(home: number, draw: number, away: number) {
