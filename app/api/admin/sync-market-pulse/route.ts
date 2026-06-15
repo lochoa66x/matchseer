@@ -4,7 +4,10 @@ import {
   listMatches,
   type MarketPulseUpdate,
 } from "../../../../lib/database";
-import { fetchPolymarketPulseSnapshot } from "../../../../lib/providers/polymarket";
+import {
+  fetchPolymarketPulseForTarget,
+  fetchPolymarketPulseSnapshot,
+} from "../../../../lib/providers/polymarket";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +43,48 @@ export async function POST(request: Request) {
   try {
     const payload = await readOptionalJson(request);
     const manualUpdates = parseManualUpdates(payload);
+
+    if (payload && typeof payload === "object" && "lookupMatchId" in payload) {
+      const lookupMatchId = (payload as { lookupMatchId?: unknown }).lookupMatchId;
+
+      if (typeof lookupMatchId !== "string" || !lookupMatchId.trim()) {
+        return NextResponse.json(
+          { error: "lookupMatchId is required" },
+          { status: 400 },
+        );
+      }
+
+      const matchResult = await listMatches();
+      const match = matchResult.matches.find(
+        (candidate) => candidate.id === lookupMatchId,
+      );
+
+      if (!match) {
+        return NextResponse.json(
+          { error: "Match not found", matchId: lookupMatchId },
+          { status: 404 },
+        );
+      }
+
+      const lookup = await fetchPolymarketPulseForTarget({
+        matchId: match.id,
+        startsAt: match.startsAt,
+        home: {
+          name: match.home.name,
+          code: match.home.code,
+        },
+        away: {
+          name: match.away.name,
+          code: match.away.code,
+        },
+      });
+
+      return NextResponse.json({
+        source: "polymarket",
+        lookup,
+        fetchedAt: lookup.fetchedAt,
+      });
+    }
 
     if (manualUpdates.length > 0) {
       const result = await applyMarketPulseUpdates(manualUpdates, "manual");

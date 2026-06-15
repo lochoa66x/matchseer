@@ -33,6 +33,7 @@ type GammaEvent = {
   slug?: unknown;
   title?: unknown;
   closed?: unknown;
+  active?: unknown;
   markets?: unknown;
 };
 
@@ -60,13 +61,26 @@ export type PolymarketPulseSnapshot = {
   skipped: PulseSkipBreakdown;
 };
 
-// Polymarket models a single match as an EVENT (e.g. "Netherlands vs. Japan")
-// containing three separate yes/no markets:
-//   "Will {home} win on {date}?"  -> Yes/No
-//   "Will {home} vs. {away} end in a draw?" -> Yes/No
-//   "Will {away} win on {date}?"  -> Yes/No
-// We look up each match's event via the public-search endpoint, then read the
-// "Yes" price from each of those three markets to build the home/draw/away pulse.
+export type PolymarketPulseLookup = {
+  source: "polymarket";
+  fetchedAt: string;
+  target: MarketPulseTarget;
+  update: MarketPulseUpdate | null;
+  reason: PulseSkipReason;
+  marketsScanned: number;
+  event: {
+    id: string | null;
+    slug: string | null;
+    title: string | null;
+    closed: boolean | null;
+    active: boolean | null;
+  } | null;
+};
+
+// Polymarket usually models a match as an EVENT (e.g. "Netherlands vs. Japan").
+// Depending on the event, the signal can be either one 3-way market
+// (Home / Draw / Away outcomes) or three separate yes/no markets. We support
+// both shapes and normalize them into one home/draw/away pulse.
 const POLYMARKET_SEARCH_URL =
   process.env.POLYMARKET_SEARCH_URL ??
   "https://gamma-api.polymarket.com/public-search";
@@ -108,20 +122,13 @@ export async function fetchPolymarketPulseSnapshot(
     const batch = targets.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (target) => {
-        try {
-          const event = await findMatchEvent(target);
+        const lookup = await fetchPolymarketPulseForTarget(target, fetchedAt);
 
-          if (!event) {
-            return { update: null, reason: "no-event" as PulseSkipReason, scanned: 0 };
-          }
-
-          const markets = parseArrayField(event.markets) as GammaMarket[];
-          const classified = classifyEvent(event, markets, target, fetchedAt);
-
-          return { ...classified, scanned: markets.length };
-        } catch {
-          return { update: null, reason: "no-event" as PulseSkipReason, scanned: 0 };
-        }
+        return {
+          update: lookup.update,
+          reason: lookup.reason,
+          scanned: lookup.marketsScanned,
+        };
       }),
     );
 
@@ -144,6 +151,56 @@ export async function fetchPolymarketPulseSnapshot(
     updates,
     skipped,
   };
+}
+
+export async function fetchPolymarketPulseForTarget(
+  target: MarketPulseTarget,
+  fetchedAt = new Date().toISOString(),
+): Promise<PolymarketPulseLookup> {
+  try {
+    const event = await findMatchEvent(target);
+
+    if (!event) {
+      return {
+        source: "polymarket",
+        fetchedAt,
+        target,
+        update: null,
+        reason: "no-event",
+        marketsScanned: 0,
+        event: null,
+      };
+    }
+
+    const markets = parseArrayField(event.markets) as GammaMarket[];
+    const classified = classifyEvent(event, markets, target, fetchedAt);
+
+    return {
+      source: "polymarket",
+      fetchedAt,
+      target,
+      update: classified.update,
+      reason: classified.reason,
+      marketsScanned: markets.length,
+      event: {
+        id: readString(event.id),
+        slug: readString(event.slug),
+        title: readString(event.title),
+        closed: typeof event.closed === "boolean" ? event.closed : null,
+        active: typeof event.active === "boolean" ? event.active : null,
+      },
+    };
+  } catch {
+    return {
+      source: "polymarket",
+      fetchedAt,
+      target,
+      update: null,
+      reason: "no-event",
+      marketsScanned: 0,
+      event: null,
+    };
+  }
 }
 
 async function findMatchEvent(
@@ -240,6 +297,20 @@ function classifyEvent(
   target: MarketPulseTarget,
   fetchedAt: string,
 ): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
+  const threeWayPulse = classifyThreeWayMarket(markets, target, fetchedAt);
+
+  if (threeWayPulse.reason !== "no-market") {
+    if (event.closed === true && threeWayPulse.update) {
+      return { update: null, reason: "settled" };
+    }
+
+    if (event.active === false && threeWayPulse.update) {
+      return { update: null, reason: "not-open" };
+    }
+
+    return threeWayPulse;
+  }
+
   const homeAliases = teamAliases(target.home);
   const awayAliases = teamAliases(target.away);
 
@@ -290,6 +361,10 @@ function classifyEvent(
     return { update: null, reason: "settled" };
   }
 
+  if (event.active === false || pickMarkets.some((market) => market.active === false)) {
+    return { update: null, reason: "not-open" };
+  }
+
   // Degenerate pricing (a 1X2 outcome at ~100%) = pre-trading placeholder.
   if (Math.max(home, draw, away) >= DEGENERATE_PRICE) {
     return { update: null, reason: "not-open" };
@@ -327,6 +402,81 @@ function classifyEvent(
     },
     reason: "usable",
   };
+}
+
+function classifyThreeWayMarket(
+  markets: GammaMarket[],
+  target: MarketPulseTarget,
+  fetchedAt: string,
+): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
+  const homeAliases = teamAliases(target.home);
+  const awayAliases = teamAliases(target.away);
+
+  for (const market of markets) {
+    const outcomes = parseArrayField(market.outcomes);
+    const prices = parseArrayField(market.outcomePrices).map(readPrice);
+
+    if (outcomes.length < 3 || prices.length < outcomes.length) {
+      continue;
+    }
+
+    const normalizedOutcomes = outcomes.map(normalizeText);
+    const homeIndex = normalizedOutcomes.findIndex((outcome) =>
+      homeAliases.some((alias) => outcome.includes(alias)),
+    );
+    const drawIndex = normalizedOutcomes.findIndex(
+      (outcome) => outcome.includes("draw") || outcome.includes("tie"),
+    );
+    const awayIndex = normalizedOutcomes.findIndex((outcome) =>
+      awayAliases.some((alias) => outcome.includes(alias)),
+    );
+
+    if (homeIndex === -1 || drawIndex === -1 || awayIndex === -1) {
+      continue;
+    }
+
+    const home = prices[homeIndex];
+    const draw = prices[drawIndex];
+    const away = prices[awayIndex];
+
+    if (home === null || draw === null || away === null || home + draw + away <= 0) {
+      continue;
+    }
+
+    if (market.closed === true) {
+      return { update: null, reason: "settled" };
+    }
+
+    if (market.active === false || Math.max(home, draw, away) >= DEGENERATE_PRICE) {
+      return { update: null, reason: "not-open" };
+    }
+
+    const liquidity = readNumber(market.liquidityNum) ?? readNumber(market.liquidity);
+    const volume = readNumber(market.volumeNum) ?? readNumber(market.volume);
+
+    if ((liquidity ?? 0) < MIN_LIQUIDITY) {
+      return { update: null, reason: "illiquid" };
+    }
+
+    return {
+      update: {
+        matchId: target.matchId,
+        source: "polymarket",
+        home,
+        draw,
+        away,
+        liquidity,
+        volume,
+        capturedAt: fetchedAt,
+        marketId: readString(market.id),
+        marketSlug: readString(market.slug),
+        question: readString(market.question),
+      },
+      reason: "usable",
+    };
+  }
+
+  return { update: null, reason: "no-market" };
 }
 
 async function fetchJson(url: URL): Promise<unknown> {
