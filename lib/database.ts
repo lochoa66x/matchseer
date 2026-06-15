@@ -399,10 +399,12 @@ type ExistingForecastLockRow = {
 };
 
 type ForecastContextRow = {
+  starts_at: Date | string | null;
   referee_name: string | null;
   cards_per_match: string | number | null;
   temperature_c: string | number | null;
   wind_kph: string | number | null;
+  humidity: string | number | null;
   weather_summary: string | null;
   home_rest_hours: string | number | null;
   away_rest_hours: string | number | null;
@@ -1974,15 +1976,18 @@ export async function syncFootballDataSnapshot(
           weather_snapshots.match_id,
           weather_snapshots.temperature_c,
           weather_snapshots.wind_kph,
+          weather_snapshots.humidity,
           weather_snapshots.summary
         from weather_snapshots
         order by weather_snapshots.match_id, weather_snapshots.captured_at desc
       )
       select
+        current_match.starts_at,
         referees.name as referee_name,
         referees.cards_per_match,
         latest_weather.temperature_c,
         latest_weather.wind_kph,
+        latest_weather.humidity,
         latest_weather.summary as weather_summary,
         (
           select extract(epoch from (current_match.starts_at - max(previous_match.starts_at))) / 3600
@@ -3424,6 +3429,29 @@ function toMatchTime(status: MatchStatus, startsAt: Date | string | null) {
   }).format(new Date(startsAt));
 }
 
+function kickoffHourInTournamentZone(startsAt: Date | string | null | undefined) {
+  if (!startsAt) {
+    return null;
+  }
+
+  const date = new Date(startsAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const hourPart = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hourCycle: "h23",
+    timeZone: "America/Toronto",
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "hour")?.value;
+  const hour = hourPart === undefined ? NaN : Number(hourPart);
+
+  return Number.isFinite(hour) ? hour : null;
+}
+
 function toReasons(factors: string[] | null) {
   const fallback = ["More data is being loaded into the Seer."];
   const values = factors && factors.length > 0 ? factors : fallback;
@@ -3669,7 +3697,8 @@ function matchseerV3Forecast({
     spotlight.awayPower -
     availability.awayPenalty -
     fatigue.awayPenalty;
-  const powerGap = homePower - awayPower;
+  const rawPowerGap = homePower - awayPower;
+  const powerGap = rawPowerGap * weather.gapMultiplier;
   const baseChaos =
     64 -
     Math.abs(powerGap) * 0.9 +
@@ -3688,7 +3717,9 @@ function matchseerV3Forecast({
     82,
   );
   const draw = clamp(
-    Math.round(28 + (chaos - 58) * 0.09 - Math.abs(powerGap) * 0.4),
+    Math.round(
+      28 + (chaos - 58) * 0.09 - Math.abs(powerGap) * 0.4 + weather.drawDelta,
+    ),
     15,
     34,
   );
@@ -3804,7 +3835,8 @@ function matchseerV3Forecast({
         50 +
           Math.abs(powerGap) * 1.04 +
           (78 - chaos) * 0.08 -
-          dynamicDrag * 0.24,
+          dynamicDrag * 0.24 +
+          weather.confidenceDelta,
       ),
       45,
       80,
@@ -3819,6 +3851,11 @@ function matchseerV3Forecast({
       adjustedPower: {
         home: roundModifier(homePower),
         away: roundModifier(awayPower),
+      },
+      weatherPowerGap: {
+        raw: roundModifier(rawPowerGap),
+        adjusted: roundModifier(powerGap),
+        multiplier: roundModifier(weather.gapMultiplier),
       },
       venue: {
         home: homeVenueBoost,
@@ -3946,8 +3983,28 @@ function weatherForecastModifier(
 ) {
   const temperature = toOptionalNumber(context?.temperature_c);
   const wind = toOptionalNumber(context?.wind_kph);
+  const humidity = toOptionalNumber(context?.humidity);
   const summary = context?.weather_summary ?? null;
+  const summaryText = summary?.toLowerCase() ?? "";
+  const kickoffHour = kickoffHourInTournamentZone(context?.starts_at);
+  const isDayKickoff =
+    kickoffHour !== null && kickoffHour >= 11 && kickoffHour < 18;
+  const isLateKickoff =
+    kickoffHour !== null && (kickoffHour >= 19 || kickoffHour < 2);
+  const isHumid =
+    (humidity !== null && humidity >= 65) ||
+    summaryText.includes("humid") ||
+    summaryText.includes("muggy");
+  const hasAdverseSurface =
+    summaryText.includes("rain") ||
+    summaryText.includes("shower") ||
+    summaryText.includes("slick") ||
+    summaryText.includes("fog");
+  const hasWindDrag = wind !== null && wind >= 18;
   let chaosDelta = 0;
+  let confidenceDelta = 0;
+  let drawDelta = 0;
+  let gapMultiplier = 1;
   let xgDelta = 0;
   let homePower = 0;
   let awayPower = 0;
@@ -3968,7 +4025,44 @@ function weatherForecastModifier(
     }
   }
 
-  if (wind !== null && wind >= 18) {
+  if (temperature !== null && temperature >= 27 && isDayKickoff) {
+    const heatStress =
+      (temperature >= 32 ? 1 : 0.65) +
+      (isHumid ? 0.45 : 0) +
+      (temperature >= 30 ? 0.25 : 0);
+    const compression = clampNumber(heatStress * 0.07, 0.04, 0.13);
+
+    gapMultiplier -= compression;
+    drawDelta += Math.round(heatStress * 2);
+    chaosDelta += isHumid ? 2 : 1;
+    confidenceDelta -= Math.round(1 + heatStress);
+    xgDelta -= isHumid ? 0.07 : 0.04;
+    notes.push(
+      isHumid
+        ? "day heat and humidity compress the favorite's edge and slow the chase"
+        : "day heat pulls tempo down and gives the underdog a little more cover",
+    );
+  } else if (temperature !== null && temperature >= 27 && isLateKickoff) {
+    chaosDelta += isHumid ? 1 : 0;
+    xgDelta -= isHumid ? 0.03 : 0;
+    notes.push("the later kickoff softens the heat tax without erasing it entirely");
+  } else if (
+    isLateKickoff &&
+    temperature !== null &&
+    temperature >= 14 &&
+    temperature <= 26 &&
+    !isHumid &&
+    !hasWindDrag &&
+    !hasAdverseSurface
+  ) {
+    gapMultiplier += 0.04;
+    drawDelta -= 1;
+    confidenceDelta += 1;
+    xgDelta += 0.02;
+    notes.push("a cooler late kickoff lets quality and legs separate more cleanly");
+  }
+
+  if (hasWindDrag) {
     chaosDelta += wind >= 28 ? 4 : 2;
     xgDelta -= wind >= 28 ? 0.12 : 0.06;
     notes.push("wind adds noise to diagonals and dead balls");
@@ -3976,8 +4070,6 @@ function weatherForecastModifier(
     homePower += setPiecePower.home;
     awayPower += setPiecePower.away;
   }
-
-  const summaryText = summary?.toLowerCase() ?? "";
 
   if (
     summaryText.includes("rain") ||
@@ -3999,7 +4091,12 @@ function weatherForecastModifier(
     notes.push("foggy edges make long balls and second balls harder to read");
   }
 
-  const hasWeather = temperature !== null || wind !== null || summary !== null;
+  const hasWeather =
+    temperature !== null ||
+    wind !== null ||
+    humidity !== null ||
+    summary !== null ||
+    kickoffHour !== null;
   const factor = hasWeather
     ? {
         label: "Weather drift",
@@ -4013,17 +4110,27 @@ function weatherForecastModifier(
 
   return {
     chaosDelta,
+    confidenceDelta,
+    drawDelta,
     factor,
+    gapMultiplier: clampNumber(gapMultiplier, 0.84, 1.08),
     homePower,
     awayPower,
     xgDelta,
     payload: {
       temperatureC: temperature,
       windKph: wind,
+      humidity,
+      kickoffHour,
+      daypart:
+        kickoffHour === null ? null : isDayKickoff ? "day" : isLateKickoff ? "late" : "evening",
       summary,
       homePower: roundModifier(homePower),
       awayPower: roundModifier(awayPower),
       chaosDelta,
+      confidenceDelta,
+      drawDelta,
+      gapMultiplier: roundModifier(clampNumber(gapMultiplier, 0.84, 1.08)),
       xgDelta: roundModifier(xgDelta),
     },
   };
