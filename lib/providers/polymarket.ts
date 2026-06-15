@@ -2,14 +2,19 @@ import type { MarketPulseUpdate } from "../database";
 
 export type MarketPulseTarget = {
   matchId: string;
+  league?: string;
+  sport?: string;
+  marketShape?: "three-way" | "two-way";
   startsAt?: string | null;
   home: {
     name: string;
     code: string;
+    aliases?: string[];
   };
   away: {
     name: string;
     code: string;
+    aliases?: string[];
   };
 };
 
@@ -78,9 +83,9 @@ export type PolymarketPulseLookup = {
 };
 
 // Polymarket usually models a match as an EVENT (e.g. "Netherlands vs. Japan").
-// Depending on the event, the signal can be either one 3-way market
-// (Home / Draw / Away outcomes) or three separate yes/no markets. We support
-// both shapes and normalize them into one home/draw/away pulse.
+// Depending on the event, the signal can be one outcome market (Home / Draw /
+// Away, or Home / Away for no-draw sports) or separate yes/no markets. We
+// support both shapes and normalize them into one home/draw/away pulse.
 const POLYMARKET_SEARCH_URL =
   process.env.POLYMARKET_SEARCH_URL ??
   "https://gamma-api.polymarket.com/public-search";
@@ -269,7 +274,7 @@ function buildSearchQueries(target: MarketPulseTarget): string[] {
 // Human-readable name spellings to search with (display names, not codes),
 // mirroring the alias map used for matching.
 function searchNames(team: MarketPulseTarget["home"]): string[] {
-  const names = [team.name];
+  const names = [team.name, ...(team.aliases ?? [])];
   const normalized = normalizeText(team.name);
 
   if (normalized === "usa") {
@@ -297,6 +302,24 @@ function classifyEvent(
   target: MarketPulseTarget,
   fetchedAt: string,
 ): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
+  if (target.marketShape === "two-way") {
+    const twoWayPulse = classifyTwoWayMarket(markets, target, fetchedAt);
+
+    if (twoWayPulse.reason !== "no-market") {
+      if (event.closed === true && twoWayPulse.update) {
+        return { update: null, reason: "settled" };
+      }
+
+      if (event.active === false && twoWayPulse.update) {
+        return { update: null, reason: "not-open" };
+      }
+
+      return twoWayPulse;
+    }
+
+    return classifyTwoWayYesNoMarkets(event, markets, target, fetchedAt);
+  }
+
   const threeWayPulse = classifyThreeWayMarket(markets, target, fetchedAt);
 
   if (threeWayPulse.reason !== "no-market") {
@@ -392,6 +415,159 @@ function classifyEvent(
       source: "polymarket",
       home,
       draw,
+      away,
+      liquidity,
+      volume,
+      capturedAt: fetchedAt,
+      marketId: readString(event.id),
+      marketSlug: readString(event.slug),
+      question: readString(event.title),
+    },
+    reason: "usable",
+  };
+}
+
+function classifyTwoWayMarket(
+  markets: GammaMarket[],
+  target: MarketPulseTarget,
+  fetchedAt: string,
+): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
+  const homeAliases = teamAliases(target.home);
+  const awayAliases = teamAliases(target.away);
+
+  for (const market of markets) {
+    const outcomes = parseArrayField(market.outcomes);
+    const prices = parseArrayField(market.outcomePrices).map(readPrice);
+
+    if (outcomes.length < 2 || prices.length < outcomes.length) {
+      continue;
+    }
+
+    const normalizedOutcomes = outcomes.map(normalizeText);
+    const homeIndex = normalizedOutcomes.findIndex((outcome) =>
+      homeAliases.some((alias) => outcome.includes(alias)),
+    );
+    const awayIndex = normalizedOutcomes.findIndex((outcome) =>
+      awayAliases.some((alias) => outcome.includes(alias)),
+    );
+
+    if (homeIndex === -1 || awayIndex === -1 || homeIndex === awayIndex) {
+      continue;
+    }
+
+    const home = prices[homeIndex];
+    const away = prices[awayIndex];
+
+    if (home === null || away === null || home + away <= 0) {
+      continue;
+    }
+
+    if (market.closed === true) {
+      return { update: null, reason: "settled" };
+    }
+
+    if (market.active === false || Math.max(home, away) >= DEGENERATE_PRICE) {
+      return { update: null, reason: "not-open" };
+    }
+
+    const liquidity = readNumber(market.liquidityNum) ?? readNumber(market.liquidity);
+    const volume = readNumber(market.volumeNum) ?? readNumber(market.volume);
+
+    if ((liquidity ?? 0) < MIN_LIQUIDITY) {
+      return { update: null, reason: "illiquid" };
+    }
+
+    return {
+      update: {
+        matchId: target.matchId,
+        source: "polymarket",
+        home,
+        draw: 0,
+        away,
+        liquidity,
+        volume,
+        capturedAt: fetchedAt,
+        marketId: readString(market.id),
+        marketSlug: readString(market.slug),
+        question: readString(market.question),
+      },
+      reason: "usable",
+    };
+  }
+
+  return { update: null, reason: "no-market" };
+}
+
+function classifyTwoWayYesNoMarkets(
+  event: GammaEvent,
+  markets: GammaMarket[],
+  target: MarketPulseTarget,
+  fetchedAt: string,
+): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
+  const homeAliases = teamAliases(target.home);
+  const awayAliases = teamAliases(target.away);
+  let homeMarket: GammaMarket | null = null;
+  let awayMarket: GammaMarket | null = null;
+
+  for (const market of markets) {
+    const text = normalizeText(market.question);
+
+    if (!text.includes("win")) {
+      continue;
+    }
+
+    if (homeAliases.some((alias) => text.includes(alias))) {
+      homeMarket = homeMarket ?? market;
+    } else if (awayAliases.some((alias) => text.includes(alias))) {
+      awayMarket = awayMarket ?? market;
+    }
+  }
+
+  if (!homeMarket || !awayMarket) {
+    return { update: null, reason: "no-market" };
+  }
+
+  const pickMarkets = [homeMarket, awayMarket];
+  const home = yesPrice(homeMarket);
+  const away = yesPrice(awayMarket);
+
+  if (home === null || away === null || home + away <= 0) {
+    return { update: null, reason: "no-market" };
+  }
+
+  if (event.closed === true || pickMarkets.some((market) => market.closed === true)) {
+    return { update: null, reason: "settled" };
+  }
+
+  if (event.active === false || pickMarkets.some((market) => market.active === false)) {
+    return { update: null, reason: "not-open" };
+  }
+
+  if (Math.max(home, away) >= DEGENERATE_PRICE) {
+    return { update: null, reason: "not-open" };
+  }
+
+  const liquidity = sumNumbers(
+    pickMarkets.map(
+      (market) => readNumber(market.liquidityNum) ?? readNumber(market.liquidity),
+    ),
+  );
+  const volume = sumNumbers(
+    pickMarkets.map(
+      (market) => readNumber(market.volumeNum) ?? readNumber(market.volume),
+    ),
+  );
+
+  if ((liquidity ?? 0) < MIN_LIQUIDITY) {
+    return { update: null, reason: "illiquid" };
+  }
+
+  return {
+    update: {
+      matchId: target.matchId,
+      source: "polymarket",
+      home,
+      draw: 0,
       away,
       liquidity,
       volume,
@@ -540,7 +716,7 @@ function yesPrice(market: GammaMarket): number | null {
 }
 
 function teamAliases(team: MarketPulseTarget["home"]) {
-  const aliases = [team.name, team.code];
+  const aliases = [team.name, team.code, ...(team.aliases ?? [])];
   const normalizedName = normalizeText(team.name);
 
   if (normalizedName === "usa") {

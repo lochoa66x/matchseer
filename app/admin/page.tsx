@@ -1833,7 +1833,7 @@ function marketLookupReason(payload: MarketPulseLookupResult) {
     settled: "market is already settled",
     "not-open": "market is not open yet",
     illiquid: "market is too thin to trust",
-    "no-market": "no three-way match market found",
+    "no-market": "no matching market found",
     "no-event": "no matching Polymarket event found",
   };
   const reason =

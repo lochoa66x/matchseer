@@ -7,6 +7,7 @@ import {
 import {
   fetchPolymarketPulseForTarget,
   fetchPolymarketPulseSnapshot,
+  type MarketPulseTarget,
 } from "../../../../lib/providers/polymarket";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,18 @@ export async function POST(request: Request) {
   try {
     const payload = await readOptionalJson(request);
     const manualUpdates = parseManualUpdates(payload);
+
+    const customLookupTarget = parseLookupTarget(payload);
+
+    if (customLookupTarget) {
+      const lookup = await fetchPolymarketPulseForTarget(customLookupTarget);
+
+      return NextResponse.json({
+        source: "polymarket",
+        lookup,
+        fetchedAt: lookup.fetchedAt,
+      });
+    }
 
     if (payload && typeof payload === "object" && "lookupMatchId" in payload) {
       const lookupMatchId = (payload as { lookupMatchId?: unknown }).lookupMatchId;
@@ -183,6 +196,61 @@ function parseManualUpdates(payload: unknown): MarketPulseUpdate[] {
       },
     ];
   });
+}
+
+function parseLookupTarget(payload: unknown): MarketPulseTarget | null {
+  if (!payload || typeof payload !== "object" || !("lookupTarget" in payload)) {
+    return null;
+  }
+
+  const lookupTarget = (payload as { lookupTarget?: unknown }).lookupTarget;
+
+  if (!lookupTarget || typeof lookupTarget !== "object") {
+    throw new Error("lookupTarget must be an object.");
+  }
+
+  const value = lookupTarget as Record<string, unknown>;
+  const home = readTeamTarget(value.home);
+  const away = readTeamTarget(value.away);
+
+  if (typeof value.matchId !== "string" || !value.matchId.trim() || !home || !away) {
+    throw new Error("lookupTarget requires matchId, home, and away.");
+  }
+
+  const marketShape =
+    value.marketShape === "two-way" || value.marketShape === "three-way"
+      ? value.marketShape
+      : "three-way";
+
+  return {
+    matchId: value.matchId.trim(),
+    league: typeof value.league === "string" ? value.league : undefined,
+    sport: typeof value.sport === "string" ? value.sport : undefined,
+    marketShape,
+    startsAt: typeof value.startsAt === "string" ? value.startsAt : undefined,
+    home,
+    away,
+  };
+}
+
+function readTeamTarget(value: unknown): MarketPulseTarget["home"] | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (typeof record.name !== "string" || typeof record.code !== "string") {
+    return null;
+  }
+
+  return {
+    name: record.name,
+    code: record.code,
+    aliases: Array.isArray(record.aliases)
+      ? record.aliases.filter((alias): alias is string => typeof alias === "string")
+      : undefined,
+  };
 }
 
 function isAuthorized(request: Request, secret: string) {
