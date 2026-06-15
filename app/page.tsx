@@ -789,6 +789,7 @@ export default function Home() {
           <a href="#forecast-board">{t.navForecasts}</a>
           <a href="#ask-seer">{t.navSeer}</a>
           <a href="#cup-seer">{t.navCup}</a>
+          <a href="/nfl">NFL Lab</a>
         </nav>
         <div className="language-switcher" aria-label="Language selector">
           <Languages size={17} />
