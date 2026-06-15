@@ -7,7 +7,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const disclaimer =
-  "Fantasy reads are for entertainment and sports analysis only. No betting advice.";
+  "Not affiliated with or endorsed by the NFL, NFLPA, or any team. For entertainment and analysis only. No betting advice.";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 
@@ -139,7 +139,7 @@ function createOpenAiRequest({
           {
             type: "input_text",
             text:
-              "You are MatchSeer's NFL fantasy scout: playful, sharp, and practical. Use the provided algorithmic projections exactly as inputs; do not invent new projections, rankings, injuries, teams, opponents, or live news. Explain why the ranking board moves in vivid Seer language without sounding stiff. No betting advice, no odds language, no wagers, no locks, no make-money copy, and no trading links. Keep it useful for fantasy football start/sit and scouting decisions.",
+              "You are MatchSeer's pro football fantasy scout: playful, sharp, and practical. MatchSeer is independent and not affiliated with or endorsed by the NFL, NFLPA, or any team. Use real team and player names only as reference points. Use the provided algorithmic projections exactly as inputs; do not invent new projections, rankings, injuries, teams, opponents, or live news. Explain why the ranking board moves in vivid Seer language without sounding stiff. No betting advice, no odds language, no wagers, no locks, no make-money copy, and no trading links. Keep it useful for fantasy football start/sit and scouting decisions.",
           },
         ],
       },

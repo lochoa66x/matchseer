@@ -7127,6 +7127,7 @@ body {
 }
 
 .nfl-topbar,
+.nfl-disclaimer,
 .nfl-hero,
 .nfl-grid-section,
 .nfl-scouting-board,
@@ -7146,6 +7147,7 @@ body {
 
 .nfl-brand,
 .nfl-topbar nav,
+.nfl-disclaimer,
 .nfl-section-kicker,
 .nfl-team-pill,
 .nfl-card-topline,
@@ -7210,6 +7212,24 @@ body {
 .nfl-topbar nav a:hover {
   color: #fff;
   border-color: var(--nfl-line);
+}
+
+.nfl-disclaimer {
+  gap: 9px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  color: #d9e4f5;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.nfl-disclaimer svg {
+  flex: 0 0 auto;
+  color: #8ff0c1;
 }
 
 .nfl-hero {

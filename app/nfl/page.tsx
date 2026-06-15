@@ -123,6 +123,9 @@ const receptionPoints: Record<ScoringFormat, number> = {
   fullPpr: 1,
 };
 
+const nflIndependenceDisclaimer =
+  "Not affiliated with or endorsed by the NFL, NFLPA, or any team. For entertainment and analysis only.";
+
 const teams = {
   bal: {
     code: "BAL",
@@ -452,6 +455,11 @@ export default function NflPage() {
           <a href="#player-compare">Player vs player</a>
         </nav>
       </header>
+
+      <div className="nfl-disclaimer" role="note">
+        <ShieldCheck size={17} />
+        <span>{nflIndependenceDisclaimer}</span>
+      </div>
 
       <section className="nfl-hero" id="team-seer">
         <div className="nfl-matchup-rail" aria-label="NFL matchup list">
