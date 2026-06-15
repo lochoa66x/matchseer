@@ -2766,11 +2766,7 @@ function ForecastView({
             <Activity size={15} />
             {t.crowdSignal}
           </span>
-          <strong>
-            {marketPulse
-              ? `${marketPulse.home}/${marketPulse.draw}/${marketPulse.away}`
-              : t.pendingMode}
-          </strong>
+          {!marketPulse && <strong>{t.pendingMode}</strong>}
           {marketPulse ? (
             <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
           ) : (
