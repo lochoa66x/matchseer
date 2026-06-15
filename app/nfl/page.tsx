@@ -7,10 +7,9 @@ import {
   Gauge,
   HeartPulse,
   LineChart,
-  ListChecks,
+  Search,
   ShieldCheck,
   Sparkles,
-  Star,
   Swords,
   Timer,
   Trophy,
@@ -20,6 +19,8 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+
+type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 
 type NflTeam = {
   code: string;
@@ -59,15 +60,56 @@ type FantasyPlayer = {
   position: string;
   opponent: string;
   color: string;
-  projection: number;
-  floor: number;
-  ceiling: number;
+  baseline: {
+    passYards?: number;
+    passTd?: number;
+    interceptions?: number;
+    rushYards: number;
+    rushTd: number;
+    receivingYards: number;
+    receivingTd: number;
+    receptions: number;
+  };
   targetShare: number;
+  carryShare: number;
   touchdownPulse: number;
   matchup: number;
   health: number;
   chaos: number;
+  nflRank: number;
+  seerRank: number;
+  traits: string[];
   read: string;
+};
+
+type FantasyProjection = {
+  projection: number;
+  floor: number;
+  ceiling: number;
+};
+
+type ScoutingRow = FantasyPlayer & {
+  fantasy: FantasyProjection;
+  rankDelta: number;
+  score: number;
+};
+
+const scoringLabels: Record<ScoringFormat, string> = {
+  standard: "Standard",
+  halfPpr: "Half PPR",
+  fullPpr: "Full PPR",
+};
+
+const scoringCopy: Record<ScoringFormat, string> = {
+  standard: "Touchdowns and yardage carry the lantern.",
+  halfPpr: "Volume matters, but touchdowns still get teeth.",
+  fullPpr: "Targets glow brighter; reception magnets rise.",
+};
+
+const receptionPoints: Record<ScoringFormat, number> = {
+  standard: 0,
+  halfPpr: 0.5,
+  fullPpr: 1,
 };
 
 const teams = {
@@ -210,14 +252,22 @@ const fantasyPlayers: FantasyPlayer[] = [
     position: "WR",
     opponent: "at PHI",
     color: teams.det.color,
-    projection: 18.4,
-    floor: 12.2,
-    ceiling: 27.8,
+    baseline: {
+      rushYards: 2,
+      rushTd: 0,
+      receivingYards: 86,
+      receivingTd: 0.55,
+      receptions: 7.6,
+    },
     targetShare: 31,
+    carryShare: 1,
     touchdownPulse: 62,
     matchup: 74,
     health: 91,
     chaos: 38,
+    nflRank: 9,
+    seerRank: 5,
+    traits: ["Target gravity", "Slot leverage", "Script proof"],
     read:
       "Target gravity is the whole spell. Even if the game gets messy, his route volume keeps the floor warm.",
   },
@@ -228,14 +278,22 @@ const fantasyPlayers: FantasyPlayer[] = [
     position: "RB",
     opponent: "at PHI",
     color: teams.det.color,
-    projection: 17.1,
-    floor: 10.4,
-    ceiling: 29.5,
+    baseline: {
+      rushYards: 72,
+      rushTd: 0.62,
+      receivingYards: 34,
+      receivingTd: 0.18,
+      receptions: 4.2,
+    },
     targetShare: 19,
+    carryShare: 44,
     touchdownPulse: 69,
     matchup: 68,
     health: 86,
     chaos: 53,
+    nflRank: 15,
+    seerRank: 11,
+    traits: ["Explosive touches", "Receiving boost", "TD swing"],
     read:
       "Explosive-touch profile is loud, but touchdown dependency adds wobble. Ceiling monster, slightly thinner floor.",
   },
@@ -246,14 +304,25 @@ const fantasyPlayers: FantasyPlayer[] = [
     position: "QB",
     opponent: "vs BAL",
     color: teams.buf.color,
-    projection: 23.7,
-    floor: 17.9,
-    ceiling: 34.8,
+    baseline: {
+      passYards: 252,
+      passTd: 1.9,
+      interceptions: 0.7,
+      rushYards: 42,
+      rushTd: 0.48,
+      receivingYards: 0,
+      receivingTd: 0,
+      receptions: 0,
+    },
     targetShare: 0,
+    carryShare: 18,
     touchdownPulse: 78,
     matchup: 70,
     health: 88,
     chaos: 61,
+    nflRank: 4,
+    seerRank: 4,
+    traits: ["Rushing floor", "Weather-proof path", "Red-zone keeper"],
     read:
       "Rushing equity keeps him alive in ugly weather. The matchup bites, but fantasy points do not need the game to look pretty.",
   },
@@ -264,14 +333,25 @@ const fantasyPlayers: FantasyPlayer[] = [
     position: "QB",
     opponent: "at BUF",
     color: teams.bal.color,
-    projection: 24.2,
-    floor: 18.7,
-    ceiling: 35.1,
+    baseline: {
+      passYards: 236,
+      passTd: 1.7,
+      interceptions: 0.55,
+      rushYards: 58,
+      rushTd: 0.44,
+      receivingYards: 0,
+      receivingTd: 0,
+      receptions: 0,
+    },
     targetShare: 0,
+    carryShare: 22,
     touchdownPulse: 76,
     matchup: 73,
     health: 87,
     chaos: 58,
+    nflRank: 5,
+    seerRank: 3,
+    traits: ["Rushing cheat code", "Wind insulation", "Explosive scramble"],
     read:
       "The legs are the cheat code. If wind cuts the passing tree, Lamar still has a path through the side door.",
   },
@@ -283,6 +363,7 @@ export default function NflPage() {
   const [activeMatchupId, setActiveMatchupId] = useState(matchups[0].id);
   const [leftPlayerId, setLeftPlayerId] = useState(playerPair[0].id);
   const [rightPlayerId, setRightPlayerId] = useState(playerPair[1].id);
+  const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
   const activeMatchup =
     matchups.find((matchup) => matchup.id === activeMatchupId) ?? matchups[0];
   const leftPlayer =
@@ -290,8 +371,12 @@ export default function NflPage() {
   const rightPlayer =
     fantasyPlayers.find((player) => player.id === rightPlayerId) ?? playerPair[1];
   const startLean = useMemo(
-    () => compareFantasyPlayers(leftPlayer, rightPlayer),
-    [leftPlayer, rightPlayer],
+    () => compareFantasyPlayers(leftPlayer, rightPlayer, scoringFormat),
+    [leftPlayer, rightPlayer, scoringFormat],
+  );
+  const scoutingBoard = useMemo(
+    () => buildScoutingBoard(fantasyPlayers, scoringFormat),
+    [scoringFormat],
   );
 
   return (
@@ -408,14 +493,26 @@ export default function NflPage() {
             <BrainCircuit size={17} />
             Fantasy Seer
           </div>
-          <h2>Start/sit pulse</h2>
+          <div className="nfl-fantasy-head">
+            <div>
+              <h2>Start/sit pulse</h2>
+              <p>{scoringCopy[scoringFormat]}</p>
+            </div>
+            <ScoringToggle value={scoringFormat} onChange={setScoringFormat} />
+          </div>
           <div className="nfl-fantasy-list">
             {fantasyPlayers.map((player) => (
-              <FantasyCard key={player.id} player={player} />
+              <FantasyCard
+                key={player.id}
+                player={player}
+                scoringFormat={scoringFormat}
+              />
             ))}
           </div>
         </div>
       </section>
+
+      <ScoutingBoard rows={scoutingBoard} scoringFormat={scoringFormat} />
 
       <section className="nfl-player-compare" id="player-compare">
         <div className="nfl-player-compare-head">
@@ -446,17 +543,48 @@ export default function NflPage() {
           </select>
         </div>
         <div className="nfl-player-duel">
-          <FantasyDuelPlayer player={leftPlayer} winner={startLean.id === leftPlayer.id} />
+          <FantasyDuelPlayer
+            player={leftPlayer}
+            scoringFormat={scoringFormat}
+            winner={startLean.id === leftPlayer.id}
+          />
           <div className="nfl-duel-verdict">
             <Sparkles size={20} />
             <span>Seer nod</span>
             <strong>{startLean.name}</strong>
             <p>{startLean.verdict}</p>
           </div>
-          <FantasyDuelPlayer player={rightPlayer} winner={startLean.id === rightPlayer.id} />
+          <FantasyDuelPlayer
+            player={rightPlayer}
+            scoringFormat={scoringFormat}
+            winner={startLean.id === rightPlayer.id}
+          />
         </div>
       </section>
     </main>
+  );
+}
+
+function ScoringToggle({
+  value,
+  onChange,
+}: {
+  value: ScoringFormat;
+  onChange: (value: ScoringFormat) => void;
+}) {
+  return (
+    <div className="nfl-format-toggle" aria-label="Fantasy scoring format">
+      {(Object.keys(scoringLabels) as ScoringFormat[]).map((format) => (
+        <button
+          className={cx(value === format && "active")}
+          key={format}
+          onClick={() => onChange(format)}
+          type="button"
+        >
+          {scoringLabels[format]}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -572,7 +700,15 @@ function TeamCompare({ matchup }: { matchup: NflMatchup }) {
   );
 }
 
-function FantasyCard({ player }: { player: FantasyPlayer }) {
+function FantasyCard({
+  player,
+  scoringFormat,
+}: {
+  player: FantasyPlayer;
+  scoringFormat: ScoringFormat;
+}) {
+  const fantasy = fantasyProjection(player, scoringFormat);
+
   return (
     <article className="nfl-fantasy-card">
       <div className="nfl-player-id">
@@ -585,12 +721,17 @@ function FantasyCard({ player }: { player: FantasyPlayer }) {
         </div>
       </div>
       <div className="nfl-fantasy-score">
-        <span>Projection</span>
-        <strong>{player.projection.toFixed(1)}</strong>
+        <span>{scoringLabels[scoringFormat]}</span>
+        <strong>{fantasy.projection.toFixed(1)}</strong>
       </div>
       <div className="nfl-fantasy-range">
-        <span>Floor {player.floor.toFixed(1)}</span>
-        <span>Ceiling {player.ceiling.toFixed(1)}</span>
+        <span>Floor {fantasy.floor.toFixed(1)}</span>
+        <span>Ceiling {fantasy.ceiling.toFixed(1)}</span>
+      </div>
+      <div className="nfl-fantasy-tags">
+        <span>{player.baseline.receptions.toFixed(1)} rec</span>
+        <span>{player.carryShare}% carry</span>
+        <span>{player.touchdownPulse}% TD pulse</span>
       </div>
       <p>{player.read}</p>
     </article>
@@ -599,11 +740,15 @@ function FantasyCard({ player }: { player: FantasyPlayer }) {
 
 function FantasyDuelPlayer({
   player,
+  scoringFormat,
   winner,
 }: {
   player: FantasyPlayer;
+  scoringFormat: ScoringFormat;
   winner: boolean;
 }) {
+  const fantasy = fantasyProjection(player, scoringFormat);
+
   return (
     <article className={cx("nfl-duel-player", winner && "winner")}>
       <div className="nfl-player-id">
@@ -615,18 +760,102 @@ function FantasyDuelPlayer({
           </em>
         </div>
       </div>
-      <MiniMeter icon={<LineChart size={16} />} label="Projection" value={Math.round(player.projection * 3)} />
-      <MiniMeter icon={<ShieldCheck size={16} />} label="Floor" value={Math.round(player.floor * 4)} />
-      <MiniMeter icon={<Zap size={16} />} label="Ceiling" value={Math.round(player.ceiling * 2.2)} hot />
+      <MiniMeter
+        icon={<LineChart size={16} />}
+        label={`${scoringLabels[scoringFormat]} projection`}
+        value={clampMeter(Math.round(fantasy.projection * 3))}
+      />
+      <MiniMeter
+        icon={<ShieldCheck size={16} />}
+        label="Floor"
+        value={clampMeter(Math.round(fantasy.floor * 4))}
+      />
+      <MiniMeter
+        icon={<Zap size={16} />}
+        label="Ceiling"
+        value={clampMeter(Math.round(fantasy.ceiling * 2.2))}
+        hot
+      />
       <MiniMeter icon={<HeartPulse size={16} />} label="Health" value={player.health} />
       <MiniMeter icon={<Timer size={16} />} label="Chaos" value={player.chaos} hot />
     </article>
   );
 }
 
-function compareFantasyPlayers(left: FantasyPlayer, right: FantasyPlayer) {
-  const leftScore = fantasyScore(left);
-  const rightScore = fantasyScore(right);
+function ScoutingBoard({
+  rows,
+  scoringFormat,
+}: {
+  rows: ScoutingRow[];
+  scoringFormat: ScoringFormat;
+}) {
+  return (
+    <section className="nfl-scouting-board" id="scouting-board">
+      <div className="nfl-scouting-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Search size={17} />
+            Player scouting
+          </div>
+          <h2>Seer ranking board</h2>
+          <p>
+            Format-aware projection, role pulse, matchup, health, and chaos. Baseline
+            rank is a placeholder until a live external ranking feed is connected.
+          </p>
+        </div>
+        <strong>{scoringLabels[scoringFormat]}</strong>
+      </div>
+      <div className="nfl-scouting-list">
+        {rows.map((player, index) => (
+          <article className="nfl-scout-row" key={player.id}>
+            <div className="nfl-rank-stack">
+              <span>#{index + 1}</span>
+              <em>Seer</em>
+            </div>
+            <div className="nfl-scout-player">
+              <div className="nfl-player-id">
+                <span style={{ background: player.color }}>{player.team}</span>
+                <div>
+                  <strong>{player.name}</strong>
+                  <em>
+                    {player.position} · {player.opponent}
+                  </em>
+                </div>
+              </div>
+              <div className="nfl-trait-list">
+                {player.traits.map((trait) => (
+                  <span key={trait}>{trait}</span>
+                ))}
+              </div>
+            </div>
+            <div className="nfl-scout-metric">
+              <span>Projection</span>
+              <strong>{player.fantasy.projection.toFixed(1)}</strong>
+            </div>
+            <div className="nfl-scout-metric">
+              <span>Range</span>
+              <strong>
+                {player.fantasy.floor.toFixed(1)}-{player.fantasy.ceiling.toFixed(1)}
+              </strong>
+            </div>
+            <div className="nfl-rank-delta">
+              <span>Baseline #{player.nflRank}</span>
+              <strong>{formatRankDelta(player.rankDelta)}</strong>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function compareFantasyPlayers(
+  left: FantasyPlayer,
+  right: FantasyPlayer,
+  scoringFormat: ScoringFormat,
+) {
+  const leftScore = fantasyScore(left, scoringFormat);
+  const rightScore = fantasyScore(right, scoringFormat);
   const winner = leftScore >= rightScore ? left : right;
   const loser = winner.id === left.id ? right : left;
   const margin = Math.abs(leftScore - rightScore);
@@ -641,19 +870,85 @@ function compareFantasyPlayers(left: FantasyPlayer, right: FantasyPlayer) {
   };
 }
 
-function fantasyScore(player: FantasyPlayer) {
+function buildScoutingBoard(players: FantasyPlayer[], scoringFormat: ScoringFormat) {
+  return players
+    .map((player) => {
+      const fantasy = fantasyProjection(player, scoringFormat);
+      return {
+        ...player,
+        fantasy,
+        rankDelta: player.nflRank - player.seerRank,
+        score: fantasyScore(player, scoringFormat),
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+function fantasyScore(player: FantasyPlayer, scoringFormat: ScoringFormat) {
+  const fantasy = fantasyProjection(player, scoringFormat);
+
   return (
-    player.projection * 3.2 +
-    player.floor * 1.8 +
-    player.ceiling * 1.1 +
+    fantasy.projection * 3.2 +
+    fantasy.floor * 1.8 +
+    fantasy.ceiling * 1.1 +
     player.matchup * 0.18 +
     player.health * 0.14 -
     player.chaos * 0.18
   );
 }
 
+function fantasyProjection(
+  player: FantasyPlayer,
+  scoringFormat: ScoringFormat,
+): FantasyProjection {
+  const ppr = receptionPoints[scoringFormat];
+  const passing =
+    (player.baseline.passYards ?? 0) / 25 +
+    (player.baseline.passTd ?? 0) * 4 -
+    (player.baseline.interceptions ?? 0) * 2;
+  const rushing = player.baseline.rushYards / 10 + player.baseline.rushTd * 6;
+  const receiving =
+    player.baseline.receivingYards / 10 +
+    player.baseline.receivingTd * 6 +
+    player.baseline.receptions * ppr;
+  const roleBonus =
+    player.targetShare * 0.025 + player.carryShare * 0.016 + player.touchdownPulse * 0.018;
+  const matchupBonus = (player.matchup - 70) / 16;
+  const stability = (player.health - player.chaos) / 120;
+  const projection = passing + rushing + receiving + roleBonus + matchupBonus + stability;
+  const floor = projection * (0.6 + player.health / 320) - player.chaos / 28;
+  const ceiling =
+    projection * (1.16 + player.touchdownPulse / 280) + player.chaos / 22;
+
+  return {
+    projection: round1(projection),
+    floor: round1(Math.max(0, floor)),
+    ceiling: round1(Math.max(projection, ceiling)),
+  };
+}
+
 function weatherDrag(matchup: NflMatchup) {
   return matchup.weather.toLowerCase().includes("wind") ? 68 : 24;
+}
+
+function clampMeter(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function formatRankDelta(delta: number) {
+  if (delta > 0) {
+    return `+${delta} vs base`;
+  }
+
+  if (delta < 0) {
+    return `${delta} vs base`;
+  }
+
+  return "even";
+}
+
+function round1(value: number) {
+  return Math.round(value * 10) / 10;
 }
 
 function cx(...classes: Array<string | false | undefined>) {
