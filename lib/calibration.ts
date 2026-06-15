@@ -2,7 +2,8 @@
 // Given predicted probabilities + actual outcomes, it measures how well-calibrated
 // the model is: does "60% confidence" actually happen ~60% of the time?
 // Works for any 3-way (home/draw/away) market — World Cup now, NFL or other
-// leagues later (draws are simply rare there, probability ~0).
+// leagues later. For NFL calibration, "draw" can mean the close-game lane
+// (within one touchdown), not a literal tied final.
 
 export type ForecastOutcome = "home" | "draw" | "away";
 
