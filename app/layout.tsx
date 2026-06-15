@@ -69,6 +69,29 @@ export const metadata: Metadata = {
   category: "sports",
 };
 
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://matchseer.com/#organization",
+      name: "MatchSeer",
+      url: "https://matchseer.com",
+      logo: "https://matchseer.com/brand/matchseer-app-icon.svg",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://matchseer.com/#website",
+      name: "MatchSeer",
+      url: "https://matchseer.com",
+      description:
+        "Playful World Cup match forecasts powered by real stats, AI readouts, weather, team form, and player sparks. No betting advice.",
+      inLanguage: ["en", "es", "fr"],
+      publisher: { "@id": "https://matchseer.com/#organization" },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -76,7 +99,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
