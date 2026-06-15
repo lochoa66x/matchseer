@@ -3,9 +3,9 @@ import { applyMarketPulseUpdates, listMatches } from "../../../../lib/database";
 import { fetchPolymarketPulseSnapshot } from "../../../../lib/providers/polymarket";
 
 export const dynamic = "force-dynamic";
-// Polymarket sync does up to ~90 lookups; give it room (requires Vercel Pro for
-// durations beyond the Hobby 10s limit).
-export const maxDuration = 60;
+// Polymarket sync does up to ~90 lookups; give it headroom so a slow batch can't
+// be cut off mid-run. Allowed on Vercel Pro (Hobby caps function duration at 10s).
+export const maxDuration = 120;
 
 // Triggered by Vercel Cron (see vercel.json). Vercel attaches
 // `Authorization: Bearer <CRON_SECRET>` to scheduled requests, so we require
