@@ -5,6 +5,7 @@ import type {
   MarketPulse,
   MatchStatus,
   MatchSummary,
+  TrailSignal,
 } from "./domain";
 import type {
   FootballDataSnapshot,
@@ -3070,6 +3071,7 @@ export async function saveForecastInterpretation({
 function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const status = toMatchStatus(row.status);
   const reasons = toReasons(row.factors);
+  const sourcePayload = parseJsonPayload(row.source_payload);
   const weatherMood = toLanguageRecord(
     row.weather_summary ?? "Weather data pending.",
   );
@@ -3137,6 +3139,12 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       chaos,
       projected: projectedScore,
       marketPulse,
+      trail: buildPublicSeerTrail({
+        awayName: row.away_name,
+        homeName: row.home_name,
+        marketPulse,
+        sourcePayload,
+      }),
       tone: {
         ...toLanguageRecord("Forecast copy pending."),
         ...(row.tone ?? {}),
@@ -3377,6 +3385,282 @@ function marketPulseSummary({
     es: `La señal de la gente se inclina por ${leaderLabel}; el Vidente mantiene la lectura, pero sube el caos.`,
     fr: `Le signal du public penche vers ${leaderLabel}; le voyant garde sa lecture, mais le chaos monte.`,
   };
+}
+
+function buildPublicSeerTrail({
+  awayName,
+  homeName,
+  marketPulse,
+  sourcePayload,
+}: {
+  awayName: string;
+  homeName: string;
+  marketPulse: MarketPulse | null;
+  sourcePayload: Record<string, unknown> | null;
+}): TrailSignal[] {
+  const modifiers = readPayloadRecord(sourcePayload?.modifiers);
+  const signals: TrailSignal[] = [];
+
+  if (modifiers) {
+    signals.push(...weatherTrailSignals(readPayloadRecord(modifiers.weather)));
+
+    if (marketPulse) {
+      signals.push(marketPulseTrailSignal(marketPulse));
+    }
+
+    const availability = readPayloadRecord(modifiers.availability);
+    const impactedPlayers = readPayloadArray(availability?.impactedPlayers);
+
+    if (impactedPlayers.length > 0) {
+      signals.push({
+        id: "player-watch",
+        label: "Player watch",
+        tone: "drag",
+        text: {
+          en: "A key-player warning takes some bite out of the attack.",
+          es: "Una alerta de jugador clave le quita filo al ataque.",
+          fr: "Une alerte joueur clé retire un peu de mordant à l'attaque.",
+        },
+      });
+    }
+
+    const fatigue = readPayloadRecord(modifiers.fatigue);
+
+    if (readPayloadArray(fatigue?.impactedPlayers).length > 0) {
+      signals.push({
+        id: "legs",
+        label: "Legs",
+        tone: "chaos",
+        text: {
+          en: "Short rest and heavy legs add late wobble to the trail.",
+          es: "El poco descanso y las piernas pesadas meten temblor al cierre.",
+          fr: "Le repos court et les jambes lourdes ajoutent du flottement en fin de piste.",
+        },
+      });
+    }
+
+    const referee = readPayloadRecord(modifiers.referee);
+    const refereeChaos = readPayloadNumber(referee?.chaosDelta) ?? 0;
+
+    if (refereeChaos >= 2) {
+      signals.push({
+        id: "card-noise",
+        label: "Card noise",
+        tone: "chaos",
+        text: {
+          en: "Card rhythm can tilt the room if tempers spike.",
+          es: "El ritmo de tarjetas puede inclinar la sala si sube la temperatura.",
+          fr: "Le rythme des cartons peut faire basculer la pièce si les nerfs montent.",
+        },
+      });
+    } else if (refereeChaos <= -2) {
+      signals.push({
+        id: "calm-whistle",
+        label: "Calm whistle",
+        tone: "steady",
+        text: {
+          en: "A calmer whistle trims some chaos from the read.",
+          es: "Un silbato más tranquilo recorta algo de caos en la lectura.",
+          fr: "Un coup de sifflet plus calme retire un peu de chaos à la lecture.",
+        },
+      });
+    }
+
+    const venue = readPayloadRecord(modifiers.venue);
+    const homeVenue = readPayloadNumber(venue?.home) ?? 0;
+    const awayVenue = readPayloadNumber(venue?.away) ?? 0;
+
+    if (Math.max(homeVenue, awayVenue) >= 2.5) {
+      const venueTeam = homeVenue >= awayVenue ? homeName : awayName;
+
+      signals.push({
+        id: "venue-pull",
+        label: "Venue pull",
+        tone: "boost",
+        text: {
+          en: `${venueTeam} get a little familiarity lift from the room.`,
+          es: `${venueTeam} recibe un pequeño empujón de familiaridad del escenario.`,
+          fr: `${venueTeam} reçoit un petit soutien de familiarité dans ce décor.`,
+        },
+      });
+    }
+
+    const spotlight = readPayloadRecord(modifiers.spotlight);
+    const spotlightGap = Math.abs(
+      (readPayloadNumber(spotlight?.home) ?? 0) -
+        (readPayloadNumber(spotlight?.away) ?? 0),
+    );
+
+    if (spotlightGap >= 1.4) {
+      signals.push({
+        id: "spotlight",
+        label: "Spotlight",
+        tone: "boost",
+        text: {
+          en: "Global attention gives the bigger stage team a small invisible push.",
+          es: "La atención global le da al equipo de mayor escenario un pequeño empujón invisible.",
+          fr: "L'attention mondiale donne à l'équipe la plus exposée une petite poussée invisible.",
+        },
+      });
+    }
+  }
+
+  if (signals.length === 0 && marketPulse) {
+    signals.push(marketPulseTrailSignal(marketPulse));
+  }
+
+  return uniqueTrailSignals(signals).slice(0, 4);
+}
+
+function weatherTrailSignals(weather: Record<string, unknown> | null): TrailSignal[] {
+  if (!weather) {
+    return [];
+  }
+
+  const signals: TrailSignal[] = [];
+  const temperature = readPayloadNumber(weather.temperatureC);
+  const humidity = readPayloadNumber(weather.humidity);
+  const wind = readPayloadNumber(weather.windKph);
+  const daypart = readPayloadString(weather.daypart);
+  const summary = readPayloadString(weather.summary)?.toLowerCase() ?? "";
+  const gapMultiplier = readPayloadNumber(weather.gapMultiplier) ?? 1;
+  const isHumid = (humidity ?? 0) >= 65 || summary.includes("humid") || summary.includes("muggy");
+
+  if (gapMultiplier <= 0.96 && daypart === "day") {
+    signals.push({
+      id: isHumid ? "humid-drag" : "sun-tax",
+      label: isHumid ? "Humid drag" : "Sun tax",
+      tone: "drag",
+      text: {
+        en: isHumid
+          ? "Day heat and humidity make the chase heavier and tighten the favorite's edge."
+          : "Day heat pulls speed out of the match and gives the underdog more cover.",
+        es: isHumid
+          ? "El calor de día y la humedad hacen más pesada la persecución y aprietan la ventaja del favorito."
+          : "El calor de día le quita velocidad al partido y le da más refugio al chico.",
+        fr: isHumid
+          ? "La chaleur de jour et l'humidité alourdissent la poursuite et resserrent l'écart du favori."
+          : "La chaleur de jour retire de la vitesse au match et couvre un peu plus l'outsider.",
+      },
+    });
+  } else if (gapMultiplier >= 1.03 && daypart === "late") {
+    signals.push({
+      id: "night-lift",
+      label: "Night lift",
+      tone: "boost",
+      text: {
+        en: "Cooler late air lets the stronger legs separate more cleanly.",
+        es: "El aire fresco de noche deja que las piernas más fuertes se separen mejor.",
+        fr: "L'air plus frais du soir laisse les jambes les plus fortes se détacher plus proprement.",
+      },
+    });
+  } else if (temperature !== null && temperature >= 27 && daypart === "late") {
+    signals.push({
+      id: "softened-heat",
+      label: "Softened heat",
+      tone: "steady",
+      text: {
+        en: "The late kickoff softens the heat tax without clearing it completely.",
+        es: "El horario tardío suaviza el impuesto del calor sin borrarlo del todo.",
+        fr: "Le coup d'envoi tardif adoucit la taxe de chaleur sans l'effacer totalement.",
+      },
+    });
+  }
+
+  if (wind !== null && wind >= 18) {
+    signals.push({
+      id: "wind-noise",
+      label: "Wind noise",
+      tone: "chaos",
+      text: {
+        en: "Wind adds noise to long balls, crosses, and dead-ball moments.",
+        es: "El viento mete ruido en balones largos, centros y jugadas quietas.",
+        fr: "Le vent ajoute du bruit aux longs ballons, centres et phases arrêtées.",
+      },
+    });
+  }
+
+  if (summary.includes("rain") || summary.includes("shower") || summary.includes("slick")) {
+    signals.push({
+      id: "slick-pitch",
+      label: "Slick pitch",
+      tone: "chaos",
+      text: {
+        en: "A slick surface can turn rebounds into little emergencies.",
+        es: "Una cancha resbalosa puede convertir rebotes en pequeñas emergencias.",
+        fr: "Une surface glissante peut transformer les rebonds en petites urgences.",
+      },
+    });
+  } else if (summary.includes("fog")) {
+    signals.push({
+      id: "fog-edge",
+      label: "Fog edge",
+      tone: "chaos",
+      text: {
+        en: "Fog blurs the long-ball trail and makes second balls stranger.",
+        es: "La niebla borra el rastro del balón largo y vuelve raras las segundas jugadas.",
+        fr: "Le brouillard floute les longs ballons et rend les seconds ballons plus étranges.",
+      },
+    });
+  }
+
+  return signals;
+}
+
+function marketPulseTrailSignal(marketPulse: MarketPulse): TrailSignal {
+  if (marketPulse.alignment === "thin") {
+    return {
+      id: "crowd-thin",
+      label: "Crowd whisper",
+      tone: "steady",
+      text: {
+        en: "The crowd signal is thin, so the Seer barely lets it touch the read.",
+        es: "La señal de la gente viene floja, así que el Vidente apenas la roza.",
+        fr: "Le signal du public est léger, donc le voyant le laisse à peine peser.",
+      },
+    };
+  }
+
+  if (marketPulse.alignment === "aligned") {
+    return {
+      id: "crowd-backs",
+      label: "Crowd backs",
+      tone: "boost",
+      text: {
+        en: "The crowd leans the same way, backing the read without taking the wheel.",
+        es: "La gente se inclina igual y acompaña la lectura sin tomar el volante.",
+        fr: "Le public penche dans le même sens et soutient la lecture sans prendre le volant.",
+      },
+    };
+  }
+
+  return {
+    id: "crowd-split",
+    label: "Crowd split",
+    tone: "chaos",
+    text: {
+      en: "The crowd points elsewhere, so the Seer keeps the pick but hears louder noise.",
+      es: "La gente apunta a otro lado, así que el Vidente mantiene la lectura pero oye más ruido.",
+      fr: "Le public regarde ailleurs, donc le voyant garde le choix mais entend plus de bruit.",
+    },
+  };
+}
+
+function uniqueTrailSignals(signals: TrailSignal[]) {
+  const seen = new Set<string>();
+
+  return signals.filter((signal) => {
+    if (seen.has(signal.id)) {
+      return false;
+    }
+
+    seen.add(signal.id);
+    return true;
+  });
+}
+
+function readPayloadArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
 }
 
 const publishedProjectedScoreCorrections: Record<string, string> = {

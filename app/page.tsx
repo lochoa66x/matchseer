@@ -15,6 +15,7 @@ import {
   Share2,
   ShieldCheck,
   Sparkles,
+  Timer,
   Trophy,
   UsersRound,
   Wind,
@@ -27,6 +28,7 @@ import type {
   MatchSummary as Match,
   PlayerSpark as Player,
   TeamRating as Team,
+  TrailSignal,
 } from "../lib/domain";
 
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
@@ -138,6 +140,8 @@ const copy = {
     marketPulse: "Market pulse",
     crowdSignal: "Crowd signal",
     marketPending: "The crowd signal hasn't formed yet — the Seer reads on its own for now.",
+    trail: "The trail",
+    trailSignals: "signals",
     projected: "Projected",
     teamEdge: "Team edge",
     compareTeams: "Compare teams",
@@ -262,6 +266,8 @@ const copy = {
     marketPulse: "Pulso público",
     crowdSignal: "Señal de la gente",
     marketPending: "La señal de la gente aún no se forma — por ahora el Vidente lee por su cuenta.",
+    trail: "El rastro",
+    trailSignals: "señales",
     projected: "Proyectado",
     teamEdge: "Ventaja",
     compareTeams: "Comparar equipos",
@@ -386,6 +392,8 @@ const copy = {
     marketPulse: "Pouls public",
     crowdSignal: "Signal du public",
     marketPending: "Le signal du public n'a pas encore pris forme — pour l'instant, le voyant lit seul.",
+    trail: "La piste",
+    trailSignals: "signaux",
     projected: "Projeté",
     teamEdge: "Avantage",
     compareTeams: "Comparer les équipes",
@@ -2691,9 +2699,11 @@ function ForecastView({
   compact?: boolean;
 }) {
   const [showSupportDetails, setShowSupportDetails] = useState(false);
+  const [showTrailDetails, setShowTrailDetails] = useState(false);
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
   const marketPulse = usableMarketPulse(match.forecast.marketPulse);
+  const trail = match.forecast.trail ?? [];
   const isFinal = match.status === "Final";
   const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
   const readLabel = isFinal
@@ -2773,6 +2783,15 @@ function ForecastView({
             <p>{t.marketPending}</p>
           )}
         </div>
+        {trail.length > 0 && (
+          <SeerTrail
+            expanded={showTrailDetails}
+            language={language}
+            onToggle={() => setShowTrailDetails((current) => !current)}
+            signals={trail}
+            t={t}
+          />
+        )}
         <p className="disclaimer forecast-disclaimer">{interpretation?.disclaimer ?? t.review}</p>
       </div>
       <div className={cx("match-insight-stack", showSupportDetails && "mobile-expanded")}>
@@ -2826,6 +2845,86 @@ function Meter({ label, value, hot = false }: { label: string; value: number; ho
       </div>
     </div>
   );
+}
+
+function SeerTrail({
+  expanded,
+  language,
+  onToggle,
+  signals,
+  t,
+}: {
+  expanded: boolean;
+  language: Language;
+  onToggle: () => void;
+  signals: TrailSignal[];
+  t: Record<string, string>;
+}) {
+  return (
+    <section className={cx("seer-trail", expanded && "expanded")}>
+      <button
+        aria-expanded={expanded}
+        className="seer-trail-toggle"
+        onClick={onToggle}
+        type="button"
+      >
+        <span>
+          <Sparkles size={15} />
+          {t.trail}
+        </span>
+        <strong>
+          {signals.length} {t.trailSignals}
+        </strong>
+        <ChevronDown size={15} />
+      </button>
+      <div className="seer-trail-list">
+        {signals.map((signal) => (
+          <div className={cx("seer-trail-signal", signal.tone)} key={signal.id}>
+            <TrailSignalIcon signal={signal} />
+            <div>
+              <strong>{signal.label}</strong>
+              <p>{signal.text[language] ?? signal.text.en}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TrailSignalIcon({ signal }: { signal: TrailSignal }) {
+  if (signal.id.includes("wind")) {
+    return <Wind size={16} />;
+  }
+
+  if (
+    signal.id.includes("sun") ||
+    signal.id.includes("humid") ||
+    signal.id.includes("night") ||
+    signal.id.includes("heat") ||
+    signal.id.includes("pitch") ||
+    signal.id.includes("fog")
+  ) {
+    return <CloudSun size={16} />;
+  }
+
+  if (signal.id.includes("crowd")) {
+    return <Activity size={16} />;
+  }
+
+  if (signal.id.includes("player")) {
+    return <UsersRound size={16} />;
+  }
+
+  if (signal.id.includes("legs")) {
+    return <Timer size={16} />;
+  }
+
+  if (signal.id.includes("card") || signal.id.includes("whistle")) {
+    return <ShieldCheck size={16} />;
+  }
+
+  return <Zap size={16} />;
 }
 
 function TeamsView({ match, t }: { match: Match; t: Record<string, string> }) {

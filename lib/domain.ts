@@ -29,6 +29,13 @@ export type ForecastCopy = {
   reasons: Record<Language, string[]>;
 };
 
+export type TrailSignal = {
+  id: string;
+  label: string;
+  tone: "boost" | "drag" | "chaos" | "steady";
+  text: Record<Language, string>;
+};
+
 export type MatchForecast = ForecastCopy & {
   home: number;
   draw: number;
@@ -39,6 +46,7 @@ export type MatchForecast = ForecastCopy & {
   chaos: number;
   projected: string;
   marketPulse?: MarketPulse | null;
+  trail?: TrailSignal[];
 };
 
 export type MarketPulse = {

@@ -763,6 +763,103 @@ h1 {
   color: rgba(226, 235, 250, 0.72);
 }
 
+.seer-trail {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 10px;
+}
+
+.seer-trail-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: rgba(225, 235, 250, 0.88);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.seer-trail-toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #eef5ff;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.seer-trail-toggle strong {
+  margin-left: auto;
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.seer-trail-toggle > svg {
+  display: none;
+  transition: transform 160ms ease;
+}
+
+.seer-trail.expanded .seer-trail-toggle > svg {
+  transform: rotate(180deg);
+}
+
+.seer-trail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.seer-trail-signal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  background: rgba(5, 10, 22, 0.4);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.seer-trail-signal > svg {
+  margin-top: 1px;
+  color: rgba(160, 246, 210, 0.86);
+}
+
+.seer-trail-signal.drag > svg {
+  color: rgba(255, 204, 105, 0.9);
+}
+
+.seer-trail-signal.chaos > svg {
+  color: rgba(255, 126, 92, 0.92);
+}
+
+.seer-trail-signal.steady > svg {
+  color: rgba(159, 178, 210, 0.9);
+}
+
+.seer-trail-signal strong {
+  display: block;
+  color: #f6f9ff;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.seer-trail-signal p {
+  margin: 4px 0 0;
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.74rem;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
 .reason-list {
   display: grid;
   gap: 10px;
@@ -6361,6 +6458,18 @@ body {
 
   .market-pulse-note p {
     grid-column: 1 / -1;
+  }
+
+  .seer-trail-toggle > svg {
+    display: block;
+  }
+
+  .seer-trail:not(.expanded) .seer-trail-list {
+    display: none;
+  }
+
+  .seer-trail-list {
+    grid-template-columns: 1fr;
   }
 
   .cup-analysis-row {
