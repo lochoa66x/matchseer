@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       ...result,
       targets: snapshot.targets,
       marketsScanned: snapshot.marketsScanned,
+      skippedReasons: snapshot.skipped,
     });
   } catch (error) {
     return NextResponse.json(

@@ -35,6 +35,7 @@ type MarketPulseSyncResult = {
   fetchedAt: string;
   targets?: number;
   marketsScanned?: number;
+  skippedReasons?: Record<string, number>;
   error?: string;
 };
 
@@ -964,9 +965,19 @@ function MarketPulsePanel({
               </div>
             </div>
             <p className="admin-muted">
-              If saved is zero, the public market scan finished but did not find a
-              clean three-way crowd signal for our fixture names.
+              If saved is zero, the scan ran but found no live three-way crowd
+              market — usually because the matches are settled or not yet trading.
             </p>
+            {lastSync?.skippedReasons &&
+            Object.values(lastSync.skippedReasons).some((n) => (n ?? 0) > 0) ? (
+              <p className="admin-muted">
+                Why no signal:{" "}
+                {Object.entries(lastSync.skippedReasons)
+                  .filter(([, n]) => (n ?? 0) > 0)
+                  .map(([reason, n]) => `${n} ${reason.replace(/-/g, " ")}`)
+                  .join(" · ")}
+              </p>
+            ) : null}
           </div>
 
           <div className="market-pulse-status-card">

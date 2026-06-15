@@ -36,12 +36,28 @@ type GammaEvent = {
   markets?: unknown;
 };
 
+export type PulseSkipReason =
+  | "usable"
+  | "settled"
+  | "not-open"
+  | "illiquid"
+  | "no-market"
+  | "no-event";
+
+export type PulseSkipBreakdown = Record<
+  Exclude<PulseSkipReason, "usable">,
+  number
+>;
+
 export type PolymarketPulseSnapshot = {
   source: "polymarket";
   fetchedAt: string;
   targets: number;
   marketsScanned: number;
   updates: MarketPulseUpdate[];
+  // Why fixtures produced no usable signal — so the admin can see "5 settled,
+  // 1 not open yet" instead of a mysterious "Saved 0".
+  skipped: PulseSkipBreakdown;
 };
 
 // Polymarket models a single match as an EVENT (e.g. "Netherlands vs. Japan")
@@ -58,9 +74,14 @@ const POLYMARKET_SEARCH_URL =
 // How many target matches to look up at once (each is one search request).
 const SEARCH_CONCURRENCY = Number(process.env.POLYMARKET_SEARCH_CONCURRENCY ?? "5");
 
-// Skip emitting a pulse when a match's markets have essentially no money behind
-// them — those prices are placeholders, not real crowd sentiment. Tunable.
-const MIN_MARKET_SIGNAL = Number(process.env.POLYMARKET_MIN_SIGNAL ?? "1");
+// An open, tradeable market has a live order book (liquidity > 0). Settled or
+// not-yet-open markets sit at ~0 liquidity — this tells real crowd odds apart
+// from results and placeholders.
+const MIN_LIQUIDITY = Number(process.env.POLYMARKET_MIN_LIQUIDITY ?? "1");
+
+// A single 1X2 outcome at/above this is never a real forecast — it's either a
+// resolved result (1.0) or a pre-trading placeholder (e.g. 0.9995).
+const DEGENERATE_PRICE = Number(process.env.POLYMARKET_DEGENERATE_PRICE ?? "0.95");
 
 const FETCH_TIMEOUT_MS = Number(process.env.POLYMARKET_FETCH_TIMEOUT_MS ?? "8000");
 
@@ -75,6 +96,14 @@ export async function fetchPolymarketPulseSnapshot(
     ? Math.max(1, Math.min(10, Math.floor(SEARCH_CONCURRENCY)))
     : 5;
 
+  const skipped: PulseSkipBreakdown = {
+    settled: 0,
+    "not-open": 0,
+    illiquid: 0,
+    "no-market": 0,
+    "no-event": 0,
+  };
+
   for (let i = 0; i < targets.length; i += concurrency) {
     const batch = targets.slice(i, i + concurrency);
     const results = await Promise.all(
@@ -83,17 +112,15 @@ export async function fetchPolymarketPulseSnapshot(
           const event = await findMatchEvent(target);
 
           if (!event) {
-            return { update: null, scanned: 0 };
+            return { update: null, reason: "no-event" as PulseSkipReason, scanned: 0 };
           }
 
           const markets = parseArrayField(event.markets) as GammaMarket[];
+          const classified = classifyEvent(event, markets, target, fetchedAt);
 
-          return {
-            update: eventToPulse(event, markets, target, fetchedAt),
-            scanned: markets.length,
-          };
+          return { ...classified, scanned: markets.length };
         } catch {
-          return { update: null, scanned: 0 };
+          return { update: null, reason: "no-event" as PulseSkipReason, scanned: 0 };
         }
       }),
     );
@@ -103,6 +130,8 @@ export async function fetchPolymarketPulseSnapshot(
 
       if (result.update) {
         updates.push(result.update);
+      } else if (result.reason !== "usable") {
+        skipped[result.reason] += 1;
       }
     }
   }
@@ -113,6 +142,7 @@ export async function fetchPolymarketPulseSnapshot(
     targets: targets.length,
     marketsScanned,
     updates,
+    skipped,
   };
 }
 
@@ -146,11 +176,9 @@ function pickMatchEvent(
   homeAliases: string[],
   awayAliases: string[],
 ): GammaEvent | null {
+  // Note: we no longer drop closed events here — we want to find them and label
+  // them "settled" so the admin understands why there's no live signal.
   const candidates = events.filter((event) => {
-    if (event.closed === true) {
-      return false;
-    }
-
     const text = normalizeText(event.title);
 
     return (
@@ -206,12 +234,12 @@ function searchNames(team: MarketPulseTarget["home"]): string[] {
   return [...new Set(names.filter(Boolean))];
 }
 
-function eventToPulse(
+function classifyEvent(
   event: GammaEvent,
   markets: GammaMarket[],
   target: MarketPulseTarget,
   fetchedAt: string,
-): MarketPulseUpdate | null {
+): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
   const homeAliases = teamAliases(target.home);
   const awayAliases = teamAliases(target.away);
 
@@ -219,11 +247,9 @@ function eventToPulse(
   let drawMarket: GammaMarket | null = null;
   let awayMarket: GammaMarket | null = null;
 
+  // Match all three markets by question text (including closed ones, so we can
+  // recognise and label a settled event rather than mislabelling it "no-market").
   for (const market of markets) {
-    if (market.closed === true || market.active === false) {
-      continue;
-    }
-
     const text = normalizeText(market.question);
     const isDraw = text.includes("draw") || text.includes("tie");
 
@@ -244,57 +270,62 @@ function eventToPulse(
   }
 
   if (!homeMarket || !drawMarket || !awayMarket) {
-    return null;
+    return { update: null, reason: "no-market" };
   }
 
+  const pickMarkets = [homeMarket, drawMarket, awayMarket];
   const home = yesPrice(homeMarket);
   const draw = yesPrice(drawMarket);
   const away = yesPrice(awayMarket);
 
-  if (home === null || draw === null || away === null) {
-    return null;
+  if (home === null || draw === null || away === null || home + draw + away <= 0) {
+    return { update: null, reason: "no-market" };
   }
 
-  if (home + draw + away <= 0) {
-    return null;
+  // Resolved / closed: prices are pinned to a result, not a forecast.
+  const isClosed =
+    event.closed === true || pickMarkets.some((market) => market.closed === true);
+
+  if (isClosed) {
+    return { update: null, reason: "settled" };
   }
 
-  // Reject degenerate / placeholder pricing. No real football 1X2 market puts a
-  // single outcome (least of all a draw) at ~100%; values like 0.9995 / 0.0005
-  // are pre-trading defaults, not crowd sentiment.
-  if (Math.max(home, draw, away) >= 0.95) {
-    return null;
+  // Degenerate pricing (a 1X2 outcome at ~100%) = pre-trading placeholder.
+  if (Math.max(home, draw, away) >= DEGENERATE_PRICE) {
+    return { update: null, reason: "not-open" };
   }
 
   const liquidity = sumNumbers(
-    [homeMarket, drawMarket, awayMarket].map(
+    pickMarkets.map(
       (market) => readNumber(market.liquidityNum) ?? readNumber(market.liquidity),
     ),
   );
   const volume = sumNumbers(
-    [homeMarket, drawMarket, awayMarket].map(
+    pickMarkets.map(
       (market) => readNumber(market.volumeNum) ?? readNumber(market.volume),
     ),
   );
 
-  // Guard against placeholder/empty markets that carry no real money — emitting
-  // those would show a meaningless "crowd signal". Let real volume drive it.
-  if (Math.max(liquidity ?? 0, volume ?? 0) < MIN_MARKET_SIGNAL) {
-    return null;
+  // No live order book → not actively traded right now (no real crowd to read).
+  if ((liquidity ?? 0) < MIN_LIQUIDITY) {
+    return { update: null, reason: "illiquid" };
   }
 
   return {
-    matchId: target.matchId,
-    source: "polymarket",
-    home,
-    draw,
-    away,
-    liquidity,
-    volume,
-    capturedAt: fetchedAt,
-    marketId: readString(event.id),
-    marketSlug: readString(event.slug),
-    question: readString(event.title),
+    update: {
+      matchId: target.matchId,
+      source: "polymarket",
+      home,
+      draw,
+      away,
+      liquidity,
+      volume,
+      capturedAt: fetchedAt,
+      marketId: readString(event.id),
+      marketSlug: readString(event.slug),
+      question: readString(event.title),
+    },
+    reason: "usable",
   };
 }
 
