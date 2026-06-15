@@ -119,27 +119,44 @@ export async function fetchPolymarketPulseSnapshot(
 async function findMatchEvent(
   target: MarketPulseTarget,
 ): Promise<GammaEvent | null> {
-  const query = `${target.home.name} ${target.away.name}`.trim();
-  const url = new URL(POLYMARKET_SEARCH_URL);
-  url.searchParams.set("q", query);
-  url.searchParams.set("limit_per_type", "20");
-
-  const payload = await fetchJson(url);
-  const events = extractEvents(payload);
-
   const homeAliases = teamAliases(target.home);
   const awayAliases = teamAliases(target.away);
 
+  // Try a few query spellings (e.g. "USA" and "United States") so teams whose
+  // common name differs from Polymarket's spelling still surface in search.
+  // Normal teams produce exactly one query, so this adds no extra requests for them.
+  for (const query of buildSearchQueries(target)) {
+    const url = new URL(POLYMARKET_SEARCH_URL);
+    url.searchParams.set("q", query);
+    url.searchParams.set("limit_per_type", "20");
+
+    const events = extractEvents(await fetchJson(url));
+    const match = pickMatchEvent(events, homeAliases, awayAliases);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function pickMatchEvent(
+  events: GammaEvent[],
+  homeAliases: string[],
+  awayAliases: string[],
+): GammaEvent | null {
   const candidates = events.filter((event) => {
     if (event.closed === true) {
       return false;
     }
 
     const text = normalizeText(event.title);
-    const hasHome = homeAliases.some((alias) => text.includes(alias));
-    const hasAway = awayAliases.some((alias) => text.includes(alias));
 
-    return hasHome && hasAway;
+    return (
+      homeAliases.some((alias) => text.includes(alias)) &&
+      awayAliases.some((alias) => text.includes(alias))
+    );
   });
 
   // Prefer an explicit "X vs Y" match event over anything else.
@@ -148,6 +165,45 @@ async function findMatchEvent(
   );
 
   return versus ?? candidates[0] ?? null;
+}
+
+function buildSearchQueries(target: MarketPulseTarget): string[] {
+  const homeNames = searchNames(target.home);
+  const awayNames = searchNames(target.away);
+  const queries: string[] = [];
+
+  for (const home of homeNames) {
+    for (const away of awayNames) {
+      queries.push(`${home} ${away}`.trim());
+    }
+  }
+
+  return [...new Set(queries)].slice(0, 4);
+}
+
+// Human-readable name spellings to search with (display names, not codes),
+// mirroring the alias map used for matching.
+function searchNames(team: MarketPulseTarget["home"]): string[] {
+  const names = [team.name];
+  const normalized = normalizeText(team.name);
+
+  if (normalized === "usa") {
+    names.push("United States");
+  }
+
+  if (normalized === "curacao") {
+    names.push("Curaçao");
+  }
+
+  if (normalized === "cote d ivoire" || normalized === "ivory coast") {
+    names.push("Ivory Coast");
+  }
+
+  if (normalized === "korea republic") {
+    names.push("South Korea");
+  }
+
+  return [...new Set(names.filter(Boolean))];
 }
 
 function eventToPulse(
