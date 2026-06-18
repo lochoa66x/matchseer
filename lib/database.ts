@@ -404,6 +404,7 @@ type DatabaseMatchRow = {
   confidence: number | null;
   chaos: number | null;
   source_payload: Record<string, unknown> | string | null;
+  market_pulse_payload: Record<string, unknown> | string | null;
   tone: Record<Language, string> | null;
   factors: string[] | null;
   players: Array<{
@@ -2409,11 +2410,20 @@ export async function applyMarketPulseUpdates(
     }
 
     const matchId = normalized.matchId;
+    const incomingSource =
+      normalized.source === "manual" ? "manual" : "polymarket";
     const matchIds = marketPulseMatchIdentifiers(matchId);
     const targetRows = await sql`
       select
         forecasts.id,
-        forecasts.source_payload -> 'marketPulse' ->> 'source' as pulse_source
+        forecasts.match_id,
+        forecasts.source_payload -> 'marketPulse' ->> 'source' as pulse_source,
+        exists (
+          select 1
+          from forecasts manual_forecasts
+          where manual_forecasts.match_id = forecasts.match_id
+            and manual_forecasts.source_payload -> 'marketPulse' ->> 'source' = 'manual'
+        ) as has_manual_pulse
       from forecasts
       join matches on matches.id = forecasts.match_id
       where matches.external_id = ${matchIds.matchId}
@@ -2425,16 +2435,25 @@ export async function applyMarketPulseUpdates(
     `;
 
     const target = targetRows[0] as
-      | { id?: string; pulse_source?: string | null }
+      | {
+          id?: string;
+          match_id?: string;
+          pulse_source?: string | null;
+          has_manual_pulse?: boolean;
+        }
       | undefined;
 
-    if (!target?.id) {
+    if (!target?.id || !target.match_id) {
       skipped += 1;
       skippedMatchIds.push(normalized.matchId);
       continue;
     }
 
-    if (!shouldApplyMarketPulseUpdate(target.pulse_source, source)) {
+    if (
+      incomingSource === "polymarket" &&
+      (target.has_manual_pulse ||
+        !shouldApplyMarketPulseUpdate(target.pulse_source, incomingSource))
+    ) {
       skipped += 1;
       manualProtected += 1;
       skippedMatchIds.push(normalized.matchId);
@@ -2446,7 +2465,7 @@ export async function applyMarketPulseUpdates(
       set source_payload =
         coalesce(source_payload, '{}'::jsonb) ||
         jsonb_build_object('marketPulse', ${JSON.stringify(normalized)}::jsonb)
-      where id = ${target.id}
+      where match_id = ${target.match_id}
       returning id;
     `;
 
@@ -2454,7 +2473,7 @@ export async function applyMarketPulseUpdates(
       skipped += 1;
       skippedMatchIds.push(normalized.matchId);
     } else {
-      pulsesSaved += rows.length;
+      pulsesSaved += 1;
     }
   }
 
@@ -2721,6 +2740,22 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       from forecasts
       order by match_id, version desc, created_at desc
     ),
+    latest_market_pulse as (
+      select distinct on (match_id)
+        match_id,
+        source_payload -> 'marketPulse' as market_pulse_payload
+      from forecasts
+      where source_payload -> 'marketPulse' is not null
+      order by
+        match_id,
+        case
+          when source_payload -> 'marketPulse' ->> 'source' = 'manual' then 0
+          else 1
+        end,
+        source_payload -> 'marketPulse' ->> 'capturedAt' desc nulls last,
+        version desc,
+        created_at desc
+    ),
     forecast_reason_groups as (
       select
         forecast_id,
@@ -2776,6 +2811,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       latest_forecast.confidence,
       latest_forecast.chaos,
       latest_forecast.source_payload,
+      latest_market_pulse.market_pulse_payload,
       interpretation_groups.tone,
       forecast_reason_groups.factors,
       '[]'::jsonb as players
@@ -2786,6 +2822,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
     left join referees on referees.id = matches.referee_id
     left join latest_weather on latest_weather.match_id = matches.id
     left join latest_forecast on latest_forecast.match_id = matches.id
+    left join latest_market_pulse on latest_market_pulse.match_id = matches.id
     left join forecast_reason_groups on forecast_reason_groups.forecast_id = latest_forecast.id
     left join interpretation_groups on interpretation_groups.forecast_id = latest_forecast.id
     order by
@@ -2926,7 +2963,10 @@ export async function saveForecastInterpretation({
 function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const status = toMatchStatus(row.status);
   const reasons = toReasons(row.factors);
-  const sourcePayload = parseJsonPayload(row.source_payload);
+  const sourcePayload = sourcePayloadWithRecoveredMarketPulse(
+    row.source_payload,
+    row.market_pulse_payload,
+  );
   const weatherMood = toLanguageRecord(
     row.weather_summary ?? "Weather data pending.",
   );
@@ -2938,7 +2978,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const awayForecast = toNumber(row.away_win_probability);
   const confidence = toNumber(row.confidence);
   const chaos = toNumber(row.chaos);
-  const marketPulse = toMarketPulse(row.source_payload, {
+  const marketPulse = toMarketPulse(sourcePayload, {
     homeForecast,
     drawForecast,
     awayForecast,
@@ -3035,8 +3075,35 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   };
 }
 
+export function sourcePayloadWithRecoveredMarketPulse(
+  sourcePayload:
+    | ExistingForecastLockRow["source_payload"]
+    | DatabaseMatchRow["source_payload"]
+    | undefined,
+  recoveredPulse: unknown,
+) {
+  const payload = parseJsonPayload(sourcePayload);
+  const recovered = readPayloadRecord(recoveredPulse);
+
+  if (!recovered) {
+    return payload;
+  }
+
+  if (readPayloadRecord(payload?.marketPulse)) {
+    return payload;
+  }
+
+  return {
+    ...(payload ?? {}),
+    marketPulse: recovered,
+  };
+}
+
 function toMarketPulse(
-  sourcePayload: DatabaseMatchRow["source_payload"],
+  sourcePayload:
+    | DatabaseMatchRow["source_payload"]
+    | Record<string, unknown>
+    | null,
   base: {
     homeForecast: number;
     drawForecast: number;

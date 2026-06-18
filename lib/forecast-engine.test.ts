@@ -5,6 +5,7 @@ import {
   marketPulseMatchIdentifiers,
   playerDependencyImpact,
   shouldApplyMarketPulseUpdate,
+  sourcePayloadWithRecoveredMarketPulse,
   type ForecastPlayerContext,
 } from "./database";
 
@@ -52,6 +53,53 @@ describe("market pulse write safety", () => {
       matchId: "fd-12345",
       externalMatchId: "fd-12345",
       providerMatchId: "12345",
+    });
+  });
+
+  it("recovers a saved crowd signal when the latest forecast payload lacks it", () => {
+    expect(
+      sourcePayloadWithRecoveredMarketPulse(
+        { forecastFingerprint: "latest-without-pulse" },
+        {
+          source: "manual",
+          home: 58,
+          draw: 24,
+          away: 18,
+          capturedAt: "2026-06-18T15:00:00.000Z",
+        },
+      ),
+    ).toMatchObject({
+      forecastFingerprint: "latest-without-pulse",
+      marketPulse: {
+        source: "manual",
+        home: 58,
+      },
+    });
+  });
+
+  it("keeps the current payload crowd signal when it already has one", () => {
+    expect(
+      sourcePayloadWithRecoveredMarketPulse(
+        {
+          marketPulse: {
+            source: "manual",
+            home: 52,
+            draw: 26,
+            away: 22,
+          },
+        },
+        {
+          source: "polymarket",
+          home: 10,
+          draw: 20,
+          away: 70,
+        },
+      ),
+    ).toMatchObject({
+      marketPulse: {
+        source: "manual",
+        home: 52,
+      },
     });
   });
 });
