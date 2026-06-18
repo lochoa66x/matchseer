@@ -172,7 +172,7 @@ const copy = {
     actual: "Actual",
     matchContext: "Match context",
     oracleError: "The Seer blinked. Try again.",
-    pendingMode: "Live data pending",
+    pendingMode: "Waiting for sync",
     fallbackMode: "Live data pending",
     noDemoFixtures: "No demo data",
     noPlayerData: "Verified player data is not connected yet.",
@@ -303,7 +303,7 @@ const copy = {
     actual: "Real",
     matchContext: "Contexto del partido",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
-    pendingMode: "Datos reales pendientes",
+    pendingMode: "Esperando sincronización",
     fallbackMode: "Datos reales pendientes",
     noDemoFixtures: "Sin datos demo",
     noPlayerData: "Todavía no conectamos datos verificados de jugadores.",
@@ -434,7 +434,7 @@ const copy = {
     actual: "Réel",
     matchContext: "Contexte du match",
     oracleError: "Le voyant a cligné. Réessaie.",
-    pendingMode: "Données réelles en attente",
+    pendingMode: "En attente de synchro",
     fallbackMode: "Données réelles en attente",
     noDemoFixtures: "Aucune donnée démo",
     noPlayerData: "Les données joueurs vérifiées ne sont pas encore connectées.",
@@ -2925,15 +2925,18 @@ function ForecastView({
           <Meter label={t.confidence} value={displayConfidence(match)} />
           <Meter label={t.chaos} value={displayChaos(match)} hot />
         </div>
-        {marketPulse && (
-          <div className={cx("market-pulse-note", marketPulse.alignment)}>
-            <span>
-              <Activity size={15} />
-              {t.crowdSignal}
-            </span>
-            <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
-          </div>
-        )}
+        <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
+          <span>
+            <Activity size={15} />
+            {t.crowdSignal}
+          </span>
+          {!marketPulse && <strong>{t.pendingMode}</strong>}
+          <p>
+            {marketPulse
+              ? marketPulse.summary[language] ?? marketPulse.summary.en
+              : t.marketPending}
+          </p>
+        </div>
         {trail.length > 0 && (
           <SeerTrail
             expanded={showTrailDetails}
