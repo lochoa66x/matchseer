@@ -46,6 +46,11 @@ type MatchListResult = {
   matches: MatchSummary[];
 };
 
+type MatchListOptions = {
+  limit?: number | null;
+  prioritizeUpcoming?: boolean;
+};
+
 export type RealDataSyncResult = {
   source: "football-data";
   competition: string;
@@ -568,7 +573,9 @@ async function getSql() {
   };
 }
 
-export async function listMatches(): Promise<MatchListResult> {
+export async function listMatches(
+  options: MatchListOptions = {},
+): Promise<MatchListResult> {
   const connection = await getSql();
 
   if (!connection) {
@@ -577,7 +584,7 @@ export async function listMatches(): Promise<MatchListResult> {
 
   if (connection.sql) {
     try {
-      const rows = await fetchMatchRows(connection.sql);
+      const rows = await fetchMatchRows(connection.sql, options);
       const matches = dedupeMatches(filterDemoRows(rows.map(toMatchSummary)));
 
       if (matches.length > 0) {
@@ -2681,7 +2688,13 @@ function unavailableResult(reason: DataSourceReason): MatchListResult {
   };
 }
 
-async function fetchMatchRows(sql: NeonQuery) {
+async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
+  const rowLimit =
+    typeof options.limit === "number" && Number.isFinite(options.limit)
+      ? Math.max(1, Math.min(72, Math.round(options.limit)))
+      : null;
+  const prioritizeUpcoming = Boolean(options.prioritizeUpcoming);
+
   return (await sql`
     with latest_weather as (
       select distinct on (match_id)
@@ -2765,20 +2778,7 @@ async function fetchMatchRows(sql: NeonQuery) {
       latest_forecast.source_payload,
       interpretation_groups.tone,
       forecast_reason_groups.factors,
-      coalesce(
-        jsonb_agg(
-          distinct jsonb_build_object(
-            'name', players.name,
-            'team', player_team.name,
-            'role', players.role,
-            'club', players.club,
-            'league', players.league,
-            'spark', players.spark_rating,
-            'note', players.note
-          )
-        ) filter (where players.id is not null),
-        '[]'::jsonb
-      ) as players
+      '[]'::jsonb as players
     from matches
     join teams home_team on home_team.id = matches.home_team_id
     join teams away_team on away_team.id = matches.away_team_id
@@ -2788,52 +2788,20 @@ async function fetchMatchRows(sql: NeonQuery) {
     left join latest_forecast on latest_forecast.match_id = matches.id
     left join forecast_reason_groups on forecast_reason_groups.forecast_id = latest_forecast.id
     left join interpretation_groups on interpretation_groups.forecast_id = latest_forecast.id
-    left join players on players.team_id in (matches.home_team_id, matches.away_team_id)
-    left join teams player_team on player_team.id = players.team_id
-    group by
-      matches.external_id,
-      matches.status,
-      matches.starts_at,
-      matches.group_name,
-      matches.home_score,
-      matches.away_score,
-      venues.name,
-      venues.city,
-      home_team.name,
-      home_team.code,
-      home_team.color,
-      home_team.record,
-      home_team.form,
-      home_team.attack,
-      home_team.control,
-      home_team.defense,
-      home_team.set_pieces,
-      away_team.name,
-      away_team.code,
-      away_team.color,
-      away_team.record,
-      away_team.form,
-      away_team.attack,
-      away_team.control,
-      away_team.defense,
-      away_team.set_pieces,
-      referees.name,
-      referees.cards_per_match,
-      latest_weather.temperature_c,
-      latest_weather.wind_kph,
-      latest_weather.summary,
-      latest_forecast.home_win_probability,
-      latest_forecast.draw_probability,
-      latest_forecast.away_win_probability,
-      latest_forecast.version,
-      latest_forecast.created_at,
-      latest_forecast.projected_score,
-      latest_forecast.confidence,
-      latest_forecast.chaos,
-      latest_forecast.source_payload,
-      interpretation_groups.tone,
-      forecast_reason_groups.factors
-    order by matches.starts_at nulls last, matches.external_id;
+    order by
+      case
+        when ${prioritizeUpcoming}
+          and lower(matches.status) <> 'final'
+          and (
+            matches.starts_at is null
+            or matches.starts_at >= now() - interval '2 hours'
+          )
+        then 0
+        else 1
+      end,
+      matches.starts_at nulls last,
+      matches.external_id
+    limit ${rowLimit};
   `) as unknown as DatabaseMatchRow[];
 }
 

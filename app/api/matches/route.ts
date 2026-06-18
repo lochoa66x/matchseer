@@ -15,8 +15,13 @@ let publicLiveSyncPromise: Promise<unknown> | null = null;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const isInitial = url.searchParams.get("initial") === "1";
+  const limit = parsePositiveLimit(url.searchParams.get("limit"));
 
-  const result = await listMatches();
+  const result = await listMatches({
+    limit: limit ?? (isInitial ? 14 : null),
+    prioritizeUpcoming: isInitial,
+  });
 
   if (url.searchParams.get("refresh") === "live") {
     void maybeSyncLiveData();
@@ -26,6 +31,16 @@ export async function GET(request: Request) {
     ...result,
     database: getDatabaseReadiness(),
   });
+}
+
+function parsePositiveLimit(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const numeric = Number(value);
+
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
 async function maybeSyncLiveData() {

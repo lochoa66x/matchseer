@@ -502,6 +502,13 @@ function MatchFeedStateCard({
       <div>
         <strong>{isLoading ? t.loadingTitle : t.feedErrorTitle}</strong>
         <p>{isLoading ? t.loadingCopy : t.feedErrorCopy}</p>
+        {isLoading && (
+          <div className="seer-loading-pulse" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+        )}
         {slow && <em>{t.loadingSlow}</em>}
       </div>
     </div>
@@ -618,7 +625,13 @@ export default function Home() {
     let loadingMatches = false;
     let hasLoadedOnce = false;
 
-    async function loadMatches(refreshLiveData = false) {
+    async function loadMatches({
+      initial = false,
+      refreshLiveData = false,
+    }: {
+      initial?: boolean;
+      refreshLiveData?: boolean;
+    } = {}) {
       if (loadingMatches) {
         return;
       }
@@ -627,10 +640,20 @@ export default function Home() {
       const isInitialLoad = !hasLoadedOnce;
 
       try {
-        const response = await fetch(
-          refreshLiveData ? "/api/matches?refresh=live" : "/api/matches",
-          { cache: "no-store" },
-        );
+        const params = new URLSearchParams();
+
+        if (initial) {
+          params.set("initial", "1");
+        }
+
+        if (refreshLiveData) {
+          params.set("refresh", "live");
+        }
+
+        const query = params.toString();
+        const response = await fetch(`/api/matches${query ? `?${query}` : ""}`, {
+          cache: "no-store",
+        });
 
         if (!response.ok) {
           if (!ignore && isInitialLoad) {
@@ -667,17 +690,21 @@ export default function Home() {
       }
     }
 
-    void loadMatches(false).then(() => {
+    void loadMatches({ initial: true }).then(() => {
       if (!ignore) {
-        void loadMatches(true);
+        void loadMatches().then(() => {
+          if (!ignore) {
+            void loadMatches({ refreshLiveData: true });
+          }
+        });
       }
     });
     const liveRefresh = window.setInterval(() => {
-      void loadMatches(true);
+      void loadMatches({ refreshLiveData: true });
     }, liveRefreshIntervalMs);
     const refreshOnFocus = () => {
       if (!document.hidden) {
-        void loadMatches(true);
+        void loadMatches({ refreshLiveData: true });
       }
     };
 
