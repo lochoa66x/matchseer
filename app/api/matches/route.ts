@@ -16,11 +16,11 @@ let publicLiveSyncPromise: Promise<unknown> | null = null;
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
-  if (url.searchParams.get("refresh") === "live") {
-    await maybeSyncLiveData();
-  }
-
   const result = await listMatches();
+
+  if (url.searchParams.get("refresh") === "live") {
+    void maybeSyncLiveData();
+  }
 
   return NextResponse.json({
     ...result,

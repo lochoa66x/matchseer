@@ -667,7 +667,11 @@ export default function Home() {
       }
     }
 
-    void loadMatches(true);
+    void loadMatches(false).then(() => {
+      if (!ignore) {
+        void loadMatches(true);
+      }
+    });
     const liveRefresh = window.setInterval(() => {
       void loadMatches(true);
     }, liveRefreshIntervalMs);
