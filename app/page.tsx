@@ -2921,18 +2921,15 @@ function ForecastView({
           <Meter label={t.confidence} value={displayConfidence(match)} />
           <Meter label={t.chaos} value={displayChaos(match)} hot />
         </div>
-        <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
-          <span>
-            <Activity size={15} />
-            {t.crowdSignal}
-          </span>
-          {!marketPulse && <strong>{t.pendingMode}</strong>}
-          {marketPulse ? (
+        {marketPulse && (
+          <div className={cx("market-pulse-note", marketPulse.alignment)}>
+            <span>
+              <Activity size={15} />
+              {t.crowdSignal}
+            </span>
             <p>{marketPulse.summary[language] ?? marketPulse.summary.en}</p>
-          ) : (
-            <p>{t.marketPending}</p>
-          )}
-        </div>
+          </div>
+        )}
         {trail.length > 0 && (
           <SeerTrail
             expanded={showTrailDetails}

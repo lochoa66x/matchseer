@@ -25,6 +25,10 @@ import {
   tournamentFloorProfilesByCode,
   tournamentFloorProfilesByName,
 } from "./data/tournament-floors";
+import {
+  DEFAULT_TEAM_DEPENDENCY,
+  teamDependencyProfiles,
+} from "./data/team-dependency";
 
 const ENABLE_PLAYER_SPARKS = false;
 
@@ -443,7 +447,7 @@ type ForecastContextRow = {
   player_availability: ForecastPlayerContext[] | null;
 };
 
-type ForecastPlayerContext = {
+export type ForecastPlayerContext = {
   teamSide: "home" | "away";
   teamCode: string;
   teamName: string;
@@ -1072,7 +1076,10 @@ async function seedKeyPlayerWatchlist(sql: NeonQuery) {
         age = excluded.age,
         is_key_player = excluded.is_key_player,
         note = excluded.note,
-        availability_note = nullif(players.availability_note, 'Availability feed pending');
+        availability_note = case
+          when players.availability_note = 'Availability feed pending' then null
+          else players.availability_note
+        end;
     `;
   }
 }
@@ -2395,18 +2402,17 @@ export async function applyMarketPulseUpdates(
     }
 
     const matchId = normalized.matchId;
-    const providerMatchId = matchId.startsWith("fd-") ? matchId.slice(3) : matchId;
-    const externalMatchId = matchId.startsWith("fd-") ? matchId : `fd-${matchId}`;
+    const matchIds = marketPulseMatchIdentifiers(matchId);
     const targetRows = await sql`
       select
         forecasts.id,
         forecasts.source_payload -> 'marketPulse' ->> 'source' as pulse_source
       from forecasts
       join matches on matches.id = forecasts.match_id
-      where matches.external_id = ${matchId}
-        or matches.external_id = ${externalMatchId}
-        or forecasts.source_payload ->> 'providerMatchId' = ${matchId}
-        or forecasts.source_payload ->> 'providerMatchId' = ${providerMatchId}
+      where matches.external_id = ${matchIds.matchId}
+        or matches.external_id = ${matchIds.externalMatchId}
+        or forecasts.source_payload ->> 'providerMatchId' = ${matchIds.matchId}
+        or forecasts.source_payload ->> 'providerMatchId' = ${matchIds.providerMatchId}
       order by forecasts.version desc, forecasts.created_at desc
       limit 1;
     `;
@@ -2421,7 +2427,7 @@ export async function applyMarketPulseUpdates(
       continue;
     }
 
-    if (source !== "manual" && target.pulse_source === "manual") {
+    if (!shouldApplyMarketPulseUpdate(target.pulse_source, source)) {
       skipped += 1;
       manualProtected += 1;
       skippedMatchIds.push(normalized.matchId);
@@ -2454,6 +2460,27 @@ export async function applyMarketPulseUpdates(
     skippedMatchIds: skippedMatchIds.slice(0, 12),
     fetchedAt: new Date().toISOString(),
   };
+}
+
+export function marketPulseMatchIdentifiers(matchId: string) {
+  const cleanMatchId = matchId.trim();
+
+  return {
+    matchId: cleanMatchId,
+    externalMatchId: cleanMatchId.startsWith("fd-")
+      ? cleanMatchId
+      : `fd-${cleanMatchId}`,
+    providerMatchId: cleanMatchId.startsWith("fd-")
+      ? cleanMatchId.slice(3)
+      : cleanMatchId,
+  };
+}
+
+export function shouldApplyMarketPulseUpdate(
+  existingSource: string | null | undefined,
+  incomingSource: "polymarket" | "manual",
+) {
+  return incomingSource === "manual" || existingSource !== "manual";
 }
 
 export async function listVenueMappingCandidates({
@@ -3247,7 +3274,7 @@ function marketPulseSummary({
   };
 }
 
-function buildPublicSeerTrail({
+export function buildPublicSeerTrail({
   awayName,
   homeName,
   marketPulse,
@@ -3284,6 +3311,27 @@ function buildPublicSeerTrail({
           fr: "Une alerte joueur clé retire un peu de mordant à l'attaque.",
         },
       });
+
+      const dependencyPlayer = impactedPlayers.find((player) => {
+        const record = readPayloadRecord(player);
+        return (readPayloadNumber(record?.dependencyMultiplier) ?? 0) >= 1.05;
+      });
+      const dependencyName = readPayloadString(
+        readPayloadRecord(dependencyPlayer)?.name,
+      );
+
+      if (dependencyName) {
+        signals.push({
+          id: "star-gravity",
+          label: "Star gravity",
+          tone: "drag",
+          text: {
+            en: `${dependencyName}'s warning lands louder because the team orbit bends around that spark.`,
+            es: `La alerta de ${dependencyName} pesa más porque el equipo gira alrededor de esa chispa.`,
+            fr: `L'alerte de ${dependencyName} pèse plus lourd parce que l'équipe tourne autour de cette étincelle.`,
+          },
+        });
+      }
     }
 
     const fatigue = readPayloadRecord(modifiers.fatigue);
@@ -4941,9 +4989,19 @@ function forecastPlayerContexts(context: ForecastContextRow | null) {
   );
 }
 
-function availabilityForecastModifier(players: ForecastPlayerContext[]) {
-  const homeImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
-  const awayImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+type PlayerModifierImpact = {
+  name: string;
+  reason: string;
+  penalty: number;
+  dependency: number;
+  benchDepth: number;
+  dependencyNote: string;
+  multiplier: number;
+};
+
+export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
+  const homeImpacts: PlayerModifierImpact[] = [];
+  const awayImpacts: PlayerModifierImpact[] = [];
   let homePenalty = 0;
   let awayPenalty = 0;
   let homeXgPenalty = 0;
@@ -4959,12 +5017,22 @@ function availabilityForecastModifier(players: ForecastPlayerContext[]) {
     }
 
     const impact = playerImpactScore(player);
-    const penalty = clampNumber(severity * impact + cardRisk * impact, 0.15, 4.2);
+    const dependency = playerDependencyImpact(player);
+    const penalty = clampNumber(
+      (severity * impact + cardRisk * impact) * dependency.multiplier,
+      0.15,
+      4.8,
+    );
     const xgPenalty = clampNumber(penalty * 0.04, 0.01, 0.24);
     const reason = playerAvailabilityReason(player, severity, cardRisk);
     const bucket = player.teamSide === "home" ? homeImpacts : awayImpacts;
 
-    bucket.push({ name: player.name, reason, penalty });
+    bucket.push({
+      name: player.name,
+      reason,
+      penalty,
+      ...dependency,
+    });
     chaosDelta += severity >= 2 ? 2 : cardRisk > 0 ? 1 : 0;
 
     if (player.teamSide === "home") {
@@ -4991,7 +5059,11 @@ function availabilityForecastModifier(players: ForecastPlayerContext[]) {
           label: "Availability watch",
           weight: 0.65,
           explanation: `Key-player board moved: ${sentenceList(
-            impacted.map((player) => `${player.name} ${player.reason}`),
+            impacted.map((player) =>
+              `${player.name} ${player.reason}${
+                player.multiplier >= 1.05 ? " with extra team dependency" : ""
+              }`,
+            ),
           )}.`,
         }
       : null;
@@ -5015,6 +5087,10 @@ function availabilityForecastModifier(players: ForecastPlayerContext[]) {
         name: player.name,
         reason: player.reason,
         penalty: roundModifier(player.penalty),
+        dependency: roundModifier(player.dependency),
+        benchDepth: roundModifier(player.benchDepth),
+        dependencyMultiplier: roundModifier(player.multiplier),
+        dependencyNote: player.dependencyNote,
       })),
       homePenalty: roundModifier(homePenalty),
       awayPenalty: roundModifier(awayPenalty),
@@ -5025,14 +5101,14 @@ function availabilityForecastModifier(players: ForecastPlayerContext[]) {
   };
 }
 
-function fatigueForecastModifier(
+export function fatigueForecastModifier(
   players: ForecastPlayerContext[],
   context: ForecastContextRow | null,
 ) {
   const homeRestHours = toOptionalNumber(context?.home_rest_hours);
   const awayRestHours = toOptionalNumber(context?.away_rest_hours);
-  const homeImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
-  const awayImpacts: Array<{ name: string; reason: string; penalty: number }> = [];
+  const homeImpacts: PlayerModifierImpact[] = [];
+  const awayImpacts: PlayerModifierImpact[] = [];
   let homePenalty = 0;
   let awayPenalty = 0;
   let homeXgPenalty = 0;
@@ -5052,7 +5128,12 @@ function fatigueForecastModifier(
     const minuteLoad = clampNumber(minutesRecent / 270, 0.15, 1.2);
     const impact = playerImpactScore(player);
     const ageMultiplier = fatigueAgeMultiplier(age);
-    const penalty = clampNumber(impact * minuteLoad * restStress * ageMultiplier, 0, 2.8);
+    const dependency = playerDependencyImpact(player);
+    const penalty = clampNumber(
+      impact * minuteLoad * restStress * ageMultiplier * dependency.multiplier,
+      0,
+      3.3,
+    );
 
     if (penalty < 0.18) {
       continue;
@@ -5064,7 +5145,7 @@ function fatigueForecastModifier(
         : `carries recent-minute fatigue on ${Math.round(restHours)}h rest`;
     const bucket = player.teamSide === "home" ? homeImpacts : awayImpacts;
 
-    bucket.push({ name: player.name, reason, penalty });
+    bucket.push({ name: player.name, reason, penalty, ...dependency });
     chaosDelta += penalty >= 1 ? 1 : 0;
 
     if (player.teamSide === "home") {
@@ -5118,6 +5199,10 @@ function fatigueForecastModifier(
         name: player.name,
         reason: player.reason,
         penalty: roundModifier(player.penalty),
+        dependency: roundModifier(player.dependency),
+        benchDepth: roundModifier(player.benchDepth),
+        dependencyMultiplier: roundModifier(player.multiplier),
+        dependencyNote: player.dependencyNote,
       })),
       homePenalty: roundModifier(homePenalty),
       awayPenalty: roundModifier(awayPenalty),
@@ -5219,6 +5304,24 @@ function playerImpactScore(player: ForecastPlayerContext) {
   const rawImpact = importance ?? spark ?? 50;
 
   return clampNumber((rawImpact - 42) / 44, 0.18, 1.35);
+}
+
+export function playerDependencyImpact(player: ForecastPlayerContext) {
+  const profile =
+    teamDependencyProfiles[player.teamCode.toUpperCase()] ??
+    DEFAULT_TEAM_DEPENDENCY;
+  const multiplier = clampNumber(
+    0.72 + profile.dependency * 0.62 - profile.benchDepth * 0.28,
+    0.58,
+    1.24,
+  );
+
+  return {
+    dependency: profile.dependency,
+    benchDepth: profile.benchDepth,
+    dependencyNote: profile.note,
+    multiplier,
+  };
 }
 
 function fatigueRestStress(restHours: number | null) {

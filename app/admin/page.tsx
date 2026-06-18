@@ -1419,7 +1419,7 @@ function ModelControlPanel({
                           availabilityNote: event.target.value,
                         })
                       }
-                      placeholder="Availability note"
+                      placeholder="No alert logged"
                     />
                   </article>
                 );
