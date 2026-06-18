@@ -82,7 +82,18 @@ export type MarketPulseSyncResult = {
   updatesReceived: number;
   pulsesSaved: number;
   skipped: number;
+  manualProtected?: number;
+  skippedMatchIds?: string[];
   fetchedAt: string;
+};
+
+type ForecastMovementTrailItem = {
+  id: string;
+  label: string;
+  tone: TrailSignal["tone"];
+  publicText: Record<Language, string>;
+  adminText: string;
+  delta?: Record<string, unknown>;
 };
 
 export type VenueOverride = {
@@ -274,6 +285,7 @@ export type ModelControlForecastVersion = {
   forecastStatus: string;
   supersedesVersion: number | null;
   previousProjected: string | null;
+  movementSummary: string | null;
 };
 
 export type ModelControlDashboard = {
@@ -412,6 +424,7 @@ type ExistingForecastLockRow = {
 };
 
 type ForecastContextRow = {
+  external_id: string | null;
   starts_at: Date | string | null;
   referee_name: string | null;
   cards_per_match: string | number | null;
@@ -1123,6 +1136,7 @@ function toModelControlForecastVersion(
 ): ModelControlForecastVersion {
   const payload = parseJsonPayload(row.source_payload);
   const previousForecast = readPayloadRecord(payload?.previousForecast);
+  const movementTrail = readForecastMovementTrail(payload);
 
   return {
     matchId: row.match_id,
@@ -1145,6 +1159,7 @@ function toModelControlForecastVersion(
     forecastStatus: readPayloadString(payload?.forecastStatus) ?? "open",
     supersedesVersion: readPayloadNumber(payload?.supersedesVersion),
     previousProjected: readPayloadString(previousForecast?.projected),
+    movementSummary: movementTrail[0]?.adminText ?? null,
   };
 }
 
@@ -1300,6 +1315,20 @@ function readPayloadNumber(value: unknown) {
     typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
 
   return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function readPayloadBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    return normalized === "true" || normalized === "1" || normalized === "yes";
+  }
+
+  return false;
 }
 
 function estimateTrafficRevenue({
@@ -1752,6 +1781,7 @@ export async function syncFootballDataSnapshot(
       with current_match as (
         select
           matches.id,
+          matches.external_id,
           matches.home_team_id,
           matches.away_team_id,
           matches.referee_id,
@@ -1771,6 +1801,7 @@ export async function syncFootballDataSnapshot(
         order by weather_snapshots.match_id, weather_snapshots.captured_at desc
       )
       select
+        current_match.external_id,
         current_match.starts_at,
         referees.name as referee_name,
         referees.cards_per_match,
@@ -2006,12 +2037,28 @@ export async function syncFootballDataSnapshot(
     const nextVersion = existingForecast
       ? Math.max(1, toNumber(existingForecast.version) + 1)
       : 1;
+    const previousForecast = existingForecast
+      ? {
+          version: toNumber(existingForecast.version),
+          home: toNumber(existingForecast.home_win_probability),
+          draw: toNumber(existingForecast.draw_probability),
+          away: toNumber(existingForecast.away_win_probability),
+          projected: existingForecast.projected_score,
+          confidence: toNumber(existingForecast.confidence),
+          chaos: toNumber(existingForecast.chaos),
+          fingerprint: existingFingerprint,
+        }
+      : null;
+    const movementTrail = buildForecastMovementTrail({
+      forecast,
+      previousForecast,
+    });
     const sourcePayload = {
       provider: snapshot.provider,
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.1-ledger",
+      modelVersion: "matchseer-v3.5-tournament-form",
       forecastFingerprint,
       forecastStatus: "open",
       supersedesVersion: existingForecast
@@ -2023,19 +2070,9 @@ export async function syncFootballDataSnapshot(
       // Carry any saved crowd signal forward so it survives forecast re-versioning
       // (manual pulses were silently orphaned on old versions before this).
       marketPulse: extractStoredMarketPulse(existingForecast?.source_payload),
-      previousForecast: existingForecast
-        ? {
-            version: toNumber(existingForecast.version),
-            home: toNumber(existingForecast.home_win_probability),
-            draw: toNumber(existingForecast.draw_probability),
-            away: toNumber(existingForecast.away_win_probability),
-            projected: existingForecast.projected_score,
-            confidence: toNumber(existingForecast.confidence),
-            chaos: toNumber(existingForecast.chaos),
-            fingerprint: existingFingerprint,
-          }
-        : null,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, player availability, fatigue signals, and tournament-floor score pressure.",
+      previousForecast,
+      movementTrail,
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, and tournament-floor score pressure.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -2338,6 +2375,8 @@ export async function applyMarketPulseUpdates(
   const sql = connection.sql;
   let pulsesSaved = 0;
   let skipped = 0;
+  let manualProtected = 0;
+  const skippedMatchIds: string[] = [];
 
   await ensureForecastLedgerSchema(sql);
 
@@ -2349,6 +2388,43 @@ export async function applyMarketPulseUpdates(
 
     if (!normalized) {
       skipped += 1;
+      if (typeof update.matchId === "string" && update.matchId.trim()) {
+        skippedMatchIds.push(update.matchId.trim());
+      }
+      continue;
+    }
+
+    const matchId = normalized.matchId;
+    const providerMatchId = matchId.startsWith("fd-") ? matchId.slice(3) : matchId;
+    const externalMatchId = matchId.startsWith("fd-") ? matchId : `fd-${matchId}`;
+    const targetRows = await sql`
+      select
+        forecasts.id,
+        forecasts.source_payload -> 'marketPulse' ->> 'source' as pulse_source
+      from forecasts
+      join matches on matches.id = forecasts.match_id
+      where matches.external_id = ${matchId}
+        or matches.external_id = ${externalMatchId}
+        or forecasts.source_payload ->> 'providerMatchId' = ${matchId}
+        or forecasts.source_payload ->> 'providerMatchId' = ${providerMatchId}
+      order by forecasts.version desc, forecasts.created_at desc
+      limit 1;
+    `;
+
+    const target = targetRows[0] as
+      | { id?: string; pulse_source?: string | null }
+      | undefined;
+
+    if (!target?.id) {
+      skipped += 1;
+      skippedMatchIds.push(normalized.matchId);
+      continue;
+    }
+
+    if (source !== "manual" && target.pulse_source === "manual") {
+      skipped += 1;
+      manualProtected += 1;
+      skippedMatchIds.push(normalized.matchId);
       continue;
     }
 
@@ -2357,19 +2433,13 @@ export async function applyMarketPulseUpdates(
       set source_payload =
         coalesce(source_payload, '{}'::jsonb) ||
         jsonb_build_object('marketPulse', ${JSON.stringify(normalized)}::jsonb)
-      where id = (
-        select forecasts.id
-        from forecasts
-        join matches on matches.id = forecasts.match_id
-        where matches.external_id = ${normalized.matchId}
-        order by forecasts.version desc, forecasts.created_at desc
-        limit 1
-      )
+      where id = ${target.id}
       returning id;
     `;
 
     if (rows.length === 0) {
       skipped += 1;
+      skippedMatchIds.push(normalized.matchId);
     } else {
       pulsesSaved += rows.length;
     }
@@ -2380,6 +2450,8 @@ export async function applyMarketPulseUpdates(
     updatesReceived: updates.length,
     pulsesSaved,
     skipped,
+    manualProtected,
+    skippedMatchIds: skippedMatchIds.slice(0, 12),
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -3187,7 +3259,9 @@ function buildPublicSeerTrail({
   sourcePayload: Record<string, unknown> | null;
 }): TrailSignal[] {
   const modifiers = readPayloadRecord(sourcePayload?.modifiers);
-  const signals: TrailSignal[] = [];
+  const signals: TrailSignal[] = readForecastMovementTrail(sourcePayload).map(
+    movementTrailToSignal,
+  );
 
   if (modifiers) {
     signals.push(...weatherTrailSignals(readPayloadRecord(modifiers.weather)));
@@ -3273,6 +3347,24 @@ function buildPublicSeerTrail({
       });
     }
 
+    const tournamentForm = readPayloadRecord(modifiers.tournamentForm);
+    const formStatus = readPayloadString(tournamentForm?.status);
+    const formLeader = readPayloadString(tournamentForm?.leader);
+    const formGap = Math.abs(readPayloadNumber(tournamentForm?.formGap) ?? 0);
+
+    if (formStatus === "active" && formLeader && formGap >= 0.45) {
+      signals.push({
+        id: "tournament-pulse",
+        label: "Tournament pulse",
+        tone: readPayloadBoolean(tournamentForm?.contradictsPrior) ? "chaos" : "boost",
+        text: {
+          en: `${formLeader} have put fresher proof on tape, so the read gives that pulse a little room.`,
+          es: `${formLeader} ya dejó prueba fresca en la cancha, y la lectura le abre un poco de espacio.`,
+          fr: `${formLeader} a montré une preuve fraîche sur le terrain, et la lecture lui laisse un peu de place.`,
+        },
+      });
+    }
+
     const spotlight = readPayloadRecord(modifiers.spotlight);
     const spotlightGap = Math.abs(
       (readPayloadNumber(spotlight?.home) ?? 0) -
@@ -3291,6 +3383,29 @@ function buildPublicSeerTrail({
         },
       });
     }
+
+    const vipSpotlight = readPayloadRecord(modifiers.vipSpotlight);
+
+    if (readPayloadBoolean(vipSpotlight?.active)) {
+      const strongerTeam = readPayloadString(vipSpotlight?.strongerTeam);
+
+      signals.push({
+        id: "vip-spotlight",
+        label: "VIP spotlight",
+        tone: "boost",
+        text: {
+          en: strongerTeam
+            ? `${strongerTeam} feel a tiny stage-pressure nudge from the bigger room.`
+            : "The bigger room adds a tiny stage-pressure nudge to the read.",
+          es: strongerTeam
+            ? `${strongerTeam} siente un pequeño empujón de escenario grande.`
+            : "El escenario grande mete un pequeño empujón de presión en la lectura.",
+          fr: strongerTeam
+            ? `${strongerTeam} reçoit une petite poussée de grande scène.`
+            : "La grande scène ajoute une petite poussée de pression à la lecture.",
+        },
+      });
+    }
   }
 
   if (signals.length === 0 && marketPulse) {
@@ -3298,6 +3413,58 @@ function buildPublicSeerTrail({
   }
 
   return uniqueTrailSignals(signals).slice(0, 4);
+}
+
+function readForecastMovementTrail(
+  sourcePayload: Record<string, unknown> | null,
+): ForecastMovementTrailItem[] {
+  return readPayloadArray(sourcePayload?.movementTrail).flatMap(
+    (item): ForecastMovementTrailItem[] => {
+      const record = readPayloadRecord(item);
+      const id = readPayloadString(record?.id);
+      const label = readPayloadString(record?.label);
+      const adminText = readPayloadString(record?.adminText);
+      const publicText = readPayloadRecord(record?.publicText);
+      const tone = readPayloadString(record?.tone);
+
+      if (
+        !id ||
+        !label ||
+        !adminText ||
+        !publicText ||
+        (tone !== "boost" &&
+          tone !== "drag" &&
+          tone !== "chaos" &&
+          tone !== "steady")
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          id,
+          label,
+          tone,
+          publicText: {
+            en: readPayloadString(publicText.en) ?? adminText,
+            es: readPayloadString(publicText.es) ?? readPayloadString(publicText.en) ?? adminText,
+            fr: readPayloadString(publicText.fr) ?? readPayloadString(publicText.en) ?? adminText,
+          },
+          adminText,
+          delta: readPayloadRecord(record?.delta) ?? undefined,
+        },
+      ];
+    },
+  );
+}
+
+function movementTrailToSignal(item: ForecastMovementTrailItem): TrailSignal {
+  return {
+    id: `movement-${item.id}`,
+    label: item.label,
+    tone: item.tone,
+    text: item.publicText,
+  };
 }
 
 function weatherTrailSignals(weather: Record<string, unknown> | null): TrailSignal[] {
@@ -3612,6 +3779,208 @@ function createForecastFingerprint({
     .slice(0, 32);
 }
 
+function buildForecastMovementTrail({
+  forecast,
+  previousForecast,
+}: {
+  forecast: ReturnType<typeof matchseerV3Forecast>;
+  previousForecast: {
+    version: number;
+    home: number;
+    draw: number;
+    away: number;
+    projected: string | null;
+    confidence: number;
+    chaos: number;
+    fingerprint: string | null;
+  } | null;
+}): ForecastMovementTrailItem[] {
+  const trail: ForecastMovementTrailItem[] = [];
+
+  if (!previousForecast) {
+    trail.push({
+      id: "first-read",
+      label: "First read",
+      tone: "steady",
+      publicText: {
+        en: "The Seer opened the first trail for this match.",
+        es: "El Vidente abrió la primera lectura de este partido.",
+        fr: "Le voyant a ouvert la première piste de ce match.",
+      },
+      adminText: "Initial forecast version minted from the current v3 inputs.",
+      delta: {
+        projected: forecast.projected,
+        confidence: forecast.confidence,
+        chaos: forecast.chaos,
+      },
+    });
+
+    return trail;
+  }
+
+  const projectedBefore = normalizeProjectedScore(previousForecast.projected);
+
+  if (projectedBefore !== forecast.projected) {
+    trail.push({
+      id: "scoreline-moved",
+      label: "Scoreline moved",
+      tone: "chaos",
+      publicText: {
+        en: "The score trail shifted after the newest match signals came in.",
+        es: "El marcador proyectado se movió con las señales más recientes.",
+        fr: "La piste du score a bougé avec les derniers signaux du match.",
+      },
+      adminText: `Projected score moved from ${projectedBefore} to ${forecast.projected}.`,
+      delta: {
+        previousProjected: projectedBefore,
+        projected: forecast.projected,
+      },
+    });
+  }
+
+  const leaderBefore = leadingSide(
+    previousForecast.home,
+    previousForecast.draw,
+    previousForecast.away,
+  );
+  const leaderAfter = leadingSide(forecast.home, forecast.draw, forecast.away);
+
+  if (leaderBefore !== leaderAfter) {
+    trail.push({
+      id: "leader-flipped",
+      label: "Lean flipped",
+      tone: "chaos",
+      publicText: {
+        en: "The lean changed shirts after the latest read.",
+        es: "La inclinación cambió de camiseta tras la nueva lectura.",
+        fr: "Le penchant a changé de maillot après la nouvelle lecture.",
+      },
+      adminText: `Forecast leader changed from ${leaderBefore} to ${leaderAfter}.`,
+      delta: {
+        previousLeader: leaderBefore,
+        leader: leaderAfter,
+      },
+    });
+  } else {
+    const leaderDelta =
+      leaderAfter === "home"
+        ? forecast.home - previousForecast.home
+        : leaderAfter === "away"
+          ? forecast.away - previousForecast.away
+          : forecast.draw - previousForecast.draw;
+
+    if (Math.abs(leaderDelta) >= 3) {
+      trail.push({
+        id: leaderDelta > 0 ? "lean-grew" : "lean-softened",
+        label: leaderDelta > 0 ? "Lean grew" : "Lean softened",
+        tone: leaderDelta > 0 ? "boost" : "drag",
+        publicText: {
+          en:
+            leaderDelta > 0
+              ? "The favorite found a little more oxygen in the read."
+              : "The favorite's edge lost a little oxygen in the read.",
+          es:
+            leaderDelta > 0
+              ? "El favorito encontró un poco más de aire en la lectura."
+              : "La ventaja del favorito perdió un poco de aire en la lectura.",
+          fr:
+            leaderDelta > 0
+              ? "Le favori a trouvé un peu plus d'air dans la lecture."
+              : "L'avantage du favori a perdu un peu d'air dans la lecture.",
+        },
+        adminText: `Leader probability moved ${formatSignedDelta(leaderDelta)} points.`,
+        delta: {
+          leader: leaderAfter,
+          probabilityDelta: leaderDelta,
+        },
+      });
+    }
+  }
+
+  const confidenceDelta = forecast.confidence - previousForecast.confidence;
+
+  if (Math.abs(confidenceDelta) >= 3) {
+    trail.push({
+      id: confidenceDelta > 0 ? "confidence-lift" : "confidence-dip",
+      label: confidenceDelta > 0 ? "Confidence lift" : "Confidence dip",
+      tone: confidenceDelta > 0 ? "boost" : "drag",
+      publicText: {
+        en:
+          confidenceDelta > 0
+            ? "The trail got cleaner, so the Seer stands a little taller."
+            : "The trail got noisier, so the Seer lowers the stance.",
+        es:
+          confidenceDelta > 0
+            ? "La lectura se limpió y el Vidente se planta un poco más firme."
+            : "La lectura se volvió más ruidosa y el Vidente baja la postura.",
+        fr:
+          confidenceDelta > 0
+            ? "La piste s'est éclaircie, le voyant se tient un peu plus droit."
+            : "La piste est devenue plus bruyante, le voyant baisse sa posture.",
+      },
+      adminText: `Confidence moved ${formatSignedDelta(confidenceDelta)} points.`,
+      delta: {
+        confidenceDelta,
+        previousConfidence: previousForecast.confidence,
+        confidence: forecast.confidence,
+      },
+    });
+  }
+
+  const chaosDelta = forecast.chaos - previousForecast.chaos;
+
+  if (Math.abs(chaosDelta) >= 3) {
+    trail.push({
+      id: chaosDelta > 0 ? "chaos-louder" : "chaos-quieter",
+      label: chaosDelta > 0 ? "Chaos louder" : "Chaos quieter",
+      tone: chaosDelta > 0 ? "chaos" : "steady",
+      publicText: {
+        en:
+          chaosDelta > 0
+            ? "The room got louder, and the match picked up more wobble."
+            : "The room quieted down, and the read got cleaner.",
+        es:
+          chaosDelta > 0
+            ? "La sala se puso más ruidosa y el partido ganó temblor."
+            : "La sala se calmó y la lectura quedó más limpia.",
+        fr:
+          chaosDelta > 0
+            ? "La pièce est devenue plus bruyante et le match a gagné du flottement."
+            : "La pièce s'est calmée et la lecture est devenue plus nette.",
+      },
+      adminText: `Chaos moved ${formatSignedDelta(chaosDelta)} points.`,
+      delta: {
+        chaosDelta,
+        previousChaos: previousForecast.chaos,
+        chaos: forecast.chaos,
+      },
+    });
+  }
+
+  if (trail.length === 0) {
+    trail.push({
+      id: "inputs-refreshed",
+      label: "Inputs refreshed",
+      tone: "steady",
+      publicText: {
+        en: "The Seer refreshed the board, but the match read held steady.",
+        es: "El Vidente refrescó el tablero, pero la lectura se mantuvo firme.",
+        fr: "Le voyant a rafraîchi le tableau, mais la lecture est restée stable.",
+      },
+      adminText: "Forecast inputs changed, but the public read stayed materially stable.",
+      delta: {
+        projected: forecast.projected,
+      },
+    });
+  }
+
+  return trail.slice(0, 4);
+}
+
+function formatSignedDelta(value: number) {
+  return `${value > 0 ? "+" : ""}${Math.round(value)}`;
+}
+
 function readForecastFingerprint(
   payload: ExistingForecastLockRow["source_payload"] | undefined,
 ) {
@@ -3702,15 +4071,25 @@ function matchseerV3Forecast({
   const weather = weatherForecastModifier(context, homeRatings, awayRatings);
   const referee = refereeForecastModifier(context, homeRatings, awayRatings);
   const spotlight = spotlightGravityModifier(homeTeam, awayTeam);
+  const vipSpotlight = vipSpotlightModifier(context, homeTeam, awayTeam);
   const playerContext = forecastPlayerContexts(context);
   const availability = availabilityForecastModifier(playerContext);
   const fatigue = fatigueForecastModifier(playerContext, context);
+  const tournamentForm = tournamentFormModifier({
+    homeTeam,
+    awayTeam,
+    homeRatings,
+    awayRatings,
+    context,
+  });
   const homePower =
     homeBasePower +
     homeVenueBoost +
     weather.homePower +
     referee.homePower +
-    spotlight.homePower -
+    spotlight.homePower +
+    vipSpotlight.homePower +
+    tournamentForm.homePower -
     availability.homePenalty -
     fatigue.homePenalty;
   const awayPower =
@@ -3718,7 +4097,9 @@ function matchseerV3Forecast({
     awayVenueBoost +
     weather.awayPower +
     referee.awayPower +
-    spotlight.awayPower -
+    spotlight.awayPower +
+    vipSpotlight.awayPower +
+    tournamentForm.awayPower -
     availability.awayPenalty -
     fatigue.awayPenalty;
   const rawPowerGap = homePower - awayPower;
@@ -3734,6 +4115,8 @@ function matchseerV3Forecast({
         weather.chaosDelta +
         referee.chaosDelta +
         spotlight.chaosDelta +
+        vipSpotlight.chaosDelta +
+        tournamentForm.chaosDelta +
         availability.chaosDelta +
         fatigue.chaosDelta,
     ),
@@ -3767,7 +4150,10 @@ function matchseerV3Forecast({
     awayRatings,
     homeVenueBoost,
     weather.xgDelta +
-      referee.homeXgDelta -
+      weather.homeXgDelta +
+      referee.homeXgDelta +
+      vipSpotlight.homeXgDelta +
+      tournamentForm.homeXgDelta -
       availability.homeXgPenalty -
       fatigue.homeXgPenalty,
   );
@@ -3776,7 +4162,10 @@ function matchseerV3Forecast({
     homeRatings,
     awayVenueBoost,
     weather.xgDelta +
-      referee.awayXgDelta -
+      weather.awayXgDelta +
+      referee.awayXgDelta +
+      vipSpotlight.awayXgDelta +
+      tournamentForm.awayXgDelta -
       availability.awayXgPenalty -
       fatigue.awayXgPenalty,
   );
@@ -3820,6 +4209,8 @@ function matchseerV3Forecast({
   const dynamicDrag =
     Math.abs(weather.chaosDelta) +
     Math.abs(referee.chaosDelta) +
+    Math.abs(vipSpotlight.chaosDelta) +
+    Math.abs(tournamentForm.chaosDelta) +
     Math.abs(availability.chaosDelta) +
     Math.abs(fatigue.chaosDelta);
   const factors = [
@@ -3827,12 +4218,14 @@ function matchseerV3Forecast({
       label: favorite ? "Team profile signal" : "Balanced profile signal",
       weight: 1,
       explanation: favorite
-        ? `${favorite.team.name} carry the stronger v3 profile at ${favorite.probability}%.`
-        : "The v3 team profiles are close enough to keep the match balanced.",
+        ? `${favorite.team.name} carry the stronger Seer profile at ${favorite.probability}%.`
+        : "The Seer team profiles are close enough to keep the match balanced.",
     },
     weather.factor,
     referee.factor,
     spotlight.factor,
+    vipSpotlight.factor,
+    tournamentForm.factor,
     availability.factor,
     fatigue.factor,
     tournamentReality.factor,
@@ -3860,7 +4253,9 @@ function matchseerV3Forecast({
           Math.abs(powerGap) * 1.04 +
           (78 - chaos) * 0.08 -
           dynamicDrag * 0.24 +
-          weather.confidenceDelta,
+          weather.confidenceDelta +
+          vipSpotlight.confidenceDelta +
+          tournamentForm.confidenceDelta,
       ),
       45,
       80,
@@ -3888,6 +4283,8 @@ function matchseerV3Forecast({
       weather: weather.payload,
       referee: referee.payload,
       spotlight: spotlight.payload,
+      vipSpotlight: vipSpotlight.payload,
+      tournamentForm: tournamentForm.payload,
       availability: availability.payload,
       fatigue: fatigue.payload,
       tournamentReality: tournamentReality.payload,
@@ -3903,6 +4300,10 @@ function teamPower(ratings: TeamRatings) {
     ratings.defense * 0.28 +
     ratings.setPieces * 0.16
   );
+}
+
+function technicalSeparationScore(ratings: TeamRatings) {
+  return ratings.attack * 0.34 + ratings.control * 0.46 + ratings.setPieces * 0.12;
 }
 
 // World-stage standing prior (0-99): how strong each nation is on the world stage.
@@ -4010,7 +4411,14 @@ function weatherForecastModifier(
   let xgDelta = 0;
   let homePower = 0;
   let awayPower = 0;
+  let homeXgDelta = 0;
+  let awayXgDelta = 0;
   const notes: string[] = [];
+  const homeProfilePower = teamPower(homeRatings);
+  const awayProfilePower = teamPower(awayRatings);
+  const homeIsProfileFavorite = homeProfilePower >= awayProfilePower;
+  const homeTechnicalEdge = technicalSeparationScore(homeRatings);
+  const awayTechnicalEdge = technicalSeparationScore(awayRatings);
 
   if (temperature !== null) {
     if (temperature >= 30) {
@@ -4039,6 +4447,23 @@ function weatherForecastModifier(
     chaosDelta += isHumid ? 2 : 1;
     confidenceDelta -= Math.round(1 + heatStress);
     xgDelta -= isHumid ? 0.07 : 0.04;
+    const favoriteXgTax = clampNumber(0.04 + heatStress * 0.035, 0.05, 0.12);
+    const underdogXgLift = clampNumber(0.015 + heatStress * 0.018, 0.02, 0.05);
+    const favoritePowerTax = clampNumber(heatStress * 0.32, 0.2, 0.65);
+    const underdogPowerLift = clampNumber(heatStress * 0.18, 0.12, 0.38);
+
+    if (homeIsProfileFavorite) {
+      homePower -= favoritePowerTax;
+      awayPower += underdogPowerLift;
+      homeXgDelta -= favoriteXgTax;
+      awayXgDelta += underdogXgLift;
+    } else {
+      awayPower -= favoritePowerTax;
+      homePower += underdogPowerLift;
+      awayXgDelta -= favoriteXgTax;
+      homeXgDelta += underdogXgLift;
+    }
+
     notes.push(
       isHumid
         ? "day heat and humidity compress the favorite's edge and slow the chase"
@@ -4061,6 +4486,21 @@ function weatherForecastModifier(
     drawDelta -= 1;
     confidenceDelta += 1;
     xgDelta += 0.02;
+    const technicalGap = Math.abs(homeTechnicalEdge - awayTechnicalEdge);
+
+    if (technicalGap >= 3) {
+      const qualityLift = clampNumber(0.025 + technicalGap * 0.004, 0.03, 0.08);
+      const qualityPower = clampNumber(technicalGap * 0.09, 0.25, 0.75);
+
+      if (homeTechnicalEdge > awayTechnicalEdge) {
+        homePower += qualityPower;
+        homeXgDelta += qualityLift;
+      } else {
+        awayPower += qualityPower;
+        awayXgDelta += qualityLift;
+      }
+    }
+
     notes.push("a cooler late kickoff lets quality and legs separate more cleanly");
   }
 
@@ -4117,7 +4557,9 @@ function weatherForecastModifier(
     factor,
     gapMultiplier: clampNumber(gapMultiplier, 0.84, 1.08),
     homePower,
+    homeXgDelta,
     awayPower,
+    awayXgDelta,
     xgDelta,
     payload: {
       temperatureC: temperature,
@@ -4129,11 +4571,164 @@ function weatherForecastModifier(
       summary,
       homePower: roundModifier(homePower),
       awayPower: roundModifier(awayPower),
+      homeXgDelta: roundModifier(homeXgDelta),
+      awayXgDelta: roundModifier(awayXgDelta),
       chaosDelta,
       confidenceDelta,
       drawDelta,
       gapMultiplier: roundModifier(clampNumber(gapMultiplier, 0.84, 1.08)),
       xgDelta: roundModifier(xgDelta),
+    },
+  };
+}
+
+function tournamentFormModifier({
+  homeTeam,
+  awayTeam,
+  homeRatings,
+  awayRatings,
+  context,
+}: {
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  context: ForecastContextRow | null;
+}) {
+  const home = tournamentFormSide("home", homeTeam, homeRatings, context);
+  const away = tournamentFormSide("away", awayTeam, awayRatings, context);
+  const formGap = home.signal - away.signal;
+  const priorGap =
+    teamPowerWithStanding(homeTeam, homeRatings) -
+    teamPowerWithStanding(awayTeam, awayRatings);
+  const contradictsPrior = Math.abs(formGap) >= 0.65 && formGap * priorGap < 0;
+  const confirmsPrior = Math.abs(formGap) >= 0.9 && formGap * priorGap > 0;
+  const chaosDelta = contradictsPrior ? 2 : confirmsPrior ? -1 : 0;
+  const confidenceDelta = confirmsPrior ? 1 : contradictsPrior ? -1 : 0;
+  const active = home.matches > 0 || away.matches > 0;
+  const leader =
+    Math.abs(formGap) < 0.35 ? null : formGap > 0 ? homeTeam.name : awayTeam.name;
+  const factor =
+    active && leader
+      ? {
+          label: "Tournament form",
+          weight: 0.52,
+          explanation: `${leader} have shown the better tournament pulse so far, but the Seer keeps the adjustment bounded until the sample grows.`,
+        }
+      : active
+        ? {
+            label: "Tournament form",
+            weight: 0.38,
+            explanation:
+              "Early tournament results are in the model, but the form gap is not loud enough to shove the forecast.",
+          }
+        : null;
+
+  return {
+    homePower: home.powerDelta,
+    awayPower: away.powerDelta,
+    homeXgDelta: home.xgDelta,
+    awayXgDelta: away.xgDelta,
+    chaosDelta,
+    confidenceDelta,
+    factor,
+    payload: {
+      status: active ? "active" : "pending",
+      leader,
+      formGap: roundModifier(formGap),
+      contradictsPrior,
+      confirmsPrior,
+      confidenceDelta,
+      chaosDelta,
+      home: home.payload,
+      away: away.payload,
+    },
+  };
+}
+
+function tournamentFormSide(
+  side: "home" | "away",
+  team: FootballDataTeam,
+  ratings: TeamRatings,
+  context: ForecastContextRow | null,
+) {
+  const matches =
+    toOptionalNumber(
+      side === "home"
+        ? context?.home_tournament_matches
+        : context?.away_tournament_matches,
+    ) ?? 0;
+  const points =
+    toOptionalNumber(
+      side === "home"
+        ? context?.home_tournament_points
+        : context?.away_tournament_points,
+    ) ?? 0;
+  const goalDiff =
+    toOptionalNumber(
+      side === "home"
+        ? context?.home_tournament_goal_diff
+        : context?.away_tournament_goal_diff,
+    ) ?? 0;
+
+  if (matches <= 0) {
+    return {
+      matches: 0,
+      signal: 0,
+      powerDelta: 0,
+      xgDelta: 0,
+      payload: {
+        team: team.code,
+        matches: 0,
+        status: "pending",
+      },
+    };
+  }
+
+  const priorPower = teamPowerWithStanding(team, ratings);
+  const pointsPerMatch = points / matches;
+  const goalDiffPerMatch = goalDiff / matches;
+  const expectedPointsPerMatch = clampNumber((priorPower - 44) / 18, 0.45, 2.35);
+  const performanceIndex = pointsPerMatch + goalDiffPerMatch * 0.42;
+  let rawDelta = performanceIndex - expectedPointsPerMatch;
+
+  if (priorPower < 60 && rawDelta > 0) {
+    rawDelta *= 1.1;
+  }
+
+  if (priorPower > 76 && rawDelta < 0) {
+    rawDelta *= 1.15;
+  }
+
+  const trust = matches === 1 ? 0.45 : matches === 2 ? 0.72 : 0.9;
+  const signal = rawDelta * trust;
+  const powerDelta = clampNumber(signal * 1.45, -2.5, 2.5);
+  const xgDelta = clampNumber(signal * 0.055, -0.11, 0.11);
+
+  return {
+    matches,
+    signal,
+    powerDelta,
+    xgDelta,
+    payload: {
+      team: team.code,
+      matches,
+      points,
+      goalDiff,
+      pointsPerMatch: roundModifier(pointsPerMatch),
+      goalDiffPerMatch: roundModifier(goalDiffPerMatch),
+      expectedPointsPerMatch: roundModifier(expectedPointsPerMatch),
+      rawDelta: roundModifier(rawDelta),
+      trust: roundModifier(trust),
+      signal: roundModifier(signal),
+      powerDelta: roundModifier(powerDelta),
+      xgDelta: roundModifier(xgDelta),
+      status:
+        signal >= 0.45
+          ? "overperforming"
+          : signal <= -0.45
+            ? "underperforming"
+            : "holding",
     },
   };
 }
@@ -4236,6 +4831,101 @@ function spotlightGravityModifier(
       chaosDelta,
     },
   };
+}
+
+function vipSpotlightModifier(
+  context: ForecastContextRow | null,
+  homeTeam: FootballDataTeam,
+  awayTeam: FootballDataTeam,
+) {
+  const active = isVipSpotlightActive(context?.external_id);
+  const homeIconBoost = active ? marqueeIconBoost(homeTeam) : 0;
+  const awayIconBoost = active ? marqueeIconBoost(awayTeam) : 0;
+  const gap = Math.abs(homeIconBoost - awayIconBoost);
+  const strongerTeam =
+    homeIconBoost === awayIconBoost
+      ? null
+      : homeIconBoost > awayIconBoost
+        ? homeTeam.name
+        : awayTeam.name;
+  const homeXgDelta = homeIconBoost > 0 ? 0.02 + homeIconBoost * 0.018 : 0;
+  const awayXgDelta = awayIconBoost > 0 ? 0.02 + awayIconBoost * 0.018 : 0;
+  const chaosDelta = active && gap >= 0.45 ? -1 : 0;
+  const confidenceDelta = active && gap >= 0.45 ? 1 : 0;
+  const factor =
+    active && strongerTeam
+      ? {
+          label: "VIP spotlight",
+          weight: 0.22,
+          explanation:
+            `${strongerTeam} get a tiny stage-pressure nudge from the bigger room. It colours tight calls, but it does not drive the forecast.`,
+        }
+      : null;
+
+  return {
+    active,
+    awayPower: awayIconBoost,
+    awayXgDelta,
+    chaosDelta,
+    confidenceDelta,
+    factor,
+    homePower: homeIconBoost,
+    homeXgDelta,
+    payload: {
+      active,
+      matchId: context?.external_id ?? null,
+      home: roundModifier(homeIconBoost),
+      away: roundModifier(awayIconBoost),
+      homeXgDelta: roundModifier(homeXgDelta),
+      awayXgDelta: roundModifier(awayXgDelta),
+      chaosDelta,
+      confidenceDelta,
+      strongerTeam,
+    },
+  };
+}
+
+function isVipSpotlightActive(matchId: string | null | undefined) {
+  const mode = process.env.MATCHSEER_VIP_SPOTLIGHT?.trim().toLowerCase();
+
+  if (mode === "always" || mode === "true" || mode === "1") {
+    return true;
+  }
+
+  if (!matchId) {
+    return false;
+  }
+
+  const configuredIds = (
+    process.env.MATCHSEER_VIP_SPOTLIGHT_MATCH_IDS ??
+    process.env.MATCHSEER_FIFA_PRESIDENT_MATCH_IDS ??
+    ""
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return configuredIds.includes("*") || configuredIds.includes(matchId);
+}
+
+function marqueeIconBoost(team: FootballDataTeam) {
+  const byCode: Record<string, number> = {
+    ARG: 0.75,
+    FRA: 0.58,
+    BRA: 0.5,
+    POR: 0.38,
+  };
+  const byName: Record<string, number> = {
+    argentina: 0.75,
+    france: 0.58,
+    brazil: 0.5,
+    brasil: 0.5,
+    portugal: 0.38,
+  };
+  const codeBoost = byCode[team.code.toUpperCase()] ?? 0;
+  const nameBoost = byName[team.name.toLowerCase()] ?? 0;
+
+  return Math.max(codeBoost, nameBoost);
 }
 
 function forecastPlayerContexts(context: ForecastContextRow | null) {
@@ -4617,6 +5307,7 @@ type TournamentRealityModifier = {
   severity: number;
   favoriteMinGoals: number;
   underdogMaxGoals: number | null;
+  underdogCapReliefXg: number;
   minMargin: number;
   factor: { label: string; weight: number; explanation: string } | null;
   payload: Record<string, unknown>;
@@ -4682,7 +5373,7 @@ function tournamentRealityScoreModifier({
   const surpriseCredit = tournamentSurpriseCredit(side === "home" ? "away" : "home", context);
   const chaosRelief = clampNumber((chaos - 62) / 34, 0, 0.4);
   const severity = clampNumber(
-    underdogWeakness * 0.9 + favoriteStrength * 0.72 - surpriseCredit - chaosRelief,
+    underdogWeakness * 1.05 + favoriteStrength * 0.78 - surpriseCredit - chaosRelief,
     0,
     1.6,
   );
@@ -4700,6 +5391,7 @@ function tournamentRealityScoreModifier({
 
   const favoriteMinGoals = severity >= 1.05 ? 3 : severity >= 0.55 ? 2 : 0;
   const underdogMaxGoals = severity >= 0.72 ? 0 : severity >= 0.45 ? 1 : null;
+  const underdogCapReliefXg = severity >= 1.05 ? 1.48 : severity >= 0.72 ? 1.32 : 1.18;
   const minMargin = severity >= 0.95 ? 2 : 1;
   const softened = surpriseCredit > 0.25;
   const explanation = softened
@@ -4711,6 +5403,7 @@ function tournamentRealityScoreModifier({
     severity: roundModifier(severity),
     favoriteMinGoals,
     underdogMaxGoals,
+    underdogCapReliefXg,
     minMargin,
     factor: {
       label: "Tournament floor",
@@ -4731,6 +5424,7 @@ function tournamentRealityScoreModifier({
       severity: roundModifier(severity),
       favoriteMinGoals,
       underdogMaxGoals,
+      underdogCapReliefXg,
       minMargin,
     },
   };
@@ -4742,6 +5436,7 @@ function inactiveTournamentReality(payload: Record<string, unknown>): Tournament
     severity: 0,
     favoriteMinGoals: 0,
     underdogMaxGoals: null,
+    underdogCapReliefXg: 1.18,
     minMargin: 0,
     factor: null,
     payload: {
@@ -4911,7 +5606,12 @@ function projectedScoreline({
 
   if (tournamentReality?.side === "home") {
     homeGoals = applyFavoriteFloor(homeGoals, tournamentReality.favoriteMinGoals);
-    awayGoals = applyUnderdogCap(awayGoals, awayXg, tournamentReality.underdogMaxGoals);
+    awayGoals = applyUnderdogCap(
+      awayGoals,
+      awayXg,
+      tournamentReality.underdogMaxGoals,
+      tournamentReality.underdogCapReliefXg,
+    );
 
     if (tournamentReality.minMargin > 0 && homeGoals - awayGoals < tournamentReality.minMargin) {
       homeGoals = awayGoals + tournamentReality.minMargin;
@@ -4920,7 +5620,12 @@ function projectedScoreline({
 
   if (tournamentReality?.side === "away") {
     awayGoals = applyFavoriteFloor(awayGoals, tournamentReality.favoriteMinGoals);
-    homeGoals = applyUnderdogCap(homeGoals, homeXg, tournamentReality.underdogMaxGoals);
+    homeGoals = applyUnderdogCap(
+      homeGoals,
+      homeXg,
+      tournamentReality.underdogMaxGoals,
+      tournamentReality.underdogCapReliefXg,
+    );
 
     if (tournamentReality.minMargin > 0 && awayGoals - homeGoals < tournamentReality.minMargin) {
       awayGoals = homeGoals + tournamentReality.minMargin;
@@ -4941,12 +5646,13 @@ function applyUnderdogCap(
   goals: number,
   xg: number,
   underdogMaxGoals: number | null,
+  reliefXg = 1.18,
 ) {
   if (underdogMaxGoals === null) {
     return goals;
   }
 
-  const capRelief = xg >= 1.18 ? 1 : 0;
+  const capRelief = xg >= reliefXg ? 1 : 0;
 
   return Math.min(goals, underdogMaxGoals + capRelief);
 }

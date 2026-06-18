@@ -32,6 +32,8 @@ type MarketPulseSyncResult = {
   updatesReceived: number;
   pulsesSaved: number;
   skipped: number;
+  manualProtected?: number;
+  skippedMatchIds?: string[];
   fetchedAt: string;
   targets?: number;
   marketsScanned?: number;
@@ -45,6 +47,7 @@ type MarketPulseLookupResult = {
   lookup: {
     reason: string;
     marketsScanned: number;
+    error?: string;
     update: {
       home: number;
       draw: number;
@@ -227,6 +230,7 @@ type ForecastVersionRow = {
   forecastStatus: string;
   supersedesVersion: number | null;
   previousProjected: string | null;
+  movementSummary: string | null;
 };
 
 type ModelControlDashboard = {
@@ -341,6 +345,12 @@ export default function AdminPage() {
       return match && venueSlug && venueSlug !== match.currentVenue.slug;
     },
   ).length;
+  const hasSeerLogData = Boolean(
+    matchesResponse?.matches.length ||
+      modelControlData?.forecasts.length ||
+      calibrationData?.sampleSize ||
+      lastMarketSync?.pulsesSaved,
+  );
 
   async function refreshDashboard(adminSecret = secret) {
     setLoadStatus("loading");
@@ -890,16 +900,18 @@ export default function AdminPage() {
 
       <p className={`admin-message ${messageStatus}`}>{message}</p>
 
-        <MarketPulsePanel
-          candidateMatches={marketPulseMatches}
-          draft={marketDraft}
-          lastLookup={lastMarketLookup}
-          lastSync={lastMarketSync}
-          onDraftChange={setMarketDraft}
-          onLookup={() => void lookupMarketPulse()}
-          onManualSave={() => void saveManualMarketPulse()}
-          actionStatus={actionStatus}
-          hasSecret={Boolean(secret)}
+      <SeerVersionLog hasData={hasSeerLogData} />
+
+      <MarketPulsePanel
+        candidateMatches={marketPulseMatches}
+        draft={marketDraft}
+        lastLookup={lastMarketLookup}
+        lastSync={lastMarketSync}
+        onDraftChange={setMarketDraft}
+        onLookup={() => void lookupMarketPulse()}
+        onManualSave={() => void saveManualMarketPulse()}
+        actionStatus={actionStatus}
+        hasSecret={Boolean(secret)}
       />
 
       <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
@@ -984,6 +996,59 @@ export default function AdminPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function SeerVersionLog({ hasData }: { hasData: boolean }) {
+  if (!hasData) {
+    return null;
+  }
+
+  const versions = [
+    {
+      version: "v0",
+      title: "First spark",
+      body: "Static match reads, early team priors, and a simple projected score lane.",
+    },
+    {
+      version: "v1",
+      title: "Live receipts",
+      body: "Real fixtures, final-score reviews, and permanent receipts for what the model called.",
+    },
+    {
+      version: "v3.5",
+      title: "Context engine",
+      body: "Weather, venues, referees, player availability, fatigue, and compact mobile readouts joined the bench.",
+    },
+    {
+      version: "v3.5",
+      title: "Tournament form",
+      body: "Completed match points and goal difference now nudge the read, with one-match reactions capped until the proof repeats.",
+    },
+  ];
+
+  return (
+    <section className="admin-panel seer-version-log">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Model history</p>
+          <h2>Seer evolution log</h2>
+        </div>
+        <div className="traffic-generated">
+          <History size={16} />
+          v3.5 active
+        </div>
+      </div>
+      <div className="seer-version-grid">
+        {versions.map((item) => (
+          <article className="seer-version-card" key={item.version}>
+            <b>{item.version}</b>
+            <strong>{item.title}</strong>
+            <span>{item.body}</span>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1413,6 +1478,9 @@ function ModelControlPanel({
                         ? ` · was ${forecast.previousProjected}`
                         : ""}
                     </em>
+                    {forecast.movementSummary ? (
+                      <small>Movement: {forecast.movementSummary}</small>
+                    ) : null}
                   </article>
                 ))
               )}
@@ -1830,6 +1898,7 @@ function formatPulseInput(value: number) {
 
 function marketLookupReason(payload: MarketPulseLookupResult) {
   const reasonLabels: Record<string, string> = {
+    "fetch-error": "Polymarket could not be reached",
     settled: "market is already settled",
     "not-open": "market is not open yet",
     illiquid: "market is too thin to trust",
@@ -1848,6 +1917,10 @@ function marketLookupReason(payload: MarketPulseLookupResult) {
     return `usable signal ${formatPulseInput(update.home)}/${formatPulseInput(
       update.draw,
     )}/${formatPulseInput(update.away)} · ${scanned}`;
+  }
+
+  if (payload.lookup.reason === "fetch-error" && payload.lookup.error) {
+    return `${reason}: ${payload.lookup.error}`;
   }
 
   return `${reason} · ${scanned}`;
@@ -1919,17 +1992,26 @@ function summarizeMarketSyncPayload(payload: MarketPulseSyncResult) {
           payload.targets ?? 0
         } fixtures.`
       : "";
+  const manualProtected = payload.manualProtected
+    ? ` Protected ${payload.manualProtected} manual signal${
+        payload.manualProtected === 1 ? "" : "s"
+      }.`
+    : "";
 
   if (payload.pulsesSaved > 0) {
     return `Saved ${payload.pulsesSaved} crowd signal${
       payload.pulsesSaved === 1 ? "" : "s"
-    }.${scanned}`;
+    }.${manualProtected}${scanned}`;
   }
 
   if (payload.updatesReceived > 0) {
+    const skippedIds = payload.skippedMatchIds?.length
+      ? ` Skipped: ${payload.skippedMatchIds.join(", ")}.`
+      : "";
+
     return `Found ${payload.updatesReceived} crowd signal${
       payload.updatesReceived === 1 ? "" : "s"
-    }, but none matched a stored forecast. Use the manual lane with the real fixture id.${scanned}`;
+    }, but none matched a stored forecast.${manualProtected}${skippedIds} Use the manual lane with the real fixture id.${scanned}`;
   }
 
   return `Market pulse ran, but no clean crowd signal was found. Use the manual lane for today's match.${scanned}`;

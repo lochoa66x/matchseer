@@ -44,6 +44,7 @@ type GammaEvent = {
 
 export type PulseSkipReason =
   | "usable"
+  | "fetch-error"
   | "settled"
   | "not-open"
   | "illiquid"
@@ -80,6 +81,7 @@ export type PolymarketPulseLookup = {
     closed: boolean | null;
     active: boolean | null;
   } | null;
+  error?: string;
 };
 
 // Polymarket usually models a match as an EVENT (e.g. "Netherlands vs. Japan").
@@ -89,6 +91,12 @@ export type PolymarketPulseLookup = {
 const POLYMARKET_SEARCH_URL =
   process.env.POLYMARKET_SEARCH_URL ??
   "https://gamma-api.polymarket.com/public-search";
+const POLYMARKET_EVENTS_URL =
+  process.env.POLYMARKET_EVENTS_URL ??
+  "https://gamma-api.polymarket.com/events";
+const POLYMARKET_WORLD_CUP_GAMES_URL =
+  process.env.POLYMARKET_WORLD_CUP_GAMES_URL ??
+  "https://polymarket.com/sports/world-cup/games";
 
 // How many target matches to look up at once (each is one search request).
 const SEARCH_CONCURRENCY = Number(process.env.POLYMARKET_SEARCH_CONCURRENCY ?? "5");
@@ -116,6 +124,7 @@ export async function fetchPolymarketPulseSnapshot(
     : 5;
 
   const skipped: PulseSkipBreakdown = {
+    "fetch-error": 0,
     settled: 0,
     "not-open": 0,
     illiquid: 0,
@@ -162,11 +171,37 @@ export async function fetchPolymarketPulseForTarget(
   target: MarketPulseTarget,
   fetchedAt = new Date().toISOString(),
 ): Promise<PolymarketPulseLookup> {
+  let primaryLookup: PolymarketPulseLookup | null = null;
+  let gammaError: string | null = null;
+
   try {
     const event = await findMatchEvent(target);
 
-    if (!event) {
-      return {
+    if (event) {
+      const markets = parseArrayField(event.markets) as GammaMarket[];
+      const classified = classifyEvent(event, markets, target, fetchedAt);
+
+      primaryLookup = {
+        source: "polymarket",
+        fetchedAt,
+        target,
+        update: classified.update,
+        reason: classified.reason,
+        marketsScanned: markets.length,
+        event: {
+          id: readString(event.id),
+          slug: readString(event.slug),
+          title: readString(event.title),
+          closed: typeof event.closed === "boolean" ? event.closed : null,
+          active: typeof event.active === "boolean" ? event.active : null,
+        },
+      };
+
+      if (classified.update || classified.reason === "settled") {
+        return primaryLookup;
+      }
+    } else {
+      primaryLookup = {
         source: "polymarket",
         fetchedAt,
         target,
@@ -176,34 +211,64 @@ export async function fetchPolymarketPulseForTarget(
         event: null,
       };
     }
+  } catch (error) {
+    gammaError =
+      error instanceof Error
+        ? error.message
+        : "Polymarket lookup failed before a usable response was returned.";
+  }
 
-    const markets = parseArrayField(event.markets) as GammaMarket[];
-    const classified = classifyEvent(event, markets, target, fetchedAt);
+  try {
+    const pageFallback = await fetchSportsPagePulseForTarget(target, fetchedAt);
 
-    return {
-      source: "polymarket",
-      fetchedAt,
-      target,
-      update: classified.update,
-      reason: classified.reason,
-      marketsScanned: markets.length,
-      event: {
-        id: readString(event.id),
-        slug: readString(event.slug),
-        title: readString(event.title),
-        closed: typeof event.closed === "boolean" ? event.closed : null,
-        active: typeof event.active === "boolean" ? event.active : null,
-      },
-    };
-  } catch {
+    if (pageFallback.update) {
+      return {
+        source: "polymarket",
+        fetchedAt,
+        target,
+        update: pageFallback.update,
+        reason: "usable",
+        marketsScanned: (primaryLookup?.marketsScanned ?? 0) + 1,
+        event: {
+          id: null,
+          slug: pageFallback.update.marketSlug ?? "sports-world-cup-games",
+          title: pageFallback.update.question ?? `${target.home.name} vs ${target.away.name}`,
+          closed: null,
+          active: true,
+        },
+      };
+    }
+
+    return (
+      primaryLookup ?? {
+        source: "polymarket",
+        fetchedAt,
+        target,
+        update: null,
+        reason: pageFallback.reason,
+        marketsScanned: 0,
+        event: null,
+      }
+    );
+  } catch (error) {
+    const pageError =
+      error instanceof Error
+        ? error.message
+        : "Polymarket sports page lookup failed.";
+
+    if (primaryLookup && !gammaError) {
+      return primaryLookup;
+    }
+
     return {
       source: "polymarket",
       fetchedAt,
       target,
       update: null,
-      reason: "no-event",
-      marketsScanned: 0,
+      reason: "fetch-error",
+      marketsScanned: primaryLookup?.marketsScanned ?? 0,
       event: null,
+      error: [gammaError, pageError].filter(Boolean).join(" · "),
     };
   }
 }
@@ -218,19 +283,31 @@ async function findMatchEvent(
   // common name differs from Polymarket's spelling still surface in search.
   // Normal teams produce exactly one query, so this adds no extra requests for them.
   for (const query of buildSearchQueries(target)) {
-    const url = new URL(POLYMARKET_SEARCH_URL);
-    url.searchParams.set("q", query);
-    url.searchParams.set("limit_per_type", "20");
+    for (const url of buildSearchUrls(query)) {
+      const events = extractEvents(await fetchJson(url));
+      const match = pickMatchEvent(events, homeAliases, awayAliases);
 
-    const events = extractEvents(await fetchJson(url));
-    const match = pickMatchEvent(events, homeAliases, awayAliases);
-
-    if (match) {
-      return match;
+      if (match) {
+        return match;
+      }
     }
   }
 
   return null;
+}
+
+function buildSearchUrls(query: string): URL[] {
+  const publicSearchUrl = new URL(POLYMARKET_SEARCH_URL);
+  publicSearchUrl.searchParams.set("q", query);
+  publicSearchUrl.searchParams.set("limit_per_type", "20");
+
+  const eventsUrl = new URL(POLYMARKET_EVENTS_URL);
+  eventsUrl.searchParams.set("search", query);
+  eventsUrl.searchParams.set("limit", "20");
+  eventsUrl.searchParams.set("active", "true");
+  eventsUrl.searchParams.set("closed", "false");
+
+  return [publicSearchUrl, eventsUrl];
 }
 
 function pickMatchEvent(
@@ -269,6 +346,46 @@ function buildSearchQueries(target: MarketPulseTarget): string[] {
   }
 
   return [...new Set(queries)].slice(0, 4);
+}
+
+async function fetchSportsPagePulseForTarget(
+  target: MarketPulseTarget,
+  fetchedAt: string,
+): Promise<{ update: MarketPulseUpdate | null; reason: PulseSkipReason }> {
+  const text = htmlToReadableText(await fetchText(new URL(POLYMARKET_WORLD_CUP_GAMES_URL)));
+  const matchWindow = findSportsPageMatchWindow(text, target);
+
+  if (!matchWindow) {
+    return { update: null, reason: "no-event" };
+  }
+
+  const home = extractCentsPrice(matchWindow, marketPriceLabels(target.home));
+  const draw =
+    target.marketShape === "two-way" ? 0 : extractCentsPrice(matchWindow, ["draw"]);
+  const away = extractCentsPrice(matchWindow, marketPriceLabels(target.away));
+
+  if (home === null || draw === null || away === null || home + draw + away <= 0) {
+    return { update: null, reason: "no-market" };
+  }
+
+  if (Math.max(home, draw, away) >= DEGENERATE_PRICE) {
+    return { update: null, reason: "not-open" };
+  }
+
+  return {
+    update: {
+      matchId: target.matchId,
+      source: "polymarket",
+      home,
+      draw,
+      away,
+      liquidityScore: 0.72,
+      capturedAt: fetchedAt,
+      marketSlug: "sports-world-cup-games",
+      question: `${target.home.name} vs ${target.away.name}`,
+    },
+    reason: "usable",
+  };
 }
 
 // Human-readable name spellings to search with (display names, not codes),
@@ -676,6 +793,27 @@ async function fetchJson(url: URL): Promise<unknown> {
   }
 }
 
+async function fetchText(url: URL): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      next: { revalidate: 60 },
+      headers: { accept: "text/html,application/xhtml+xml" },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Polymarket sports page failed (${response.status}).`);
+    }
+
+    return response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function extractEvents(payload: unknown): GammaEvent[] {
   if (Array.isArray(payload)) {
     return payload as GammaEvent[];
@@ -713,6 +851,129 @@ function yesPrice(market: GammaMarket): number | null {
   }
 
   return prices[yesIndex];
+}
+
+function findSportsPageMatchWindow(
+  text: string,
+  target: MarketPulseTarget,
+): string | null {
+  const folded = foldForMarketPage(text);
+  const homeLabels = marketPriceLabels(target.home);
+  const awayLabels = marketPriceLabels(target.away);
+
+  for (const homeLabel of homeLabels) {
+    for (const homeIndex of labelIndexes(folded, homeLabel)) {
+      for (const awayLabel of awayLabels) {
+        const awayIndex = labelIndexes(folded, awayLabel).find(
+          (index) => Math.abs(index - homeIndex) <= 1200,
+        );
+
+        if (awayIndex !== undefined) {
+          const start = Math.max(0, Math.min(homeIndex, awayIndex) - 8);
+          const end = Math.min(folded.length, Math.max(homeIndex, awayIndex) + 900);
+
+          return folded.slice(start, end);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function labelIndexes(text: string, label: string) {
+  const pattern = labelPattern(label);
+
+  if (!pattern) {
+    return [];
+  }
+
+  return [...text.matchAll(new RegExp(`(?:^|\\s)${pattern}(?=\\s|$|\\d|[+\\-.])`, "gi"))].map(
+    (match) => (match.index ?? 0) + match[0].search(/\S/),
+  );
+}
+
+function extractCentsPrice(text: string, labels: string[]): number | null {
+  for (const label of labels) {
+    const pattern = labelPattern(label);
+
+    if (!pattern) {
+      continue;
+    }
+
+    const match = text.match(
+      new RegExp(`(?:^|\\s)${pattern}\\s*(\\d{1,3})\\s*(?:¢|c\\b|cent)`, "i"),
+    );
+    const cents = match ? Number(match[1]) : NaN;
+
+    if (Number.isFinite(cents) && cents >= 0 && cents <= 100) {
+      return cents / 100;
+    }
+  }
+
+  return null;
+}
+
+function marketPriceLabels(team: MarketPulseTarget["home"]) {
+  const aliases = [
+    team.code,
+    team.name,
+    ...(team.aliases ?? []),
+    ...searchNames(team),
+    ...marketCodeAliases(team.code),
+  ];
+
+  return [...new Set(aliases.map(foldForMarketPage).filter(Boolean))];
+}
+
+function marketCodeAliases(code: string) {
+  const normalizedCode = foldForMarketPage(code).toUpperCase();
+  const aliases: Record<string, string[]> = {
+    BIH: ["Bosnia-Herzegovina", "Bosnia and Herzegovina"],
+    CIV: ["Ivory Coast", "Cote d Ivoire"],
+    CUW: ["Curacao", "Curaçao"],
+    CZE: ["Czechia", "Czech Republic"],
+    KOR: ["KR", "South Korea", "Korea Republic"],
+    RSA: ["South Africa"],
+    SUI: ["CHE", "Switzerland"],
+  };
+
+  return aliases[normalizedCode] ?? [];
+}
+
+function labelPattern(label: string) {
+  return foldForMarketPage(label)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join("(?:\\s|-)+");
+}
+
+function htmlToReadableText(html: string) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/&cent;|&#162;/gi, "¢")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function foldForMarketPage(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function teamAliases(team: MarketPulseTarget["home"]) {

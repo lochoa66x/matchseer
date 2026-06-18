@@ -33,6 +33,7 @@ import type {
 
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
+type MatchFeedStatus = "loading" | "success" | "empty" | "error";
 type ShareStatus = "idle" | "copied" | "error";
 type CupCandidate = {
   team: Team;
@@ -102,6 +103,11 @@ const copy = {
     allGroups: "All groups",
     matches: "matches",
     noMatches: "No matches in this view yet.",
+    loadingTitle: "The Seer is reading the match signals...",
+    loadingCopy: "Checking fixtures, venues, weather, and team form.",
+    loadingSlow: "The match feed is taking longer than expected. Try refreshing in a moment.",
+    feedErrorTitle: "The match feed slipped off the trail.",
+    feedErrorCopy: "Refresh in a moment while the Seer finds the fixtures again.",
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
     seerScoreboard: "Model receipts",
@@ -228,6 +234,11 @@ const copy = {
     allGroups: "Todos los grupos",
     matches: "partidos",
     noMatches: "Aún no hay partidos en esta vista.",
+    loadingTitle: "El Vidente está leyendo las señales del partido...",
+    loadingCopy: "Revisando partidos, sedes, clima y forma de los equipos.",
+    loadingSlow: "La fuente de partidos está tardando más de lo esperado. Intenta refrescar en un momento.",
+    feedErrorTitle: "La fuente de partidos se salió del rastro.",
+    feedErrorCopy: "Refresca en un momento mientras el Vidente vuelve a encontrar los partidos.",
     matchExplorer: "Explorar partidos",
     selectedMatch: "Partido seleccionado",
     seerScoreboard: "Recibos del modelo",
@@ -354,6 +365,11 @@ const copy = {
     allGroups: "Tous les groupes",
     matches: "matchs",
     noMatches: "Aucun match dans cette vue pour le moment.",
+    loadingTitle: "Le voyant lit les signaux du match...",
+    loadingCopy: "Vérification des affiches, stades, météo et forme des équipes.",
+    loadingSlow: "Le flux des matchs prend plus de temps que prévu. Réessaie dans un instant.",
+    feedErrorTitle: "Le flux des matchs a quitté la piste.",
+    feedErrorCopy: "Rafraîchis dans un instant pendant que le voyant retrouve les affiches.",
     matchExplorer: "Explorer les matchs",
     selectedMatch: "Match sélectionné",
     seerScoreboard: "Reçus du modèle",
@@ -465,6 +481,93 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+type AppCopy = typeof copy.en;
+
+function MatchFeedStateCard({
+  kind,
+  slow = false,
+  t,
+}: {
+  kind: "loading" | "error";
+  slow?: boolean;
+  t: AppCopy;
+}) {
+  const isLoading = kind === "loading";
+
+  return (
+    <div className={cx("match-feed-state-card", isLoading ? "loading" : "error")} role="status">
+      <div className="match-feed-state-icon">
+        {isLoading ? <LoaderCircle size={22} /> : <RefreshCcw size={22} />}
+      </div>
+      <div>
+        <strong>{isLoading ? t.loadingTitle : t.feedErrorTitle}</strong>
+        <p>{isLoading ? t.loadingCopy : t.feedErrorCopy}</p>
+        {slow && <em>{t.loadingSlow}</em>}
+      </div>
+    </div>
+  );
+}
+
+function MatchFeedDetailSkeleton({ slow, t }: { slow: boolean; t: AppCopy }) {
+  return (
+    <div className="feed-detail-skeleton" aria-hidden="true">
+      <div className="section-heading">
+        <Sparkles size={18} />
+        <span>{t.signal}</span>
+      </div>
+      <div className="skeleton-title" />
+      <div className="skeleton-title short" />
+      <div className="skeleton-meter-grid">
+        <div className="skeleton-meter">
+          <span />
+        </div>
+        <div className="skeleton-meter warm">
+          <span />
+        </div>
+      </div>
+      <div className="skeleton-copy-block">
+        <span />
+        <span />
+        <span className="short" />
+      </div>
+      {slow && <p className="feed-slow-note">{t.loadingSlow}</p>}
+    </div>
+  );
+}
+
+function SkeletonMatchCard() {
+  return (
+    <div className="skeleton-match-card">
+      <div className="skeleton-card-top">
+        <span className="skeleton-dot" />
+        <span className="skeleton-line tiny" />
+        <span className="skeleton-line date" />
+      </div>
+      <div className="skeleton-team-row">
+        <span className="skeleton-flag" />
+        <span className="skeleton-line team" />
+        <span className="skeleton-score" />
+      </div>
+      <div className="skeleton-team-row">
+        <span className="skeleton-flag" />
+        <span className="skeleton-line team away" />
+        <span className="skeleton-score" />
+      </div>
+      <div className="skeleton-probability">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="skeleton-line reason" />
+      <div className="skeleton-chip-row">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
 function isLanguageOption(value: string | null): value is Language {
   return value === "en" || value === "es" || value === "fr";
 }
@@ -486,6 +589,8 @@ export default function Home() {
   const [activeMatchId, setActiveMatchId] = useState("");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
+  const [matchFeedStatus, setMatchFeedStatus] = useState<MatchFeedStatus>("loading");
+  const [matchFeedSlow, setMatchFeedSlow] = useState(false);
   const [oracleReads, setOracleReads] = useState<Record<string, OracleResponse>>({});
   const [oracleStatus, setOracleStatus] = useState<Record<string, OracleStatus>>({});
   const [shareStatus, setShareStatus] = useState<ShareStatus>("idle");
@@ -511,6 +616,7 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
     let loadingMatches = false;
+    let hasLoadedOnce = false;
 
     async function loadMatches(refreshLiveData = false) {
       if (loadingMatches) {
@@ -518,6 +624,7 @@ export default function Home() {
       }
 
       loadingMatches = true;
+      const isInitialLoad = !hasLoadedOnce;
 
       try {
         const response = await fetch(
@@ -526,6 +633,9 @@ export default function Home() {
         );
 
         if (!response.ok) {
+          if (!ignore && isInitialLoad) {
+            setMatchFeedStatus("error");
+          }
           return;
         }
 
@@ -533,6 +643,8 @@ export default function Home() {
 
         if (!ignore) {
           setMatches(payload.matches);
+          setMatchFeedStatus(payload.matches.length > 0 ? "success" : "empty");
+          setMatchFeedSlow(false);
           setActiveMatchId((current) => {
             if (payload.matches.length === 0) {
               return "";
@@ -542,11 +654,13 @@ export default function Home() {
               ? current
               : payload.matches[0].id;
           });
+          hasLoadedOnce = true;
         }
       } catch {
-        if (!ignore) {
+        if (!ignore && isInitialLoad) {
           setMatches([]);
           setActiveMatchId("");
+          setMatchFeedStatus("error");
         }
       } finally {
         loadingMatches = false;
@@ -571,6 +685,19 @@ export default function Home() {
       document.removeEventListener("visibilitychange", refreshOnFocus);
     };
   }, []);
+
+  useEffect(() => {
+    if (matchFeedStatus !== "loading") {
+      setMatchFeedSlow(false);
+      return;
+    }
+
+    const slowTimer = window.setTimeout(() => {
+      setMatchFeedSlow(true);
+    }, 3500);
+
+    return () => window.clearTimeout(slowTimer);
+  }, [matchFeedStatus]);
 
   const activeMatch = useMemo(
     () => matches.find((match) => match.id === activeMatchId) ?? matches[0] ?? null,
@@ -701,6 +828,10 @@ export default function Home() {
   }
 
   if (!activeMatch) {
+    const feedIsLoading = matchFeedStatus === "loading";
+    const feedHasError = matchFeedStatus === "error";
+    const feedIsEmpty = matchFeedStatus === "empty";
+
     return (
       <main className="app-shell">
         <section className="topbar" aria-label="MatchSeer header">
@@ -739,33 +870,52 @@ export default function Home() {
               <CalendarDays size={18} />
               <span>{t.matchExplorer}</span>
             </div>
-            <div className="match-filter-panel">
-              <div className="match-filter-tabs" aria-label="Match filters">
-                {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
-                  <button
-                    className={cx("filter-pill", matchFilter === filter && "active")}
-                    key={filter}
-                    onClick={() => setMatchFilter(filter)}
-                    type="button"
-                  >
-                    {t[filter]}
+            {feedIsLoading && (
+              <>
+                <MatchFeedStateCard kind="loading" slow={matchFeedSlow} t={t} />
+                <div className="hero-match-list loading-match-list" aria-hidden="true">
+                  <SkeletonMatchCard />
+                  <SkeletonMatchCard />
+                  <SkeletonMatchCard />
+                </div>
+              </>
+            )}
+
+            {!feedIsLoading && (
+              <div className="match-filter-panel">
+                <div className="match-filter-tabs" aria-label="Match filters">
+                  {(["next", "today", "upcoming", "completed", "all"] as MatchFilter[]).map((filter) => (
+                    <button
+                      className={cx("filter-pill", matchFilter === filter && "active")}
+                      key={filter}
+                      onClick={() => setMatchFilter(filter)}
+                      type="button"
+                    >
+                      {t[filter]}
+                    </button>
+                  ))}
+                </div>
+                <div className="group-chip-panel" aria-label={t.groups}>
+                  <button className="group-chip active" type="button">
+                    {t.allGroups}
                   </button>
-                ))}
+                </div>
+                {feedIsEmpty && (
+                  <p className="match-count">
+                    0 {t.matches}
+                  </p>
+                )}
               </div>
-              <div className="group-chip-panel" aria-label={t.groups}>
-                <button className="group-chip active" type="button">
-                  {t.allGroups}
-                </button>
-              </div>
-              <p className="match-count">
-                0 / 0 {t.matches}
-              </p>
-            </div>
-            <div className="empty-match-state">{t.noMatches}</div>
+            )}
+
+            {feedHasError && <MatchFeedStateCard kind="error" t={t} />}
+            {feedIsEmpty && <div className="empty-match-state">{t.noMatches}</div>}
           </aside>
 
-          <section className="detail-panel empty-detail-panel">
-            <div className="empty-match-state">{t.noDemoFixtures}</div>
+          <section className="detail-panel empty-detail-panel feed-detail-panel">
+            {feedIsLoading && <MatchFeedDetailSkeleton slow={matchFeedSlow} t={t} />}
+            {feedHasError && <MatchFeedStateCard kind="error" t={t} />}
+            {feedIsEmpty && <div className="empty-match-state">{t.noMatches}</div>}
           </section>
         </section>
       </main>
@@ -949,7 +1099,7 @@ export default function Home() {
                     verticalAlign: "middle",
                   }}
                 >
-                  v2
+                  v3
                 </span>
               </p>
               <h2 className="seer-panel-title">{t.matchday}</h2>
