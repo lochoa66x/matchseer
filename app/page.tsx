@@ -97,12 +97,28 @@ const copy = {
     groups: "Groups",
     allGroups: "All groups",
     matches: "matches",
-    noMatches: "No matches in this view yet.",
+    noMatches: "No matches in this filter.",
+    filterEmptyCopy: "Try Upcoming, Completed, or All while the Seer checks the room.",
     loadingTitle: "The Seer is reading the match signals...",
     loadingCopy: "Checking fixtures, venues, weather, and team form.",
-    loadingSlow: "The match feed is taking longer than expected. Try refreshing in a moment.",
-    feedErrorTitle: "The match feed slipped off the trail.",
-    feedErrorCopy: "Refresh in a moment while the Seer finds the fixtures again.",
+    loadingStepFixtures: "Reading fixtures",
+    loadingStepVenues: "Checking venue and weather",
+    loadingStepForm: "Comparing team form",
+    loadingStepPlayers: "Finding player sparks",
+    loadingStepReadout: "Preparing the Seer readout",
+    loadingCount: "Reading",
+    loadingCountCopy: "match feed",
+    loadingSlow: "Still reading the feed. The Seer is checking one more signal.",
+    feedErrorTitle: "The Seer lost the signal.",
+    feedErrorCopy: "Try refreshing in a moment while the fixtures come back into focus.",
+    feedEmptyTitle: "No matches loaded yet.",
+    feedEmptyCopy: "The Seer is still checking the signal.",
+    sampleLabel: "Sample readout",
+    sampleTitle: "Canada vs Morocco",
+    sampleSignal: "Oracle signal: Balanced",
+    sampleWeather: "Weather: Mild",
+    sampleForm: "Form: Morocco slightly sharper",
+    sampleReadout: "Canada has chaos energy, Morocco has structure.",
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
     seerScoreboard: "Model receipts",
@@ -169,7 +185,7 @@ const copy = {
     oracleError: "The Seer blinked. Try again.",
     pendingMode: "Waiting for sync",
     fallbackMode: "Live data pending",
-    noDemoFixtures: "No demo data",
+    noDemoFixtures: "Signal source pending",
     noPlayerData: "Verified player data is not connected yet.",
     connected: "Connected",
     mapping: "Mapping underway",
@@ -229,12 +245,28 @@ const copy = {
     groups: "Grupos",
     allGroups: "Todos los grupos",
     matches: "partidos",
-    noMatches: "Aún no hay partidos en esta vista.",
+    noMatches: "No hay partidos en este filtro.",
+    filterEmptyCopy: "Prueba Próximos, Terminados o Todos mientras el Vidente revisa la sala.",
     loadingTitle: "El Vidente está leyendo las señales del partido...",
     loadingCopy: "Revisando partidos, sedes, clima y forma de los equipos.",
-    loadingSlow: "La fuente de partidos está tardando más de lo esperado. Intenta refrescar en un momento.",
-    feedErrorTitle: "La fuente de partidos se salió del rastro.",
-    feedErrorCopy: "Refresca en un momento mientras el Vidente vuelve a encontrar los partidos.",
+    loadingStepFixtures: "Leyendo partidos",
+    loadingStepVenues: "Revisando sede y clima",
+    loadingStepForm: "Comparando forma de equipos",
+    loadingStepPlayers: "Buscando chispas de jugadores",
+    loadingStepReadout: "Preparando la lectura del Vidente",
+    loadingCount: "Leyendo",
+    loadingCountCopy: "fuente de partidos",
+    loadingSlow: "Aún leyendo la fuente. El Vidente revisa una señal más.",
+    feedErrorTitle: "El Vidente perdió la señal.",
+    feedErrorCopy: "Intenta refrescar en un momento mientras los partidos vuelven a foco.",
+    feedEmptyTitle: "Aún no cargan partidos.",
+    feedEmptyCopy: "El Vidente sigue revisando la señal.",
+    sampleLabel: "Lectura de muestra",
+    sampleTitle: "Canadá vs Marruecos",
+    sampleSignal: "Señal oráculo: Balanceada",
+    sampleWeather: "Clima: Suave",
+    sampleForm: "Forma: Marruecos un poco más fino",
+    sampleReadout: "Canadá trae energía de caos; Marruecos trae estructura.",
     matchExplorer: "Explorar partidos",
     selectedMatch: "Partido seleccionado",
     seerScoreboard: "Recibos del modelo",
@@ -301,7 +333,7 @@ const copy = {
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
     pendingMode: "Esperando sincronización",
     fallbackMode: "Datos reales pendientes",
-    noDemoFixtures: "Sin datos demo",
+    noDemoFixtures: "Fuente de señal pendiente",
     noPlayerData: "Todavía no conectamos datos verificados de jugadores.",
     connected: "Conectado",
     mapping: "Mapeo en curso",
@@ -361,12 +393,28 @@ const copy = {
     groups: "Groupes",
     allGroups: "Tous les groupes",
     matches: "matchs",
-    noMatches: "Aucun match dans cette vue pour le moment.",
+    noMatches: "Aucun match dans ce filtre.",
+    filterEmptyCopy: "Essaie À venir, Terminés ou Tous pendant que le voyant lit la salle.",
     loadingTitle: "Le voyant lit les signaux du match...",
     loadingCopy: "Vérification des affiches, stades, météo et forme des équipes.",
-    loadingSlow: "Le flux des matchs prend plus de temps que prévu. Réessaie dans un instant.",
-    feedErrorTitle: "Le flux des matchs a quitté la piste.",
-    feedErrorCopy: "Rafraîchis dans un instant pendant que le voyant retrouve les affiches.",
+    loadingStepFixtures: "Lecture des affiches",
+    loadingStepVenues: "Vérification stade et météo",
+    loadingStepForm: "Comparaison de la forme",
+    loadingStepPlayers: "Recherche des étincelles joueurs",
+    loadingStepReadout: "Préparation de la lecture",
+    loadingCount: "Lecture",
+    loadingCountCopy: "flux des matchs",
+    loadingSlow: "Lecture toujours en cours. Le voyant vérifie un dernier signal.",
+    feedErrorTitle: "Le voyant a perdu le signal.",
+    feedErrorCopy: "Rafraîchis dans un instant pendant que les affiches reviennent au point.",
+    feedEmptyTitle: "Aucun match chargé pour le moment.",
+    feedEmptyCopy: "Le voyant vérifie encore le signal.",
+    sampleLabel: "Lecture exemple",
+    sampleTitle: "Canada vs Maroc",
+    sampleSignal: "Signal oracle : équilibré",
+    sampleWeather: "Météo : douce",
+    sampleForm: "Forme : Maroc un peu plus net",
+    sampleReadout: "Le Canada apporte l'énergie du chaos; le Maroc apporte la structure.",
     matchExplorer: "Explorer les matchs",
     selectedMatch: "Match sélectionné",
     seerScoreboard: "Reçus du modèle",
@@ -433,7 +481,7 @@ const copy = {
     oracleError: "Le voyant a cligné. Réessaie.",
     pendingMode: "En attente de synchro",
     fallbackMode: "Données réelles en attente",
-    noDemoFixtures: "Aucune donnée démo",
+    noDemoFixtures: "Source du signal en attente",
     noPlayerData: "Les données joueurs vérifiées ne sont pas encore connectées.",
     connected: "Connecté",
     mapping: "Mappage en cours",
@@ -501,14 +549,32 @@ function MatchFeedStateCard({
         <strong>{isLoading ? t.loadingTitle : t.feedErrorTitle}</strong>
         <p>{isLoading ? t.loadingCopy : t.feedErrorCopy}</p>
         {isLoading && (
-          <div className="seer-loading-pulse" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
+          <>
+            <div className="seer-loading-steps" aria-label={t.loadingCopy}>
+              <span>{t.loadingStepFixtures}</span>
+              <span>{t.loadingStepVenues}</span>
+              <span>{t.loadingStepForm}</span>
+              <span>{t.loadingStepPlayers}</span>
+              <span>{t.loadingStepReadout}</span>
+            </div>
+            <div className="seer-loading-pulse" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </>
         )}
         {slow && <em>{t.loadingSlow}</em>}
       </div>
+    </div>
+  );
+}
+
+function FeedEmptyState({ t, feed = false }: { t: AppCopy; feed?: boolean }) {
+  return (
+    <div className="empty-match-state match-feed-empty">
+      <strong>{feed ? t.feedEmptyTitle : t.noMatches}</strong>
+      <span>{feed ? t.feedEmptyCopy : t.filterEmptyCopy}</span>
     </div>
   );
 }
@@ -536,6 +602,26 @@ function MatchFeedDetailSkeleton({ slow, t }: { slow: boolean; t: AppCopy }) {
         <span className="short" />
       </div>
       {slow && <p className="feed-slow-note">{t.loadingSlow}</p>}
+    </div>
+  );
+}
+
+function SampleReadoutCard({ t }: { t: AppCopy }) {
+  return (
+    <div className="sample-readout-card" aria-label={t.sampleLabel}>
+      <div className="sample-readout-mark">
+        <img src="/brand/matchseer-app-icon.svg" alt="" aria-hidden="true" />
+      </div>
+      <div className="sample-readout-content">
+        <span>{t.sampleLabel}</span>
+        <strong>{t.sampleTitle}</strong>
+        <div className="sample-readout-chips">
+          <em>{t.sampleSignal}</em>
+          <em>{t.sampleWeather}</em>
+          <em>{t.sampleForm}</em>
+        </div>
+        <p>{t.sampleReadout}</p>
+      </div>
     </div>
   );
 }
@@ -1003,13 +1089,28 @@ export default function Home() {
             )}
 
             {feedHasError && <MatchFeedStateCard kind="error" t={t} />}
-            {feedIsEmpty && <div className="empty-match-state">{t.noMatches}</div>}
+            {feedIsEmpty && <FeedEmptyState feed t={t} />}
           </aside>
 
           <section className="detail-panel empty-detail-panel feed-detail-panel">
-            {feedIsLoading && <MatchFeedDetailSkeleton slow={matchFeedSlow} t={t} />}
-            {feedHasError && <MatchFeedStateCard kind="error" t={t} />}
-            {feedIsEmpty && <div className="empty-match-state">{t.noMatches}</div>}
+            {feedIsLoading && (
+              <>
+                <MatchFeedDetailSkeleton slow={matchFeedSlow} t={t} />
+                <SampleReadoutCard t={t} />
+              </>
+            )}
+            {feedHasError && (
+              <>
+                <MatchFeedStateCard kind="error" t={t} />
+                <SampleReadoutCard t={t} />
+              </>
+            )}
+            {feedIsEmpty && (
+              <>
+                <FeedEmptyState feed t={t} />
+                <SampleReadoutCard t={t} />
+              </>
+            )}
           </section>
         </section>
       </main>
@@ -1070,8 +1171,12 @@ export default function Home() {
               <p>{t.heroExplorerCopy}</p>
             </div>
             <div className="hero-board-count">
-              <strong>{visibleMatches.length}</strong>
-              <span>/ {matches.length} {t.matches}</span>
+              <strong>{matches.length > 0 ? visibleMatches.length : t.loadingCount}</strong>
+              <span>
+                {matches.length > 0
+                  ? `/ ${matches.length} ${t.matches}`
+                  : t.loadingCountCopy}
+              </span>
             </div>
           </div>
 
@@ -1111,7 +1216,7 @@ export default function Home() {
 
           <div className="hero-match-list">
             {visibleMatches.length === 0 && (
-              <div className="empty-match-state">{t.noMatches}</div>
+              <FeedEmptyState t={t} />
             )}
             {visibleMatches.map((match) => {
               const accents = matchAccentColors(match);
