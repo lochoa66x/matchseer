@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const limit = parsePositiveLimit(url.searchParams.get("limit"));
 
   const result = await listMatches({
-    limit: limit ?? (isInitial ? 14 : null),
+    limit: limit ?? (isInitial ? 8 : null),
     prioritizeUpcoming: isInitial,
   });
 

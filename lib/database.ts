@@ -29,6 +29,11 @@ import {
   DEFAULT_TEAM_DEPENDENCY,
   teamDependencyProfiles,
 } from "./data/team-dependency";
+import {
+  buildCupCandidates,
+  toCupSnapshotCandidates,
+  type CupSnapshotCandidate,
+} from "./cup-seer";
 
 const ENABLE_PLAYER_SPARKS = false;
 
@@ -69,6 +74,28 @@ export type WeatherSyncResult = {
   matchesUpdated: number;
   fetchedAt: string;
   skippedReason?: string;
+};
+
+export type CupSeerSnapshot = {
+  id: string;
+  label: string;
+  generatedAt: string;
+  candidates: Array<
+    CupSnapshotCandidate & {
+      previousRank: number | null;
+      rankDelta: number | null;
+    }
+  >;
+};
+
+export type CupSeerSnapshotDashboard = {
+  source: DataSourceStatus;
+  reason: DataSourceReason;
+  generatedAt: string;
+  current: CupSeerSnapshot | null;
+  previous: CupSeerSnapshot | null;
+  history: CupSeerSnapshot[];
+  error?: string;
 };
 
 export type MarketPulseUpdate = {
@@ -649,6 +676,205 @@ function matchQualityScore(match: MatchSummary) {
   ].reduce((total, value) => total + value, 0);
 }
 
+type CupSeerSnapshotRow = {
+  id: string;
+  label: string;
+  generated_at: Date | string;
+  candidates: unknown;
+};
+
+export async function listCupSeerSnapshots(): Promise<CupSeerSnapshotDashboard> {
+  const connection = await getSql();
+
+  if (!connection) {
+    return unavailableCupSeerSnapshotResult("missing-database-url");
+  }
+
+  if (!connection.sql) {
+    return unavailableCupSeerSnapshotResult(connection.reason);
+  }
+
+  try {
+    await ensureCupSeerSnapshotSchema(connection.sql);
+
+    const rows = (await connection.sql`
+      select id, label, generated_at, candidates
+      from cup_seer_snapshots
+      order by generated_at desc
+      limit 8;
+    `) as unknown as CupSeerSnapshotRow[];
+
+    const rawSnapshots = rows.map(toCupSeerSnapshotBase);
+    const snapshots = rawSnapshots.map((snapshot, index) =>
+      withCupSeerMovement(snapshot, rawSnapshots[index + 1] ?? null),
+    );
+
+    return {
+      source: "database",
+      reason: "database",
+      generatedAt: new Date().toISOString(),
+      current: snapshots[0] ?? null,
+      previous: snapshots[1] ?? null,
+      history: snapshots,
+    };
+  } catch (error) {
+    console.error("MatchSeer cup snapshot read failed", error);
+    return {
+      ...unavailableCupSeerSnapshotResult("database-query-failed"),
+      error: error instanceof Error ? error.message : "Snapshot read failed",
+    };
+  }
+}
+
+export async function saveCupSeerSnapshot(
+  label?: string | null,
+): Promise<CupSeerSnapshotDashboard> {
+  const connection = await getSql();
+
+  if (!connection) {
+    return unavailableCupSeerSnapshotResult("missing-database-url");
+  }
+
+  if (!connection.sql) {
+    return unavailableCupSeerSnapshotResult(connection.reason);
+  }
+
+  try {
+    await ensureCupSeerSnapshotSchema(connection.sql);
+
+    const { matches } = await listMatches();
+    const candidates = toCupSnapshotCandidates(buildCupCandidates(matches, "en", 8));
+    const countRows = (await connection.sql`
+      select count(*)::int as count
+      from cup_seer_snapshots;
+    `) as unknown as Array<{ count: number | string }>;
+    const nextIndex = toNumber(countRows[0]?.count) + 1;
+    const snapshotLabel =
+      typeof label === "string" && label.trim()
+        ? label.replace(/\s+/g, " ").trim().slice(0, 80)
+        : `Week ${Math.max(1, nextIndex)}`;
+
+    await connection.sql`
+      insert into cup_seer_snapshots (label, candidates, source_payload)
+      values (
+        ${snapshotLabel},
+        ${JSON.stringify(candidates)}::jsonb,
+        ${JSON.stringify({
+          modelVersion: "v3.5",
+          matchesConsidered: matches.length,
+          note: "Final 8 lane snapshot with second-round path probability.",
+        })}::jsonb
+      );
+    `;
+
+    return listCupSeerSnapshots();
+  } catch (error) {
+    console.error("MatchSeer cup snapshot save failed", error);
+    return {
+      ...unavailableCupSeerSnapshotResult("database-query-failed"),
+      error: error instanceof Error ? error.message : "Snapshot save failed",
+    };
+  }
+}
+
+function unavailableCupSeerSnapshotResult(
+  reason: DataSourceReason,
+): CupSeerSnapshotDashboard {
+  return {
+    source: "database-unavailable",
+    reason,
+    generatedAt: new Date().toISOString(),
+    current: null,
+    previous: null,
+    history: [],
+  };
+}
+
+function toCupSeerSnapshotBase(row: CupSeerSnapshotRow): CupSeerSnapshot {
+  return {
+    id: row.id,
+    label: row.label,
+    generatedAt: new Date(row.generated_at).toISOString(),
+    candidates: readCupSnapshotCandidates(row.candidates).map((candidate) => ({
+      ...candidate,
+      previousRank: null,
+      rankDelta: null,
+    })),
+  };
+}
+
+function withCupSeerMovement(
+  snapshot: CupSeerSnapshot,
+  previous: CupSeerSnapshot | null,
+): CupSeerSnapshot {
+  const previousRanks = new Map(
+    previous?.candidates.map((candidate) => [
+      candidate.team.code,
+      candidate.rank,
+    ]) ?? [],
+  );
+
+  return {
+    ...snapshot,
+    candidates: snapshot.candidates.map((candidate) => {
+      const previousRank = previousRanks.get(candidate.team.code) ?? null;
+
+      return {
+        ...candidate,
+        previousRank,
+        rankDelta: previousRank === null ? null : previousRank - candidate.rank,
+      };
+    }),
+  };
+}
+
+function readCupSnapshotCandidates(value: unknown): CupSnapshotCandidate[] {
+  const parsed = typeof value === "string" ? safeJson(value) : value;
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed.flatMap((candidate) => {
+    const record = readPayloadRecord(candidate);
+    const team = readPayloadRecord(record?.team);
+    const rank = readPayloadNumber(record?.rank);
+    const signal = readPayloadNumber(record?.signal);
+    const advanceProbability = readPayloadNumber(record?.advanceProbability);
+
+    if (!record || !team || rank === null || signal === null) {
+      return [];
+    }
+
+    return [
+      {
+        rank,
+        team: {
+          name: readPayloadString(team.name) ?? "Unknown",
+          code: readPayloadString(team.code) ?? "TBD",
+          color: readPayloadString(team.color) ?? "#8fa2c4",
+        },
+        signal,
+        advanceProbability: advanceProbability ?? signal,
+        expectedPoints: readPayloadNumber(record.expectedPoints) ?? 0,
+        matches: readPayloadNumber(record.matches) ?? 0,
+        pathSignal: readPayloadNumber(record.pathSignal) ?? signal,
+        traits: Array.isArray(record.traits)
+          ? record.traits.filter((trait): trait is string => typeof trait === "string")
+          : [],
+      },
+    ];
+  });
+}
+
+function safeJson(value: string) {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export async function getMatch(matchId: string) {
   const result = await listMatches();
 
@@ -662,6 +888,7 @@ export async function getMatch(matchId: string) {
 let trafficSchemaPromise: Promise<void> | null = null;
 let playerModelSchemaPromise: Promise<void> | null = null;
 let forecastLedgerSchemaPromise: Promise<void> | null = null;
+let cupSeerSnapshotSchemaPromise: Promise<void> | null = null;
 
 export async function recordTrafficEvent(
   input: TrafficEventInput,
@@ -1025,6 +1252,31 @@ async function ensureForecastLedgerSchema(sql: NeonQuery) {
   }
 
   return forecastLedgerSchemaPromise;
+}
+
+async function ensureCupSeerSnapshotSchema(sql: NeonQuery) {
+  if (!cupSeerSnapshotSchemaPromise) {
+    cupSeerSnapshotSchemaPromise = (async () => {
+      await sql`
+        create table if not exists cup_seer_snapshots (
+          id uuid primary key default gen_random_uuid(),
+          label text not null,
+          generated_at timestamptz not null default now(),
+          candidates jsonb not null,
+          source_payload jsonb not null default '{}'::jsonb
+        );
+      `;
+      await sql`
+        create index if not exists cup_seer_snapshots_generated_idx
+        on cup_seer_snapshots (generated_at desc);
+      `;
+    })().catch((error) => {
+      cupSeerSnapshotSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  return cupSeerSnapshotSchemaPromise;
 }
 
 
@@ -2715,13 +2967,32 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
   const prioritizeUpcoming = Boolean(options.prioritizeUpcoming);
 
   return (await sql`
-    with latest_weather as (
+    with target_matches as (
+      select matches.id
+      from matches
+      order by
+        case
+          when ${prioritizeUpcoming}
+            and lower(matches.status) <> 'final'
+            and (
+              matches.starts_at is null
+              or matches.starts_at >= now() - interval '2 hours'
+            )
+          then 0
+          else 1
+        end,
+        matches.starts_at nulls last,
+        matches.external_id
+      limit ${rowLimit}
+    ),
+    latest_weather as (
       select distinct on (match_id)
         match_id,
         temperature_c,
         wind_kph,
         summary
       from weather_snapshots
+      join target_matches on target_matches.id = weather_snapshots.match_id
       order by match_id, captured_at desc
     ),
     latest_forecast as (
@@ -2738,29 +3009,32 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
         source_payload,
         created_at
       from forecasts
+      join target_matches on target_matches.id = forecasts.match_id
       order by match_id, version desc, created_at desc
     ),
     latest_market_pulse as (
       select distinct on (match_id)
-        match_id,
-        source_payload -> 'marketPulse' as market_pulse_payload
+        forecasts.match_id,
+        forecasts.source_payload -> 'marketPulse' as market_pulse_payload
       from forecasts
-      where source_payload -> 'marketPulse' is not null
+      join target_matches on target_matches.id = forecasts.match_id
+      where forecasts.source_payload -> 'marketPulse' is not null
       order by
-        match_id,
+        forecasts.match_id,
         case
-          when source_payload -> 'marketPulse' ->> 'source' = 'manual' then 0
+          when forecasts.source_payload -> 'marketPulse' ->> 'source' = 'manual' then 0
           else 1
         end,
-        source_payload -> 'marketPulse' ->> 'capturedAt' desc nulls last,
-        version desc,
-        created_at desc
+        forecasts.source_payload -> 'marketPulse' ->> 'capturedAt' desc nulls last,
+        forecasts.version desc,
+        forecasts.created_at desc
     ),
     forecast_reason_groups as (
       select
         forecast_id,
         jsonb_agg(explanation order by weight desc nulls last, label) as factors
       from forecast_factors
+      join latest_forecast on latest_forecast.id = forecast_factors.forecast_id
       group by forecast_id
     ),
     interpretation_groups as (
@@ -2768,6 +3042,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
         forecast_id,
         jsonb_object_agg(language, summary) as tone
       from forecast_interpretations
+      join latest_forecast on latest_forecast.id = forecast_interpretations.forecast_id
       group by forecast_id
     )
     select
@@ -2816,6 +3091,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       forecast_reason_groups.factors,
       '[]'::jsonb as players
     from matches
+    join target_matches on target_matches.id = matches.id
     join teams home_team on home_team.id = matches.home_team_id
     join teams away_team on away_team.id = matches.away_team_id
     join venues on venues.id = matches.venue_id

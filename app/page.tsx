@@ -22,6 +22,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  buildCupCandidates as buildCupSeerCandidates,
+  type CupCandidate,
+} from "../lib/cup-seer";
 import type {
   Language,
   ForecastInterpretation,
@@ -35,17 +39,6 @@ type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
 type MatchFeedStatus = "loading" | "success" | "empty" | "error";
 type ShareStatus = "idle" | "copied" | "error";
-type CupCandidate = {
-  team: Team;
-  score: number;
-  signal: number;
-  matches: number;
-  expectedPoints: number;
-  pathSignal: number;
-  traits: string[];
-  verdict: string;
-  risk: string;
-};
 type ForecastSide = "home" | "draw" | "away";
 type ForecastReceiptOutcome = "exact" | "hit" | "miss" | "live" | "pending";
 type ForecastReceipt = {
@@ -80,6 +73,8 @@ type OracleResponse = {
 
 const collapsedReceiptCount = 4;
 const liveRefreshIntervalMs = 12_000;
+const matchFeedCacheKey = "matchseer.match-feed.v3.5";
+const matchFeedCacheTtlMs = 20 * 60 * 1000;
 
 const copy = {
   en: {
@@ -181,13 +176,14 @@ const copy = {
     pending: "Pending",
     refereePending: "Assignment pending",
     cupSeer: "Weekly Cup Seer",
-    cupSeerTitle: "Who is in the final-six lane?",
-    cupSeerIntro: "Pre-round pulse: the Seer treats every group match as unplayed, forecasts each team path, and ranks the six strongest cup lanes.",
+    cupSeerTitle: "Who is in the final-eight lane?",
+    cupSeerIntro: "Weekly pulse: finished matches count, upcoming fixtures stay projected, and the Seer tracks the eight strongest cup lanes.",
     cupPulse: "Weekly pulse",
     cupLeader: "Top signal",
     cupOpen: "Open weekly cup pulse",
     cupClose: "Hide weekly cup pulse",
     cupSignal: "Finalist signal",
+    cupAdvance: "R16 path",
     seerVerdict: "Seer verdict",
     riskCloud: "Risk cloud",
     signalNotes: "Signal notes",
@@ -312,13 +308,14 @@ const copy = {
     pending: "Pendiente",
     refereePending: "Asignación pendiente",
     cupSeer: "Vidente semanal de la copa",
-    cupSeerTitle: "¿Quién entra en la vía de los seis finalistas?",
-    cupSeerIntro: "Pulso previo: el Vidente trata cada partido de grupo como no jugado, proyecta el camino de cada equipo y ordena las seis rutas más fuertes.",
+    cupSeerTitle: "¿Quién entra en la vía de los ocho más fuertes?",
+    cupSeerIntro: "Pulso semanal: los resultados terminados cuentan, los próximos siguen proyectados y el Vidente sigue las ocho rutas más fuertes.",
     cupPulse: "Pulso semanal",
     cupLeader: "Señal líder",
     cupOpen: "Abrir pulso semanal",
     cupClose: "Ocultar pulso semanal",
     cupSignal: "Señal finalista",
+    cupAdvance: "Ruta R16",
     seerVerdict: "Veredicto vidente",
     riskCloud: "Nube de riesgo",
     signalNotes: "Notas de señal",
@@ -443,13 +440,14 @@ const copy = {
     pending: "En attente",
     refereePending: "Affectation en attente",
     cupSeer: "Voyant hebdo de la coupe",
-    cupSeerTitle: "Qui entre dans la voie des six finalistes ?",
-    cupSeerIntro: "Pulse d’avant-tour : le voyant traite chaque match de groupe comme non joué, projette le chemin de chaque équipe et classe les six routes les plus fortes.",
+    cupSeerTitle: "Qui entre dans la voie des huit plus forts ?",
+    cupSeerIntro: "Pulse hebdo : les matchs terminés comptent, les affiches à venir restent projetées, et le voyant suit les huit routes les plus fortes.",
     cupPulse: "Pulse hebdo",
     cupLeader: "Signal leader",
     cupOpen: "Ouvrir le pulse hebdo",
     cupClose: "Masquer le pulse hebdo",
     cupSignal: "Signal finaliste",
+    cupAdvance: "Route R16",
     seerVerdict: "Verdict du voyant",
     riskCloud: "Nuage de risque",
     signalNotes: "Notes du signal",
@@ -575,6 +573,48 @@ function SkeletonMatchCard() {
   );
 }
 
+function readCachedMatchFeed() {
+  try {
+    const raw = window.localStorage.getItem(matchFeedCacheKey);
+
+    if (!raw) {
+      return [];
+    }
+
+    const cached = JSON.parse(raw) as Partial<CachedMatchFeed>;
+
+    if (
+      typeof cached.savedAt !== "number" ||
+      Date.now() - cached.savedAt > matchFeedCacheTtlMs ||
+      !Array.isArray(cached.matches)
+    ) {
+      window.localStorage.removeItem(matchFeedCacheKey);
+      return [];
+    }
+
+    return cached.matches;
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedMatchFeed(matches: Match[]) {
+  if (matches.length === 0) {
+    return;
+  }
+
+  try {
+    const cached: CachedMatchFeed = {
+      savedAt: Date.now(),
+      matches,
+    };
+
+    window.localStorage.setItem(matchFeedCacheKey, JSON.stringify(cached));
+  } catch {
+    // Cache is only a speed boost; failing silently keeps the live feed path intact.
+  }
+}
+
 function isLanguageOption(value: string | null): value is Language {
   return value === "en" || value === "es" || value === "fr";
 }
@@ -588,6 +628,11 @@ type MatchesResponse = {
     driver: string;
     note: string;
   };
+};
+
+type CachedMatchFeed = {
+  savedAt: number;
+  matches: Match[];
 };
 
 export default function Home() {
@@ -624,6 +669,20 @@ export default function Home() {
     let ignore = false;
     let loadingMatches = false;
     let hasLoadedOnce = false;
+
+    const cachedMatches = readCachedMatchFeed();
+
+    if (cachedMatches.length > 0) {
+      setMatches(cachedMatches);
+      setMatchFeedStatus("success");
+      setMatchFeedSlow(false);
+      setActiveMatchId((current) =>
+        cachedMatches.some((match) => match.id === current)
+          ? current
+          : cachedMatches[0].id,
+      );
+      hasLoadedOnce = true;
+    }
 
     async function loadMatches({
       initial = false,
@@ -668,6 +727,7 @@ export default function Home() {
           setMatches(payload.matches);
           setMatchFeedStatus(payload.matches.length > 0 ? "success" : "empty");
           setMatchFeedSlow(false);
+          writeCachedMatchFeed(payload.matches);
           setActiveMatchId((current) => {
             if (payload.matches.length === 0) {
               return "";
@@ -773,7 +833,10 @@ export default function Home() {
       (match) => match.status === "Upcoming" || match.status === "Live",
     );
   }, [groupFilter, matchFilter, matches, todayKey]);
-  const cupCandidates = useMemo(() => buildCupCandidates(matches, language), [matches, language]);
+  const cupCandidates = useMemo(
+    () => buildCupSeerCandidates(matches, language),
+    [matches, language],
+  );
   const cupPulseLabel = useMemo(() => getCupPulseLabel(language), [language]);
   const seerScoreboard = useMemo(
     () => buildSeerScoreboard(matches, language, t),
@@ -1354,6 +1417,7 @@ function buildCupCandidates(matches: Match[], language: Language): CupCandidate[
         team: entry.team,
         score: signal,
         signal,
+        advanceProbability: clamp(Math.round(signal * 0.82 + pointsPerMatch * 6), 5, 98),
         matches: entry.matches,
         expectedPoints: entry.expectedPoints,
         pathSignal,
@@ -1363,7 +1427,7 @@ function buildCupCandidates(matches: Match[], language: Language): CupCandidate[
       };
     })
     .sort((left, right) => right.score - left.score)
-    .slice(0, 6);
+    .slice(0, 8);
 }
 
 function addCupTeam(
@@ -2431,6 +2495,9 @@ function CupCandidateCard({
       <div className="cup-path-meta">
         <span>
           {candidate.matches} {t.matches}
+        </span>
+        <span>
+          {t.cupAdvance}: {candidate.advanceProbability}%
         </span>
         <span>{candidate.expectedPoints.toFixed(1)} xPts</span>
       </div>

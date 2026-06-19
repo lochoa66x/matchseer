@@ -16,6 +16,7 @@ import {
   RefreshCcw,
   Save,
   ShieldCheck,
+  Trophy,
   UsersRound,
 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
@@ -111,6 +112,38 @@ type MatchesResponse = {
     driver: string;
   };
   matches: unknown[];
+};
+
+type CupSeerSnapshotDashboard = {
+  source: string;
+  reason?: string;
+  generatedAt: string;
+  current: CupSeerSnapshot | null;
+  previous: CupSeerSnapshot | null;
+  history: CupSeerSnapshot[];
+  error?: string;
+};
+
+type CupSeerSnapshot = {
+  id: string;
+  label: string;
+  generatedAt: string;
+  candidates: Array<{
+    rank: number;
+    team: {
+      name: string;
+      code: string;
+      color: string;
+    };
+    signal: number;
+    advanceProbability: number;
+    expectedPoints: number;
+    matches: number;
+    pathSignal: number;
+    traits: string[];
+    previousRank: number | null;
+    rankDelta: number | null;
+  }>;
 };
 
 type TrafficDashboard = {
@@ -272,6 +305,8 @@ export default function AdminPage() {
     useState<ModelControlDashboard | null>(null);
   const [calibrationData, setCalibrationData] =
     useState<CalibrationDashboard | null>(null);
+  const [cupSnapshotData, setCupSnapshotData] =
+    useState<CupSeerSnapshotDashboard | null>(null);
   const [playerDrafts, setPlayerDrafts] = useState<Record<string, PlayerDraft>>(
     {},
   );
@@ -392,6 +427,24 @@ export default function AdminPage() {
             error: error instanceof Error ? error.message : "Calibration failed.",
           }))
         : Promise.resolve<CalibrationDashboard | null>(null);
+      const cupSnapshotsPromise = adminSecret
+        ? fetchJson<CupSeerSnapshotDashboard>("/api/admin/cup-seer-snapshots", {
+            headers: {
+              Authorization: `Bearer ${adminSecret}`,
+            },
+          }).catch((error) => ({
+            source: "database-unavailable",
+            reason: "database-query-failed",
+            generatedAt: new Date().toISOString(),
+            current: null,
+            previous: null,
+            history: [],
+            error:
+              error instanceof Error
+                ? error.message
+                : "Cup snapshots failed.",
+          }))
+        : Promise.resolve<CupSeerSnapshotDashboard | null>(null);
       const [
         football,
         weather,
@@ -401,6 +454,7 @@ export default function AdminPage() {
         traffic,
         modelControls,
         calibration,
+        cupSnapshots,
       ] =
         await Promise.all([
           fetchJson<AdminStatus>("/api/admin/sync-football-data"),
@@ -411,6 +465,7 @@ export default function AdminPage() {
           trafficPromise,
           modelControlsPromise,
           calibrationPromise,
+          cupSnapshotsPromise,
         ]);
 
       setFootballStatus(football);
@@ -421,6 +476,7 @@ export default function AdminPage() {
       setTrafficData(traffic);
       setModelControlData(modelControls);
       setCalibrationData(calibration);
+      setCupSnapshotData(cupSnapshots);
       setPlayerDrafts(createPlayerDrafts(modelControls?.players ?? []));
       setSelectedVenues({});
       setLoadStatus("success");
@@ -758,6 +814,52 @@ export default function AdminPage() {
     }
   }
 
+  async function saveCupSeerSnapshot() {
+    if (!secret) {
+      setMessage("Add the admin secret first.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    setActionStatus("loading");
+    setMessageStatus("loading");
+
+    try {
+      const nextIndex = (cupSnapshotData?.history.length ?? 0) + 1;
+      const response = await fetch("/api/admin/cup-seer-snapshots", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ label: `Week ${nextIndex}` }),
+      });
+      const payload = (await response.json()) as CupSeerSnapshotDashboard & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Cup snapshot save failed.");
+      }
+
+      setCupSnapshotData(payload);
+      setActionStatus("success");
+      setMessageStatus("success");
+      setMessage(
+        `Saved ${payload.current?.label ?? "Cup Seer snapshot"} with ${
+          payload.current?.candidates.length ?? 0
+        } teams in the final-eight lane.`,
+      );
+    } catch (error) {
+      setActionStatus("error");
+      setMessageStatus("error");
+      setMessage(
+        error instanceof Error ? error.message : "Cup snapshot save failed.",
+      );
+    }
+  }
+
   return (
     <main className="admin-shell">
       <section className="admin-topbar">
@@ -889,6 +991,19 @@ export default function AdminPage() {
           Sync market pulse
         </button>
         <button
+          className="admin-command"
+          type="button"
+          onClick={() => void saveCupSeerSnapshot()}
+          disabled={actionStatus === "loading" || !secret}
+        >
+          {actionStatus === "loading" ? (
+            <LoaderCircle size={18} className="spin" />
+          ) : (
+            <Trophy size={18} />
+          )}
+          Save final 8 snapshot
+        </button>
+        <button
           className="admin-command primary"
           type="button"
           onClick={() => void saveVenueOverrides()}
@@ -901,6 +1016,13 @@ export default function AdminPage() {
       <p className={`admin-message ${messageStatus}`}>{message}</p>
 
       <SeerVersionLog hasData={hasSeerLogData} />
+
+      <CupSnapshotPanel
+        data={cupSnapshotData}
+        hasSecret={Boolean(secret)}
+        onSave={() => void saveCupSeerSnapshot()}
+        actionStatus={actionStatus}
+      />
 
       <MarketPulsePanel
         candidateMatches={marketPulseMatches}
@@ -1050,6 +1172,139 @@ function SeerVersionLog({ hasData }: { hasData: boolean }) {
       </div>
     </section>
   );
+}
+
+function CupSnapshotPanel({
+  data,
+  hasSecret,
+  onSave,
+  actionStatus,
+}: {
+  data: CupSeerSnapshotDashboard | null;
+  hasSecret: boolean;
+  onSave: () => void;
+  actionStatus: ActionStatus;
+}) {
+  const current = data?.current;
+
+  return (
+    <section className="admin-panel cup-snapshot-panel">
+      <div className="admin-table-header">
+        <div>
+          <p className="eyebrow">Cup Seer memory</p>
+          <h2>Final 8 weekly lane</h2>
+        </div>
+        <div className="traffic-generated">
+          <Trophy size={16} />
+          {current ? formatAdminTime(current.generatedAt) : "No snapshot yet"}
+        </div>
+      </div>
+
+      {!hasSecret ? (
+        <div className="traffic-empty">
+          <Trophy size={22} />
+          <strong>Final 8 memory locked</strong>
+          <span>Add the admin secret to load or save weekly Cup Seer snapshots.</span>
+        </div>
+      ) : !current ? (
+        <div className="traffic-empty">
+          <Trophy size={22} />
+          <strong>No final 8 snapshot yet</strong>
+          <span>
+            Once Week 1 is complete, save a snapshot to start tracking movement.
+          </span>
+          <button
+            className="admin-command model-save-button"
+            disabled={actionStatus === "loading"}
+            onClick={onSave}
+            type="button"
+          >
+            {actionStatus === "loading" ? (
+              <LoaderCircle size={18} className="spin" />
+            ) : (
+              <Save size={18} />
+            )}
+            Save first snapshot
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="cup-snapshot-head">
+            <div>
+              <span>Current lane</span>
+              <strong>{current.label}</strong>
+              <em>{current.candidates.length} teams · R16 path included</em>
+            </div>
+            <button
+              className="admin-command"
+              disabled={actionStatus === "loading"}
+              onClick={onSave}
+              type="button"
+            >
+              {actionStatus === "loading" ? (
+                <LoaderCircle size={18} className="spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              Save new week
+            </button>
+          </div>
+
+          <div className="cup-snapshot-list">
+            {current.candidates.map((candidate) => (
+              <div className="cup-snapshot-row" key={candidate.team.code}>
+                <b>#{candidate.rank}</b>
+                <span
+                  className="cup-snapshot-team-dot"
+                  style={{ background: candidate.team.color }}
+                />
+                <strong>{candidate.team.name}</strong>
+                <em>{candidate.signal}% lane</em>
+                <em>{candidate.advanceProbability}% R16</em>
+                <span className={rankDeltaClass(candidate.rankDelta)}>
+                  {formatRankDelta(candidate.rankDelta)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {data.history.length > 1 ? (
+            <p className="admin-muted">
+              History:{" "}
+              {data.history
+                .slice(1)
+                .map((snapshot) => snapshot.label)
+                .join(" · ")}
+            </p>
+          ) : (
+            <p className="admin-muted">
+              Save again after Week 2 and the movement column will show who rose,
+              fell, or entered the lane.
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function formatRankDelta(delta: number | null) {
+  if (delta === null) {
+    return "new";
+  }
+
+  if (delta === 0) {
+    return "hold";
+  }
+
+  return delta > 0 ? `+${delta}` : `${delta}`;
+}
+
+function rankDeltaClass(delta: number | null) {
+  return [
+    "cup-rank-delta",
+    delta === null ? "new" : delta > 0 ? "up" : delta < 0 ? "down" : "hold",
+  ].join(" ");
 }
 
 function MarketPulsePanel({
