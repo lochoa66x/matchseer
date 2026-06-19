@@ -2986,34 +2986,34 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       limit ${rowLimit}
     ),
     latest_weather as (
-      select distinct on (match_id)
-        match_id,
-        temperature_c,
-        wind_kph,
-        summary
+      select distinct on (weather_snapshots.match_id)
+        weather_snapshots.match_id,
+        weather_snapshots.temperature_c,
+        weather_snapshots.wind_kph,
+        weather_snapshots.summary
       from weather_snapshots
       join target_matches on target_matches.id = weather_snapshots.match_id
-      order by match_id, captured_at desc
+      order by weather_snapshots.match_id, weather_snapshots.captured_at desc
     ),
     latest_forecast as (
-      select distinct on (match_id)
-        id,
-        match_id,
-        version,
-        home_win_probability,
-        draw_probability,
-        away_win_probability,
-        projected_score,
-        confidence,
-        chaos,
-        source_payload,
-        created_at
+      select distinct on (forecasts.match_id)
+        forecasts.id,
+        forecasts.match_id,
+        forecasts.version,
+        forecasts.home_win_probability,
+        forecasts.draw_probability,
+        forecasts.away_win_probability,
+        forecasts.projected_score,
+        forecasts.confidence,
+        forecasts.chaos,
+        forecasts.source_payload,
+        forecasts.created_at
       from forecasts
       join target_matches on target_matches.id = forecasts.match_id
-      order by match_id, version desc, created_at desc
+      order by forecasts.match_id, forecasts.version desc, forecasts.created_at desc
     ),
     latest_market_pulse as (
-      select distinct on (match_id)
+      select distinct on (forecasts.match_id)
         forecasts.match_id,
         forecasts.source_payload -> 'marketPulse' as market_pulse_payload
       from forecasts
