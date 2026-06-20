@@ -108,12 +108,13 @@ const copy = {
     loadingStepReadout: "Preparing the Seer readout",
     loadingCount: "Reading",
     loadingCountCopy: "match feed",
+    featuredCountCopy: "featured reads",
     loadingSlow: "Still reading the feed. The Seer is checking one more signal.",
     feedErrorTitle: "The Seer lost the signal.",
     feedErrorCopy: "Try refreshing in a moment while the fixtures come back into focus.",
     feedEmptyTitle: "No matches loaded yet.",
     feedEmptyCopy: "The Seer is still checking the signal.",
-    sampleLabel: "Sample readout",
+    sampleLabel: "Featured Seer Readout",
     sampleTitle: "Canada vs Morocco",
     sampleSignal: "Oracle signal: Balanced",
     sampleWeather: "Weather: Mild",
@@ -256,12 +257,13 @@ const copy = {
     loadingStepReadout: "Preparando la lectura del Vidente",
     loadingCount: "Leyendo",
     loadingCountCopy: "fuente de partidos",
+    featuredCountCopy: "lecturas destacadas",
     loadingSlow: "Aún leyendo la fuente. El Vidente revisa una señal más.",
     feedErrorTitle: "El Vidente perdió la señal.",
     feedErrorCopy: "Intenta refrescar en un momento mientras los partidos vuelven a foco.",
     feedEmptyTitle: "Aún no cargan partidos.",
     feedEmptyCopy: "El Vidente sigue revisando la señal.",
-    sampleLabel: "Lectura de muestra",
+    sampleLabel: "Lectura destacada del Vidente",
     sampleTitle: "Canadá vs Marruecos",
     sampleSignal: "Señal oráculo: Balanceada",
     sampleWeather: "Clima: Suave",
@@ -404,12 +406,13 @@ const copy = {
     loadingStepReadout: "Préparation de la lecture",
     loadingCount: "Lecture",
     loadingCountCopy: "flux des matchs",
+    featuredCountCopy: "lectures phares",
     loadingSlow: "Lecture toujours en cours. Le voyant vérifie un dernier signal.",
     feedErrorTitle: "Le voyant a perdu le signal.",
     feedErrorCopy: "Rafraîchis dans un instant pendant que les affiches reviennent au point.",
     feedEmptyTitle: "Aucun match chargé pour le moment.",
     feedEmptyCopy: "Le voyant vérifie encore le signal.",
-    sampleLabel: "Lecture exemple",
+    sampleLabel: "Lecture phare du voyant",
     sampleTitle: "Canada vs Maroc",
     sampleSignal: "Signal oracle : équilibré",
     sampleWeather: "Météo : douce",
@@ -529,6 +532,172 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 type AppCopy = typeof copy.en;
 
+type FeaturedFallbackConfig = Pick<
+  Match,
+  "id" | "status" | "startsAt" | "group" | "time" | "venue" | "city" | "home" | "away" | "weather"
+> & {
+  forecast: Match["forecast"];
+};
+
+const featuredFallbackMatches: Match[] = [
+  makeFeaturedFallbackMatch({
+    id: "fd-537341",
+    status: "Upcoming",
+    startsAt: "2026-06-20T00:30:00.000Z",
+    group: "Group C",
+    time: "8:30 PM",
+    venue: "Lincoln Financial Field",
+    city: "Philadelphia",
+    home: makeFeaturedTeam("Brazil", "BRA", "#e1251b", 90, 87, 81, 78),
+    away: makeFeaturedTeam("Haiti", "HAI", "#325dff", 66, 64, 65, 68),
+    forecast: makeFeaturedForecast(77, 15, 8, 80, 40, "3-0"),
+    weather: makeFeaturedWeather("24°C", "14 km/h", "Cloud cover overhead, but the ball should still move cleanly."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "fd-537347",
+    status: "Upcoming",
+    startsAt: "2026-06-20T03:00:00.000Z",
+    group: "Group D",
+    time: "11:00 PM",
+    venue: "Levi's Stadium",
+    city: "San Francisco Bay Area",
+    home: makeFeaturedTeam("Turkey", "TUR", "#f5c542", 75, 77, 72, 74),
+    away: makeFeaturedTeam("Paraguay", "PAR", "#0b8fa8", 72, 71, 76, 78),
+    forecast: makeFeaturedForecast(43, 27, 30, 55, 60, "1-1"),
+    weather: makeFeaturedWeather("14°C", "5 km/h", "Clear skies, clean touches, and fast pitch rhythm."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "fd-537359",
+    status: "Upcoming",
+    startsAt: "2026-06-20T17:00:00.000Z",
+    group: "Group F",
+    time: "1:00 PM",
+    venue: "NRG Stadium",
+    city: "Houston",
+    home: makeFeaturedTeam("Netherlands", "NED", "#d94141", 85, 86, 83, 81),
+    away: makeFeaturedTeam("Sweden", "SWE", "#c1272d", 58, 87, 73, 55),
+    forecast: makeFeaturedForecast(61, 23, 16, 63, 61, "1-0"),
+    weather: makeFeaturedWeather("27°C", "6 km/h", "Shower risk adds a little chaos to every bounce."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "fd-537353",
+    status: "Upcoming",
+    startsAt: "2026-06-20T20:00:00.000Z",
+    group: "Group E",
+    time: "4:00 PM",
+    venue: "BMO Field",
+    city: "Toronto",
+    home: makeFeaturedTeam("Germany", "GER", "#c1272d", 85, 85, 79, 81),
+    away: makeFeaturedTeam("Ivory Coast", "CIV", "#11a36a", 79, 75, 74, 77),
+    forecast: makeFeaturedForecast(65, 21, 14, 68, 51, "2-1"),
+    weather: makeFeaturedWeather("16°C", "10 km/h", "Cloud cover overhead, but the ball should still move cleanly."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "fd-537354",
+    status: "Upcoming",
+    startsAt: "2026-06-21T00:00:00.000Z",
+    group: "Group E",
+    time: "8:00 PM",
+    venue: "Arrowhead Stadium",
+    city: "Kansas City",
+    home: makeFeaturedTeam("Ecuador", "ECU", "#c1272d", 78, 79, 77, 73),
+    away: makeFeaturedTeam("Curaçao", "CUW", "#8d5cf6", 62, 66, 59, 64),
+    forecast: makeFeaturedForecast(74, 17, 9, 76, 45, "3-0"),
+    weather: makeFeaturedWeather("20°C", "6 km/h", "Clear skies, clean touches, and fast pitch rhythm."),
+  }),
+];
+
+function makeFeaturedTeam(
+  name: string,
+  code: string,
+  color: string,
+  attack: number,
+  control: number,
+  defense: number,
+  setPieces: number,
+): Team {
+  return {
+    name,
+    code,
+    color,
+    record: "Featured feed",
+    form: [],
+    attack,
+    control,
+    defense,
+    setPieces,
+  };
+}
+
+function makeFeaturedForecast(
+  home: number,
+  draw: number,
+  away: number,
+  confidence: number,
+  chaos: number,
+  projected: string,
+): Match["forecast"] {
+  const leader =
+    home >= away && home >= draw ? "home" : away >= home && away >= draw ? "away" : "draw";
+
+  return {
+    home,
+    draw,
+    away,
+    confidence,
+    chaos,
+    projected,
+    version: 3.5,
+    generatedAt: "2026-06-19T23:37:00.000Z",
+    tone: {
+      en: "A featured readout is ready while the live feed warms up.",
+      es: "Una lectura destacada está lista mientras despierta la fuente en vivo.",
+      fr: "Une lecture phare est prête pendant que le flux en direct se réveille.",
+    },
+    reasons: {
+      en: [`The featured feed leans ${leader} while the live signal loads.`],
+      es: [`La lectura destacada se inclina por ${leader} mientras carga la señal en vivo.`],
+      fr: [`La lecture phare penche vers ${leader} pendant que le signal en direct charge.`],
+    },
+    trail: [
+      {
+        id: "featured-feed",
+        label: "Featured feed",
+        tone: "steady",
+        text: {
+          en: "A real scheduled match is staged early so the page never feels empty.",
+          es: "Un partido real programado aparece temprano para que la página nunca se sienta vacía.",
+          fr: "Un vrai match programmé apparaît tôt pour que la page ne semble jamais vide.",
+        },
+      },
+    ],
+  };
+}
+
+function makeFeaturedWeather(temp: string, wind: string, mood: string): Match["weather"] {
+  return {
+    temp,
+    wind,
+    mood: {
+      en: mood,
+      es: mood,
+      fr: mood,
+    },
+  };
+}
+
+function makeFeaturedFallbackMatch(config: FeaturedFallbackConfig): Match {
+  return {
+    ...config,
+    forecast: config.forecast,
+    referee: {
+      name: "TBD",
+      cardRisk: "Pending",
+    },
+    players: [],
+  };
+}
+
 function MatchFeedStateCard({
   kind,
   slow = false,
@@ -543,7 +712,13 @@ function MatchFeedStateCard({
   return (
     <div className={cx("match-feed-state-card", isLoading ? "loading" : "error")} role="status">
       <div className="match-feed-state-icon">
-        {isLoading ? <LoaderCircle size={22} /> : <RefreshCcw size={22} />}
+        <img
+          className="state-brand-mark"
+          src="/brand/matchseer-app-icon.svg"
+          alt=""
+          aria-hidden="true"
+        />
+        {isLoading ? <LoaderCircle className="state-spinner" size={22} /> : <RefreshCcw size={20} />}
       </div>
       <div>
         <strong>{isLoading ? t.loadingTitle : t.feedErrorTitle}</strong>
@@ -573,8 +748,16 @@ function MatchFeedStateCard({
 function FeedEmptyState({ t, feed = false }: { t: AppCopy; feed?: boolean }) {
   return (
     <div className="empty-match-state match-feed-empty">
-      <strong>{feed ? t.feedEmptyTitle : t.noMatches}</strong>
-      <span>{feed ? t.feedEmptyCopy : t.filterEmptyCopy}</span>
+      <img
+        className="empty-state-brand-mark"
+        src="/brand/matchseer-app-icon.svg"
+        alt=""
+        aria-hidden="true"
+      />
+      <div>
+        <strong>{feed ? t.feedEmptyTitle : t.noMatches}</strong>
+        <span>{feed ? t.feedEmptyCopy : t.filterEmptyCopy}</span>
+      </div>
     </div>
   );
 }
@@ -583,7 +766,12 @@ function MatchFeedDetailSkeleton({ slow, t }: { slow: boolean; t: AppCopy }) {
   return (
     <div className="feed-detail-skeleton" aria-hidden="true">
       <div className="section-heading">
-        <Sparkles size={18} />
+        <img
+          className="inline-brand-mark"
+          src="/brand/matchseer-app-icon.svg"
+          alt=""
+          aria-hidden="true"
+        />
         <span>{t.signal}</span>
       </div>
       <div className="skeleton-title" />
@@ -723,7 +911,8 @@ type CachedMatchFeed = {
 
 export default function Home() {
   const [language, setLanguage] = useState<Language>("en");
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<Match[]>(featuredFallbackMatches);
+  const [usingFeaturedFallback, setUsingFeaturedFallback] = useState(true);
   const [activeMatchId, setActiveMatchId] = useState("");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
   const [groupFilter, setGroupFilter] = useState("all");
@@ -760,6 +949,7 @@ export default function Home() {
 
     if (cachedMatches.length > 0) {
       setMatches(cachedMatches);
+      setUsingFeaturedFallback(false);
       setMatchFeedStatus("success");
       setMatchFeedSlow(false);
       setActiveMatchId((current) =>
@@ -810,7 +1000,20 @@ export default function Home() {
         const payload = (await response.json()) as MatchesResponse;
 
         if (!ignore) {
+          if (payload.matches.length === 0 && usingFeaturedFallback) {
+            setMatches(featuredFallbackMatches);
+            setMatchFeedStatus("success");
+            setActiveMatchId((current) =>
+              featuredFallbackMatches.some((match) => match.id === current)
+                ? current
+                : featuredFallbackMatches[0]?.id ?? "",
+            );
+            setMatchFeedSlow(false);
+            return;
+          }
+
           setMatches(payload.matches);
+          setUsingFeaturedFallback(false);
           setMatchFeedStatus(payload.matches.length > 0 ? "success" : "empty");
           setMatchFeedSlow(false);
           writeCachedMatchFeed(payload.matches);
@@ -1174,7 +1377,9 @@ export default function Home() {
               <strong>{matches.length > 0 ? visibleMatches.length : t.loadingCount}</strong>
               <span>
                 {matches.length > 0
-                  ? `/ ${matches.length} ${t.matches}`
+                  ? usingFeaturedFallback
+                    ? `/ ${matches.length} ${t.featuredCountCopy}`
+                    : `/ ${matches.length} ${t.matches}`
                   : t.loadingCountCopy}
               </span>
             </div>
@@ -1359,11 +1564,13 @@ export default function Home() {
         </div>
       </section>
 
-      <SeerScoreboardBoard
-        scoreboard={seerScoreboard}
-        t={t}
-        onSelectMatch={(matchId) => setActiveMatchId(matchId)}
-      />
+      {!usingFeaturedFallback && (
+        <SeerScoreboardBoard
+          scoreboard={seerScoreboard}
+          t={t}
+          onSelectMatch={(matchId) => setActiveMatchId(matchId)}
+        />
+      )}
 
       {activeMatch.players.length > 0 && (
         <section className="content-grid content-grid-support player-detail-only">
@@ -1380,22 +1587,24 @@ export default function Home() {
         </section>
       )}
 
-      <CupSeerBoard
-        candidates={cupCandidates}
-        language={language}
-        onSelectTeam={(teamName) => {
-          const candidateMatch = matches.find(
-            (match) =>
-              match.home.name === teamName || match.away.name === teamName,
-          );
+      {!usingFeaturedFallback && (
+        <CupSeerBoard
+          candidates={cupCandidates}
+          language={language}
+          onSelectTeam={(teamName) => {
+            const candidateMatch = matches.find(
+              (match) =>
+                match.home.name === teamName || match.away.name === teamName,
+            );
 
-          if (candidateMatch) {
-            setActiveMatchId(candidateMatch.id);
-          }
-        }}
-        pulseLabel={cupPulseLabel}
-        t={t}
-      />
+            if (candidateMatch) {
+              setActiveMatchId(candidateMatch.id);
+            }
+          }}
+          pulseLabel={cupPulseLabel}
+          t={t}
+        />
+      )}
 
       <SeerLensStrip t={t} />
     </main>
@@ -3070,7 +3279,12 @@ function ForecastView({
       <div className="forecast-card primary-card">
         <div className="forecast-card-head">
           <div className="section-heading">
-            <Sparkles size={18} />
+            <img
+              className="inline-brand-mark"
+              src="/brand/matchseer-app-icon.svg"
+              alt=""
+              aria-hidden="true"
+            />
             <span>{t.signal}</span>
           </div>
           <div className="oracle-actions">

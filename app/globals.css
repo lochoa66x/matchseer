@@ -4736,6 +4736,7 @@ body {
 }
 
 .match-feed-state-icon {
+  position: relative;
   display: inline-grid;
   width: 42px;
   height: 42px;
@@ -4746,7 +4747,23 @@ body {
   border-radius: 10px;
 }
 
-.match-feed-state-card.loading .match-feed-state-icon svg {
+.state-brand-mark {
+  width: 24px;
+  height: 24px;
+  opacity: 0.88;
+}
+
+.state-spinner {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 3px;
+  color: #f7c51d;
+  background: rgba(8, 12, 22, 0.92);
+  border-radius: 999px;
+}
+
+.match-feed-state-card.loading .state-spinner {
   animation: seer-spin 1.2s linear infinite;
 }
 
@@ -4881,17 +4898,32 @@ body {
 }
 
 .match-feed-empty {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
+.empty-state-brand-mark,
+.inline-brand-mark {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.empty-state-brand-mark {
+  margin-right: 6px;
+  opacity: 0.86;
+}
+
 .match-feed-empty strong {
+  display: block;
   color: #fff;
   font-size: 0.98rem;
   font-weight: 950;
 }
 
 .match-feed-empty span {
+  display: block;
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 850;

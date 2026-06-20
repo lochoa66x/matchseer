@@ -563,7 +563,7 @@ export type TeamRatings = {
 };
 
 const fallbackNote =
-  "Live match data is unavailable. Demo fixtures are not shown in production.";
+  "Live match data is unavailable. The public page will use its featured readout fallback until the feed returns.";
 
 async function loadNeon() {
   try {
@@ -2946,7 +2946,7 @@ export function getDatabaseReadiness() {
       ? "@neondatabase/serverless"
       : "waiting-for-database-url",
     note: hasDatabaseUrl
-      ? "The API reads Neon/provider data only. Demo fixtures are not returned if the database is unavailable."
+      ? "The API reads Neon/provider data only. If the database is unavailable, the public page keeps its featured readout fallback."
       : fallbackNote,
   };
 }
