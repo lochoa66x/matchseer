@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type {
   ForecastInterpretation,
+  GoalModelForecast,
   KnockoutForecast,
   Language,
   MarketPulse,
@@ -2355,7 +2356,7 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.6-knockout-rounds",
+      modelVersion: "matchseer-v3.7-xg-source",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -2364,6 +2365,7 @@ export async function syncFootballDataSnapshot(
         : null,
       homeRatings,
       awayRatings,
+      goalModel: forecast.goalModel,
       knockout: forecast.knockout,
       modifiers: forecast.modifiers,
       // Carry any saved crowd signal forward so it survives forecast re-versioning
@@ -2371,7 +2373,7 @@ export async function syncFootballDataSnapshot(
       marketPulse: extractStoredMarketPulse(existingForecast?.source_payload),
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, and stage-specific knockout resolution logic.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, knockout resolution logic, and xG-derived outcome probabilities.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -3290,6 +3292,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const awayForecast = toNumber(row.away_win_probability);
   const confidence = toNumber(row.confidence);
   const chaos = toNumber(row.chaos);
+  const goalModel = toGoalModelForecast(sourcePayload);
   const knockout = toKnockoutForecast(sourcePayload);
   const marketPulse = toMarketPulse(sourcePayload, {
     homeForecast,
@@ -3357,6 +3360,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
           chaos,
           projected: projectedScore,
           marketPulse,
+          goalModel,
           knockout,
           trail: buildPublicSeerTrail({
             awayName: row.away_name,
@@ -3420,6 +3424,76 @@ export function sourcePayloadWithRecoveredMarketPulse(
   return {
     ...(payload ?? {}),
     marketPulse: recovered,
+  };
+}
+
+function toGoalModelForecast(
+  sourcePayload: Record<string, unknown> | null,
+): GoalModelForecast | null {
+  const rawGoalModel = readPayloadRecord(sourcePayload?.goalModel);
+
+  if (!rawGoalModel) {
+    return null;
+  }
+
+  const projectedScore = readPayloadString(rawGoalModel.projectedScore);
+
+  if (!projectedScore) {
+    return null;
+  }
+
+  return {
+    homeXg: roundXg(readPayloadNumber(rawGoalModel.homeXg) ?? 0),
+    awayXg: roundXg(readPayloadNumber(rawGoalModel.awayXg) ?? 0),
+    totalXg: roundXg(readPayloadNumber(rawGoalModel.totalXg) ?? 0),
+    homeCleanSheet: clampInteger(rawGoalModel.homeCleanSheet, 0, 100),
+    awayCleanSheet: clampInteger(rawGoalModel.awayCleanSheet, 0, 100),
+    over25: clampInteger(rawGoalModel.over25, 0, 100),
+    under25: clampInteger(rawGoalModel.under25, 0, 100),
+    bothTeamsScore: clampInteger(rawGoalModel.bothTeamsScore, 0, 100),
+    projectedScore,
+    signals: readPayloadArray(rawGoalModel.signals).flatMap((signal) => {
+      const record = readPayloadRecord(signal);
+      const id = readPayloadString(record?.id);
+      const label = readPayloadRecord(record?.label);
+      const text = readPayloadRecord(record?.text);
+      const value = readPayloadNumber(record?.value);
+      const tone = readPayloadString(record?.tone);
+
+      if (
+        !id ||
+        value === null ||
+        (tone !== "over" &&
+          tone !== "under" &&
+          tone !== "clean" &&
+          tone !== "balanced")
+      ) {
+        return [];
+      }
+
+      const signalTone: GoalModelForecast["signals"][number]["tone"] = tone;
+      const englishLabel = readPayloadString(label?.en) ?? "Goal model";
+      const englishText =
+        readPayloadString(text?.en) ?? "The xG model keeps this goal script live.";
+
+      return [
+        {
+          id,
+          label: {
+            en: englishLabel,
+            es: readPayloadString(label?.es) ?? englishLabel,
+            fr: readPayloadString(label?.fr) ?? englishLabel,
+          },
+          value: clampInteger(value, 0, 100),
+          tone: signalTone,
+          text: {
+            en: englishText,
+            es: readPayloadString(text?.es) ?? englishText,
+            fr: readPayloadString(text?.fr) ?? englishText,
+          },
+        },
+      ];
+    }),
   };
 }
 
@@ -4255,6 +4329,7 @@ function createForecastFingerprint({
         confidence: forecast.confidence,
         chaos: forecast.chaos,
         projected: forecast.projected,
+        goalModel: forecast.goalModel,
         knockout: forecast.knockout,
         modifiers: forecast.modifiers,
         factorExplanations: forecast.factors.map((factor) => ({
@@ -4627,39 +4702,14 @@ function matchseerV3Forecast({
     36,
     82,
   );
-  const rawDraw = Math.round(
-    28 +
-      (chaos - 58) * 0.09 -
-      Math.abs(powerGap) * 0.4 +
-      weather.drawDelta +
-      knockout.drawDelta,
-  );
-  const draw = clamp(
-    rawDraw,
-    knockout.drawFloor,
-    knockout.drawCeiling,
-  );
-  const nonDrawPool = 100 - draw;
-  const homeShare = 1 / (1 + Math.exp(-powerGap / 10));
-  let home = clamp(Math.round(nonDrawPool * homeShare), 8, 84);
-  let away = 100 - draw - home;
-
-  if (away < 8) {
-    away = 8;
-    home = 100 - draw - away;
-  }
-
-  if (home < 8) {
-    home = 8;
-    away = 100 - draw - home;
-  }
-
-  const homeXg = expectedGoals(
+  const xgPowerSwing = clampNumber(powerGap * 0.014, -0.38, 0.38);
+  const rawHomeXg = expectedGoals(
     homeRatings,
     awayRatings,
     homeVenueBoost,
     weather.xgDelta +
       knockout.xgDelta +
+      xgPowerSwing +
       weather.homeXgDelta +
       referee.homeXgDelta +
       vipSpotlight.homeXgDelta +
@@ -4667,12 +4717,13 @@ function matchseerV3Forecast({
       availability.homeXgPenalty -
       fatigue.homeXgPenalty,
   );
-  const awayXg = expectedGoals(
+  const rawAwayXg = expectedGoals(
     awayRatings,
     homeRatings,
     awayVenueBoost,
     weather.xgDelta +
       knockout.xgDelta +
+      -xgPowerSwing +
       weather.awayXgDelta +
       referee.awayXgDelta +
       vipSpotlight.awayXgDelta +
@@ -4680,6 +4731,10 @@ function matchseerV3Forecast({
       availability.awayXgPenalty -
       fatigue.awayXgPenalty,
   );
+  const preliminaryGoalModel = deriveForecastFromExpectedGoals({
+    homeXg: rawHomeXg,
+    awayXg: rawAwayXg,
+  });
   const tournamentReality = tournamentRealityScoreModifier({
     homeTeam,
     awayTeam,
@@ -4687,19 +4742,21 @@ function matchseerV3Forecast({
     awayRatings,
     homePower,
     awayPower,
-    homeProbability: home,
-    awayProbability: away,
+    homeProbability: preliminaryGoalModel.homeWin,
+    awayProbability: preliminaryGoalModel.awayWin,
     chaos,
     context,
   });
-  const projected = projectedScoreline({
-    homeProbability: home,
-    drawProbability: draw,
-    awayProbability: away,
-    homeXg,
-    awayXg,
+  const finalXg = applyTournamentRealityToExpectedGoals({
+    homeXg: rawHomeXg,
+    awayXg: rawAwayXg,
     tournamentReality,
   });
+  const goalModel = deriveForecastFromExpectedGoals(finalXg);
+  const home = goalModel.homeWin;
+  const draw = goalModel.draw;
+  const away = goalModel.awayWin;
+  const projected = goalModel.projectedScore;
   const knockoutLane = knockout.isKnockout
     ? buildKnockoutResolutionLane({
         phase,
@@ -4787,6 +4844,7 @@ function matchseerV3Forecast({
     ),
     chaos,
     projected,
+    goalModel,
     knockout: knockoutLane,
     modifiers: {
       basePower: {
@@ -4805,6 +4863,23 @@ function matchseerV3Forecast({
       venue: {
         home: homeVenueBoost,
         away: awayVenueBoost,
+      },
+      xg: {
+        rawHome: roundXg(rawHomeXg),
+        rawAway: roundXg(rawAwayXg),
+        home: goalModel.homeXg,
+        away: goalModel.awayXg,
+        total: goalModel.totalXg,
+        powerSwing: roundModifier(xgPowerSwing),
+        homeWin: goalModel.homeWin,
+        draw: goalModel.draw,
+        awayWin: goalModel.awayWin,
+        projected: goalModel.projectedScore,
+        homeCleanSheet: goalModel.homeCleanSheet,
+        awayCleanSheet: goalModel.awayCleanSheet,
+        over25: goalModel.over25,
+        under25: goalModel.under25,
+        bothTeamsScore: goalModel.bothTeamsScore,
       },
       weather: weather.payload,
       referee: referee.payload,
@@ -6241,116 +6316,324 @@ function expectedGoals(
   );
 }
 
-function projectedScoreline({
-  homeProbability,
-  drawProbability,
-  awayProbability,
+type GoalOutcomeSide = "home" | "draw" | "away";
+
+type GoalDistributionCell = {
+  homeGoals: number;
+  awayGoals: number;
+  probability: number;
+  side: GoalOutcomeSide;
+};
+
+export type ExpectedGoalsDerivation = GoalModelForecast & {
+  homeWin: number;
+  draw: number;
+  awayWin: number;
+  projectedSide: GoalOutcomeSide;
+};
+
+export function deriveForecastFromExpectedGoals({
+  homeXg,
+  awayXg,
+}: {
+  homeXg: number;
+  awayXg: number;
+}): ExpectedGoalsDerivation {
+  const homeDistribution = poissonDistribution(homeXg);
+  const awayDistribution = poissonDistribution(awayXg);
+  const cells: GoalDistributionCell[] = [];
+  let homeShare = 0;
+  let drawShare = 0;
+  let awayShare = 0;
+  let under25Share = 0;
+  let totalMass = 0;
+
+  for (let homeGoals = 0; homeGoals < homeDistribution.length; homeGoals += 1) {
+    for (let awayGoals = 0; awayGoals < awayDistribution.length; awayGoals += 1) {
+      const probability = homeDistribution[homeGoals] * awayDistribution[awayGoals];
+      const side = goalOutcomeSide(homeGoals, awayGoals);
+
+      totalMass += probability;
+
+      if (side === "home") {
+        homeShare += probability;
+      } else if (side === "away") {
+        awayShare += probability;
+      } else {
+        drawShare += probability;
+      }
+
+      if (homeGoals + awayGoals <= 2) {
+        under25Share += probability;
+      }
+
+      cells.push({ homeGoals, awayGoals, probability, side });
+    }
+  }
+
+  const normalizedHomeShare = homeShare / totalMass;
+  const normalizedDrawShare = drawShare / totalMass;
+  const normalizedAwayShare = awayShare / totalMass;
+  const percentages = outcomePercentages({
+    home: normalizedHomeShare,
+    draw: normalizedDrawShare,
+    away: normalizedAwayShare,
+  });
+  const projectedSide = leadingSide(
+    percentages.home,
+    percentages.draw,
+    percentages.away,
+  );
+  const projectedCell =
+    cells
+      .filter((cell) => cell.side === projectedSide)
+      .sort((left, right) => right.probability - left.probability)[0] ??
+    cells.sort((left, right) => right.probability - left.probability)[0] ?? {
+      homeGoals: 0,
+      awayGoals: 0,
+      probability: 0,
+      side: "draw" as const,
+    };
+  const homeCleanSheet = Math.round(Math.exp(-awayXg) * 100);
+  const awayCleanSheet = Math.round(Math.exp(-homeXg) * 100);
+  const under25 = Math.round((under25Share / totalMass) * 100);
+  const over25 = 100 - under25;
+  const bothTeamsScore = Math.round(
+    (1 - Math.exp(-homeXg)) * (1 - Math.exp(-awayXg)) * 100,
+  );
+
+  return {
+    homeXg: roundXg(homeXg),
+    awayXg: roundXg(awayXg),
+    totalXg: roundXg(homeXg + awayXg),
+    homeWin: percentages.home,
+    draw: percentages.draw,
+    awayWin: percentages.away,
+    projectedSide,
+    projectedScore: `${projectedCell.homeGoals}-${projectedCell.awayGoals}`,
+    homeCleanSheet,
+    awayCleanSheet,
+    over25,
+    under25,
+    bothTeamsScore,
+    signals: goalModelSignals({
+      homeCleanSheet,
+      awayCleanSheet,
+      over25,
+      under25,
+      bothTeamsScore,
+    }),
+  };
+}
+
+function poissonDistribution(lambda: number, maxGoals = 8) {
+  const probabilities: number[] = [Math.exp(-lambda)];
+
+  for (let goals = 1; goals <= maxGoals; goals += 1) {
+    probabilities[goals] = (probabilities[goals - 1] * lambda) / goals;
+  }
+
+  return probabilities;
+}
+
+function outcomePercentages({
+  home,
+  draw,
+  away,
+}: {
+  home: number;
+  draw: number;
+  away: number;
+}) {
+  const raw = {
+    home: home * 100,
+    draw: draw * 100,
+    away: away * 100,
+  };
+  const rounded = {
+    home: Math.round(raw.home),
+    draw: Math.round(raw.draw),
+    away: Math.round(raw.away),
+  };
+  const total = rounded.home + rounded.draw + rounded.away;
+  const diff = 100 - total;
+  const largest = Object.entries(raw).sort(
+    (left, right) => right[1] - left[1],
+  )[0]?.[0] as "home" | "draw" | "away" | undefined;
+
+  if (largest && diff !== 0) {
+    rounded[largest] = clamp(rounded[largest] + diff, 0, 100);
+  }
+
+  return rounded;
+}
+
+function goalOutcomeSide(homeGoals: number, awayGoals: number): GoalOutcomeSide {
+  if (homeGoals > awayGoals) {
+    return "home";
+  }
+
+  if (awayGoals > homeGoals) {
+    return "away";
+  }
+
+  return "draw";
+}
+
+function goalModelSignals({
+  homeCleanSheet,
+  awayCleanSheet,
+  over25,
+  under25,
+  bothTeamsScore,
+}: {
+  homeCleanSheet: number;
+  awayCleanSheet: number;
+  over25: number;
+  under25: number;
+  bothTeamsScore: number;
+}) {
+  const signals: GoalModelForecast["signals"] = [];
+  const cleanSheet = Math.max(homeCleanSheet, awayCleanSheet);
+
+  if (over25 >= 57) {
+    signals.push({
+      id: "over-lean",
+      label: { en: "Over lean", es: "Más goles", fr: "Plus de buts" },
+      value: over25,
+      tone: "over",
+      text: {
+        en: "The xG profile points toward a fuller scoreboard.",
+        es: "El perfil xG apunta a un marcador más cargado.",
+        fr: "Le profil xG pointe vers un score plus rempli.",
+      },
+    });
+  } else if (under25 >= 57) {
+    signals.push({
+      id: "under-lean",
+      label: { en: "Under lean", es: "Menos goles", fr: "Moins de buts" },
+      value: under25,
+      tone: "under",
+      text: {
+        en: "The xG profile sees a tighter total-goals lane.",
+        es: "El perfil xG ve una ruta más cerrada de goles totales.",
+        fr: "Le profil xG voit une voie plus serrée sur le total de buts.",
+      },
+    });
+  }
+
+  if (bothTeamsScore >= 54) {
+    signals.push({
+      id: "both-score",
+      label: { en: "Both score", es: "Ambos anotan", fr: "Les deux marquent" },
+      value: bothTeamsScore,
+      tone: "over",
+      text: {
+        en: "Both attacks have enough xG oxygen to find one.",
+        es: "Ambos ataques tienen suficiente oxígeno xG para encontrar uno.",
+        fr: "Les deux attaques ont assez d'oxygène xG pour en trouver un.",
+      },
+    });
+  }
+
+  if (cleanSheet >= 34) {
+    signals.push({
+      id: "clean-sheet-watch",
+      label: { en: "Clean sheet watch", es: "Portería en cero", fr: "Clean sheet" },
+      value: cleanSheet,
+      tone: "clean",
+      text: {
+        en: "One side has a live shutout lane in the xG model.",
+        es: "Un lado tiene una ruta viva para dejar el arco en cero.",
+        fr: "Un côté garde une vraie voie vers le match sans encaisser.",
+      },
+    });
+  }
+
+  if (signals.length === 0) {
+    signals.push({
+      id: "balanced-goals",
+      label: { en: "Balanced total", es: "Total balanceado", fr: "Total équilibré" },
+      value: Math.max(over25, under25),
+      tone: "balanced",
+      text: {
+        en: "The xG total stays near the middle: neither goal script dominates.",
+        es: "El total xG queda en el medio: ningún guion de goles domina.",
+        fr: "Le total xG reste au milieu : aucun scénario de buts ne domine.",
+      },
+    });
+  }
+
+  return signals.slice(0, 3);
+}
+
+function applyTournamentRealityToExpectedGoals({
   homeXg,
   awayXg,
   tournamentReality,
 }: {
-  homeProbability: number;
-  drawProbability: number;
-  awayProbability: number;
   homeXg: number;
   awayXg: number;
-  tournamentReality?: TournamentRealityModifier;
+  tournamentReality: TournamentRealityModifier;
 }) {
-  const isDrawish =
-    drawProbability >= Math.max(homeProbability, awayProbability) - 3;
-  let homeGoals = goalsFromXg(homeXg);
-  let awayGoals = goalsFromXg(awayXg);
-  const probabilityGap = homeProbability - awayProbability;
-
-  if (isDrawish) {
-    const drawGoals = homeXg + awayXg >= 2.9 ? 2 : homeXg + awayXg <= 1.7 ? 0 : 1;
-
-    return `${drawGoals}-${drawGoals}`;
+  if (!tournamentReality.side || tournamentReality.severity <= 0) {
+    return { homeXg, awayXg };
   }
 
-  if (probabilityGap >= 14 && homeGoals <= awayGoals) {
-    homeGoals = awayGoals + 1;
-  }
+  const severityLift = tournamentReality.severity * 0.14;
+  let adjustedHomeXg = homeXg;
+  let adjustedAwayXg = awayXg;
 
-  if (probabilityGap <= -14 && awayGoals <= homeGoals) {
-    awayGoals = homeGoals + 1;
-  }
+  if (tournamentReality.side === "home") {
+    adjustedHomeXg += severityLift;
 
-  if (probabilityGap >= 28 && awayGoals > 0 && homeXg - awayXg > 0.9) {
-    awayGoals -= 1;
-  }
+    if (tournamentReality.favoriteMinGoals > 0) {
+      adjustedHomeXg = Math.max(
+        adjustedHomeXg,
+        tournamentReality.favoriteMinGoals - 0.35,
+      );
+    }
 
-  if (probabilityGap <= -28 && homeGoals > 0 && awayXg - homeXg > 0.9) {
-    homeGoals -= 1;
-  }
+    if (tournamentReality.underdogMaxGoals !== null) {
+      const relief =
+        awayXg >= tournamentReality.underdogCapReliefXg ? 0.5 : 0.25;
 
-  if (tournamentReality?.side === "home") {
-    homeGoals = applyFavoriteFloor(homeGoals, tournamentReality.favoriteMinGoals);
-    awayGoals = applyUnderdogCap(
-      awayGoals,
-      awayXg,
-      tournamentReality.underdogMaxGoals,
-      tournamentReality.underdogCapReliefXg,
-    );
-
-    if (tournamentReality.minMargin > 0 && homeGoals - awayGoals < tournamentReality.minMargin) {
-      homeGoals = awayGoals + tournamentReality.minMargin;
+      adjustedAwayXg = Math.min(
+        adjustedAwayXg,
+        tournamentReality.underdogMaxGoals + relief,
+      );
     }
   }
 
-  if (tournamentReality?.side === "away") {
-    awayGoals = applyFavoriteFloor(awayGoals, tournamentReality.favoriteMinGoals);
-    homeGoals = applyUnderdogCap(
-      homeGoals,
-      homeXg,
-      tournamentReality.underdogMaxGoals,
-      tournamentReality.underdogCapReliefXg,
-    );
+  if (tournamentReality.side === "away") {
+    adjustedAwayXg += severityLift;
 
-    if (tournamentReality.minMargin > 0 && awayGoals - homeGoals < tournamentReality.minMargin) {
-      awayGoals = homeGoals + tournamentReality.minMargin;
+    if (tournamentReality.favoriteMinGoals > 0) {
+      adjustedAwayXg = Math.max(
+        adjustedAwayXg,
+        tournamentReality.favoriteMinGoals - 0.35,
+      );
+    }
+
+    if (tournamentReality.underdogMaxGoals !== null) {
+      const relief =
+        homeXg >= tournamentReality.underdogCapReliefXg ? 0.5 : 0.25;
+
+      adjustedHomeXg = Math.min(
+        adjustedHomeXg,
+        tournamentReality.underdogMaxGoals + relief,
+      );
     }
   }
 
-  homeGoals = clamp(homeGoals, 0, 5);
-  awayGoals = clamp(awayGoals, 0, 5);
-
-  return `${homeGoals}-${awayGoals}`;
+  return {
+    homeXg: clampNumber(adjustedHomeXg, 0.25, 3.8),
+    awayXg: clampNumber(adjustedAwayXg, 0.25, 3.8),
+  };
 }
 
-function applyFavoriteFloor(goals: number, favoriteMinGoals: number) {
-  return favoriteMinGoals > 0 ? Math.max(goals, favoriteMinGoals) : goals;
-}
-
-function applyUnderdogCap(
-  goals: number,
-  xg: number,
-  underdogMaxGoals: number | null,
-  reliefXg = 1.18,
-) {
-  if (underdogMaxGoals === null) {
-    return goals;
-  }
-
-  const capRelief = xg >= reliefXg ? 1 : 0;
-
-  return Math.min(goals, underdogMaxGoals + capRelief);
-}
-
-function goalsFromXg(xg: number) {
-  if (xg >= 2.45) {
-    return 3;
-  }
-
-  if (xg >= 1.55) {
-    return 2;
-  }
-
-  if (xg >= 0.65) {
-    return 1;
-  }
-
-  return 0;
+function roundXg(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -705,6 +705,104 @@ h1 {
   background: var(--gold);
 }
 
+.goal-model-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  color: rgba(226, 235, 250, 0.9);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(126, 231, 178, 0.18);
+  border-radius: 10px;
+}
+
+.goal-model-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.goal-model-head span,
+.goal-model-head strong {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.goal-model-head span {
+  color: #9af0c2;
+}
+
+.goal-model-head strong {
+  color: #fff;
+}
+
+.goal-model-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.goal-model-grid span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  background: rgba(6, 10, 20, 0.22);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.goal-model-grid small,
+.goal-model-signals small {
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.goal-model-grid strong {
+  color: #fff;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.goal-model-signals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.goal-model-signals span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.goal-model-signals strong,
+.goal-model-signals em {
+  color: #fff;
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.goal-model-signals span.over {
+  border-color: rgba(255, 203, 68, 0.24);
+}
+
+.goal-model-signals span.under,
+.goal-model-signals span.clean {
+  border-color: rgba(126, 231, 178, 0.22);
+}
+
 .knockout-lane-panel {
   display: grid;
   gap: 10px;
@@ -1141,6 +1239,8 @@ h1 {
   .quick-signals,
   .probability-grid,
   .metric-row,
+  .goal-model-grid,
+  .goal-model-signals,
   .knockout-lane-grid,
   .weather-grid {
     grid-template-columns: 1fr;

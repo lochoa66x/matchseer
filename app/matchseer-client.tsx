@@ -161,6 +161,11 @@ const copy = {
     trail: "The trail",
     trailSignals: "signals",
     projected: "Projected",
+    goalModel: "Goal model",
+    cleanSheet: "Clean sheet",
+    over25: "Over 2.5",
+    under25: "Under 2.5",
+    bothScore: "Both score",
     knockoutPath: "Knockout path",
     deadlock90: "90' deadlock",
     extraTime: "Extra time",
@@ -317,6 +322,11 @@ const copy = {
     trail: "El rastro",
     trailSignals: "señales",
     projected: "Proyectado",
+    goalModel: "Modelo xG",
+    cleanSheet: "Arco en cero",
+    over25: "Más de 2.5",
+    under25: "Menos de 2.5",
+    bothScore: "Ambos anotan",
     knockoutPath: "Ruta eliminatoria",
     deadlock90: "Empate 90'",
     extraTime: "Prórroga",
@@ -473,6 +483,11 @@ const copy = {
     trail: "La piste",
     trailSignals: "signaux",
     projected: "Projeté",
+    goalModel: "Modèle xG",
+    cleanSheet: "Clean sheet",
+    over25: "Plus de 2.5",
+    under25: "Moins de 2.5",
+    bothScore: "Les deux marquent",
     knockoutPath: "Voie éliminatoire",
     deadlock90: "Blocage 90'",
     extraTime: "Prolongation",
@@ -3406,6 +3421,7 @@ function ForecastView({
               <Meter label={t.confidence} value={displayConfidence(match)} />
               <Meter label={t.chaos} value={displayChaos(match)} hot />
             </div>
+            <GoalModelPanel match={match} t={t} language={language} />
             <KnockoutLanePanel match={match} t={t} language={language} />
             <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
               <span>
@@ -3482,6 +3498,69 @@ function Meter({ label, value, hot = false }: { label: string; value: number; ho
         <span className={cx("meter-fill", hot && "hot")} style={{ width: `${value}%` }} />
       </div>
     </div>
+  );
+}
+
+function GoalModelPanel({
+  match,
+  t,
+  language,
+}: {
+  match: Match;
+  t: Record<string, string>;
+  language: Language;
+}) {
+  const model = match.forecast.goalModel;
+
+  if (!model) {
+    return null;
+  }
+
+  const cleanSheetTeam =
+    model.homeCleanSheet >= model.awayCleanSheet ? match.home : match.away;
+  const cleanSheetValue = Math.max(model.homeCleanSheet, model.awayCleanSheet);
+  const totalLabel = model.over25 >= model.under25 ? t.over25 : t.under25;
+  const totalValue = Math.max(model.over25, model.under25);
+
+  return (
+    <section className="goal-model-panel">
+      <div className="goal-model-head">
+        <span>
+          <BarChart3 size={15} />
+          {t.goalModel}
+        </span>
+        <strong>{model.totalXg.toFixed(2)} xG</strong>
+      </div>
+      <div className="goal-model-grid">
+        <span>
+          <small>{match.home.code} xG</small>
+          <strong>{model.homeXg.toFixed(2)}</strong>
+        </span>
+        <span>
+          <small>{match.away.code} xG</small>
+          <strong>{model.awayXg.toFixed(2)}</strong>
+        </span>
+        <span>
+          <small>{t.cleanSheet}</small>
+          <strong>
+            {cleanSheetTeam.code} {cleanSheetValue}%
+          </strong>
+        </span>
+        <span>
+          <small>{totalLabel}</small>
+          <strong>{totalValue}%</strong>
+        </span>
+      </div>
+      <div className="goal-model-signals">
+        {model.signals.map((signal) => (
+          <span className={signal.tone} key={signal.id}>
+            <strong>{signal.label[language] ?? signal.label.en}</strong>
+            <em>{signal.value}%</em>
+            <small>{signal.text[language] ?? signal.text.en}</small>
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }
 

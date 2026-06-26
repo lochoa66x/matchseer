@@ -48,8 +48,30 @@ export type MatchForecast = ForecastCopy & {
   projected: string;
   isPending?: boolean;
   marketPulse?: MarketPulse | null;
+  goalModel?: GoalModelForecast | null;
   knockout?: KnockoutForecast | null;
   trail?: TrailSignal[];
+};
+
+export type GoalModelSignal = {
+  id: string;
+  label: Record<Language, string>;
+  value: number;
+  tone: "over" | "under" | "clean" | "balanced";
+  text: Record<Language, string>;
+};
+
+export type GoalModelForecast = {
+  homeXg: number;
+  awayXg: number;
+  totalXg: number;
+  homeCleanSheet: number;
+  awayCleanSheet: number;
+  over25: number;
+  under25: number;
+  bothTeamsScore: number;
+  projectedScore: string;
+  signals: GoalModelSignal[];
 };
 
 export type KnockoutForecast = {

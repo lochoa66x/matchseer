@@ -3,6 +3,7 @@ import {
   availabilityForecastModifier,
   buildKnockoutResolutionLane,
   buildPublicSeerTrail,
+  deriveForecastFromExpectedGoals,
   knockoutRoundForecastModifier,
   marketPulseMatchIdentifiers,
   playerDependencyImpact,
@@ -103,6 +104,40 @@ describe("market pulse write safety", () => {
         home: 52,
       },
     });
+  });
+});
+
+describe("xG-derived forecast spine", () => {
+  it("derives outcome probabilities and projected score from the same xG grid", () => {
+    const forecast = deriveForecastFromExpectedGoals({
+      homeXg: 2.15,
+      awayXg: 0.72,
+    });
+    const [homeGoals, awayGoals] = forecast.projectedScore
+      .split("-")
+      .map(Number);
+
+    expect(forecast.homeWin + forecast.draw + forecast.awayWin).toBe(100);
+    expect(forecast.homeWin).toBeGreaterThan(forecast.awayWin);
+    expect(forecast.projectedSide).toBe("home");
+    expect(homeGoals).toBeGreaterThan(awayGoals);
+    expect(forecast.homeCleanSheet).toBeGreaterThan(forecast.awayCleanSheet);
+  });
+
+  it("derives over and under style signals from total xG", () => {
+    const openGame = deriveForecastFromExpectedGoals({
+      homeXg: 2.05,
+      awayXg: 1.45,
+    });
+    const tightGame = deriveForecastFromExpectedGoals({
+      homeXg: 0.82,
+      awayXg: 0.74,
+    });
+
+    expect(openGame.over25).toBeGreaterThan(openGame.under25);
+    expect(openGame.signals.some((signal) => signal.id === "over-lean")).toBe(true);
+    expect(tightGame.under25).toBeGreaterThan(tightGame.over25);
+    expect(tightGame.signals.some((signal) => signal.id === "under-lean")).toBe(true);
   });
 });
 
