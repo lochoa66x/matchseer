@@ -101,6 +101,7 @@ function parseUpdates(payload: unknown): PlayerAvailabilityUpdate[] {
       yellowCards?: unknown;
       redCards?: unknown;
       isSuspended?: unknown;
+      lineupStatus?: unknown;
       minutesRecent?: unknown;
     };
 
@@ -129,6 +130,8 @@ function parseUpdates(payload: unknown): PlayerAvailabilityUpdate[] {
         yellowCards: toFiniteNumber(value.yellowCards),
         redCards: toFiniteNumber(value.redCards),
         isSuspended: Boolean(value.isSuspended),
+        lineupStatus:
+          typeof value.lineupStatus === "string" ? value.lineupStatus : null,
         minutesRecent: toFiniteNumber(value.minutesRecent),
       },
     ];

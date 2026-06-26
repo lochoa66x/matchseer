@@ -295,6 +295,7 @@ export type PlayerAvailabilityUpdate = {
   yellowCards?: number;
   redCards?: number;
   isSuspended?: boolean;
+  lineupStatus?: string | null;
   minutesRecent?: number;
 };
 
@@ -318,6 +319,8 @@ export type ModelControlPlayer = {
   yellowCards: number;
   redCards: number;
   isSuspended: boolean;
+  lineupStatus: string;
+  lineupConfirmedAt: string | null;
   age: number | null;
   minutesRecent: number;
 };
@@ -523,6 +526,8 @@ export type ForecastPlayerContext = {
   yellowCards: string | number | null;
   redCards: string | number | null;
   isSuspended: boolean | null;
+  lineupStatus: string | null;
+  lineupConfirmedAt: string | null;
   age: string | number | null;
   minutesRecent: string | number | null;
 };
@@ -562,6 +567,8 @@ type ModelControlPlayerRow = {
   yellow_cards: string | number | null;
   red_cards: string | number | null;
   is_suspended: boolean | null;
+  lineup_status: string | null;
+  lineup_confirmed_at: Date | string | null;
   age: string | number | null;
   minutes_recent: string | number | null;
 };
@@ -1247,6 +1254,14 @@ async function ensurePlayerModelSchema(sql: NeonQuery) {
       `;
       await sql`
         alter table players
+        add column if not exists lineup_status text not null default 'unknown';
+      `;
+      await sql`
+        alter table players
+        add column if not exists lineup_confirmed_at timestamptz;
+      `;
+      await sql`
+        alter table players
         add column if not exists age integer;
       `;
       await sql`
@@ -1425,6 +1440,10 @@ function toModelControlPlayer(row: ModelControlPlayerRow): ModelControlPlayer {
     yellowCards: toNumber(row.yellow_cards),
     redCards: toNumber(row.red_cards),
     isSuspended: Boolean(row.is_suspended),
+    lineupStatus: normalizeLineupStatus(row.lineup_status),
+    lineupConfirmedAt: row.lineup_confirmed_at
+      ? new Date(row.lineup_confirmed_at).toISOString()
+      : null,
     age: toOptionalNumber(row.age),
     minutesRecent: toNumber(row.minutes_recent),
   };
@@ -1472,11 +1491,31 @@ const allowedAvailabilityStatuses = new Set([
   "out",
 ]);
 
+const allowedLineupStatuses = new Set([
+  "unknown",
+  "expected_start",
+  "confirmed_start",
+  "bench",
+  "not_in_squad",
+]);
+
+const confirmedLineupStatuses = new Set([
+  "confirmed_start",
+  "bench",
+  "not_in_squad",
+]);
+
+const yellowCardSuspensionThreshold = 2;
+
 function normalizePlayerAvailabilityUpdate(
   update: PlayerAvailabilityUpdate,
 ): PlayerAvailabilityUpdate | null {
   const slug = normalizePlayerSlug(update.slug);
   const status = normalizeAvailabilityStatus(update.availabilityStatus);
+  const lineupStatus = normalizeLineupStatus(update.lineupStatus);
+  const yellowCards = clampInteger(update.yellowCards, 0, 3);
+  const isAccumulationSuspension =
+    yellowCards >= yellowCardSuspensionThreshold;
 
   if (!slug || !status) {
     return null;
@@ -1486,9 +1525,13 @@ function normalizePlayerAvailabilityUpdate(
     slug,
     availabilityStatus: status,
     availabilityNote: normalizeAvailabilityNote(update.availabilityNote),
-    yellowCards: clampInteger(update.yellowCards, 0, 3),
+    yellowCards,
     redCards: clampInteger(update.redCards, 0, 2),
-    isSuspended: Boolean(update.isSuspended) || status === "suspended",
+    isSuspended:
+      Boolean(update.isSuspended) ||
+      status === "suspended" ||
+      isAccumulationSuspension,
+    lineupStatus,
     minutesRecent: clampInteger(update.minutesRecent, 0, 450),
   };
 }
@@ -1561,6 +1604,20 @@ function normalizeAvailabilityStatus(value: unknown) {
   const normalized = value.trim().toLowerCase();
 
   return allowedAvailabilityStatuses.has(normalized) ? normalized : null;
+}
+
+function normalizeLineupStatus(value: unknown) {
+  if (typeof value !== "string") {
+    return "unknown";
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  return allowedLineupStatuses.has(normalized) ? normalized : "unknown";
+}
+
+function isConfirmedLineupStatus(value: string | null | undefined) {
+  return confirmedLineupStatuses.has(normalizeLineupStatus(value));
 }
 
 function normalizeAvailabilityNote(value: unknown) {
@@ -2402,6 +2459,10 @@ export async function syncFootballDataSnapshot(
                 players.red_cards,
                 'isSuspended',
                 players.is_suspended,
+                'lineupStatus',
+                players.lineup_status,
+                'lineupConfirmedAt',
+                players.lineup_confirmed_at,
                 'age',
                 players.age,
                 'minutesRecent',
@@ -2485,7 +2546,7 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.9-body-cost",
+      modelVersion: "matchseer-v3.10-lineups",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -2513,7 +2574,7 @@ export async function syncFootballDataSnapshot(
           : null,
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, altitude, heat load, travel distance, rest windows, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, extra-time hangover, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, altitude, heat load, travel distance, rest windows, referee rhythm, spotlight gravity, VIP stage pressure, player availability, yellow-card accumulation, suspension risk, confirmed lineups, team dependency, fatigue signals, extra-time hangover, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -2703,6 +2764,8 @@ export async function getModelControlDashboard(): Promise<ModelControlDashboard>
         players.yellow_cards,
         players.red_cards,
         players.is_suspended,
+        players.lineup_status,
+        players.lineup_confirmed_at,
         players.age,
         players.minutes_recent
       from players
@@ -2784,6 +2847,15 @@ export async function applyPlayerAvailabilityUpdates(
         yellow_cards = ${normalized.yellowCards},
         red_cards = ${normalized.redCards},
         is_suspended = ${normalized.isSuspended},
+        lineup_status = ${normalized.lineupStatus},
+        lineup_confirmed_at = case
+          when ${isConfirmedLineupStatus(normalized.lineupStatus)}
+            and players.lineup_status is distinct from ${normalized.lineupStatus}
+            then now()
+          when not ${isConfirmedLineupStatus(normalized.lineupStatus)}
+            then null
+          else players.lineup_confirmed_at
+        end,
         minutes_recent = ${normalized.minutesRecent}
       where slug = ${normalized.slug}
         and is_key_player = true
@@ -4628,6 +4700,37 @@ export function buildPublicSeerTrail({
       });
     }
 
+    if ((readPayloadNumber(availability?.confirmedLineupCount) ?? 0) > 0) {
+      signals.push({
+        id: "lineup-sheet",
+        label: "Lineup sheet",
+        tone: "steady",
+        text: {
+          en: "Confirmed lineup signals are in, so the player board is less guessy before kickoff.",
+          es: "Ya entraron señales de alineación confirmada, así que el tablero de jugadores llega con menos duda.",
+          fr: "Les signaux de composition confirmée sont là, donc le tableau joueurs est moins flou avant le coup d'envoi.",
+        },
+      });
+    }
+
+    const hasSuspensionRisk = impactedPlayers.some((player) => {
+      const record = readPayloadRecord(player);
+      return readPayloadString(record?.reason)?.includes("suspension");
+    });
+
+    if (hasSuspensionRisk) {
+      signals.push({
+        id: "suspension-risk",
+        label: "Suspension risk",
+        tone: "chaos",
+        text: {
+          en: "Card accumulation or suspension risk changes how boldly a key player can live in the match.",
+          es: "La acumulación de tarjetas o el riesgo de suspensión cambia la agresividad de un jugador clave.",
+          fr: "L'accumulation de cartons ou le risque de suspension change la liberté d'un joueur clé.",
+        },
+      });
+    }
+
     const bodyCost = readPayloadRecord(modifiers.bodyCost);
     const bodyStatus = readPayloadString(bodyCost?.status);
     const homeBody = readPayloadRecord(bodyCost?.home);
@@ -5593,6 +5696,7 @@ function matchseerV3Forecast({
         vipSpotlight.confidenceDelta +
         tournamentForm.confidenceDelta +
         bodyCost.confidenceDelta +
+        availability.confidenceDelta +
         knockout.confidenceDelta,
     ),
     45,
@@ -6990,17 +7094,38 @@ type PlayerModifierImpact = {
 export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
   const homeImpacts: PlayerModifierImpact[] = [];
   const awayImpacts: PlayerModifierImpact[] = [];
+  const confirmedStarters: PlayerModifierImpact[] = [];
+  const suspensionRisks: PlayerModifierImpact[] = [];
   let homePenalty = 0;
   let awayPenalty = 0;
   let homeXgPenalty = 0;
   let awayXgPenalty = 0;
   let chaosDelta = 0;
+  let confirmedLineupCount = 0;
 
   for (const player of players) {
-    const severity = availabilitySeverity(player);
+    const availability = availabilitySeverity(player);
+    const lineupSeverity = playerLineupSeverity(player);
+    const severity = Math.max(availability, lineupSeverity);
     const cardRisk = playerCardRisk(player);
+    const lineupStatus = normalizeLineupStatus(player.lineupStatus);
+
+    if (isConfirmedLineupStatus(lineupStatus)) {
+      confirmedLineupCount += 1;
+    }
 
     if (severity === 0 && cardRisk === 0) {
+      if (lineupStatus === "confirmed_start") {
+        const dependency = playerDependencyImpact(player);
+
+        confirmedStarters.push({
+          name: player.name,
+          reason: "is confirmed in the XI",
+          penalty: 0,
+          ...dependency,
+        });
+      }
+
       continue;
     }
 
@@ -7023,6 +7148,15 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
     });
     chaosDelta += severity >= 2 ? 2 : cardRisk > 0 ? 1 : 0;
 
+    if (cardRisk > 0 && severity < 2) {
+      suspensionRisks.push({
+        name: player.name,
+        reason,
+        penalty,
+        ...dependency,
+      });
+    }
+
     if (player.teamSide === "home") {
       homePenalty += penalty;
       homeXgPenalty += xgPenalty;
@@ -7037,6 +7171,16 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
   homeXgPenalty = clampNumber(homeXgPenalty, 0, 0.42);
   awayXgPenalty = clampNumber(awayXgPenalty, 0, 0.42);
   chaosDelta = clamp(Math.round(chaosDelta), 0, 6);
+  const confidenceDelta = clamp(
+    Math.round(
+      confirmedStarters.length * 0.7 -
+        homeImpacts.length * 0.25 -
+        awayImpacts.length * 0.25 -
+        suspensionRisks.length * 0.25,
+    ),
+    -3,
+    2,
+  );
 
   const impacted = [...homeImpacts, ...awayImpacts]
     .sort((a, b) => b.penalty - a.penalty)
@@ -7054,12 +7198,26 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
             ),
           )}.`,
         }
+      : confirmedLineupCount > 0
+        ? {
+            label: "Confirmed lineups",
+            weight: 0.48,
+            explanation:
+              confirmedStarters.length > 0
+                ? `Lineup sheet steadies the read: ${sentenceList(
+                    confirmedStarters
+                      .slice(0, 3)
+                      .map((player) => `${player.name} is confirmed in the XI`),
+                  )}.`
+                : "Lineup sheet is synced, and the key-player board does not flag a major absence.",
+          }
       : null;
 
   return {
     awayPenalty,
     awayXgPenalty,
     chaosDelta,
+    confidenceDelta,
     factor,
     homePenalty,
     homeXgPenalty,
@@ -7068,13 +7226,25 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
         players.length > 0
           ? impacted.length > 0
             ? "availability-signals-active"
+            : confirmedLineupCount > 0
+              ? "lineups-confirmed"
             : "watchlist-clear"
           : "pending-player-availability-feed",
       watchedPlayers: players.length,
+      teamDependency: availabilityTeamDependencyPayload(players),
+      confirmedLineupCount,
+      suspensionRiskCount: suspensionRisks.length,
       impactedPlayers: impacted.map((player) => ({
         name: player.name,
         reason: player.reason,
         penalty: roundModifier(player.penalty),
+        dependency: roundModifier(player.dependency),
+        benchDepth: roundModifier(player.benchDepth),
+        dependencyMultiplier: roundModifier(player.multiplier),
+        dependencyNote: player.dependencyNote,
+      })),
+      confirmedStarters: confirmedStarters.slice(0, 4).map((player) => ({
+        name: player.name,
         dependency: roundModifier(player.dependency),
         benchDepth: roundModifier(player.benchDepth),
         dependencyMultiplier: roundModifier(player.multiplier),
@@ -7085,6 +7255,7 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
       homeXgPenalty: roundModifier(homeXgPenalty),
       awayXgPenalty: roundModifier(awayXgPenalty),
       chaosDelta,
+      confidenceDelta,
     },
   };
 }
@@ -7204,8 +7375,14 @@ export function fatigueForecastModifier(
 function availabilitySeverity(player: ForecastPlayerContext) {
   const status = normalizedPlayerStatus(player.availabilityStatus);
   const redCards = toOptionalNumber(player.redCards) ?? 0;
+  const yellowCards = toOptionalNumber(player.yellowCards) ?? 0;
 
-  if (player.isSuspended || redCards > 0 || status.includes("suspend")) {
+  if (
+    player.isSuspended ||
+    redCards > 0 ||
+    status.includes("suspend") ||
+    yellowCards >= yellowCardSuspensionThreshold
+  ) {
     return 3.4;
   }
 
@@ -7232,15 +7409,29 @@ function availabilitySeverity(player: ForecastPlayerContext) {
   return 0;
 }
 
+function playerLineupSeverity(player: ForecastPlayerContext) {
+  const lineupStatus = normalizeLineupStatus(player.lineupStatus);
+
+  if (lineupStatus === "not_in_squad") {
+    return 3.2;
+  }
+
+  if (lineupStatus === "bench") {
+    return 1.45;
+  }
+
+  return 0;
+}
+
 function playerCardRisk(player: ForecastPlayerContext) {
   const yellowCards = toOptionalNumber(player.yellowCards) ?? 0;
 
-  if (yellowCards >= 2) {
-    return 0.75;
+  if (yellowCards >= yellowCardSuspensionThreshold) {
+    return 0;
   }
 
-  if (yellowCards === 1) {
-    return 0.3;
+  if (yellowCards === yellowCardSuspensionThreshold - 1) {
+    return 0.62;
   }
 
   return 0;
@@ -7252,6 +7443,20 @@ function playerAvailabilityReason(
   cardRisk: number,
 ) {
   const status = normalizedPlayerStatus(player.availabilityStatus);
+  const lineupStatus = normalizeLineupStatus(player.lineupStatus);
+  const yellowCards = toOptionalNumber(player.yellowCards) ?? 0;
+
+  if (lineupStatus === "not_in_squad") {
+    return "is missing from the confirmed squad";
+  }
+
+  if (lineupStatus === "bench") {
+    return "starts on the bench";
+  }
+
+  if (yellowCards >= yellowCardSuspensionThreshold) {
+    return "is suspended by yellow-card accumulation";
+  }
 
   if (player.isSuspended || status.includes("suspend")) {
     return "is suspended";
@@ -7269,8 +7474,8 @@ function playerAvailabilityReason(
     return "is limited";
   }
 
-  return cardRisk >= 0.75
-    ? "is close to suspension risk"
+  return cardRisk >= 0.6
+    ? "is one booking from suspension risk"
     : "is carrying card risk";
 }
 
@@ -7310,6 +7515,49 @@ export function playerDependencyImpact(player: ForecastPlayerContext) {
     dependencyNote: profile.note,
     multiplier,
   };
+}
+
+function availabilityTeamDependencyPayload(players: ForecastPlayerContext[]) {
+  const byTeam = new Map<
+    string,
+    {
+      side: "home" | "away";
+      teamCode: string;
+      teamName: string;
+      watchedPlayers: number;
+      profile: typeof DEFAULT_TEAM_DEPENDENCY;
+    }
+  >();
+
+  for (const player of players) {
+    const teamCode = player.teamCode.toUpperCase();
+
+    if (!byTeam.has(teamCode)) {
+      byTeam.set(teamCode, {
+        side: player.teamSide,
+        teamCode,
+        teamName: player.teamName,
+        watchedPlayers: 0,
+        profile: teamDependencyProfiles[teamCode] ?? DEFAULT_TEAM_DEPENDENCY,
+      });
+    }
+
+    const record = byTeam.get(teamCode);
+
+    if (record) {
+      record.watchedPlayers += 1;
+    }
+  }
+
+  return Array.from(byTeam.values()).map((record) => ({
+    side: record.side,
+    teamCode: record.teamCode,
+    teamName: record.teamName,
+    watchedPlayers: record.watchedPlayers,
+    dependency: roundModifier(record.profile.dependency),
+    benchDepth: roundModifier(record.profile.benchDepth),
+    note: record.profile.note,
+  }));
 }
 
 function fatigueRestStress(restHours: number | null) {

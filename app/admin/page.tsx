@@ -238,6 +238,8 @@ type PlayerControlRow = {
   yellowCards: number;
   redCards: number;
   isSuspended: boolean;
+  lineupStatus: string;
+  lineupConfirmedAt: string | null;
   age: number | null;
   minutesRecent: number;
 };
@@ -281,6 +283,7 @@ type PlayerDraft = {
   yellowCards: number;
   redCards: number;
   isSuspended: boolean;
+  lineupStatus: string;
   minutesRecent: number;
 };
 
@@ -1606,6 +1609,30 @@ function ModelControlPanel({
                         </option>
                       ))}
                     </select>
+                    <select
+                      className="admin-select player-status-select"
+                      value={draft.lineupStatus}
+                      onChange={(event) =>
+                        updateDraft(player.slug, {
+                          lineupStatus: event.target.value,
+                          availabilityStatus:
+                            event.target.value === "not_in_squad"
+                              ? "out"
+                              : draft.availabilityStatus,
+                        })
+                      }
+                      title={
+                        player.lineupConfirmedAt
+                          ? `Last confirmed ${formatAdminTime(player.lineupConfirmedAt)}`
+                          : "Lineup status"
+                      }
+                    >
+                      {lineupOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                     <div className="player-mini-fields">
                       <label>
                         Y
@@ -2056,6 +2083,14 @@ const availabilityOptions = [
   { value: "out", label: "Out" },
 ];
 
+const lineupOptions = [
+  { value: "unknown", label: "Lineup unknown" },
+  { value: "expected_start", label: "Expected XI" },
+  { value: "confirmed_start", label: "Confirmed XI" },
+  { value: "bench", label: "Bench" },
+  { value: "not_in_squad", label: "Not in squad" },
+];
+
 function createPlayerDrafts(players: PlayerControlRow[]) {
   return Object.fromEntries(
     players.map((player) => [player.slug, playerToDraft(player)]),
@@ -2069,6 +2104,7 @@ function playerToDraft(player: PlayerControlRow): PlayerDraft {
     yellowCards: player.yellowCards,
     redCards: player.redCards,
     isSuspended: player.isSuspended,
+    lineupStatus: player.lineupStatus,
     minutesRecent: player.minutesRecent,
   };
 }
@@ -2092,6 +2128,7 @@ function changedPlayerUpdates(
         yellowCards: draft.yellowCards,
         redCards: draft.redCards,
         isSuspended: draft.isSuspended,
+        lineupStatus: draft.lineupStatus,
         minutesRecent: draft.minutesRecent,
       };
     })
@@ -2116,6 +2153,7 @@ function playerDraftChanged(player: PlayerControlRow, draft: PlayerDraft) {
     draft.yellowCards !== player.yellowCards ||
     draft.redCards !== player.redCards ||
     draft.isSuspended !== player.isSuspended ||
+    draft.lineupStatus !== player.lineupStatus ||
     draft.minutesRecent !== player.minutesRecent
   );
 }

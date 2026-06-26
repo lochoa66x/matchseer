@@ -31,6 +31,8 @@ function player(
     yellowCards: 0,
     redCards: 0,
     isSuspended: false,
+    lineupStatus: "unknown",
+    lineupConfirmedAt: null,
     age: 39,
     minutesRecent: 0,
     ...overrides,
@@ -453,6 +455,51 @@ describe("key-player dependency modifier", () => {
       name: "Lionel Messi",
       dependencyNote: expect.stringContaining("Messi"),
     });
+  });
+
+  it("turns yellow-card accumulation into a suspension hit", () => {
+    const modifier = availabilityForecastModifier([
+      player({ yellowCards: 2, isSuspended: true }),
+    ]);
+
+    expect(modifier.homePenalty).toBeGreaterThan(1);
+    expect(modifier.payload.impactedPlayers[0]).toMatchObject({
+      reason: "is suspended by yellow-card accumulation",
+    });
+  });
+
+  it("prices one-card-away players as suspension risk", () => {
+    const modifier = availabilityForecastModifier([
+      player({ yellowCards: 1, isSuspended: false }),
+    ]);
+
+    expect(modifier.homePenalty).toBeGreaterThan(0);
+    expect(modifier.payload.suspensionRiskCount).toBe(1);
+    expect(modifier.payload.impactedPlayers[0]?.reason).toContain(
+      "suspension risk",
+    );
+  });
+
+  it("uses confirmed lineups to separate starters from bench and missing players", () => {
+    const confirmed = availabilityForecastModifier([
+      player({ lineupStatus: "confirmed_start" }),
+    ]);
+    const bench = availabilityForecastModifier([
+      player({ lineupStatus: "bench" }),
+    ]);
+    const missing = availabilityForecastModifier([
+      player({ lineupStatus: "not_in_squad" }),
+    ]);
+
+    expect(confirmed.homePenalty).toBe(0);
+    expect(confirmed.confidenceDelta).toBeGreaterThan(0);
+    expect(confirmed.payload.confirmedLineupCount).toBe(1);
+    expect(bench.homePenalty).toBeGreaterThan(0);
+    expect(bench.payload.impactedPlayers[0]?.reason).toBe("starts on the bench");
+    expect(missing.homePenalty).toBeGreaterThan(bench.homePenalty);
+    expect(missing.payload.impactedPlayers[0]?.reason).toBe(
+      "is missing from the confirmed squad",
+    );
   });
 });
 
