@@ -11,6 +11,7 @@ import {
   playerDependencyImpact,
   shouldApplyMarketPulseUpdate,
   sourcePayloadWithRecoveredMarketPulse,
+  travelBodyCostModifier,
   type ForecastPlayerContext,
 } from "./database";
 
@@ -238,6 +239,123 @@ describe("xG-derived forecast spine", () => {
     expect(openGame.signals.some((signal) => signal.id === "over-lean")).toBe(true);
     expect(tightGame.under25).toBeGreaterThan(tightGame.over25);
     expect(tightGame.signals.some((signal) => signal.id === "under-lean")).toBe(true);
+  });
+});
+
+describe("travel and body-cost modifier", () => {
+  const mexico = {
+    id: 1,
+    slug: "mexico",
+    name: "Mexico",
+    code: "MEX",
+    color: "#0b8f5a",
+    country: "Mexico",
+  };
+  const canada = {
+    id: 2,
+    slug: "canada",
+    name: "Canada",
+    code: "CAN",
+    color: "#d91e36",
+    country: "Canada",
+  };
+  const germany = {
+    id: 3,
+    slug: "germany",
+    name: "Germany",
+    code: "GER",
+    color: "#111111",
+    country: "Germany",
+  };
+
+  it("makes Mexico City altitude louder for non-acclimated teams", () => {
+    const modifier = travelBodyCostModifier({
+      homeTeam: mexico,
+      awayTeam: canada,
+      phase: "Group A",
+      venueSlug: "mexico-city-stadium",
+      context: {
+        starts_at: "2026-06-11T19:00:00.000Z",
+        temperature_c: 24,
+        humidity: 42,
+      } as never,
+    });
+
+    expect(modifier.payload.altitudeStress).toBeGreaterThan(1);
+    expect(modifier.awayPenalty).toBeGreaterThan(modifier.homePenalty);
+    expect(modifier.factor?.explanation).toContain("Mexico City altitude");
+  });
+
+  it("charges the bigger travel/rest tax to the side making the long jump", () => {
+    const modifier = travelBodyCostModifier({
+      homeTeam: canada,
+      awayTeam: germany,
+      phase: "Round of 16",
+      venueSlug: "miami-stadium",
+      context: {
+        starts_at: "2026-07-04T19:00:00.000Z",
+        temperature_c: 31,
+        humidity: 76,
+        home_rest_hours: 118,
+        away_rest_hours: 68,
+        home_previous_match: {
+          venueSlug: "atlanta-stadium",
+          duration: "regular",
+        },
+        away_previous_match: {
+          venueSlug: "vancouver-stadium",
+          duration: "regular",
+        },
+      } as never,
+    });
+
+    expect(modifier.awayPenalty).toBeGreaterThan(modifier.homePenalty);
+    expect(modifier.payload.away.travelDistanceKm).toBeGreaterThan(4000);
+    expect(modifier.payload.heatStress).toBeGreaterThan(1);
+  });
+
+  it("adds a knockout hangover after extra time or penalties", () => {
+    const regular = travelBodyCostModifier({
+      homeTeam: canada,
+      awayTeam: germany,
+      phase: "Quarter-finals",
+      venueSlug: "dallas-stadium",
+      context: {
+        starts_at: "2026-07-10T19:00:00.000Z",
+        home_rest_hours: 90,
+        away_rest_hours: 90,
+        home_previous_match: {
+          venueSlug: "houston-stadium",
+          duration: "regular",
+        },
+        away_previous_match: {
+          venueSlug: "houston-stadium",
+          duration: "regular",
+        },
+      } as never,
+    });
+    const penalties = travelBodyCostModifier({
+      homeTeam: canada,
+      awayTeam: germany,
+      phase: "Quarter-finals",
+      venueSlug: "dallas-stadium",
+      context: {
+        starts_at: "2026-07-10T19:00:00.000Z",
+        home_rest_hours: 90,
+        away_rest_hours: 90,
+        home_previous_match: {
+          venueSlug: "houston-stadium",
+          duration: "penalties",
+        },
+        away_previous_match: {
+          venueSlug: "houston-stadium",
+          duration: "regular",
+        },
+      } as never,
+    });
+
+    expect(penalties.homePenalty).toBeGreaterThan(regular.homePenalty);
+    expect(penalties.payload.home.extraTimeStress).toBeGreaterThan(0);
   });
 });
 

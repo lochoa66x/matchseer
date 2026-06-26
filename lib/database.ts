@@ -486,6 +486,11 @@ type ExistingForecastLockRow = {
 type ForecastContextRow = {
   external_id: string | null;
   starts_at: Date | string | null;
+  venue_slug: string | null;
+  venue_city: string | null;
+  venue_country: string | null;
+  venue_latitude: string | number | null;
+  venue_longitude: string | number | null;
   referee_name: string | null;
   cards_per_match: string | number | null;
   temperature_c: string | number | null;
@@ -500,6 +505,8 @@ type ForecastContextRow = {
   away_tournament_matches: string | number | null;
   away_tournament_points: string | number | null;
   away_tournament_goal_diff: string | number | null;
+  home_previous_match: Record<string, unknown> | null;
+  away_previous_match: Record<string, unknown> | null;
   player_availability: ForecastPlayerContext[] | null;
 };
 
@@ -2087,6 +2094,24 @@ export async function syncFootballDataSnapshot(
       existingForecast &&
       shouldPreserveModelForecast(existingForecast)
     ) {
+      if (match.status === "final" && match.duration && existingForecast.forecast_id) {
+        await sql`
+          update forecasts
+          set source_payload =
+            coalesce(source_payload, '{}'::jsonb) ||
+            jsonb_build_object(
+              'result',
+              jsonb_build_object(
+                'duration', ${match.duration},
+                'homeScore', ${match.homeScore},
+                'awayScore', ${match.awayScore},
+                'updatedAt', ${snapshot.fetchedAt}
+              )
+            )
+          where id = ${existingForecast.forecast_id};
+        `;
+      }
+
       forecasts += 1;
       continue;
     }
@@ -2099,8 +2124,14 @@ export async function syncFootballDataSnapshot(
           matches.home_team_id,
           matches.away_team_id,
           matches.referee_id,
-          matches.starts_at
+          matches.starts_at,
+          venues.slug as venue_slug,
+          venues.city as venue_city,
+          venues.country as venue_country,
+          venues.latitude as venue_latitude,
+          venues.longitude as venue_longitude
         from matches
+        left join venues on venues.id = matches.venue_id
         where matches.external_id = ${match.externalId}
         limit 1
       ),
@@ -2117,6 +2148,11 @@ export async function syncFootballDataSnapshot(
       select
         current_match.external_id,
         current_match.starts_at,
+        current_match.venue_slug,
+        current_match.venue_city,
+        current_match.venue_country,
+        current_match.venue_latitude,
+        current_match.venue_longitude,
         referees.name as referee_name,
         referees.cards_per_match,
         latest_weather.temperature_c,
@@ -2145,6 +2181,70 @@ export async function syncFootballDataSnapshot(
               or previous_match.away_team_id = current_match.away_team_id
             )
         ) as away_rest_hours,
+        (
+          select jsonb_build_object(
+            'externalId', previous_match.external_id,
+            'stage', previous_match.stage,
+            'groupName', previous_match.group_name,
+            'startsAt', previous_match.starts_at,
+            'venueSlug', previous_venue.slug,
+            'venueCity', previous_venue.city,
+            'venueCountry', previous_venue.country,
+            'latitude', previous_venue.latitude,
+            'longitude', previous_venue.longitude,
+            'duration', previous_forecast.source_payload -> 'result' ->> 'duration'
+          )
+          from matches previous_match
+          left join venues previous_venue on previous_venue.id = previous_match.venue_id
+          left join lateral (
+            select forecasts.source_payload
+            from forecasts
+            where forecasts.match_id = previous_match.id
+            order by forecasts.version desc, forecasts.created_at desc
+            limit 1
+          ) previous_forecast on true
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and (
+              previous_match.home_team_id = current_match.home_team_id
+              or previous_match.away_team_id = current_match.home_team_id
+            )
+          order by previous_match.starts_at desc
+          limit 1
+        ) as home_previous_match,
+        (
+          select jsonb_build_object(
+            'externalId', previous_match.external_id,
+            'stage', previous_match.stage,
+            'groupName', previous_match.group_name,
+            'startsAt', previous_match.starts_at,
+            'venueSlug', previous_venue.slug,
+            'venueCity', previous_venue.city,
+            'venueCountry', previous_venue.country,
+            'latitude', previous_venue.latitude,
+            'longitude', previous_venue.longitude,
+            'duration', previous_forecast.source_payload -> 'result' ->> 'duration'
+          )
+          from matches previous_match
+          left join venues previous_venue on previous_venue.id = previous_match.venue_id
+          left join lateral (
+            select forecasts.source_payload
+            from forecasts
+            where forecasts.match_id = previous_match.id
+            order by forecasts.version desc, forecasts.created_at desc
+            limit 1
+          ) previous_forecast on true
+          where current_match.starts_at is not null
+            and previous_match.starts_at is not null
+            and previous_match.starts_at < current_match.starts_at
+            and (
+              previous_match.home_team_id = current_match.away_team_id
+              or previous_match.away_team_id = current_match.away_team_id
+            )
+          order by previous_match.starts_at desc
+          limit 1
+        ) as away_previous_match,
         (
           select count(*)
           from matches previous_match
@@ -2385,7 +2485,7 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.8-market-live",
+      modelVersion: "matchseer-v3.9-body-cost",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -2402,9 +2502,18 @@ export async function syncFootballDataSnapshot(
       // Carry any saved crowd signal forward so it survives forecast re-versioning
       // (manual pulses were silently orphaned on old versions before this).
       marketPulse: storedMarketPulse,
+      result:
+        match.status === "final" && match.duration
+          ? {
+              duration: match.duration,
+              homeScore: match.homeScore,
+              awayScore: match.awayScore,
+              updatedAt: snapshot.fetchedAt,
+            }
+          : null,
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, altitude, heat load, travel distance, rest windows, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, extra-time hangover, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -4519,6 +4628,28 @@ export function buildPublicSeerTrail({
       });
     }
 
+    const bodyCost = readPayloadRecord(modifiers.bodyCost);
+    const bodyStatus = readPayloadString(bodyCost?.status);
+    const homeBody = readPayloadRecord(bodyCost?.home);
+    const awayBody = readPayloadRecord(bodyCost?.away);
+    const maxBodyStress = Math.max(
+      readPayloadNumber(homeBody?.totalStress) ?? 0,
+      readPayloadNumber(awayBody?.totalStress) ?? 0,
+    );
+
+    if (bodyStatus === "active" && maxBodyStress >= 0.5) {
+      signals.push({
+        id: "body-cost",
+        label: "Body cost",
+        tone: maxBodyStress >= 1.6 ? "chaos" : "drag",
+        text: {
+          en: "Altitude, travel, heat, or rest load leaves a body-cost mark on the read.",
+          es: "La altura, el viaje, el calor o el descanso dejan una marca física en la lectura.",
+          fr: "Altitude, voyage, chaleur ou repos court laissent une marque physique sur la lecture.",
+        },
+      });
+    }
+
     const referee = readPayloadRecord(modifiers.referee);
     const refereeChaos = readPayloadNumber(referee?.chaosDelta) ?? 0;
 
@@ -5320,6 +5451,13 @@ function matchseerV3Forecast({
   const homeBasePower = teamPowerWithStanding(homeTeam, homeRatings);
   const awayBasePower = teamPowerWithStanding(awayTeam, awayRatings);
   const weather = weatherForecastModifier(context, homeRatings, awayRatings);
+  const bodyCost = travelBodyCostModifier({
+    homeTeam,
+    awayTeam,
+    phase,
+    venueSlug,
+    context,
+  });
   const referee = refereeForecastModifier(context, homeRatings, awayRatings);
   const spotlight = spotlightGravityModifier(homeTeam, awayTeam);
   const vipSpotlight = vipSpotlightModifier(context, homeTeam, awayTeam);
@@ -5343,6 +5481,7 @@ function matchseerV3Forecast({
     vipSpotlight.homePower +
     tournamentForm.homePower -
     availability.homePenalty -
+    bodyCost.homePenalty -
     fatigue.homePenalty;
   const awayPower =
     awayBasePower +
@@ -5353,9 +5492,14 @@ function matchseerV3Forecast({
     vipSpotlight.awayPower +
     tournamentForm.awayPower -
     availability.awayPenalty -
+    bodyCost.awayPenalty -
     fatigue.awayPenalty;
   const rawPowerGap = homePower - awayPower;
-  const powerGap = rawPowerGap * weather.gapMultiplier * knockout.gapMultiplier;
+  const powerGap =
+    rawPowerGap *
+    weather.gapMultiplier *
+    bodyCost.gapMultiplier *
+    knockout.gapMultiplier;
   const baseChaos =
     64 -
     Math.abs(powerGap) * 0.9 +
@@ -5369,6 +5513,7 @@ function matchseerV3Forecast({
         spotlight.chaosDelta +
         vipSpotlight.chaosDelta +
         tournamentForm.chaosDelta +
+        bodyCost.chaosDelta +
         availability.chaosDelta +
         fatigue.chaosDelta +
         knockout.chaosDelta,
@@ -5381,13 +5526,14 @@ function matchseerV3Forecast({
     homeRatings,
     awayRatings,
     homeVenueBoost,
-    weather.xgDelta +
+      weather.xgDelta +
       knockout.xgDelta +
       xgPowerSwing +
       weather.homeXgDelta +
       referee.homeXgDelta +
       vipSpotlight.homeXgDelta +
       tournamentForm.homeXgDelta -
+      bodyCost.homeXgPenalty -
       availability.homeXgPenalty -
       fatigue.homeXgPenalty,
   );
@@ -5402,6 +5548,7 @@ function matchseerV3Forecast({
       referee.awayXgDelta +
       vipSpotlight.awayXgDelta +
       tournamentForm.awayXgDelta -
+      bodyCost.awayXgPenalty -
       availability.awayXgPenalty -
       fatigue.awayXgPenalty,
   );
@@ -5433,6 +5580,7 @@ function matchseerV3Forecast({
     Math.abs(referee.chaosDelta) +
     Math.abs(vipSpotlight.chaosDelta) +
     Math.abs(tournamentForm.chaosDelta) +
+    Math.abs(bodyCost.chaosDelta) +
     Math.abs(availability.chaosDelta) +
     Math.abs(fatigue.chaosDelta);
   const baseConfidence = clamp(
@@ -5444,6 +5592,7 @@ function matchseerV3Forecast({
         weather.confidenceDelta +
         vipSpotlight.confidenceDelta +
         tournamentForm.confidenceDelta +
+        bodyCost.confidenceDelta +
         knockout.confidenceDelta,
     ),
     45,
@@ -5533,6 +5682,7 @@ function matchseerV3Forecast({
     spotlight.factor,
     vipSpotlight.factor,
     tournamentForm.factor,
+    bodyCost.factor,
     availability.factor,
     fatigue.factor,
     knockout.factor,
@@ -5577,6 +5727,7 @@ function matchseerV3Forecast({
         raw: roundModifier(rawPowerGap),
         adjusted: roundModifier(powerGap),
         multiplier: roundModifier(weather.gapMultiplier),
+        bodyCostMultiplier: roundModifier(bodyCost.gapMultiplier),
       },
       venue: {
         home: homeVenueBoost,
@@ -5604,6 +5755,7 @@ function matchseerV3Forecast({
       spotlight: spotlight.payload,
       vipSpotlight: vipSpotlight.payload,
       tournamentForm: tournamentForm.payload,
+      bodyCost: bodyCost.payload,
       availability: availability.payload,
       fatigue: fatigue.payload,
       knockout: knockout.payload,
@@ -5797,6 +5949,470 @@ function venueCountryBoost(team: FootballDataTeam, venueSlug: string | null) {
   }
 
   return 0;
+}
+
+export function travelBodyCostModifier({
+  homeTeam,
+  awayTeam,
+  phase,
+  venueSlug,
+  context,
+}: {
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  phase: string | null;
+  venueSlug: string | null;
+  context: ForecastContextRow | null;
+}) {
+  const currentVenue = venueProfileForContext(venueSlug, context);
+  const temperature = toOptionalNumber(context?.temperature_c);
+  const humidity = toOptionalNumber(context?.humidity);
+  const summary = context?.weather_summary?.toLowerCase() ?? "";
+  const kickoffHour = kickoffHourInTournamentZone(context?.starts_at);
+  const isDayKickoff =
+    kickoffHour !== null && kickoffHour >= 11 && kickoffHour < 18;
+  const isHumid =
+    (humidity !== null && humidity >= 65) ||
+    summary.includes("humid") ||
+    summary.includes("muggy");
+  const heatStress = bodyHeatStress(temperature, humidity, isDayKickoff, summary);
+  const altitudeStress = bodyAltitudeStress(currentVenue?.elevationMeters ?? null);
+  const isKnockout = isKnockoutPhase(phase);
+  const home = travelBodySideCost({
+    team: homeTeam,
+    side: "home",
+    currentVenue,
+    previousMatch: previousContextMatch(context, "home"),
+    restHours: toOptionalNumber(context?.home_rest_hours),
+    heatStress,
+    altitudeStress,
+    isHumid,
+    isKnockout,
+  });
+  const away = travelBodySideCost({
+    team: awayTeam,
+    side: "away",
+    currentVenue,
+    previousMatch: previousContextMatch(context, "away"),
+    restHours: toOptionalNumber(context?.away_rest_hours),
+    heatStress,
+    altitudeStress,
+    isHumid,
+    isKnockout,
+  });
+  const maxStress = Math.max(home.totalStress, away.totalStress);
+  const sharedStress = Math.min(home.totalStress, away.totalStress);
+  const stressGap = Math.abs(home.totalStress - away.totalStress);
+  const gapMultiplier = clampNumber(1 - sharedStress * 0.024, 0.9, 1);
+  const chaosDelta = clamp(
+    Math.round(maxStress * 1.25 + (heatStress >= 0.75 ? 1 : 0)),
+    0,
+    6,
+  );
+  const confidenceDelta = -clamp(
+    Math.round(maxStress * 0.8 + sharedStress * 0.35),
+    0,
+    4,
+  );
+  const activeNotes = [
+    ...home.notes.map((note) => `${homeTeam.name}: ${note}`),
+    ...away.notes.map((note) => `${awayTeam.name}: ${note}`),
+  ].slice(0, 4);
+  const active =
+    maxStress >= 0.35 ||
+    altitudeStress >= 0.45 ||
+    heatStress >= 0.45 ||
+    home.travelDistanceKm !== null ||
+    away.travelDistanceKm !== null;
+  const factor =
+    active && activeNotes.length > 0
+      ? {
+          label: "Travel and body cost",
+          weight: 0.58,
+          explanation: `Travel load nudges the read: ${sentenceList(activeNotes)}.`,
+        }
+      : active
+        ? {
+            label: "Travel and body cost",
+            weight: 0.38,
+            explanation:
+              "Venue altitude, travel, heat, and rest are synced but do not shove either side hard.",
+          }
+        : null;
+
+  return {
+    homePenalty: home.powerPenalty,
+    awayPenalty: away.powerPenalty,
+    homeXgPenalty: home.xgPenalty,
+    awayXgPenalty: away.xgPenalty,
+    gapMultiplier,
+    chaosDelta,
+    confidenceDelta,
+    factor,
+    payload: {
+      status: active ? "active" : "pending-previous-venue-feed",
+      phase: phase ?? "Group stage",
+      venue: currentVenue,
+      heatStress: roundModifier(heatStress),
+      altitudeStress: roundModifier(altitudeStress),
+      stressGap: roundModifier(stressGap),
+      sharedStress: roundModifier(sharedStress),
+      gapMultiplier: roundModifier(gapMultiplier),
+      home: home.payload,
+      away: away.payload,
+      chaosDelta,
+      confidenceDelta,
+    },
+  };
+}
+
+function travelBodySideCost({
+  team,
+  side,
+  currentVenue,
+  previousMatch,
+  restHours,
+  heatStress,
+  altitudeStress,
+  isHumid,
+  isKnockout,
+}: {
+  team: FootballDataTeam;
+  side: "home" | "away";
+  currentVenue: VenueBodyProfile | null;
+  previousMatch: Record<string, unknown> | null;
+  restHours: number | null;
+  heatStress: number;
+  altitudeStress: number;
+  isHumid: boolean;
+  isKnockout: boolean;
+}) {
+  const previousVenue = previousVenueProfile(previousMatch);
+  const travelDistanceKm =
+    currentVenue && previousVenue
+      ? haversineDistanceKm(currentVenue, previousVenue)
+      : null;
+  const travelStress = bodyTravelStress(travelDistanceKm);
+  const restStress = bodyRestStress(restHours);
+  const duration = readPayloadString(previousMatch?.duration);
+  const extraTimeStress =
+    isKnockout && isExtraTimeDuration(duration)
+      ? duration === "penalties"
+        ? 0.9
+        : 0.68
+      : 0;
+  const altitudePenalty =
+    altitudeStress * (1 - teamAltitudeAcclimation(team, currentVenue));
+  const heatTravelLoad = heatStress * (0.45 + travelStress * 0.18 + restStress * 0.16);
+  const totalStress = clampNumber(
+    travelStress * 0.85 +
+      restStress * 0.72 +
+      heatTravelLoad +
+      altitudePenalty * 0.8 +
+      extraTimeStress,
+    0,
+    4.8,
+  );
+  const powerPenalty = clampNumber(totalStress * 0.76, 0, 3.8);
+  const xgPenalty = clampNumber(
+    powerPenalty * 0.034 + heatTravelLoad * 0.025 + altitudePenalty * 0.035,
+    0,
+    0.24,
+  );
+  const notes: string[] = [];
+
+  if (altitudePenalty >= 0.55) {
+    notes.push(
+      currentVenue?.city === "Mexico City"
+        ? "Mexico City altitude taxes the lungs"
+        : `${Math.round(currentVenue?.elevationMeters ?? 0)}m altitude adds a lung tax`,
+    );
+  }
+
+  if (heatTravelLoad >= 0.5) {
+    notes.push(
+      isHumid
+        ? "heat and humidity make recovery heavier"
+        : "heat makes the legs burn faster",
+    );
+  }
+
+  if (travelDistanceKm !== null && travelStress >= 0.45) {
+    notes.push(`${Math.round(travelDistanceKm)}km venue jump`);
+  }
+
+  if (restStress >= 0.65) {
+    notes.push(
+      restHours === null
+        ? "rest window is unclear"
+        : `${Math.round(restHours)}h rest keeps the turnaround short`,
+    );
+  }
+
+  if (extraTimeStress > 0) {
+    notes.push(
+      duration === "penalties"
+        ? "penalty shootout hangover follows the knockout win"
+        : "extra-time hangover follows the knockout win",
+    );
+  }
+
+  return {
+    totalStress,
+    travelDistanceKm,
+    powerPenalty,
+    xgPenalty,
+    notes,
+    payload: {
+      side,
+      team: team.code,
+      previousVenue,
+      travelDistanceKm:
+        travelDistanceKm === null ? null : Math.round(travelDistanceKm),
+      restHours: restHours === null ? null : Math.round(restHours * 10) / 10,
+      previousDuration: duration,
+      travelStress: roundModifier(travelStress),
+      restStress: roundModifier(restStress),
+      heatTravelLoad: roundModifier(heatTravelLoad),
+      altitudePenalty: roundModifier(altitudePenalty),
+      extraTimeStress: roundModifier(extraTimeStress),
+      totalStress: roundModifier(totalStress),
+      powerPenalty: roundModifier(powerPenalty),
+      xgPenalty: roundModifier(xgPenalty),
+      notes,
+    },
+  };
+}
+
+type VenueBodyProfile = {
+  slug: string | null;
+  city: string | null;
+  country: string | null;
+  latitude: number;
+  longitude: number;
+  elevationMeters: number | null;
+};
+
+function venueProfileForContext(
+  venueSlug: string | null,
+  context: ForecastContextRow | null,
+): VenueBodyProfile | null {
+  const curated = worldCupVenues.find((venue) => venue.slug === venueSlug);
+
+  if (curated) {
+    return {
+      slug: curated.slug,
+      city: curated.city,
+      country: curated.country,
+      latitude: curated.latitude,
+      longitude: curated.longitude,
+      elevationMeters: curated.elevationMeters,
+    };
+  }
+
+  const latitude = toOptionalNumber(context?.venue_latitude);
+  const longitude = toOptionalNumber(context?.venue_longitude);
+
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+
+  return {
+    slug: context?.venue_slug ?? venueSlug,
+    city: context?.venue_city ?? null,
+    country: context?.venue_country ?? null,
+    latitude,
+    longitude,
+    elevationMeters: null,
+  };
+}
+
+function previousContextMatch(
+  context: ForecastContextRow | null,
+  side: "home" | "away",
+) {
+  return readPayloadRecord(
+    side === "home" ? context?.home_previous_match : context?.away_previous_match,
+  );
+}
+
+function previousVenueProfile(
+  previousMatch: Record<string, unknown> | null,
+): VenueBodyProfile | null {
+  const venueSlug = readPayloadString(previousMatch?.venueSlug);
+  const curated = worldCupVenues.find((venue) => venue.slug === venueSlug);
+
+  if (curated) {
+    return {
+      slug: curated.slug,
+      city: curated.city,
+      country: curated.country,
+      latitude: curated.latitude,
+      longitude: curated.longitude,
+      elevationMeters: curated.elevationMeters,
+    };
+  }
+
+  const latitude = readPayloadNumber(previousMatch?.latitude);
+  const longitude = readPayloadNumber(previousMatch?.longitude);
+
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+
+  return {
+    slug: venueSlug,
+    city: readPayloadString(previousMatch?.venueCity),
+    country: readPayloadString(previousMatch?.venueCountry),
+    latitude,
+    longitude,
+    elevationMeters: null,
+  };
+}
+
+function bodyHeatStress(
+  temperature: number | null,
+  humidity: number | null,
+  isDayKickoff: boolean,
+  summary: string,
+) {
+  if (temperature === null) {
+    return summary.includes("humid") || summary.includes("muggy") ? 0.35 : 0;
+  }
+
+  let stress = 0;
+
+  if (temperature >= 33) {
+    stress += 1.05;
+  } else if (temperature >= 30) {
+    stress += 0.78;
+  } else if (temperature >= 27) {
+    stress += 0.45;
+  }
+
+  if ((humidity ?? 0) >= 72 || summary.includes("muggy")) {
+    stress += 0.42;
+  } else if ((humidity ?? 0) >= 62 || summary.includes("humid")) {
+    stress += 0.25;
+  }
+
+  if (isDayKickoff && temperature >= 27) {
+    stress += 0.18;
+  }
+
+  return clampNumber(stress, 0, 1.45);
+}
+
+function bodyAltitudeStress(elevationMeters: number | null) {
+  if (elevationMeters === null) {
+    return 0;
+  }
+
+  if (elevationMeters >= 2000) {
+    return 1.25;
+  }
+
+  if (elevationMeters >= 1500) {
+    return 0.72;
+  }
+
+  if (elevationMeters >= 900) {
+    return 0.35;
+  }
+
+  return 0;
+}
+
+function bodyTravelStress(distanceKm: number | null) {
+  if (distanceKm === null) {
+    return 0;
+  }
+
+  if (distanceKm >= 3200) {
+    return 1.15;
+  }
+
+  if (distanceKm >= 2200) {
+    return 0.85;
+  }
+
+  if (distanceKm >= 1200) {
+    return 0.58;
+  }
+
+  if (distanceKm >= 650) {
+    return 0.34;
+  }
+
+  return 0.12;
+}
+
+function bodyRestStress(restHours: number | null) {
+  if (restHours === null) {
+    return 0.22;
+  }
+
+  if (restHours < 72) {
+    return 1.08;
+  }
+
+  if (restHours < 96) {
+    return 0.72;
+  }
+
+  if (restHours < 120) {
+    return 0.36;
+  }
+
+  return 0;
+}
+
+function teamAltitudeAcclimation(
+  team: FootballDataTeam,
+  venue: VenueBodyProfile | null,
+) {
+  const teamCountry = team.country?.toLowerCase() ?? "";
+  const venueCountry = venue?.country?.toLowerCase() ?? "";
+
+  if (!teamCountry || !venueCountry) {
+    return 0.05;
+  }
+
+  if (teamCountry === venueCountry && venueCountry === "mexico") {
+    return 0.58;
+  }
+
+  if (teamCountry === venueCountry) {
+    return 0.22;
+  }
+
+  return 0.05;
+}
+
+function isExtraTimeDuration(duration: string | null) {
+  return duration === "extra_time" || duration === "penalties";
+}
+
+function haversineDistanceKm(
+  from: Pick<VenueBodyProfile, "latitude" | "longitude">,
+  to: Pick<VenueBodyProfile, "latitude" | "longitude">,
+) {
+  const earthRadiusKm = 6371;
+  const latitudeDelta = degreesToRadians(to.latitude - from.latitude);
+  const longitudeDelta = degreesToRadians(to.longitude - from.longitude);
+  const fromLatitude = degreesToRadians(from.latitude);
+  const toLatitude = degreesToRadians(to.latitude);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(fromLatitude) *
+      Math.cos(toLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function degreesToRadians(value: number) {
+  return (value * Math.PI) / 180;
 }
 
 function weatherForecastModifier(

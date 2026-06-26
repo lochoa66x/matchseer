@@ -5,6 +5,7 @@ export type WorldCupVenue = {
   country: string;
   latitude: number;
   longitude: number;
+  elevationMeters: number;
   aliases: string[];
 };
 
@@ -16,6 +17,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "Mexico",
     latitude: 19.3029,
     longitude: -99.1505,
+    elevationMeters: 2240,
     aliases: ["estadio azteca", "mexico city stadium"],
   },
   {
@@ -25,6 +27,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "Mexico",
     latitude: 20.6819,
     longitude: -103.4626,
+    elevationMeters: 1560,
     aliases: ["estadio akron", "guadalajara stadium"],
   },
   {
@@ -34,6 +37,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "Mexico",
     latitude: 25.6682,
     longitude: -100.2444,
+    elevationMeters: 540,
     aliases: ["estadio bbva", "monterrey stadium"],
   },
   {
@@ -43,6 +47,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "Canada",
     latitude: 43.6332,
     longitude: -79.4186,
+    elevationMeters: 76,
     aliases: ["bmo field", "toronto stadium"],
   },
   {
@@ -52,6 +57,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "Canada",
     latitude: 49.2767,
     longitude: -123.1119,
+    elevationMeters: 70,
     aliases: ["bc place", "vancouver stadium"],
   },
   {
@@ -61,6 +67,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 33.7554,
     longitude: -84.4008,
+    elevationMeters: 320,
     aliases: ["mercedes-benz stadium", "atlanta stadium"],
   },
   {
@@ -70,6 +77,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 42.0909,
     longitude: -71.2643,
+    elevationMeters: 90,
     aliases: ["gillette stadium", "boston stadium"],
   },
   {
@@ -79,6 +87,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 32.7473,
     longitude: -97.0945,
+    elevationMeters: 180,
     aliases: ["at&t stadium", "att stadium", "dallas stadium"],
   },
   {
@@ -88,6 +97,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 29.6847,
     longitude: -95.4107,
+    elevationMeters: 15,
     aliases: ["nrg stadium", "houston stadium"],
   },
   {
@@ -97,6 +107,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 39.049,
     longitude: -94.4839,
+    elevationMeters: 265,
     aliases: ["arrowhead stadium", "kansas city stadium"],
   },
   {
@@ -106,6 +117,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 33.9535,
     longitude: -118.3392,
+    elevationMeters: 40,
     aliases: ["sofi stadium", "los angeles stadium"],
   },
   {
@@ -115,6 +127,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 25.958,
     longitude: -80.2389,
+    elevationMeters: 2,
     aliases: ["hard rock stadium", "miami stadium"],
   },
   {
@@ -124,6 +137,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 40.8135,
     longitude: -74.0745,
+    elevationMeters: 2,
     aliases: ["metlife stadium", "new york new jersey stadium"],
   },
   {
@@ -133,6 +147,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 39.9008,
     longitude: -75.1675,
+    elevationMeters: 12,
     aliases: ["lincoln financial field", "philadelphia stadium"],
   },
   {
@@ -142,6 +157,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 37.403,
     longitude: -121.97,
+    elevationMeters: 3,
     aliases: ["levi's stadium", "levis stadium", "san francisco bay area stadium"],
   },
   {
@@ -151,6 +167,7 @@ export const worldCupVenues: WorldCupVenue[] = [
     country: "United States",
     latitude: 47.5952,
     longitude: -122.3316,
+    elevationMeters: 50,
     aliases: ["lumen field", "seattle stadium"],
   },
 ];

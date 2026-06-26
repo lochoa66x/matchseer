@@ -29,6 +29,7 @@ export type FootballDataMatch = {
   minute: number | null;
   homeRedCards: number | null;
   awayRedCards: number | null;
+  duration: "regular" | "extra_time" | "penalties" | null;
   homeTeamProviderId: number;
   awayTeamProviderId: number;
   homeTeamIsPlaceholder: boolean;
@@ -89,6 +90,7 @@ type FootballDataMatchesResponse = {
     venueName?: string | null;
     stadium?: string | { name?: string | null } | null;
     score?: {
+      duration?: string | null;
       fullTime?: {
         home?: number | null;
         away?: number | null;
@@ -235,6 +237,7 @@ function toFootballDataMatch(
     minute: null,
     homeRedCards: null,
     awayRedCards: null,
+    duration: readMatchDuration(match.score?.duration),
     homeTeamProviderId: homeTeam.id,
     awayTeamProviderId: awayTeam.id,
     homeTeamIsPlaceholder: Boolean(homeTeam.isPlaceholder),
@@ -343,6 +346,28 @@ function readVenueName(
     ) {
       return venueValue.name;
     }
+  }
+
+  return null;
+}
+
+function readMatchDuration(duration: string | null | undefined): FootballDataMatch["duration"] {
+  const normalized = duration?.trim().toUpperCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.includes("PENAL")) {
+    return "penalties";
+  }
+
+  if (normalized.includes("EXTRA")) {
+    return "extra_time";
+  }
+
+  if (normalized.includes("REGULAR") || normalized.includes("NORMAL")) {
+    return "regular";
   }
 
   return null;
