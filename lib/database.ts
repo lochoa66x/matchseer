@@ -2092,17 +2092,17 @@ export async function syncFootballDataSnapshot(
       on conflict (external_id) do update set
         competition_id = excluded.competition_id,
         venue_id = case
-          when ${match.venueSlug === null}
+          when ${match.venueSlug === null}::boolean
             then coalesce(matches.venue_id, excluded.venue_id)
           else excluded.venue_id
         end,
         home_team_id = case
-          when ${match.homeTeamIsPlaceholder}
+          when ${match.homeTeamIsPlaceholder}::boolean
             then coalesce(matches.home_team_id, excluded.home_team_id)
           else excluded.home_team_id
         end,
         away_team_id = case
-          when ${match.awayTeamIsPlaceholder}
+          when ${match.awayTeamIsPlaceholder}::boolean
             then coalesce(matches.away_team_id, excluded.away_team_id)
           else excluded.away_team_id
         end,
@@ -2180,19 +2180,20 @@ export async function syncFootballDataSnapshot(
       shouldPreserveModelForecast(existingForecast)
     ) {
       if (match.status === "final" && match.duration && existingForecast.forecast_id) {
+        const resultPayload = {
+          result: {
+            duration: match.duration,
+            homeScore: match.homeScore,
+            awayScore: match.awayScore,
+            updatedAt: snapshot.fetchedAt,
+          },
+        };
+
         await sql`
           update forecasts
           set source_payload =
             coalesce(source_payload, '{}'::jsonb) ||
-            jsonb_build_object(
-              'result',
-              jsonb_build_object(
-                'duration', ${match.duration},
-                'homeScore', ${match.homeScore},
-                'awayScore', ${match.awayScore},
-                'updatedAt', ${snapshot.fetchedAt}
-              )
-            )
+            ${JSON.stringify(resultPayload)}::jsonb
           where id = ${existingForecast.forecast_id};
         `;
       }
