@@ -9010,6 +9010,138 @@ body {
   border-color: transparent;
 }
 
+.nfl-provider-grid,
+.nfl-source-coverage,
+.nfl-source-coverage-lanes,
+.nfl-provider-strip > div:first-child,
+.nfl-provider-positions {
+  display: grid;
+}
+
+.nfl-provider-grid {
+  flex-basis: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-provider-strip {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(5, 12, 28, 0.38);
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 8px;
+}
+
+.nfl-provider-strip.live {
+  border-color: rgba(52, 245, 166, 0.34);
+}
+
+.nfl-provider-strip.error,
+.nfl-provider-strip.stale {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.nfl-provider-strip > div:first-child {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.nfl-provider-strip strong,
+.nfl-source-coverage strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-provider-strip > div:first-child span {
+  padding: 4px 6px;
+  color: #d9e4f5;
+  background: rgba(143, 160, 189, 0.14);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-provider-strip.live > div:first-child span {
+  color: #06100f;
+  background: #8ff0c1;
+}
+
+.nfl-provider-strip.error > div:first-child span,
+.nfl-provider-strip.stale > div:first-child span {
+  color: #22080a;
+  background: #fca5a5;
+}
+
+.nfl-provider-strip p,
+.nfl-source-coverage p {
+  margin: 0;
+  color: #d9e4f5;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.nfl-provider-strip em,
+.nfl-source-coverage em {
+  display: block;
+  margin-top: 6px;
+  color: var(--nfl-muted);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-provider-positions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.nfl-provider-positions span,
+.nfl-source-coverage-lanes span {
+  min-width: 0;
+  padding: 5px 6px;
+  color: rgba(237, 244, 255, 0.76);
+  background: rgba(143, 160, 189, 0.1);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 950;
+  text-align: center;
+}
+
+.nfl-source-coverage {
+  flex-basis: 100%;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(45, 212, 191, 0.06);
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  border-radius: 8px;
+}
+
+.nfl-source-coverage-lanes {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.nfl-source-coverage-lanes span.live {
+  color: #06100f;
+  background: #c8f7dc;
+  border-color: transparent;
+}
+
+.nfl-source-coverage p {
+  grid-column: 1 / -1;
+  color: #ffd2d2;
+}
+
 .nfl-hero {
   display: grid;
   grid-template-columns: minmax(300px, 0.58fr) minmax(0, 1.12fr);
@@ -10625,6 +10757,12 @@ body {
 
   .nfl-data-pills {
     justify-content: flex-start;
+  }
+
+  .nfl-provider-grid,
+  .nfl-source-coverage,
+  .nfl-source-coverage-lanes {
+    grid-template-columns: 1fr;
   }
 
   .nfl-teams,

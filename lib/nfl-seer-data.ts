@@ -5,12 +5,20 @@ import {
 } from "./providers/polymarket";
 import {
   applyFantasyProjectionRealism,
+  buildSleeperFantasyLeague,
   fantasyPlayersFromSourceProjections,
   isNflFantasyPlayer,
+  mergeFantasyPlayerPools,
   mergeFantasySourceFeeds,
   normalizeFantasyProjectionFeed,
   type FantasyProjectionMatchupContext,
   type FantasySourceProjection,
+  type NflFantasyPlayer,
+  type SleeperLeague,
+  type SleeperMatchup,
+  type SleeperPlayer,
+  type SleeperRoster,
+  type SleeperUser,
 } from "./nfl-fantasy-import";
 
 export type NflTeamFeed = {
@@ -72,6 +80,47 @@ export type NflSeerProviderStatus = {
   fantasy: "live" | "fallback";
   market: "live" | "fallback";
   notes: string[];
+  fantasyProviders?: NflFantasyProviderStatus[];
+  fantasyCoverage?: NflFantasyCoverageStatus;
+};
+
+export type FantasyProviderStatusValue = "live" | "fallback" | "missing" | "error";
+
+export type FantasyProviderFreshness = "fresh" | "stale" | "unknown";
+
+export type FantasyProviderKind = "sleeper" | "players" | "projections" | "rankings";
+
+export type FantasyPosition = "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+
+export type FantasyPositionCounts = Record<FantasyPosition, number>;
+
+export type NflFantasyProviderStatus = {
+  id: string;
+  label: string;
+  kind: FantasyProviderKind;
+  status: FantasyProviderStatusValue;
+  source: string | null;
+  count: number;
+  updatedAt: string | null;
+  freshness: FantasyProviderFreshness;
+  positions: FantasyPositionCounts;
+  message: string;
+};
+
+export type NflFantasyCoverageStatus = {
+  totalPlayers: number;
+  totalProjections: number;
+  totalRankings: number;
+  positions: Record<
+    FantasyPosition,
+    {
+      players: number;
+      projections: number;
+      rankings: number;
+      total: number;
+    }
+  >;
+  missingPositions: FantasyPosition[];
 };
 
 export type NflSeerDataset = {
@@ -134,24 +183,18 @@ const nflPolymarketEnabled = process.env.NFL_POLYMARKET_ENABLED !== "0";
 const nflPolymarketMaxGames = Number(process.env.NFL_POLYMARKET_MAX_GAMES ?? "6");
 const nflPolymarketMaxShift = Number(process.env.NFL_POLYMARKET_MAX_SHIFT ?? "4");
 const nflPolymarketMaxWeight = Number(process.env.NFL_POLYMARKET_MAX_WEIGHT ?? "0.16");
+const sleeperApiBase = "https://api.sleeper.app/v1";
+const fantasyFreshHours = Number(process.env.NFL_FANTASY_FRESH_HOURS ?? "24");
+const fantasyStaleHours = Number(process.env.NFL_FANTASY_STALE_HOURS ?? "72");
+const fantasyPositions = ["QB", "RB", "WR", "TE", "K", "DST"] as const;
 
 export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
   const fetchedAt = new Date().toISOString();
   const notes: string[] = [];
   const scheduleUrl = process.env.NFL_SEER_DATA_URL ?? espnScoreboardUrl;
-  const fantasyUrl = process.env.NFL_FANTASY_DATA_URL;
-  const fantasyProjectionUrl = process.env.NFL_FANTASY_PROJECTIONS_URL;
-  const fantasyRankingUrl = process.env.NFL_FANTASY_RANKINGS_URL;
-  const fantasyPlayers = fantasyUrl
-    ? await fetchFantasyPlayers(fantasyUrl, notes)
-    : [];
-  const fantasyProjections = fantasyProjectionUrl
-    ? await fetchFantasyProjections(fantasyProjectionUrl, notes)
-    : [];
-  const fantasyRankings = fantasyRankingUrl
-    ? await fetchFantasyRankings(fantasyRankingUrl, notes)
-    : [];
-  const fantasySignals = mergeFantasySourceFeeds(fantasyProjections, fantasyRankings);
+  const fantasyAdapters = await loadFantasyProviderAdapters(fetchedAt, notes);
+  const fantasyPlayers = fantasyAdapters.players;
+  const fantasySignals = fantasyAdapters.signals;
 
   try {
     const response = await fetch(scheduleUrl, {
@@ -182,11 +225,13 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       ...marketResult.dataset,
       providerStatus: {
         schedule: "live",
-          fantasy:
+        fantasy:
           fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? "live"
             : "fallback",
         market: marketResult.status,
+        fantasyProviders: fantasyAdapters.providers,
+        fantasyCoverage: fantasyAdapters.coverage,
         notes:
           fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? [...notes, ...projectionNotes(fantasySignals), ...marketResult.notes]
@@ -220,6 +265,8 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
             schedule: "fallback",
             fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
             market: "fallback",
+            fantasyProviders: fantasyAdapters.providers,
+            fantasyCoverage: fantasyAdapters.coverage,
             notes: [],
           },
         },
@@ -227,11 +274,13 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       ).fantasyPlayers,
       providerStatus: {
         schedule: "fallback",
-          fantasy:
+        fantasy:
           fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? "live"
             : "fallback",
         market: "fallback",
+        fantasyProviders: fantasyAdapters.providers,
+        fantasyCoverage: fantasyAdapters.coverage,
         notes: [
           message,
           fantasyPlayers.length > 0 || fantasySignals.length > 0
@@ -270,6 +319,8 @@ export function toNflSeerDataset(
             : "fallback",
         market: payload.providerStatus?.market ?? "fallback",
         notes: payload.providerStatus?.notes ?? [],
+        fantasyProviders: payload.providerStatus?.fantasyProviders,
+        fantasyCoverage: payload.providerStatus?.fantasyCoverage,
       },
     };
   }
@@ -670,94 +721,609 @@ function matchupEdges({
   return edges.slice(0, 3);
 }
 
-async function fetchFantasyPlayers(url: string, notes: string[]) {
+async function loadFantasyProviderAdapters(
+  fetchedAt: string,
+  notes: string[],
+) {
+  const [sleeper, players, projections, rankings] = await Promise.all([
+    loadSleeperRosterAdapter(fetchedAt, notes),
+    loadFantasyPlayersAdapter({
+      fetchedAt,
+      label: "Player feed",
+      notes,
+      source: process.env.NFL_FANTASY_DATA_URL ?? "",
+    }),
+    loadFantasySignalAdapter({
+      fetchedAt,
+      id: "projections",
+      kind: "projections",
+      label: "Projection feed",
+      missingMessage: "Set NFL_FANTASY_PROJECTIONS_URL for source point receipts.",
+      notes,
+      source: process.env.NFL_FANTASY_PROJECTIONS_URL ?? "",
+    }),
+    loadFantasySignalAdapter({
+      fetchedAt,
+      id: "rankings",
+      kind: "rankings",
+      label: "Rankings / ECR / ADP",
+      missingMessage: "Set NFL_FANTASY_RANKINGS_URL for rankings, ECR, or ADP.",
+      notes,
+      source: process.env.NFL_FANTASY_RANKINGS_URL ?? "",
+    }),
+  ]);
+  const providerPlayers = mergeFantasyPlayerPools(
+    players.players.filter(isNflFantasyPlayer),
+    sleeper.players,
+  );
+  const signals = mergeFantasySourceFeeds(projections.signals, rankings.signals);
+  const providers = [
+    sleeper.provider,
+    players.provider,
+    projections.provider,
+    rankings.provider,
+  ];
+
+  return {
+    coverage: fantasyCoverage(providerPlayers, signals),
+    players: providerPlayers,
+    providers,
+    signals,
+  };
+}
+
+async function loadFantasyPlayersAdapter({
+  fetchedAt,
+  label,
+  notes,
+  source,
+}: {
+  fetchedAt: string;
+  label: string;
+  notes: string[];
+  source: string;
+}): Promise<{
+  players: unknown[];
+  provider: NflFantasyProviderStatus;
+}> {
+  if (!source) {
+    return {
+      players: [],
+      provider: missingProvider({
+        id: "players",
+        kind: "players",
+        label,
+        message: "Set NFL_FANTASY_DATA_URL for a canonical fantasy player feed.",
+      }),
+    };
+  }
+
   try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
+    const { payload, updatedAt } = await fetchJsonPayload(source, fetchedAt);
+    const players = fantasyPlayersFromPayload(payload);
+
+    return {
+      players,
+      provider: providerStatus({
+        count: players.length,
+        fetchedAt,
+        id: "players",
+        kind: "players",
+        label,
+        message:
+          players.length > 0
+            ? `Loaded ${players.length} canonical fantasy player${players.length === 1 ? "" : "s"}.`
+            : "Fantasy player feed loaded but did not include usable players.",
+        positions: positionCountsForPlayers(players),
+        source,
+        status: players.length > 0 ? "live" : "fallback",
+        updatedAt,
+      }),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "NFL fantasy player feed failed.";
+    notes.push(message);
+
+    return {
+      players: [],
+      provider: providerStatus({
+        count: 0,
+        fetchedAt,
+        id: "players",
+        kind: "players",
+        label,
+        message,
+        positions: emptyPositionCounts(),
+        source,
+        status: "error",
+        updatedAt: null,
+      }),
+    };
+  }
+}
+
+async function loadFantasySignalAdapter({
+  fetchedAt,
+  id,
+  kind,
+  label,
+  missingMessage,
+  notes,
+  source,
+}: {
+  fetchedAt: string;
+  id: string;
+  kind: Extract<FantasyProviderKind, "projections" | "rankings">;
+  label: string;
+  missingMessage: string;
+  notes: string[];
+  source: string;
+}): Promise<{
+  signals: FantasySourceProjection[];
+  provider: NflFantasyProviderStatus;
+}> {
+  if (!source) {
+    return {
+      provider: missingProvider({ id, kind, label, message: missingMessage }),
+      signals: [],
+    };
+  }
+
+  try {
+    const { payload, updatedAt } = await fetchJsonPayload(source, fetchedAt);
+    const signals = normalizeFantasyProjectionFeed(payload);
+
+    return {
+      provider: providerStatus({
+        count: signals.length,
+        fetchedAt,
+        id,
+        kind,
+        label,
+        message:
+          signals.length > 0
+            ? `Normalized ${signals.length} ${kind === "rankings" ? "ranking" : "projection"} row${signals.length === 1 ? "" : "s"}.`
+            : `${label} loaded but had no usable fantasy rows.`,
+        positions: positionCountsForSignals(signals),
+        source,
+        status: signals.length > 0 ? "live" : "fallback",
+        updatedAt,
+      }),
+      signals,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : `${label} failed to load.`;
+    notes.push(message);
+
+    return {
+      provider: providerStatus({
+        count: 0,
+        fetchedAt,
+        id,
+        kind,
+        label,
+        message,
+        positions: emptyPositionCounts(),
+        source,
+        status: "error",
+        updatedAt: null,
+      }),
+      signals: [],
+    };
+  }
+}
+
+async function loadSleeperRosterAdapter(
+  fetchedAt: string,
+  notes: string[],
+): Promise<{
+  players: NflFantasyPlayer[];
+  provider: NflFantasyProviderStatus;
+}> {
+  const leagueId = (process.env.NFL_SLEEPER_LEAGUE_ID ?? "").trim();
+
+  if (!leagueId) {
+    return {
+      players: [],
+      provider: missingProvider({
+        id: "sleeper",
+        kind: "sleeper",
+        label: "Sleeper rosters",
+        message: "Set NFL_SLEEPER_LEAGUE_ID to sync a public Sleeper league.",
+      }),
+    };
+  }
+
+  try {
+    const week = await sleeperWeek();
+    const [league, rosters, users, players, matchups] = await Promise.all([
+      sleeperJson<SleeperLeague>(`/league/${encodeURIComponent(leagueId)}`, {
+        cache: "no-store",
+      }),
+      sleeperJson<SleeperRoster[]>(`/league/${encodeURIComponent(leagueId)}/rosters`, {
+        cache: "no-store",
+      }),
+      sleeperJson<SleeperUser[]>(`/league/${encodeURIComponent(leagueId)}/users`, {
+        cache: "no-store",
+      }),
+      sleeperJson<Record<string, SleeperPlayer>>("/players/nfl", {
+        next: { revalidate: 86400 },
+      }),
+      week
+        ? sleeperJson<SleeperMatchup[]>(
+            `/league/${encodeURIComponent(leagueId)}/matchups/${week}`,
+            { cache: "no-store" },
+          ).catch(() => [])
+        : Promise.resolve([] as SleeperMatchup[]),
+    ]);
+    const leagueImport = buildSleeperFantasyLeague({
+      league,
+      matchups,
+      players,
+      rosters,
+      users,
+      week,
     });
 
-    if (!response.ok) {
-      throw new Error(`NFL fantasy feed failed: ${response.status}`);
-    }
+    return {
+      players: leagueImport.players,
+      provider: providerStatus({
+        count: leagueImport.players.length,
+        fetchedAt,
+        id: "sleeper",
+        kind: "sleeper",
+        label: "Sleeper rosters",
+        message:
+          leagueImport.players.length > 0
+            ? `Synced ${leagueImport.teams.length} team${leagueImport.teams.length === 1 ? "" : "s"} from ${leagueImport.label}.`
+            : "Sleeper league loaded but no roster players were usable.",
+        positions: positionCountsForPlayers(leagueImport.players),
+        source: `sleeper:${leagueId}`,
+        status: leagueImport.players.length > 0 ? "live" : "fallback",
+        updatedAt: fetchedAt,
+      }),
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Sleeper roster sync failed.";
+    notes.push(message);
 
-    const payload = (await response.json()) as unknown;
+    return {
+      players: [],
+      provider: providerStatus({
+        count: 0,
+        fetchedAt,
+        id: "sleeper",
+        kind: "sleeper",
+        label: "Sleeper rosters",
+        message,
+        positions: emptyPositionCounts(),
+        source: `sleeper:${leagueId}`,
+        status: "error",
+        updatedAt: null,
+      }),
+    };
+  }
+}
 
-    if (Array.isArray(payload)) {
-      return payload;
+async function fetchJsonPayload(source: string, fetchedAt: string) {
+  const response = await fetch(source, {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fantasy provider failed: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as unknown;
+
+  return {
+    payload,
+    updatedAt: payloadUpdatedAt(payload, response, fetchedAt),
+  };
+}
+
+async function sleeperWeek() {
+  const explicitWeek = Number(process.env.NFL_SLEEPER_WEEK);
+
+  if (Number.isFinite(explicitWeek) && explicitWeek > 0) {
+    return Math.floor(explicitWeek);
+  }
+
+  const state = await sleeperJson<{
+    display_week?: string | number | null;
+    week?: string | number | null;
+  }>("/state/nfl", { cache: "no-store" }).catch(() => null);
+
+  return (
+    numberFromValue(state?.display_week) ??
+    numberFromValue(state?.week) ??
+    undefined
+  );
+}
+
+async function sleeperJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${sleeperApiBase}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Sleeper request failed (${response.status}).`);
+  }
+
+  return (await response.json()) as T;
+}
+
+function fantasyPlayersFromPayload(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "fantasyPlayers" in payload &&
+    Array.isArray(payload.fantasyPlayers)
+  ) {
+    return payload.fantasyPlayers;
+  }
+
+  return [];
+}
+
+function providerStatus({
+  count,
+  fetchedAt,
+  id,
+  kind,
+  label,
+  message,
+  positions,
+  source,
+  status,
+  updatedAt,
+}: {
+  count: number;
+  fetchedAt: string;
+  id: string;
+  kind: FantasyProviderKind;
+  label: string;
+  message: string;
+  positions: FantasyPositionCounts;
+  source: string | null;
+  status: FantasyProviderStatusValue;
+  updatedAt: string | null;
+}): NflFantasyProviderStatus {
+  return {
+    count,
+    freshness: freshnessStatus(updatedAt, fetchedAt),
+    id,
+    kind,
+    label,
+    message,
+    positions,
+    source,
+    status,
+    updatedAt,
+  };
+}
+
+function missingProvider({
+  id,
+  kind,
+  label,
+  message,
+}: {
+  id: string;
+  kind: FantasyProviderKind;
+  label: string;
+  message: string;
+}): NflFantasyProviderStatus {
+  return {
+    count: 0,
+    freshness: "unknown",
+    id,
+    kind,
+    label,
+    message,
+    positions: emptyPositionCounts(),
+    source: null,
+    status: "missing",
+    updatedAt: null,
+  };
+}
+
+function fantasyCoverage(
+  players: unknown[],
+  signals: FantasySourceProjection[],
+): NflFantasyCoverageStatus {
+  const positions = fantasyPositions.reduce<NflFantasyCoverageStatus["positions"]>(
+    (coverage, position) => {
+      coverage[position] = {
+        players: 0,
+        projections: 0,
+        rankings: 0,
+        total: 0,
+      };
+      return coverage;
+    },
+    {} as NflFantasyCoverageStatus["positions"],
+  );
+
+  players.filter(isNflFantasyPlayer).forEach((player) => {
+    const position = normalizeFantasyPosition(player.position);
+    positions[position].players += 1;
+  });
+
+  signals.forEach((signal) => {
+    const position = normalizeFantasyPosition(signal.position);
+
+    if (typeof signal.projection === "number") {
+      positions[position].projections += 1;
     }
 
     if (
-      typeof payload === "object" &&
-      payload !== null &&
-      "fantasyPlayers" in payload &&
-      Array.isArray(payload.fantasyPlayers)
+      typeof signal.sourceRank === "number" ||
+      typeof signal.positionRank === "number"
     ) {
-      return payload.fantasyPlayers;
+      positions[position].rankings += 1;
     }
-  } catch (error) {
-    notes.push(
-      error instanceof Error ? error.message : "NFL fantasy feed failed to load.",
-    );
-  }
+  });
 
-  return [];
+  fantasyPositions.forEach((position) => {
+    const row = positions[position];
+    row.total = row.players + row.projections + row.rankings;
+  });
+
+  return {
+    missingPositions: fantasyPositions.filter(
+      (position) => positions[position].total === 0,
+    ),
+    positions,
+    totalPlayers: players.filter(isNflFantasyPlayer).length,
+    totalProjections: signals.filter(
+      (signal) => typeof signal.projection === "number",
+    ).length,
+    totalRankings: signals.filter(
+      (signal) =>
+        typeof signal.sourceRank === "number" ||
+        typeof signal.positionRank === "number",
+    ).length,
+  };
 }
 
-async function fetchFantasyProjections(url: string, notes: string[]) {
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+function positionCountsForPlayers(players: unknown[]) {
+  const counts = emptyPositionCounts();
 
-    if (!response.ok) {
-      throw new Error(`NFL fantasy projections feed failed: ${response.status}`);
-    }
+  players.filter(isNflFantasyPlayer).forEach((player) => {
+    counts[normalizeFantasyPosition(player.position)] += 1;
+  });
 
-    const payload = (await response.json()) as unknown;
-
-    return normalizeFantasyProjectionFeed(payload);
-  } catch (error) {
-    notes.push(
-      error instanceof Error
-        ? error.message
-        : "NFL fantasy projections feed failed to load.",
-    );
-  }
-
-  return [];
+  return counts;
 }
 
-async function fetchFantasyRankings(url: string, notes: string[]) {
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+function positionCountsForSignals(signals: FantasySourceProjection[]) {
+  const counts = emptyPositionCounts();
 
-    if (!response.ok) {
-      throw new Error(`NFL fantasy rankings feed failed: ${response.status}`);
-    }
+  signals.forEach((signal) => {
+    counts[normalizeFantasyPosition(signal.position)] += 1;
+  });
 
-    const payload = (await response.json()) as unknown;
+  return counts;
+}
 
-    return normalizeFantasyProjectionFeed(payload);
-  } catch (error) {
-    notes.push(
-      error instanceof Error
-        ? error.message
-        : "NFL fantasy rankings feed failed to load.",
-    );
+function emptyPositionCounts(): FantasyPositionCounts {
+  return {
+    DST: 0,
+    K: 0,
+    QB: 0,
+    RB: 0,
+    TE: 0,
+    WR: 0,
+  };
+}
+
+function normalizeFantasyPosition(value: unknown): FantasyPosition {
+  const position = typeof value === "string" ? value.toUpperCase() : "";
+
+  if (position === "DEF" || position === "D") {
+    return "DST";
   }
 
-  return [];
+  if (
+    position === "QB" ||
+    position === "RB" ||
+    position === "WR" ||
+    position === "TE" ||
+    position === "K" ||
+    position === "DST"
+  ) {
+    return position;
+  }
+
+  return "WR";
+}
+
+function payloadUpdatedAt(
+  payload: unknown,
+  response: Response,
+  fetchedAt: string,
+) {
+  const payloadDate =
+    typeof payload === "object" && payload !== null
+      ? dateStringFromRecord(payload as Record<string, unknown>)
+      : "";
+  const headerDate = response.headers.get("last-modified") ?? response.headers.get("date");
+
+  return validDateString(payloadDate) ?? validDateString(headerDate) ?? fetchedAt;
+}
+
+function dateStringFromRecord(record: Record<string, unknown>) {
+  for (const key of ["updatedAt", "lastUpdated", "generatedAt", "asOf", "timestamp"]) {
+    const value = record[key];
+
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function validDateString(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function freshnessStatus(
+  updatedAt: string | null,
+  fetchedAt: string,
+): FantasyProviderFreshness {
+  if (!updatedAt) {
+    return "unknown";
+  }
+
+  const updated = new Date(updatedAt).getTime();
+  const fetched = new Date(fetchedAt).getTime();
+
+  if (Number.isNaN(updated) || Number.isNaN(fetched)) {
+    return "unknown";
+  }
+
+  const ageHours = Math.max(0, (fetched - updated) / 36e5);
+  const freshHours = Number.isFinite(fantasyFreshHours)
+    ? Math.max(1, fantasyFreshHours)
+    : 24;
+  const staleHours = Number.isFinite(fantasyStaleHours)
+    ? Math.max(freshHours, fantasyStaleHours)
+    : freshHours;
+
+  return ageHours <= staleHours ? "fresh" : "stale";
+}
+
+function numberFromValue(value: unknown) {
+  const numberValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function applyFantasyProjectionLayer(

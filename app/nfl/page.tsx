@@ -37,6 +37,11 @@ type FantasyTeamLens = "redraft" | "dynasty";
 type ScoutingPosition = "ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DST";
 type ScoutingPlayerPosition = Exclude<ScoutingPosition, "ALL">;
 type ScoutingDepth = "top10" | "top25" | "deep";
+type FantasyProviderStatusValue = "live" | "fallback" | "missing" | "error";
+type FantasyProviderFreshness = "fresh" | "stale" | "unknown";
+type FantasyProviderKind = "sleeper" | "players" | "projections" | "rankings";
+type FantasyPosition = ScoutingPlayerPosition;
+type FantasyPositionCounts = Record<FantasyPosition, number>;
 
 type NflTeam = {
   code: string;
@@ -137,6 +142,32 @@ type NflProviderStatus = {
   fantasy: "live" | "fallback";
   market: "live" | "fallback";
   notes: string[];
+  fantasyProviders?: NflFantasyProviderStatus[];
+  fantasyCoverage?: NflFantasyCoverageStatus;
+};
+
+type NflFantasyProviderStatus = {
+  id: string;
+  label: string;
+  kind: FantasyProviderKind;
+  status: FantasyProviderStatusValue;
+  source: string | null;
+  count: number;
+  updatedAt: string | null;
+  freshness: FantasyProviderFreshness;
+  positions: FantasyPositionCounts;
+  message: string;
+};
+
+type NflFantasyCoverageStatus = {
+  totalPlayers: number;
+  totalProjections: number;
+  totalRankings: number;
+  positions: Record<
+    FantasyPosition,
+    { players: number; projections: number; rankings: number; total: number }
+  >;
+  missingPositions: FantasyPosition[];
 };
 
 type NflSeerDataset = {
@@ -177,6 +208,8 @@ const scoutingPositionOptions: Array<{ value: ScoutingPosition; label: string }>
   { value: "K", label: "Kicker" },
   { value: "DST", label: "Def" },
 ];
+
+const fantasyCoveragePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE", "K", "DST"];
 
 const scoutingDepthOptions: Array<{
   value: ScoutingDepth;
@@ -1112,6 +1145,14 @@ function NflDataRibbon({
     dataset.updatedAt === new Date(0).toISOString()
       ? "waiting"
       : formatDataUpdated(dataset.updatedAt);
+  const fantasyProviders = dataset.providerStatus.fantasyProviders ?? [];
+  const fantasyCoverage = dataset.providerStatus.fantasyCoverage;
+  const providerWarning = fantasyProviders.find(
+    (provider) =>
+      provider.status === "error" ||
+      provider.freshness === "stale" ||
+      provider.status === "missing",
+  );
 
   return (
     <section className="nfl-data-ribbon" aria-label="NFL data status">
@@ -1135,6 +1176,75 @@ function NflDataRibbon({
       </div>
       {dataset.providerStatus.notes.length > 0 ? (
         <p>{dataset.providerStatus.notes.slice(0, 2).join(" ")}</p>
+      ) : null}
+      {fantasyProviders.length > 0 ? (
+        <div className="nfl-provider-grid" aria-label="Fantasy provider status">
+          {fantasyProviders.map((provider) => (
+            <article
+              className={cx(
+                "nfl-provider-strip",
+                provider.status === "live" && "live",
+                provider.status === "error" && "error",
+                provider.freshness === "stale" && "stale",
+              )}
+              key={provider.id}
+            >
+              <div>
+                <strong>{provider.label}</strong>
+                <span>{provider.status}</span>
+              </div>
+              <p>{provider.message}</p>
+              <em>
+                {provider.count} rows · {provider.freshness}
+                {provider.updatedAt ? ` · ${formatDataUpdated(provider.updatedAt)}` : ""}
+              </em>
+              <div className="nfl-provider-positions">
+                {fantasyCoveragePositions.map((position) => (
+                  <span key={position}>
+                    {scoutingRankLabel(position)} {provider.positions[position] ?? 0}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      {fantasyCoverage ? (
+        <div className="nfl-source-coverage" aria-label="Fantasy source coverage">
+          <div>
+            <strong>Fantasy source coverage</strong>
+            <em>
+              {fantasyCoverage.totalPlayers} players ·{" "}
+              {fantasyCoverage.totalProjections} projections ·{" "}
+              {fantasyCoverage.totalRankings} rankings
+            </em>
+          </div>
+          <div className="nfl-source-coverage-lanes">
+            {fantasyCoveragePositions.map((position) => {
+              const row = fantasyCoverage.positions[position];
+
+              return (
+                <span
+                  className={cx(row.total > 0 && "live")}
+                  key={position}
+                  title={`${row.players} players, ${row.projections} projections, ${row.rankings} rankings`}
+                >
+                  {scoutingRankLabel(position)} {row.total}
+                </span>
+              );
+            })}
+          </div>
+          {fantasyCoverage.missingPositions.length > 0 || providerWarning ? (
+            <p>
+              {providerWarning ? providerWarning.message : "Coverage is thin"}{" "}
+              {fantasyCoverage.missingPositions.length > 0
+                ? `Missing ${fantasyCoverage.missingPositions
+                    .map(scoutingRankLabel)
+                    .join(", ")} lanes.`
+                : ""}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );
@@ -3103,6 +3213,13 @@ function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
       ? incomingFantasyPlayers
       : seededNflDataset.fantasyPlayers;
   const providerStatus = payload.providerStatus ?? seededNflDataset.providerStatus;
+  const fantasyProviders = sanitizeFantasyProviders(
+    providerStatus.fantasyProviders,
+  );
+  const fantasyCoverage = sanitizeFantasyCoverage(providerStatus.fantasyCoverage);
+  const hasLiveFantasyProvider = fantasyProviders.some(
+    (provider) => provider.status === "live",
+  );
 
   return {
     source: isNflDatasetSource(payload.source)
@@ -3124,7 +3241,8 @@ function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
     providerStatus: {
       schedule: providerStatus.schedule === "live" ? "live" : "fallback",
       fantasy:
-        providerStatus.fantasy === "live" && incomingFantasyPlayers.length > 0
+        providerStatus.fantasy === "live" &&
+        (incomingFantasyPlayers.length > 0 || hasLiveFantasyProvider)
           ? "live"
           : "fallback",
       market:
@@ -3138,8 +3256,169 @@ function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
           : incomingFantasyPlayers.length > 0
             ? []
             : ["Fantasy board is still using the seeded preseason rail."],
+      fantasyCoverage,
+      fantasyProviders,
     },
   };
+}
+
+function sanitizeFantasyProviders(value: unknown): NflFantasyProviderStatus[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (typeof item !== "object" || item === null) {
+      return [];
+    }
+
+    const provider = item as Partial<NflFantasyProviderStatus>;
+
+    if (
+      typeof provider.id !== "string" ||
+      typeof provider.label !== "string" ||
+      !isFantasyProviderKind(provider.kind) ||
+      !isFantasyProviderStatusValue(provider.status) ||
+      !isFantasyProviderFreshness(provider.freshness) ||
+      typeof provider.message !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        count: numberFromUnknown(provider.count),
+        freshness: provider.freshness,
+        id: provider.id,
+        kind: provider.kind,
+        label: provider.label,
+        message: provider.message,
+        positions: sanitizeFantasyPositionCounts(provider.positions),
+        source: typeof provider.source === "string" ? provider.source : null,
+        status: provider.status,
+        updatedAt:
+          typeof provider.updatedAt === "string" ? provider.updatedAt : null,
+      },
+    ];
+  });
+}
+
+function sanitizeFantasyCoverage(
+  value: unknown,
+): NflFantasyCoverageStatus | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const coverage = value as Partial<NflFantasyCoverageStatus>;
+  const positionsRecord =
+    typeof coverage.positions === "object" && coverage.positions !== null
+      ? (coverage.positions as Partial<NflFantasyCoverageStatus["positions"]>)
+      : {};
+  const positions = fantasyCoveragePositions.reduce<
+    NflFantasyCoverageStatus["positions"]
+  >(
+    (nextPositions, position) => {
+      const row = positionsRecord[position];
+      const safeRow =
+        typeof row === "object" && row !== null
+          ? row
+          : { players: 0, projections: 0, rankings: 0, total: 0 };
+
+      nextPositions[position] = {
+        players: numberFromUnknown(safeRow.players),
+        projections: numberFromUnknown(safeRow.projections),
+        rankings: numberFromUnknown(safeRow.rankings),
+        total: numberFromUnknown(safeRow.total),
+      };
+
+      if (nextPositions[position].total === 0) {
+        nextPositions[position].total =
+          nextPositions[position].players +
+          nextPositions[position].projections +
+          nextPositions[position].rankings;
+      }
+
+      return nextPositions;
+    },
+    {} as NflFantasyCoverageStatus["positions"],
+  );
+  const missingPositions = Array.isArray(coverage.missingPositions)
+    ? coverage.missingPositions.filter(isFantasyPosition)
+    : fantasyCoveragePositions.filter((position) => positions[position].total === 0);
+
+  return {
+    missingPositions,
+    positions,
+    totalPlayers: numberFromUnknown(coverage.totalPlayers),
+    totalProjections: numberFromUnknown(coverage.totalProjections),
+    totalRankings: numberFromUnknown(coverage.totalRankings),
+  };
+}
+
+function sanitizeFantasyPositionCounts(value: unknown): FantasyPositionCounts {
+  const record =
+    typeof value === "object" && value !== null
+      ? (value as Partial<FantasyPositionCounts>)
+      : {};
+
+  return fantasyCoveragePositions.reduce(
+    (counts, position) => {
+      counts[position] = numberFromUnknown(record[position]);
+      return counts;
+    },
+    {
+      DST: 0,
+      K: 0,
+      QB: 0,
+      RB: 0,
+      TE: 0,
+      WR: 0,
+    } satisfies FantasyPositionCounts,
+  );
+}
+
+function isFantasyProviderKind(value: unknown): value is FantasyProviderKind {
+  return (
+    value === "sleeper" ||
+    value === "players" ||
+    value === "projections" ||
+    value === "rankings"
+  );
+}
+
+function isFantasyProviderStatusValue(
+  value: unknown,
+): value is FantasyProviderStatusValue {
+  return (
+    value === "live" ||
+    value === "fallback" ||
+    value === "missing" ||
+    value === "error"
+  );
+}
+
+function isFantasyProviderFreshness(
+  value: unknown,
+): value is FantasyProviderFreshness {
+  return value === "fresh" || value === "stale" || value === "unknown";
+}
+
+function isFantasyPosition(value: unknown): value is FantasyPosition {
+  return (
+    value === "QB" ||
+    value === "RB" ||
+    value === "WR" ||
+    value === "TE" ||
+    value === "K" ||
+    value === "DST"
+  );
+}
+
+function numberFromUnknown(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : 0;
 }
 
 function isNflMatchup(value: unknown): value is NflMatchup {

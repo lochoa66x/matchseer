@@ -80,7 +80,36 @@ describe("toNflSeerDataset", () => {
         providerStatus: {
           schedule: "fallback",
           fantasy: "live",
+          market: "fallback",
           notes: ["custom feed"],
+          fantasyProviders: [
+            {
+              count: 2,
+              freshness: "fresh",
+              id: "rankings",
+              kind: "rankings",
+              label: "Rankings / ECR / ADP",
+              message: "Normalized 2 ranking rows.",
+              positions: { DST: 0, K: 0, QB: 1, RB: 0, TE: 0, WR: 1 },
+              source: "https://example.com/ranks.json",
+              status: "live",
+              updatedAt: "2026-09-22T11:45:00.000Z",
+            },
+          ],
+          fantasyCoverage: {
+            missingPositions: ["RB", "TE", "K", "DST"],
+            positions: {
+              DST: { players: 0, projections: 0, rankings: 0, total: 0 },
+              K: { players: 0, projections: 0, rankings: 0, total: 0 },
+              QB: { players: 1, projections: 0, rankings: 1, total: 2 },
+              RB: { players: 0, projections: 0, rankings: 0, total: 0 },
+              TE: { players: 0, projections: 0, rankings: 0, total: 0 },
+              WR: { players: 1, projections: 0, rankings: 1, total: 2 },
+            },
+            totalPlayers: 2,
+            totalProjections: 0,
+            totalRankings: 2,
+          },
         },
       },
       {
@@ -92,5 +121,10 @@ describe("toNflSeerDataset", () => {
     expect(dataset.weekLabel).toBe("Week 3");
     expect(dataset.fantasyPlayers).toEqual([{ id: "wr-1" }]);
     expect(dataset.providerStatus.notes).toEqual(["custom feed"]);
+    expect(dataset.providerStatus.fantasyProviders?.[0]).toMatchObject({
+      id: "rankings",
+      status: "live",
+    });
+    expect(dataset.providerStatus.fantasyCoverage?.positions.WR.total).toBe(2);
   });
 });
