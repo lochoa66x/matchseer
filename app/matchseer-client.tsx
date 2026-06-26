@@ -3654,6 +3654,8 @@ function ForecastWaterfall({
   steps: ForecastWaterfallStep[];
   t: Record<string, string>;
 }) {
+  const leadingStep = steps[0];
+
   return (
     <section className={cx("forecast-waterfall", expanded && "expanded")}>
       <button
@@ -3671,6 +3673,18 @@ function ForecastWaterfall({
         </strong>
         <ChevronDown size={15} />
       </button>
+      {!expanded && leadingStep && (
+        <div className={cx("forecast-waterfall-preview", leadingStep.tone)}>
+          <WaterfallStepIcon step={leadingStep} />
+          <div>
+            <span>
+              <strong>{leadingStep.label}</strong>
+              <small>{leadingStep.impactLabel}</small>
+            </span>
+            <p>{leadingStep.text[language] ?? leadingStep.text.en}</p>
+          </div>
+        </div>
+      )}
       <div className="forecast-waterfall-list">
         {steps.map((step, index) => (
           <div className={cx("forecast-waterfall-step", step.tone)} key={step.id}>

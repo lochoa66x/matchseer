@@ -879,7 +879,7 @@ h1 {
   display: grid;
   gap: 10px;
   margin-top: 12px;
-  padding: 10px;
+  padding: 9px;
   color: rgba(226, 235, 250, 0.9);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(126, 231, 178, 0.18);
@@ -895,8 +895,14 @@ h1 {
   color: rgba(225, 235, 250, 0.9);
   background: transparent;
   border: 0;
+  cursor: pointer;
   font: inherit;
   text-align: left;
+}
+
+.forecast-waterfall-toggle:focus-visible {
+  outline: 2px solid rgba(126, 231, 178, 0.58);
+  outline-offset: 4px;
 }
 
 .forecast-waterfall-toggle span {
@@ -917,7 +923,7 @@ h1 {
 }
 
 .forecast-waterfall-toggle > svg {
-  display: none;
+  display: block;
   flex: 0 0 auto;
   transition: transform 160ms ease;
 }
@@ -931,6 +937,112 @@ h1 {
   gap: 8px;
 }
 
+.forecast-waterfall:not(.expanded) .forecast-waterfall-list {
+  display: none;
+}
+
+.forecast-waterfall-preview {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  background: rgba(5, 10, 22, 0.32);
+  border: 1px solid rgba(126, 231, 178, 0.14);
+  border-radius: 8px;
+}
+
+.forecast-waterfall-preview.drag {
+  border-color: rgba(255, 204, 105, 0.18);
+}
+
+.forecast-waterfall-preview.chaos {
+  border-color: rgba(255, 126, 92, 0.2);
+}
+
+.forecast-waterfall-preview.steady {
+  border-color: rgba(159, 178, 210, 0.18);
+}
+
+.forecast-waterfall-preview > svg {
+  margin-top: 2px;
+  color: rgba(160, 246, 210, 0.86);
+}
+
+.forecast-waterfall-preview.drag > svg {
+  color: rgba(255, 204, 105, 0.9);
+}
+
+.forecast-waterfall-preview.chaos > svg {
+  color: rgba(255, 126, 92, 0.92);
+}
+
+.forecast-waterfall-preview.steady > svg {
+  color: rgba(159, 178, 210, 0.9);
+}
+
+.forecast-waterfall-preview span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.forecast-waterfall-preview strong {
+  min-width: 0;
+  color: #f6f9ff;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.forecast-waterfall-preview small {
+  flex: 0 0 auto;
+  max-width: 9rem;
+  padding: 3px 7px;
+  color: #dfffea;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(126, 231, 178, 0.12);
+  border: 1px solid rgba(126, 231, 178, 0.18);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.forecast-waterfall-preview.drag small {
+  color: #ffe6b3;
+  background: rgba(255, 204, 105, 0.12);
+  border-color: rgba(255, 204, 105, 0.2);
+}
+
+.forecast-waterfall-preview.chaos small {
+  color: #ffd4c7;
+  background: rgba(255, 126, 92, 0.12);
+  border-color: rgba(255, 126, 92, 0.2);
+}
+
+.forecast-waterfall-preview.steady small {
+  color: #dce7f8;
+  background: rgba(159, 178, 210, 0.11);
+  border-color: rgba(159, 178, 210, 0.18);
+}
+
+.forecast-waterfall-preview p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: rgba(202, 214, 234, 0.78);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.74rem;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
 .forecast-waterfall-step {
   display: grid;
   grid-template-columns: 24px auto minmax(0, 1fr);
@@ -940,6 +1052,26 @@ h1 {
   background: rgba(5, 10, 22, 0.38);
   border: 1px solid rgba(143, 160, 189, 0.14);
   border-radius: 8px;
+}
+
+.forecast-waterfall-step.boost {
+  border-color: rgba(126, 231, 178, 0.18);
+  box-shadow: inset 3px 0 0 rgba(126, 231, 178, 0.5);
+}
+
+.forecast-waterfall-step.drag {
+  border-color: rgba(255, 204, 105, 0.2);
+  box-shadow: inset 3px 0 0 rgba(255, 204, 105, 0.48);
+}
+
+.forecast-waterfall-step.chaos {
+  border-color: rgba(255, 126, 92, 0.22);
+  box-shadow: inset 3px 0 0 rgba(255, 126, 92, 0.5);
+}
+
+.forecast-waterfall-step.steady {
+  border-color: rgba(159, 178, 210, 0.18);
+  box-shadow: inset 3px 0 0 rgba(159, 178, 210, 0.45);
 }
 
 .forecast-waterfall-step > em {
@@ -954,6 +1086,19 @@ h1 {
   font-style: normal;
   font-weight: 950;
   line-height: 1;
+}
+
+.forecast-waterfall-step.drag > em {
+  background: rgba(255, 204, 105, 0.86);
+}
+
+.forecast-waterfall-step.chaos > em {
+  background: rgba(255, 126, 92, 0.9);
+}
+
+.forecast-waterfall-step.steady > em {
+  color: rgba(5, 12, 24, 0.88);
+  background: rgba(159, 178, 210, 0.9);
 }
 
 .forecast-waterfall-step > svg {
@@ -991,9 +1136,36 @@ h1 {
 
 .forecast-waterfall-step small {
   flex: 0 0 auto;
+  max-width: 9rem;
+  padding: 3px 7px;
   color: #dfffea;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(126, 231, 178, 0.12);
+  border: 1px solid rgba(126, 231, 178, 0.18);
+  border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.forecast-waterfall-step.drag small {
+  color: #ffe6b3;
+  background: rgba(255, 204, 105, 0.12);
+  border-color: rgba(255, 204, 105, 0.2);
+}
+
+.forecast-waterfall-step.chaos small {
+  color: #ffd4c7;
+  background: rgba(255, 126, 92, 0.12);
+  border-color: rgba(255, 126, 92, 0.2);
+}
+
+.forecast-waterfall-step.steady small {
+  color: #dce7f8;
+  background: rgba(159, 178, 210, 0.11);
+  border-color: rgba(159, 178, 210, 0.18);
 }
 
 .forecast-waterfall-step p {
@@ -7605,18 +7777,16 @@ body {
     display: block;
   }
 
-  .forecast-waterfall-toggle > svg {
-    display: block;
-  }
-
-  .forecast-waterfall:not(.expanded) .forecast-waterfall-list {
-    display: none;
-  }
-
+  .forecast-waterfall-preview span,
   .forecast-waterfall-step span {
     align-items: flex-start;
     flex-direction: column;
     gap: 3px;
+  }
+
+  .forecast-waterfall-preview small,
+  .forecast-waterfall-step small {
+    max-width: 100%;
   }
 
   .seer-trail:not(.expanded) .seer-trail-list {
