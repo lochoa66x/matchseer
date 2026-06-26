@@ -1552,7 +1552,7 @@ export default function MatchSeerHome({
                     verticalAlign: "middle",
                   }}
                 >
-                  v3
+                  v4
                 </span>
               </p>
               <h2 className="seer-panel-title">{t.matchday}</h2>
