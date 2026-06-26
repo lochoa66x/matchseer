@@ -4,9 +4,12 @@ import {
   Activity,
   BrainCircuit,
   ChevronRight,
+  ClipboardList,
+  FileImage,
   Gauge,
   HeartPulse,
   LineChart,
+  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -19,6 +22,14 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  createManualFantasyLeague,
+  mergeFantasyPlayerPools,
+  sanitizeImportedFantasyLeague,
+  type ImportedFantasyLeague,
+  type ImportedFantasyTeam,
+  type NflFantasyPlayer,
+} from "../../lib/nfl-fantasy-import";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 type FantasyTeamLens = "redraft" | "dynasty";
@@ -58,34 +69,7 @@ type NflMatchup = {
   marketPulse?: NflMarketPulse | null;
 };
 
-type FantasyPlayer = {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-  opponent: string;
-  color: string;
-  baseline: {
-    passYards?: number;
-    passTd?: number;
-    interceptions?: number;
-    rushYards: number;
-    rushTd: number;
-    receivingYards: number;
-    receivingTd: number;
-    receptions: number;
-  };
-  targetShare: number;
-  carryShare: number;
-  touchdownPulse: number;
-  matchup: number;
-  health: number;
-  chaos: number;
-  nflRank: number;
-  seerRank: number;
-  traits: string[];
-  read: string;
-};
+type FantasyPlayer = NflFantasyPlayer;
 
 type FantasyProjection = {
   projection: number;
@@ -99,17 +83,12 @@ type ScoutingRow = FantasyPlayer & {
   score: number;
 };
 
-type FantasyTeam = {
-  id: string;
-  name: string;
-  manager: string;
-  rosterIds: string[];
-  identity: string;
-};
+type FantasyTeam = ImportedFantasyTeam;
 
 type FantasyTeamReport = {
   team: FantasyTeam;
   players: ScoutingRow[];
+  benchPlayers: ScoutingRow[];
   projection: number;
   floor: number;
   ceiling: number;
@@ -121,6 +100,7 @@ type FantasyTeamReport = {
   strengths: string[];
   weaknesses: string[];
   moves: string[];
+  benchUpgrades: string[];
   tradeIdeas: string[];
 };
 
@@ -146,6 +126,7 @@ type NflScoutingAnalysis = {
 type ScoutStatus = "idle" | "loading" | "ready" | "error";
 
 type NflDataStatus = "loading" | "ready" | "fallback";
+type FantasyImportStatus = "idle" | "loading" | "ready" | "error";
 
 type NflProviderStatus = {
   schedule: "live" | "fallback";
@@ -508,16 +489,45 @@ export default function NflPage() {
   const [teamLens, setTeamLens] = useState<FantasyTeamLens>("redraft");
   const [activeFantasyTeamId, setActiveFantasyTeamId] = useState("seer-house");
   const [opponentFantasyTeamId, setOpponentFantasyTeamId] = useState("rival-house");
+  const [fantasyImport, setFantasyImport] = useState<ImportedFantasyLeague | null>(null);
+  const [sleeperQuery, setSleeperQuery] = useState("");
+  const [sleeperImportStatus, setSleeperImportStatus] =
+    useState<FantasyImportStatus>("idle");
+  const [sleeperImportMessage, setSleeperImportMessage] = useState(
+    "Sleeper can load public league rosters by username, league id, or league link.",
+  );
+  const [manualRosterText, setManualRosterText] = useState(
+    "My Team:\nJosh Allen BUF QB\nAmon-Ra St. Brown DET WR\n\nOpponent:\nLamar Jackson BAL QB\nJahmyr Gibbs DET RB",
+  );
+  const [manualImportStatus, setManualImportStatus] =
+    useState<FantasyImportStatus>("idle");
+  const [manualImportMessage, setManualImportMessage] = useState(
+    "Paste two rosters with My Team and Opponent headings.",
+  );
+  const [screenshotDataUrl, setScreenshotDataUrl] = useState<string | null>(null);
+  const [screenshotFileName, setScreenshotFileName] = useState("");
+  const [screenshotImportStatus, setScreenshotImportStatus] =
+    useState<FantasyImportStatus>("idle");
+  const [screenshotImportMessage, setScreenshotImportMessage] = useState(
+    "Upload a roster screenshot; vision extraction runs only when an API key is configured.",
+  );
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
     Record<string, ScenarioLevers>
   >({});
   const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
-  const fantasyPlayers =
+  const baseFantasyPlayers =
     nflDataset.fantasyPlayers.length > 0
       ? nflDataset.fantasyPlayers
       : seededFantasyPlayers;
+  const fantasyPlayers = useMemo(
+    () =>
+      fantasyImport
+        ? mergeFantasyPlayerPools(baseFantasyPlayers, fantasyImport.players)
+        : baseFantasyPlayers,
+    [baseFantasyPlayers, fantasyImport],
+  );
   const defaultPlayerPair = useMemo(
     () =>
       [
@@ -552,10 +562,13 @@ export default function NflPage() {
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
     [fantasyPlayers, scoringFormat],
   );
-  const fantasyTeams = useMemo(
-    () => buildFantasyTeams(fantasyPlayers),
-    [fantasyPlayers],
-  );
+  const fantasyTeams = useMemo(() => {
+    if (fantasyImport?.teams.length) {
+      return fantasyImport.teams;
+    }
+
+    return buildFantasyTeams(fantasyPlayers);
+  }, [fantasyImport, fantasyPlayers]);
   const activeFantasyTeam =
     fantasyTeams.find((team) => team.id === activeFantasyTeamId) ?? fantasyTeams[0];
   const opponentFantasyTeam =
@@ -637,6 +650,18 @@ export default function NflPage() {
   }, [defaultPlayerPair, fantasyPlayers, leftPlayerId, rightPlayerId]);
 
   useEffect(() => {
+    if (!fantasyImport?.teams.length) {
+      return;
+    }
+
+    setActiveFantasyTeamId(fantasyImport.teams[0].id);
+    setOpponentFantasyTeamId(
+      fantasyImport.teams.find((team) => team.id !== fantasyImport.teams[0].id)?.id ??
+        fantasyImport.teams[0].id,
+    );
+  }, [fantasyImport]);
+
+  useEffect(() => {
     if (!fantasyTeams.some((team) => team.id === activeFantasyTeamId)) {
       setActiveFantasyTeamId(fantasyTeams[0]?.id ?? "seer-house");
     }
@@ -713,6 +738,181 @@ export default function NflPage() {
       setScoutStatus("ready");
     } catch {
       setScoutStatus("error");
+    }
+  }
+
+  function applyImportedFantasyLeague(
+    importedLeague: ImportedFantasyLeague,
+    message: string,
+  ) {
+    setFantasyImport(importedLeague);
+    setSleeperImportMessage(message);
+    setManualImportMessage(message);
+    setScreenshotImportMessage(message);
+  }
+
+  async function requestSleeperImport() {
+    const query = sleeperQuery.trim();
+
+    if (!query) {
+      setSleeperImportStatus("error");
+      setSleeperImportMessage("Drop in a Sleeper username, league id, or league link.");
+      return;
+    }
+
+    setSleeperImportStatus("loading");
+    setSleeperImportMessage("Calling Sleeper and shaping those rosters...");
+
+    try {
+      const response = await fetch(
+        `/api/nfl/fantasy/sleeper?${new URLSearchParams({ q: query })}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as { error?: string };
+      const importedLeague = sanitizeImportedFantasyLeague(payload);
+
+      if (!response.ok || !importedLeague) {
+        throw new Error(payload.error ?? "Sleeper import did not return usable teams.");
+      }
+
+      applyImportedFantasyLeague(
+        importedLeague,
+        `${importedLeague.label} loaded with ${importedLeague.teams.length} fantasy team${importedLeague.teams.length === 1 ? "" : "s"}.`,
+      );
+      setSleeperImportStatus("ready");
+    } catch (error) {
+      setSleeperImportStatus("error");
+      setSleeperImportMessage(
+        error instanceof Error
+          ? error.message
+          : "Sleeper import failed. Paste the rosters and we can still cook.",
+      );
+    }
+  }
+
+  function applyManualRosterImport(source: "manual" | "screenshot" = "manual") {
+    setManualImportStatus(source === "manual" ? "loading" : manualImportStatus);
+
+    try {
+      const importedLeague = createManualFantasyLeague({
+        knownPlayers: baseFantasyPlayers,
+        source,
+        text: manualRosterText,
+      });
+      const sanitized = sanitizeImportedFantasyLeague(importedLeague);
+
+      if (!sanitized) {
+        throw new Error("No player names popped out. Try one player per line.");
+      }
+
+      applyImportedFantasyLeague(
+        sanitized,
+        `${sanitized.label} loaded with ${sanitized.teams.length} fantasy team${sanitized.teams.length === 1 ? "" : "s"}.`,
+      );
+      setManualImportStatus("ready");
+    } catch (error) {
+      setManualImportStatus("error");
+      setManualImportMessage(
+        error instanceof Error
+          ? error.message
+          : "Paste parser missed this one. Try My Team and Opponent headings.",
+      );
+    }
+  }
+
+  function handleScreenshotFile(file: File | null | undefined) {
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setScreenshotImportStatus("error");
+      setScreenshotImportMessage("Use an image file for the roster screenshot.");
+      return;
+    }
+
+    setScreenshotFileName(file.name);
+    setScreenshotImportStatus("loading");
+    setScreenshotImportMessage("Screenshot attached. Reading the image into the lab...");
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setScreenshotImportStatus("error");
+        setScreenshotImportMessage("The screenshot could not be read.");
+        return;
+      }
+
+      setScreenshotDataUrl(reader.result);
+      setScreenshotImportStatus("ready");
+      setScreenshotImportMessage(
+        `${file.name} is attached. Run screenshot import or paste the visible roster text below.`,
+      );
+    };
+    reader.onerror = () => {
+      setScreenshotImportStatus("error");
+      setScreenshotImportMessage("The screenshot could not be read.");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function requestScreenshotRosterImport() {
+    if (!screenshotDataUrl) {
+      setScreenshotImportStatus("error");
+      setScreenshotImportMessage("Attach a screenshot first.");
+      return;
+    }
+
+    setScreenshotImportStatus("loading");
+    setScreenshotImportMessage("Asking the vision reader to extract the rosters...");
+
+    try {
+      const response = await fetch("/api/ai/nfl-roster-screenshot", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ imageDataUrl: screenshotDataUrl }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        notes?: string[];
+        rosterText?: string;
+      };
+
+      if (!response.ok || !payload.rosterText) {
+        throw new Error(payload.error ?? "Screenshot import did not find roster text.");
+      }
+
+      setManualRosterText(payload.rosterText);
+
+      const importedLeague = createManualFantasyLeague({
+        knownPlayers: baseFantasyPlayers,
+        source: "screenshot",
+        text: payload.rosterText,
+      });
+      const sanitized = sanitizeImportedFantasyLeague(importedLeague);
+
+      if (!sanitized) {
+        throw new Error("The screenshot text came back, but no players matched.");
+      }
+
+      applyImportedFantasyLeague(
+        sanitized,
+        `${sanitized.label} loaded from ${screenshotFileName || "screenshot"}.`,
+      );
+      setScreenshotImportStatus("ready");
+      setScreenshotImportMessage(
+        payload.notes?.[0] ??
+          `${screenshotFileName || "Screenshot"} was converted into roster text.`,
+      );
+    } catch (error) {
+      setScreenshotImportStatus("error");
+      setScreenshotImportMessage(
+        error instanceof Error
+          ? error.message
+          : "Screenshot import failed. Paste the roster text and we can still compare.",
+      );
     }
   }
 
@@ -874,13 +1074,29 @@ export default function NflPage() {
 
       <FantasyTeamLab
         activeReport={activeTeamReport}
+        fantasyImport={fantasyImport}
+        manualImportMessage={manualImportMessage}
+        manualImportStatus={manualImportStatus}
+        manualRosterText={manualRosterText}
         matchupReport={fantasyMatchupReport}
+        onManualImport={() => applyManualRosterImport("manual")}
         onLensChange={setTeamLens}
         onOpponentTeamChange={setOpponentFantasyTeamId}
         onScoringChange={setScoringFormat}
+        onScreenshotFile={handleScreenshotFile}
+        onScreenshotImport={requestScreenshotRosterImport}
+        onSleeperImport={requestSleeperImport}
+        onSleeperQueryChange={setSleeperQuery}
         onTeamChange={setActiveFantasyTeamId}
+        onManualRosterTextChange={setManualRosterText}
         opponentTeamId={opponentFantasyTeam.id}
         scoringFormat={scoringFormat}
+        screenshotFileName={screenshotFileName}
+        screenshotImportMessage={screenshotImportMessage}
+        screenshotImportStatus={screenshotImportStatus}
+        sleeperImportMessage={sleeperImportMessage}
+        sleeperImportStatus={sleeperImportStatus}
+        sleeperQuery={sleeperQuery}
         teamLens={teamLens}
         teams={fantasyTeams}
       />
@@ -1472,24 +1688,56 @@ function ScoutingBoard({
 
 function FantasyTeamLab({
   activeReport,
+  fantasyImport,
+  manualImportMessage,
+  manualImportStatus,
+  manualRosterText,
   matchupReport,
+  onManualImport,
   onLensChange,
+  onManualRosterTextChange,
   onOpponentTeamChange,
   onScoringChange,
+  onScreenshotFile,
+  onScreenshotImport,
+  onSleeperImport,
+  onSleeperQueryChange,
   onTeamChange,
   opponentTeamId,
   scoringFormat,
+  screenshotFileName,
+  screenshotImportMessage,
+  screenshotImportStatus,
+  sleeperImportMessage,
+  sleeperImportStatus,
+  sleeperQuery,
   teamLens,
   teams,
 }: {
   activeReport: FantasyTeamReport;
+  fantasyImport: ImportedFantasyLeague | null;
+  manualImportMessage: string;
+  manualImportStatus: FantasyImportStatus;
+  manualRosterText: string;
   matchupReport: FantasyMatchupReport;
+  onManualImport: () => void;
   onLensChange: (lens: FantasyTeamLens) => void;
+  onManualRosterTextChange: (value: string) => void;
   onOpponentTeamChange: (teamId: string) => void;
   onScoringChange: (format: ScoringFormat) => void;
+  onScreenshotFile: (file: File | null | undefined) => void;
+  onScreenshotImport: () => void;
+  onSleeperImport: () => void;
+  onSleeperQueryChange: (value: string) => void;
   onTeamChange: (teamId: string) => void;
   opponentTeamId: string;
   scoringFormat: ScoringFormat;
+  screenshotFileName: string;
+  screenshotImportMessage: string;
+  screenshotImportStatus: FantasyImportStatus;
+  sleeperImportMessage: string;
+  sleeperImportStatus: FantasyImportStatus;
+  sleeperQuery: string;
   teamLens: FantasyTeamLens;
   teams: FantasyTeam[];
 }) {
@@ -1523,6 +1771,25 @@ function FantasyTeamLab({
           </div>
         </div>
       </div>
+
+      <FantasyImportPanel
+        fantasyImport={fantasyImport}
+        manualImportMessage={manualImportMessage}
+        manualImportStatus={manualImportStatus}
+        manualRosterText={manualRosterText}
+        onManualImport={onManualImport}
+        onManualRosterTextChange={onManualRosterTextChange}
+        onScreenshotFile={onScreenshotFile}
+        onScreenshotImport={onScreenshotImport}
+        onSleeperImport={onSleeperImport}
+        onSleeperQueryChange={onSleeperQueryChange}
+        screenshotFileName={screenshotFileName}
+        screenshotImportMessage={screenshotImportMessage}
+        screenshotImportStatus={screenshotImportStatus}
+        sleeperImportMessage={sleeperImportMessage}
+        sleeperImportStatus={sleeperImportStatus}
+        sleeperQuery={sleeperQuery}
+      />
 
       <div className="nfl-team-lab-selectors">
         <label>
@@ -1598,6 +1865,15 @@ function FantasyTeamLab({
                     <em>
                       {player.position} · {player.opponent}
                     </em>
+                    {typeof player.sourceProjection === "number" ? (
+                      <small>
+                        Source {player.sourceProjection.toFixed(1)} -&gt; Seer{" "}
+                        {player.fantasy.projection.toFixed(1)}{" "}
+                        {formatFantasyDelta(
+                          player.fantasy.projection - player.sourceProjection,
+                        )}
+                      </small>
+                    ) : null}
                   </div>
                 </div>
                 <strong>{player.fantasy.projection.toFixed(1)}</strong>
@@ -1615,6 +1891,7 @@ function FantasyTeamLab({
           <AdviceList title="Strengths" items={activeReport.strengths} />
           <AdviceList title="Weak spots" items={activeReport.weaknesses} />
           <AdviceList title="Moves to consider" items={activeReport.moves} />
+          <AdviceList title="Bench upgrades" items={activeReport.benchUpgrades} />
           <AdviceList title="Trade paths" items={activeReport.tradeIdeas} />
         </article>
       </div>
@@ -1646,6 +1923,133 @@ function FantasyTeamLab({
         </div>
       </article>
     </section>
+  );
+}
+
+function FantasyImportPanel({
+  fantasyImport,
+  manualImportMessage,
+  manualImportStatus,
+  manualRosterText,
+  onManualImport,
+  onManualRosterTextChange,
+  onScreenshotFile,
+  onScreenshotImport,
+  onSleeperImport,
+  onSleeperQueryChange,
+  screenshotFileName,
+  screenshotImportMessage,
+  screenshotImportStatus,
+  sleeperImportMessage,
+  sleeperImportStatus,
+  sleeperQuery,
+}: {
+  fantasyImport: ImportedFantasyLeague | null;
+  manualImportMessage: string;
+  manualImportStatus: FantasyImportStatus;
+  manualRosterText: string;
+  onManualImport: () => void;
+  onManualRosterTextChange: (value: string) => void;
+  onScreenshotFile: (file: File | null | undefined) => void;
+  onScreenshotImport: () => void;
+  onSleeperImport: () => void;
+  onSleeperQueryChange: (value: string) => void;
+  screenshotFileName: string;
+  screenshotImportMessage: string;
+  screenshotImportStatus: FantasyImportStatus;
+  sleeperImportMessage: string;
+  sleeperImportStatus: FantasyImportStatus;
+  sleeperQuery: string;
+}) {
+  const importLabel = fantasyImport
+    ? `${fantasyImport.label} · ${fantasyImport.teams.length} team${fantasyImport.teams.length === 1 ? "" : "s"}`
+    : "Seeded lab rosters";
+
+  return (
+    <div className="nfl-fantasy-import-panel">
+      <div className="nfl-import-panel-head">
+        <div>
+          <span>Roster source</span>
+          <strong>{importLabel}</strong>
+        </div>
+        <em>{fantasyImport?.source ?? "demo"}</em>
+      </div>
+
+      <div className="nfl-import-grid">
+        <article className="nfl-import-card">
+          <div>
+            <RefreshCw size={18} />
+            <strong>Sleeper</strong>
+          </div>
+          <input
+            onChange={(event) => onSleeperQueryChange(event.target.value)}
+            placeholder="username, league id, or link"
+            value={sleeperQuery}
+          />
+          <button
+            disabled={sleeperImportStatus === "loading"}
+            onClick={onSleeperImport}
+            type="button"
+          >
+            <RefreshCw size={16} />
+            {sleeperImportStatus === "loading" ? "Loading" : "Load"}
+          </button>
+          <p className={cx("nfl-import-status", sleeperImportStatus)}>
+            {sleeperImportMessage}
+          </p>
+        </article>
+
+        <article className="nfl-import-card wide">
+          <div>
+            <ClipboardList size={18} />
+            <strong>Copy paste</strong>
+          </div>
+          <textarea
+            onChange={(event) => onManualRosterTextChange(event.target.value)}
+            spellCheck={false}
+            value={manualRosterText}
+          />
+          <button
+            disabled={manualImportStatus === "loading"}
+            onClick={onManualImport}
+            type="button"
+          >
+            <ClipboardList size={16} />
+            Parse rosters
+          </button>
+          <p className={cx("nfl-import-status", manualImportStatus)}>
+            {manualImportMessage}
+          </p>
+        </article>
+
+        <article className="nfl-import-card">
+          <div>
+            <FileImage size={18} />
+            <strong>Screenshot</strong>
+          </div>
+          <label className="nfl-file-drop">
+            <FileImage size={16} />
+            <span>{screenshotFileName || "Choose image"}</span>
+            <input
+              accept="image/*"
+              onChange={(event) => onScreenshotFile(event.target.files?.[0])}
+              type="file"
+            />
+          </label>
+          <button
+            disabled={screenshotImportStatus === "loading" || !screenshotFileName}
+            onClick={onScreenshotImport}
+            type="button"
+          >
+            <FileImage size={16} />
+            {screenshotImportStatus === "loading" ? "Reading" : "Import"}
+          </button>
+          <p className={cx("nfl-import-status", screenshotImportStatus)}>
+            {screenshotImportMessage}
+          </p>
+        </article>
+      </div>
+    </div>
   );
 }
 
@@ -1699,7 +2103,13 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
         homeRoster.length > 0
           ? homeRoster
           : rankedPlayers.slice(0, 1).map((player) => player.id),
+      starterIds:
+        homeRoster.length > 0
+          ? homeRoster
+          : rankedPlayers.slice(0, 1).map((player) => player.id),
+      benchIds: [],
       identity: "Floor plus flash, built to survive weird game scripts.",
+      source: "seeded",
     },
     {
       id: "rival-house",
@@ -1709,7 +2119,13 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
         awayRoster.length > 0
           ? awayRoster
           : rankedPlayers.slice(0, 1).map((player) => player.id),
+      starterIds:
+        awayRoster.length > 0
+          ? awayRoster
+          : rankedPlayers.slice(0, 1).map((player) => player.id),
+      benchIds: [],
       identity: "Ceiling hunter with a little more weekly wobble.",
+      source: "seeded",
     },
   ];
 }
@@ -1726,15 +2142,24 @@ function analyzeFantasyTeam({
   team: FantasyTeam;
 }): FantasyTeamReport {
   const board = buildScoutingBoard(allPlayers, scoringFormat);
-  const players = board.filter((player) => team.rosterIds.includes(player.id));
-  const roster = players.length > 0 ? players : board.slice(0, 1);
+  const rosterIdSet = new Set(team.rosterIds);
+  const starterIdSet = new Set(team.starterIds?.length ? team.starterIds : team.rosterIds);
+  const fullRoster = board.filter((player) => rosterIdSet.has(player.id));
+  const starters = fullRoster.filter((player) => starterIdSet.has(player.id));
+  const benchPlayers = fullRoster.filter((player) => !starterIdSet.has(player.id));
+  const roster =
+    starters.length > 0
+      ? starters
+      : fullRoster.length > 0
+        ? fullRoster
+        : board.slice(0, 1);
   const projection = round1(sum(roster.map((player) => player.fantasy.projection)));
   const floor = round1(sum(roster.map((player) => player.fantasy.floor)));
   const ceiling = round1(sum(roster.map((player) => player.fantasy.ceiling)));
   const balance = teamBalance(roster);
-  const depth = teamDepth(roster);
+  const depth = teamDepth(fullRoster.length > 0 ? fullRoster : roster);
   const risk = teamRisk(roster);
-  const dynastyCore = teamDynastyCore(roster);
+  const dynastyCore = teamDynastyCore(fullRoster.length > 0 ? fullRoster : roster);
   const score = clampMeter(
     Math.round(
       projection * 2.25 +
@@ -1749,6 +2174,7 @@ function analyzeFantasyTeam({
   return {
     team,
     players: roster,
+    benchPlayers,
     projection,
     floor,
     ceiling,
@@ -1760,10 +2186,11 @@ function analyzeFantasyTeam({
     strengths: fantasyStrengths(roster, scoringFormat, lens),
     weaknesses: fantasyWeaknesses(roster, scoringFormat, lens, balance, depth, risk),
     moves: fantasyMoves(roster, scoringFormat, lens),
+    benchUpgrades: fantasyBenchUpgrades(roster, benchPlayers),
     tradeIdeas: fantasyTradeIdeas({
       allPlayers: board,
       lens,
-      roster,
+      roster: fullRoster.length > 0 ? fullRoster : roster,
       scoringFormat,
     }),
   };
@@ -1902,6 +2329,45 @@ function fantasyMoves(
   }
 
   return moves.slice(0, 4);
+}
+
+function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow[]) {
+  if (benchPlayers.length === 0) {
+    return ["No bench receipt yet; import a full roster to unlock swap ideas."];
+  }
+
+  const weakestStarter = [...starters].sort(
+    (left, right) => left.fantasy.projection - right.fantasy.projection,
+  )[0];
+  const bestBench = [...benchPlayers].sort(
+    (left, right) => right.fantasy.projection - left.fantasy.projection,
+  )[0];
+  const samePositionBench = benchPlayers
+    .filter((player) => player.position === weakestStarter.position)
+    .sort((left, right) => right.fantasy.floor - left.fantasy.floor)[0];
+  const ideas: string[] = [];
+
+  if (bestBench.fantasy.projection > weakestStarter.fantasy.projection + 1.5) {
+    ideas.push(
+      `${bestBench.name} is pushing past ${weakestStarter.name}; check the slot before kickoff.`,
+    );
+  } else {
+    ideas.push(
+      `${bestBench.name} is the first bench pressure point, but the starters still hold the lane.`,
+    );
+  }
+
+  if (
+    samePositionBench &&
+    samePositionBench.id !== bestBench.id &&
+    samePositionBench.fantasy.floor > weakestStarter.fantasy.floor
+  ) {
+    ideas.push(
+      `${samePositionBench.name} has the cleaner ${samePositionBench.position} floor if you need less chaos.`,
+    );
+  }
+
+  return ideas.slice(0, 2);
 }
 
 function fantasyTradeIdeas({
@@ -2668,6 +3134,20 @@ function formatRankDelta(delta: number) {
   }
 
   return "even";
+}
+
+function formatFantasyDelta(delta: number) {
+  const rounded = round1(delta);
+
+  if (rounded > 0) {
+    return `(+${rounded.toFixed(1)})`;
+  }
+
+  if (rounded < 0) {
+    return `(${rounded.toFixed(1)})`;
+  }
+
+  return "(even)";
 }
 
 function round1(value: number) {
