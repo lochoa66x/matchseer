@@ -21,6 +21,9 @@ describe("computeCalibration", () => {
     expect(report.logLoss).toBe(0);
     expect(report.byPredictedProbability).toEqual([]);
     expect(report.byConfidence).toEqual([]);
+    expect(report.stageSplits).toEqual([]);
+    expect(report.contextSplits).toEqual([]);
+    expect(report.seerSays).toEqual([]);
     expect(report.diagnostics.favorite.count).toBe(0);
     expect(report.diagnostics.chaos.trend).toBe("insufficient-data");
     expect(report.tuning.readiness).toBe("collecting");
@@ -128,6 +131,62 @@ describe("computeCalibration", () => {
     ]);
 
     expect(report.byConfidence).toEqual([]);
+  });
+
+  it("splits receipt calibration by stage and context signals", () => {
+    const report = computeCalibration([
+      {
+        probabilities: { home: 0.6, draw: 0.25, away: 0.15 },
+        actual: "home",
+        stage: "group",
+        contexts: { weather: true, crowd: true },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.25, away: 0.15 },
+        actual: "away",
+        stage: "group",
+        contexts: { weather: true },
+      },
+      {
+        probabilities: { home: 0.2, draw: 0.2, away: 0.6 },
+        actual: "away",
+        stage: "knockout",
+        contexts: { bodyCost: true, lineup: true, crowd: true },
+      },
+      {
+        probabilities: { home: 0.2, draw: 0.2, away: 0.6 },
+        actual: "draw",
+        stage: "knockout",
+        contexts: { bodyCost: true, lineup: true },
+      },
+    ]);
+
+    expect(report.stageSplits).toEqual([
+      expect.objectContaining({
+        id: "group",
+        label: "Group games",
+        count: 2,
+        predictedPct: 60,
+        actualPct: 50,
+        gap: -10,
+      }),
+      expect.objectContaining({
+        id: "knockout",
+        label: "Knockout games",
+        count: 2,
+        predictedPct: 60,
+        actualPct: 50,
+        gap: -10,
+      }),
+    ]);
+    expect(report.contextSplits).toEqual([
+      expect.objectContaining({ id: "weather", count: 2, actualPct: 50 }),
+      expect.objectContaining({ id: "bodyCost", count: 2, actualPct: 50 }),
+      expect.objectContaining({ id: "lineup", count: 2, actualPct: 50 }),
+      expect.objectContaining({ id: "crowd", count: 2, actualPct: 100 }),
+    ]);
+    expect(report.seerSays.some((note) => note.startsWith("Favorites:"))).toBe(true);
+    expect(report.seerSays.some((note) => note.startsWith("Group games:"))).toBe(true);
   });
 
   it("flags favorite overconfidence from final-score receipts", () => {
@@ -262,7 +321,7 @@ describe("computeCalibration", () => {
     });
   });
 
-  it("activates capped tuning knobs once receipt readiness is actionable", () => {
+  it("keeps actionable tuning recommendations staged until review", () => {
     const baseSamples: CalibrationSample[] = [
       {
         probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
@@ -311,10 +370,17 @@ describe("computeCalibration", () => {
 
     expect(report.tuning.readiness).toBe("actionable");
     expect(report.tuning.application).toMatchObject({
-      applied: true,
+      applied: false,
       sampleSize: 12,
       readiness: "actionable",
       knobs: {
+        favoriteScale: 1,
+        drawLaneMultiplier: 1,
+        confidenceBias: 0,
+        chaosSensitivity: 1,
+        marketNudgeMaxWeight: 0.18,
+      },
+      recommendedKnobs: {
         favoriteScale: 0.88,
         drawLaneMultiplier: 1.073,
         confidenceBias: -5,

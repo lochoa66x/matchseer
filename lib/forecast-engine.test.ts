@@ -379,7 +379,7 @@ describe("receipt-tuned forecast knobs", () => {
     expect(tuned.awayXg).toBe(0.8);
   });
 
-  it("applies actionable receipt tuning gently to the xG spine", () => {
+  it("keeps actionable receipt recommendations out of forecast xG until review", () => {
     const tuning = computeCalibration([
       ...receiptSamples,
       ...receiptSamples,
@@ -390,11 +390,12 @@ describe("receipt-tuned forecast knobs", () => {
       calibrationTuning: tuning,
     });
 
-    expect(tuning.applied).toBe(true);
-    expect(tuned.applied).toBe(true);
-    expect(tuned.homeXg - tuned.awayXg).toBeLessThan(1.1);
-    expect(Math.abs(tuned.deltas.homeXg)).toBeLessThanOrEqual(0.3);
-    expect(Math.abs(tuned.deltas.awayXg)).toBeLessThanOrEqual(0.3);
+    expect(tuning.readiness).toBe("actionable");
+    expect(tuning.applied).toBe(false);
+    expect(tuning.recommendedKnobs.favoriteScale).toBeLessThan(1);
+    expect(tuned.applied).toBe(false);
+    expect(tuned.homeXg).toBe(1.9);
+    expect(tuned.awayXg).toBe(0.8);
   });
 });
 

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { listMatches } from "../../../../lib/database";
 import {
   computeCalibration,
+  type CalibrationContextFlags,
   type CalibrationSample,
+  type CalibrationStage,
   type ForecastOutcome,
 } from "../../../../lib/calibration";
 
@@ -50,6 +52,8 @@ export async function GET(request: Request) {
         actual,
         confidence: match.forecast.confidence,
         chaos: match.forecast.chaos,
+        stage: stageToCalibration(match.stage, match.group),
+        contexts: contextFlagsFromForecast(match.forecast),
         market: marketPulse
           ? {
               leader: marketPulse.leader,
@@ -76,6 +80,60 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function stageToCalibration(
+  stage: string | null | undefined,
+  group: string | null | undefined,
+): CalibrationStage {
+  const value = `${stage ?? ""} ${group ?? ""}`.toLowerCase();
+
+  if (value.includes("group")) {
+    return "group";
+  }
+
+  if (
+    value.includes("knockout") ||
+    value.includes("round of") ||
+    value.includes("quarter") ||
+    value.includes("semi") ||
+    value.includes("final") ||
+    value.includes("third place")
+  ) {
+    return "knockout";
+  }
+
+  return "other";
+}
+
+function contextFlagsFromForecast(forecast: {
+  trail?: Array<{ id: string }> | null;
+  waterfall?: Array<{ id: string }> | null;
+  marketPulse?: { nudge?: { applied?: boolean | null } | null } | null;
+}): CalibrationContextFlags {
+  const ids = [
+    ...(forecast.trail ?? []).map((signal) => signal.id.toLowerCase()),
+    ...(forecast.waterfall ?? []).map((signal) => signal.id.toLowerCase()),
+  ];
+  const hasSignal = (needles: string[]) =>
+    ids.some((id) => needles.some((needle) => id.includes(needle)));
+
+  return {
+    weather: hasSignal([
+      "fog",
+      "heat",
+      "humid",
+      "night",
+      "pitch",
+      "slick",
+      "sun",
+      "weather",
+      "wind",
+    ]),
+    bodyCost: hasSignal(["altitude", "body", "legs", "rest", "travel"]),
+    lineup: hasSignal(["lineup", "player", "star", "suspension"]),
+    crowd: hasSignal(["crowd"]) || Boolean(forecast.marketPulse?.nudge?.applied),
+  };
 }
 
 function isAuthorized(request: Request, secret: string) {

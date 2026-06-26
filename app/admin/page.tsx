@@ -430,6 +430,9 @@ export default function AdminPage() {
             logLoss: 0,
             byPredictedProbability: [],
             byConfidence: [],
+            stageSplits: [],
+            contextSplits: [],
+            seerSays: [],
             diagnostics: emptyCalibrationDiagnostics(),
             error: error instanceof Error ? error.message : "Calibration failed.",
           }))
@@ -2347,6 +2350,10 @@ type CalibrationSegmentRow = CalibrationBucketRow & {
   verdict: string;
 };
 
+type CalibrationSplitRow = CalibrationSegmentRow & {
+  id: string;
+};
+
 type ChaosMissBucketRow = {
   label: string;
   count: number;
@@ -2427,6 +2434,9 @@ type CalibrationDashboard = {
   logLoss: number;
   byPredictedProbability: CalibrationBucketRow[];
   byConfidence: CalibrationBucketRow[];
+  stageSplits: CalibrationSplitRow[];
+  contextSplits: CalibrationSplitRow[];
+  seerSays: string[];
   diagnostics: CalibrationDiagnostics;
   tuning?: CalibrationTuningReport;
   completedMatchesConsidered?: number;
@@ -2472,6 +2482,7 @@ function CalibrationPanel({
 }) {
   const ready =
     hasSecret && calibration && !calibration.error && calibration.sampleSize > 0;
+  const seerSays = calibration?.seerSays ?? [];
 
   const thStyle: React.CSSProperties = {
     textAlign: "left",
@@ -2539,6 +2550,37 @@ function CalibrationPanel({
         </em>
         <p>{segment.verdict}</p>
       </article>
+    );
+  }
+
+  function renderSplitDeck(title: string, subtitle: string, rows: CalibrationSplitRow[]) {
+    if (rows.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="calibration-split-deck">
+        <div className="calibration-split-header">
+          <span>{title}</span>
+          <small>{subtitle}</small>
+        </div>
+        <div className="calibration-split-grid">
+          {rows.map((row) => (
+            <article className="calibration-split-card" key={row.id}>
+              <span>{row.label}</span>
+              <strong>{row.actualPct}%</strong>
+              <small>
+                {row.count} receipts · called {row.predictedPct}%
+              </small>
+              <em className={row.gap < 0 ? "negative" : "positive"}>
+                {row.gap > 0 ? "+" : ""}
+                {row.gap} pts
+              </em>
+              <p>{row.verdict}</p>
+            </article>
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -2640,14 +2682,24 @@ function CalibrationPanel({
               <strong>{calibration.accuracy}%</strong>
             </div>
             <div>
-              <span>Brier</span>
+              <span>Forecast error</span>
               <strong>{calibration.brierScore}</strong>
             </div>
             <div>
-              <span>Log loss</span>
+              <span>Surprise cost</span>
               <strong>{calibration.logLoss}</strong>
             </div>
           </div>
+          {seerSays.length > 0 ? (
+            <div className="calibration-seer-says">
+              <span>Seer says</span>
+              <div>
+                {seerSays.map((note) => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="calibration-diagnostics">
             {renderDiagnosticCard(
               "Favorite discipline",
@@ -2671,6 +2723,16 @@ function CalibrationPanel({
               <p>{calibration.diagnostics.chaos.verdict}</p>
             </article>
           </div>
+          {renderSplitDeck(
+            "Stage split",
+            "Group games vs knockout pressure",
+            calibration.stageSplits ?? [],
+          )}
+          {renderSplitDeck(
+            "Context split",
+            "Weather, body cost, lineups, and crowd nudges",
+            calibration.contextSplits ?? [],
+          )}
           {calibration.tuning ? (
             <div className="calibration-tuning">
               <div className="calibration-tuning-header">
@@ -2678,19 +2740,22 @@ function CalibrationPanel({
                   <span>Tuning plan</span>
                   <strong>
                     {calibration.tuning.readiness} ·{" "}
-                    {calibration.tuning.application.applied ? "active" : "watching"}
+                    {calibration.tuning.application.applied ? "active" : "staged"}
                   </strong>
                 </div>
                 <p>{calibration.tuning.summary}</p>
               </div>
               <div className="calibration-market-read">
-                <span>Active knobs</span>
+                <span>Forecast knobs</span>
                 <strong>
                   {calibration.tuning.application.applied
                     ? "Applied to new forecasts"
-                    : "Recommendations only"}
+                    : "Baseline live; recommendations staged"}
                 </strong>
-                <small>{formatKnobs(calibration.tuning.application.knobs)}</small>
+                <small>Live: {formatKnobs(calibration.tuning.application.knobs)}</small>
+                <small>
+                  Suggested: {formatKnobs(calibration.tuning.application.recommendedKnobs)}
+                </small>
                 <p>{calibration.tuning.application.reason}</p>
               </div>
               <div className="calibration-market-read">

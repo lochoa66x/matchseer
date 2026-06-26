@@ -6,12 +6,17 @@
 // (within one touchdown), not a literal tied final.
 
 export type ForecastOutcome = "home" | "draw" | "away";
+export type CalibrationStage = "group" | "knockout" | "other";
+export type CalibrationContextSignal = "weather" | "bodyCost" | "lineup" | "crowd";
+export type CalibrationContextFlags = Partial<Record<CalibrationContextSignal, boolean>>;
 
 export type CalibrationSample = {
   probabilities: { home: number; draw: number; away: number };
   actual: ForecastOutcome;
   confidence?: number | null;
   chaos?: number | null;
+  stage?: CalibrationStage | null;
+  contexts?: CalibrationContextFlags | null;
   market?: {
     leader: ForecastOutcome;
     liquidityScore?: number | null;
@@ -35,6 +40,9 @@ export type CalibrationReport = {
   logLoss: number; // lower is better
   byPredictedProbability: CalibrationBucket[]; // bucketed by the leaned pick's probability
   byConfidence: CalibrationBucket[]; // bucketed by the model's stated confidence
+  stageSplits: CalibrationSplit[];
+  contextSplits: CalibrationSplit[];
+  seerSays: string[];
   diagnostics: CalibrationDiagnostics;
   tuning: CalibrationTuningReport;
 };
@@ -46,6 +54,10 @@ export type CalibrationSegment = {
   actualPct: number;
   gap: number;
   verdict: string;
+};
+
+export type CalibrationSplit = CalibrationSegment & {
+  id: string;
 };
 
 export type ChaosMissBucket = {
@@ -129,6 +141,17 @@ export type CalibrationTuningReport = {
 };
 
 const OUTCOMES: ForecastOutcome[] = ["home", "draw", "away"];
+const STAGE_LABELS: Record<CalibrationStage, string> = {
+  group: "Group games",
+  knockout: "Knockout games",
+  other: "Other rounds",
+};
+const CONTEXT_LABELS: Record<CalibrationContextSignal, string> = {
+  weather: "Weather signal",
+  bodyCost: "Body cost",
+  lineup: "Lineup board",
+  crowd: "Crowd nudge",
+};
 export const CALIBRATION_TUNING_VERSION = "calibration-tuning-v1";
 export const DEFAULT_CALIBRATION_TUNING_KNOBS: CalibrationTuningKnobs = {
   favoriteScale: 1,
@@ -275,6 +298,118 @@ function calibrationSegment({
     gap: round1(gap),
     verdict: verdict(gap, rows.length),
   };
+}
+
+function splitVerdict(gap: number, count: number, kind: "stage" | "context") {
+  if (count < 3) {
+    return kind === "stage"
+      ? "Early read: this round lane needs a few more receipts before it gets a tuning vote."
+      : "Early read: this signal needs more receipts before the Seer gives it louder weight.";
+  }
+
+  if (gap <= -8) {
+    return kind === "stage"
+      ? "This round lane is running hot. Keep its confidence on a shorter leash."
+      : "This signal is adding more drama than truth so far. Keep it as a small nudge.";
+  }
+
+  if (gap >= 8) {
+    return kind === "stage"
+      ? "This round lane is landing better than priced. The Seer can trust it a touch more."
+      : "This signal is sharpening the read. It can keep a real seat at the table.";
+  }
+
+  return kind === "stage"
+    ? "This round lane is holding close to the receipts."
+    : "This signal is behaving close to the receipts.";
+}
+
+function calibrationSplit({
+  id,
+  label,
+  rows,
+  kind,
+}: {
+  id: string;
+  label: string;
+  rows: { predicted: number; hit: boolean }[];
+  kind: "stage" | "context";
+}): CalibrationSplit | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    id,
+    ...calibrationSegment({
+      label,
+      rows,
+      emptyVerdict: "No receipts yet.",
+      verdict: (gap, count) => splitVerdict(gap, count, kind),
+    }),
+  };
+}
+
+function buildStageSplits(
+  rows: Record<CalibrationStage, { predicted: number; hit: boolean }[]>,
+) {
+  return (Object.keys(STAGE_LABELS) as CalibrationStage[])
+    .map((stage) =>
+      calibrationSplit({
+        id: stage,
+        label: STAGE_LABELS[stage],
+        rows: rows[stage],
+        kind: "stage",
+      }),
+    )
+    .filter((split): split is CalibrationSplit => split !== null);
+}
+
+function buildContextSplits(
+  rows: Record<CalibrationContextSignal, { predicted: number; hit: boolean }[]>,
+) {
+  return (Object.keys(CONTEXT_LABELS) as CalibrationContextSignal[])
+    .map((context) =>
+      calibrationSplit({
+        id: context,
+        label: CONTEXT_LABELS[context],
+        rows: rows[context],
+        kind: "context",
+      }),
+    )
+    .filter((split): split is CalibrationSplit => split !== null);
+}
+
+function strongestSplit(splits: CalibrationSplit[]) {
+  return [...splits].sort((left, right) => Math.abs(right.gap) - Math.abs(left.gap))[0];
+}
+
+function buildSeerSays({
+  diagnostics,
+  stageSplits,
+  contextSplits,
+}: {
+  diagnostics: CalibrationDiagnostics;
+  stageSplits: CalibrationSplit[];
+  contextSplits: CalibrationSplit[];
+}) {
+  const notes = [
+    `Favorites: ${diagnostics.favorite.verdict}`,
+    `Draws: ${diagnostics.draw.verdict}`,
+    `Chaos: ${diagnostics.chaos.verdict}`,
+  ];
+  const stage = strongestSplit(stageSplits);
+  const context = strongestSplit(contextSplits);
+
+  if (stage) {
+    notes.push(`${stage.label}: ${stage.verdict}`);
+  }
+
+  if (context) {
+    notes.push(`${context.label}: ${context.verdict}`);
+  }
+
+  return notes.slice(0, 5);
 }
 
 function favoriteVerdict(gap: number, count: number) {
@@ -583,7 +718,7 @@ function calibrationTuningSummary(readiness: CalibrationTuningReport["readiness"
     return "Early tuning read: use these as guardrails, not automatic rewrites.";
   }
 
-  return "Enough receipts are in play for bounded model-weight tuning.";
+  return "Enough receipts are in play for bounded v4.1 recommendations; live weights stay on review.";
 }
 
 function recommendationValue(
@@ -669,17 +804,17 @@ function appliedTuningFromRecommendations({
   recommendations: CalibrationTuningRecommendation[];
 }): AppliedCalibrationTuning {
   const recommendedKnobs = recommendedKnobsFromRecommendations(recommendations);
-  const applied = readiness === "actionable";
 
   return {
     version: CALIBRATION_TUNING_VERSION,
     readiness,
     sampleSize,
-    applied,
-    reason: applied
-      ? "Actionable receipt sample; capped tuning knobs are active."
-      : "Receipt sample is not actionable yet; forecasts keep baseline knobs.",
-    knobs: applied ? recommendedKnobs : DEFAULT_CALIBRATION_TUNING_KNOBS,
+    applied: false,
+    reason:
+      readiness === "actionable"
+        ? "Actionable receipt sample; recommendations are staged for review before changing forecasts."
+        : "Receipt sample is not actionable yet; forecasts keep baseline knobs.",
+    knobs: DEFAULT_CALIBRATION_TUNING_KNOBS,
     recommendedKnobs,
   };
 }
@@ -812,6 +947,9 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
       logLoss: 0,
       byPredictedProbability: [],
       byConfidence: [],
+      stageSplits: [],
+      contextSplits: [],
+      seerSays: [],
       diagnostics,
       tuning: buildTuningReport({
         sampleSize: 0,
@@ -830,6 +968,17 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
   const favoriteRows: { predicted: number; hit: boolean }[] = [];
   const drawRows: { predicted: number; hit: boolean }[] = [];
   const chaosRows: { chaos: number; miss: boolean }[] = [];
+  const stageRows: Record<CalibrationStage, { predicted: number; hit: boolean }[]> = {
+    group: [],
+    knockout: [],
+    other: [],
+  };
+  const contextRows: Record<CalibrationContextSignal, { predicted: number; hit: boolean }[]> = {
+    weather: [],
+    bodyCost: [],
+    lineup: [],
+    crowd: [],
+  };
   const marketRows: {
     modelHit: boolean;
     marketHit: boolean;
@@ -857,6 +1006,16 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
 
     probabilityRows.push({ predicted: p[pick] * 100, hit });
     drawRows.push({ predicted: p.draw * 100, hit: sample.actual === "draw" });
+    const splitRow = { predicted: p[pick] * 100, hit };
+    const stage = sample.stage ?? "other";
+
+    stageRows[stage].push(splitRow);
+
+    for (const context of Object.keys(CONTEXT_LABELS) as CalibrationContextSignal[]) {
+      if (sample.contexts?.[context]) {
+        contextRows[context].push(splitRow);
+      }
+    }
 
     if (pick !== "draw") {
       favoriteRows.push({ predicted: p[pick] * 100, hit });
@@ -901,6 +1060,13 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
     chaos: computeChaosCalibration(chaosRows),
   };
   const market = marketCalibration(marketRows);
+  const stageSplits = buildStageSplits(stageRows);
+  const contextSplits = buildContextSplits(contextRows);
+  const seerSays = buildSeerSays({
+    diagnostics,
+    stageSplits,
+    contextSplits,
+  });
 
   return {
     sampleSize,
@@ -912,6 +1078,9 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
       [30, 40, 50, 60, 70, 80, 90, 100],
     ),
     byConfidence,
+    stageSplits,
+    contextSplits,
+    seerSays,
     diagnostics,
     tuning: buildTuningReport({
       sampleSize,
