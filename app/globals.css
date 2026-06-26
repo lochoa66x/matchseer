@@ -10369,6 +10369,185 @@ body {
   padding: 0 10px;
 }
 
+.nfl-decision-engine-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(247, 197, 29, 0.11), transparent 36%),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 8px;
+}
+
+.nfl-decision-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.nfl-decision-head > div:first-child,
+.nfl-source-vs-seer {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nfl-decision-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.2rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-decision-head em,
+.nfl-source-vs-seer em {
+  color: var(--nfl-muted);
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-source-vs-seer {
+  flex: 0 0 auto;
+  min-width: 190px;
+  padding: 10px;
+  text-align: right;
+  background: rgba(5, 12, 28, 0.42);
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 8px;
+}
+
+.nfl-source-vs-seer strong {
+  font-size: 1.05rem;
+}
+
+.nfl-decision-summary,
+.nfl-lineup-grid,
+.nfl-startsit-grid,
+.nfl-position-edge-grid,
+.nfl-lane-snapshot {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-decision-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nfl-decision-summary div,
+.nfl-lineup-slot,
+.nfl-startsit-list,
+.nfl-position-edge-grid div,
+.nfl-lane-snapshot span {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(5, 12, 28, 0.36);
+  border: 1px solid rgba(143, 160, 189, 0.15);
+  border-radius: 8px;
+}
+
+.nfl-decision-summary span,
+.nfl-lineup-slot span,
+.nfl-startsit-list > span,
+.nfl-position-edge-grid span,
+.nfl-lane-snapshot span {
+  color: var(--nfl-muted);
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-decision-summary strong,
+.nfl-lineup-slot strong,
+.nfl-position-edge-grid strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-lineup-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-lineup-slot {
+  display: grid;
+  gap: 9px;
+  border-color: rgba(45, 212, 191, 0.22);
+}
+
+.nfl-lineup-slot.missing {
+  border-color: rgba(248, 113, 113, 0.38);
+}
+
+.nfl-lineup-slot > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.nfl-lineup-slot em,
+.nfl-lineup-receipt em,
+.nfl-position-edge-grid em {
+  color: var(--nfl-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-lineup-receipt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.nfl-lineup-receipt strong {
+  color: #8ff0c1;
+  font-size: 0.82rem;
+}
+
+.nfl-lineup-slot p,
+.nfl-startsit-list p {
+  margin: 0;
+  color: #d9e4f5;
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.36;
+}
+
+.nfl-lineup-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nfl-lineup-tags span {
+  padding: 5px 7px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.64rem;
+}
+
+.nfl-startsit-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.92fr) minmax(0, 0.92fr);
+}
+
+.nfl-startsit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-startsit-list strong {
+  color: #8ff0c1;
+}
+
 .nfl-team-lab-grid,
 .nfl-matchup-score-grid {
   display: grid;
@@ -10468,6 +10647,15 @@ body {
   font-size: 1.08rem;
   font-weight: 900;
   line-height: 1.28;
+}
+
+.nfl-lane-snapshot {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nfl-lane-snapshot span {
+  color: #d9e4f5;
+  text-transform: none;
 }
 
 .nfl-advice-list {
@@ -10578,6 +10766,24 @@ body {
   line-height: 1.4;
 }
 
+.nfl-position-edge-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.nfl-position-edge-grid div.hot {
+  border-color: rgba(247, 197, 29, 0.46);
+}
+
+.nfl-position-edge-grid strong {
+  margin-top: 5px;
+  font-size: 0.86rem;
+}
+
+.nfl-position-edge-grid em {
+  display: block;
+  margin-top: 4px;
+}
+
 .nfl-swing-list {
   flex-wrap: wrap;
   gap: 8px;
@@ -10676,6 +10882,10 @@ body {
   .nfl-grid-section,
   .nfl-scenario-body,
   .nfl-team-lab-grid,
+  .nfl-decision-summary,
+  .nfl-lineup-grid,
+  .nfl-startsit-grid,
+  .nfl-position-edge-grid,
   .nfl-import-grid,
   .nfl-matchup-score-grid,
   .nfl-player-duel {
@@ -10734,6 +10944,7 @@ body {
   }
 
   .nfl-topbar,
+  .nfl-decision-head,
   .nfl-import-panel-head,
   .nfl-fantasy-matchup-head,
   .nfl-fantasy-team-head,
@@ -10801,6 +11012,7 @@ body {
   }
 
   .nfl-fantasy-team-controls,
+  .nfl-source-vs-seer,
   .nfl-lens-toggle,
   .nfl-import-card button,
   .nfl-file-drop,
@@ -10810,6 +11022,14 @@ body {
   }
 
   .nfl-lens-toggle {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-source-vs-seer {
+    text-align: left;
+  }
+
+  .nfl-lane-snapshot {
     grid-template-columns: 1fr;
   }
 
