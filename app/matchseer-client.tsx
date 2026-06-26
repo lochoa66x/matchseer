@@ -73,7 +73,7 @@ type OracleResponse = {
 
 const collapsedReceiptCount = 4;
 const liveRefreshIntervalMs = 12_000;
-const matchFeedCacheKey = "matchseer.match-feed.v3.5";
+const matchFeedCacheKey = "matchseer.match-feed.v4";
 const matchFeedCacheTtlMs = 20 * 60 * 1000;
 
 const copy = {
@@ -683,7 +683,7 @@ function makeFeaturedForecast(
     confidence,
     chaos,
     projected,
-    version: 3.5,
+    version: 4,
     generatedAt: "2026-06-19T23:37:00.000Z",
     tone: {
       en: "A featured readout is ready while the live feed warms up.",

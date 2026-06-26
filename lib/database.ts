@@ -799,7 +799,7 @@ export async function saveCupSeerSnapshot(
         ${snapshotLabel},
         ${JSON.stringify(candidates)}::jsonb,
         ${JSON.stringify({
-          modelVersion: "v3.5",
+          modelVersion: "v4.0",
           matchesConsidered: matches.length,
           note: "Final 8 lane snapshot with second-round path probability.",
         })}::jsonb
@@ -2545,8 +2545,8 @@ export async function syncFootballDataSnapshot(
       provider: snapshot.provider,
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
-      forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.10-lineups",
+      forecastEngine: "matchseer-v4",
+      modelVersion: "matchseer-v4.0-lineups",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -5277,7 +5277,7 @@ function buildForecastMovementTrail({
         es: "El Vidente abrió la primera lectura de este partido.",
         fr: "Le voyant a ouvert la première piste de ce match.",
       },
-      adminText: "Initial forecast version minted from the current v3 inputs.",
+      adminText: "Initial forecast version minted from the current v4 inputs.",
       delta: {
         projected: forecast.projected,
         confidence: forecast.confidence,

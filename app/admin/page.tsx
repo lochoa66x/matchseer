@@ -1147,9 +1147,9 @@ function SeerVersionLog({ hasData }: { hasData: boolean }) {
       body: "Weather, venues, referees, player availability, fatigue, and compact mobile readouts joined the bench.",
     },
     {
-      version: "v3.5",
-      title: "Tournament form",
-      body: "Completed match points and goal difference now nudge the read, with one-match reactions capped until the proof repeats.",
+      version: "v4",
+      title: "Tournament brain",
+      body: "xG-first probabilities, calibration receipts, knockout lanes, crowd nudges, body cost, and lineup risk now travel together.",
     },
   ];
 
@@ -1162,7 +1162,7 @@ function SeerVersionLog({ hasData }: { hasData: boolean }) {
         </div>
         <div className="traffic-generated">
           <History size={16} />
-          v3.5 active
+          v4 active
         </div>
       </div>
       <div className="seer-version-grid">
