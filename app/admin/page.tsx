@@ -424,6 +424,7 @@ export default function AdminPage() {
             logLoss: 0,
             byPredictedProbability: [],
             byConfidence: [],
+            diagnostics: emptyCalibrationDiagnostics(),
             error: error instanceof Error ? error.message : "Calibration failed.",
           }))
         : Promise.resolve<CalibrationDashboard | null>(null);
@@ -2294,6 +2295,31 @@ type CalibrationBucketRow = {
   gap: number;
 };
 
+type CalibrationSegmentRow = CalibrationBucketRow & {
+  verdict: string;
+};
+
+type ChaosMissBucketRow = {
+  label: string;
+  count: number;
+  averageChaos: number;
+  missRatePct: number;
+  gapFromAverage: number;
+};
+
+type CalibrationDiagnostics = {
+  favorite: CalibrationSegmentRow;
+  draw: CalibrationSegmentRow;
+  chaos: {
+    sampleSize: number;
+    averageChaos: number;
+    missRatePct: number;
+    trend: "rising" | "flat" | "inverted" | "insufficient-data";
+    verdict: string;
+    buckets: ChaosMissBucketRow[];
+  };
+};
+
 type CalibrationDashboard = {
   sampleSize: number;
   accuracy: number;
@@ -2301,10 +2327,40 @@ type CalibrationDashboard = {
   logLoss: number;
   byPredictedProbability: CalibrationBucketRow[];
   byConfidence: CalibrationBucketRow[];
+  diagnostics: CalibrationDiagnostics;
   completedMatchesConsidered?: number;
   generatedAt?: string;
   error?: string;
 };
+
+function emptyCalibrationDiagnostics(): CalibrationDiagnostics {
+  return {
+    favorite: {
+      label: "Favorite calls",
+      count: 0,
+      predictedPct: 0,
+      actualPct: 0,
+      gap: 0,
+      verdict: "No favorite receipts yet.",
+    },
+    draw: {
+      label: "Draw lane",
+      count: 0,
+      predictedPct: 0,
+      actualPct: 0,
+      gap: 0,
+      verdict: "No draw receipts yet.",
+    },
+    chaos: {
+      sampleSize: 0,
+      averageChaos: 0,
+      missRatePct: 0,
+      trend: "insufficient-data",
+      verdict: "No chaos-tagged receipts yet.",
+      buckets: [],
+    },
+  };
+}
 
 function CalibrationPanel({
   calibration,
@@ -2366,6 +2422,63 @@ function CalibrationPanel({
     );
   }
 
+  function renderDiagnosticCard(
+    title: string,
+    subtitle: string,
+    segment: CalibrationSegmentRow,
+  ) {
+    return (
+      <article className="calibration-diagnostic-card">
+        <span>{title}</span>
+        <strong>{segment.actualPct}%</strong>
+        <small>{subtitle} · predicted {segment.predictedPct}%</small>
+        <em className={segment.gap < 0 ? "negative" : "positive"}>
+          {segment.gap > 0 ? "+" : ""}
+          {segment.gap} pts
+        </em>
+        <p>{segment.verdict}</p>
+      </article>
+    );
+  }
+
+  function renderChaosTable(rows: ChaosMissBucketRow[]) {
+    return (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          color: "#cfd9f2",
+          fontSize: "0.8rem",
+          marginTop: 8,
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={thStyle}>Chaos band</th>
+            <th style={thStyle}>Matches</th>
+            <th style={thStyle}>Avg chaos</th>
+            <th style={thStyle}>Miss rate</th>
+            <th style={thStyle}>Vs avg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <td style={tdStyle}>{row.label}</td>
+              <td style={tdStyle}>{row.count}</td>
+              <td style={tdStyle}>{row.averageChaos}</td>
+              <td style={tdStyle}>{row.missRatePct}%</td>
+              <td style={{ ...tdStyle, color: row.gapFromAverage > 0 ? "#e2734b" : "#5dca8f" }}>
+                {row.gapFromAverage > 0 ? "+" : ""}
+                {row.gapFromAverage}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <section className="admin-panel">
       <div className="admin-table-header">
@@ -2410,11 +2523,40 @@ function CalibrationPanel({
               <strong>{calibration.logLoss}</strong>
             </div>
           </div>
+          <div className="calibration-diagnostics">
+            {renderDiagnosticCard(
+              "Favorite discipline",
+              `${calibration.diagnostics.favorite.count} team calls`,
+              calibration.diagnostics.favorite,
+            )}
+            {renderDiagnosticCard(
+              "Draw pricing",
+              `${calibration.diagnostics.draw.count} final scores`,
+              calibration.diagnostics.draw,
+            )}
+            <article className="calibration-diagnostic-card">
+              <span>Chaos misses</span>
+              <strong>{calibration.diagnostics.chaos.missRatePct}%</strong>
+              <small>
+                miss rate · avg chaos {calibration.diagnostics.chaos.averageChaos}
+              </small>
+              <em className={calibration.diagnostics.chaos.trend}>
+                {calibration.diagnostics.chaos.trend.replace("-", " ")}
+              </em>
+              <p>{calibration.diagnostics.chaos.verdict}</p>
+            </article>
+          </div>
           <p className="admin-muted">
             Predicted vs actual by the leaned pick&apos;s probability. A positive gap = the
             Seer is underconfident; negative = overconfident.
           </p>
           {renderTable(calibration.byPredictedProbability, "Probability band", "Predicted")}
+          {calibration.diagnostics.chaos.buckets.length > 0 ? (
+            <>
+              <p className="admin-muted">Chaos buckets against actual misses:</p>
+              {renderChaosTable(calibration.diagnostics.chaos.buckets)}
+            </>
+          ) : null}
           {calibration.byConfidence.length > 0 ? (
             <>
               <p className="admin-muted">By the model&apos;s stated confidence:</p>

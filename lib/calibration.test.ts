@@ -11,6 +11,8 @@ describe("computeCalibration", () => {
     expect(report.logLoss).toBe(0);
     expect(report.byPredictedProbability).toEqual([]);
     expect(report.byConfidence).toEqual([]);
+    expect(report.diagnostics.favorite.count).toBe(0);
+    expect(report.diagnostics.chaos.trend).toBe("insufficient-data");
   });
 
   it("computes accuracy, Brier score and log loss with hand-checked values", () => {
@@ -101,5 +103,68 @@ describe("computeCalibration", () => {
     ]);
 
     expect(report.byConfidence).toEqual([]);
+  });
+
+  it("flags favorite overconfidence from final-score receipts", () => {
+    const report = computeCalibration([
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away" },
+    ]);
+
+    expect(report.diagnostics.favorite.count).toBe(5);
+    expect(report.diagnostics.favorite.predictedPct).toBe(60);
+    expect(report.diagnostics.favorite.actualPct).toBe(40);
+    expect(report.diagnostics.favorite.gap).toBe(-20);
+    expect(report.diagnostics.favorite.verdict).toContain("Trim favorite confidence");
+  });
+
+  it("flags draw underpricing across all completed matches", () => {
+    const report = computeCalibration([
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "draw" },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "draw" },
+    ]);
+
+    expect(report.diagnostics.draw.count).toBe(5);
+    expect(report.diagnostics.draw.predictedPct).toBe(20);
+    expect(report.diagnostics.draw.actualPct).toBe(40);
+    expect(report.diagnostics.draw.gap).toBe(20);
+    expect(report.diagnostics.draw.verdict).toContain("Lift the draw lane");
+  });
+
+  it("buckets chaos and reports a rising miss trend", () => {
+    const report = computeCalibration([
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home", chaos: 44 },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home", chaos: 46 },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home", chaos: 48 },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", chaos: 72 },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", chaos: 74 },
+      { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", chaos: 76 },
+    ]);
+
+    expect(report.diagnostics.chaos.sampleSize).toBe(6);
+    expect(report.diagnostics.chaos.missRatePct).toBe(50);
+    expect(report.diagnostics.chaos.trend).toBe("rising");
+    expect(report.diagnostics.chaos.buckets).toEqual([
+      {
+        label: "35-50",
+        count: 3,
+        averageChaos: 46,
+        missRatePct: 0,
+        gapFromAverage: -50,
+      },
+      {
+        label: "70-85",
+        count: 3,
+        averageChaos: 74,
+        missRatePct: 100,
+        gapFromAverage: 50,
+      },
+    ]);
   });
 });

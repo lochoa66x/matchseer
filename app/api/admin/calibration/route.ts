@@ -47,6 +47,7 @@ export async function GET(request: Request) {
         },
         actual,
         confidence: match.forecast.confidence,
+        chaos: match.forecast.chaos,
       });
     }
 
