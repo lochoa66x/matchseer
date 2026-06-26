@@ -2358,6 +2358,39 @@ type CalibrationDiagnostics = {
   };
 };
 
+type MarketCalibrationRow = {
+  count: number;
+  modelHitPct: number;
+  marketHitPct: number;
+  edgePct: number;
+  alignedCount: number;
+  splitCount: number;
+  nudgeAppliedCount: number;
+  averageLiquidity: number;
+  verdict: string;
+};
+
+type CalibrationTuningRecommendation = {
+  id: string;
+  label: string;
+  currentValue: number;
+  recommendedValue: number;
+  unit: "multiplier" | "points" | "weight";
+  direction: "increase" | "decrease" | "hold" | "collect";
+  sampleSize: number;
+  confidence: "collecting" | "early" | "actionable";
+  evidence: string;
+  rationale: string;
+};
+
+type CalibrationTuningReport = {
+  sampleSize: number;
+  readiness: "collecting" | "early" | "actionable";
+  summary: string;
+  market: MarketCalibrationRow;
+  recommendations: CalibrationTuningRecommendation[];
+};
+
 type CalibrationDashboard = {
   sampleSize: number;
   accuracy: number;
@@ -2366,6 +2399,7 @@ type CalibrationDashboard = {
   byPredictedProbability: CalibrationBucketRow[];
   byConfidence: CalibrationBucketRow[];
   diagnostics: CalibrationDiagnostics;
+  tuning?: CalibrationTuningReport;
   completedMatchesConsidered?: number;
   generatedAt?: string;
   error?: string;
@@ -2479,6 +2513,26 @@ function CalibrationPanel({
     );
   }
 
+  function formatTuningValue(item: CalibrationTuningRecommendation, value: number) {
+    if (item.unit === "points") {
+      return `${value > 0 ? "+" : ""}${value.toFixed(1)} pts`;
+    }
+
+    if (item.unit === "weight") {
+      return value.toFixed(3);
+    }
+
+    return `${value.toFixed(3)}x`;
+  }
+
+  function tuningDirectionLabel(direction: CalibrationTuningRecommendation["direction"]) {
+    if (direction === "collect") {
+      return "collect";
+    }
+
+    return direction;
+  }
+
   function renderChaosTable(rows: ChaosMissBucketRow[]) {
     return (
       <table
@@ -2584,6 +2638,53 @@ function CalibrationPanel({
               <p>{calibration.diagnostics.chaos.verdict}</p>
             </article>
           </div>
+          {calibration.tuning ? (
+            <div className="calibration-tuning">
+              <div className="calibration-tuning-header">
+                <div>
+                  <span>Tuning plan</span>
+                  <strong>{calibration.tuning.readiness}</strong>
+                </div>
+                <p>{calibration.tuning.summary}</p>
+              </div>
+              <div className="calibration-market-read">
+                <span>Crowd backtest</span>
+                <strong>
+                  {calibration.tuning.market.count} finals · crowd{" "}
+                  {calibration.tuning.market.marketHitPct}% · model{" "}
+                  {calibration.tuning.market.modelHitPct}%
+                </strong>
+                <small>
+                  {calibration.tuning.market.alignedCount} aligned ·{" "}
+                  {calibration.tuning.market.splitCount} split · liquidity{" "}
+                  {calibration.tuning.market.averageLiquidity} ·{" "}
+                  {calibration.tuning.market.nudgeAppliedCount} nudged
+                </small>
+                <p>{calibration.tuning.market.verdict}</p>
+              </div>
+              <div className="calibration-tuning-grid">
+                {calibration.tuning.recommendations.map((item) => (
+                  <article className="calibration-tuning-card" key={item.id}>
+                    <div>
+                      <span>{item.label}</span>
+                      <em className={item.direction}>
+                        {tuningDirectionLabel(item.direction)}
+                      </em>
+                    </div>
+                    <strong>
+                      {formatTuningValue(item, item.currentValue)} -&gt;{" "}
+                      {formatTuningValue(item, item.recommendedValue)}
+                    </strong>
+                    <small>
+                      {item.sampleSize} receipts · {item.confidence}
+                    </small>
+                    <p>{item.evidence}</p>
+                    <p>{item.rationale}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <p className="admin-muted">
             Predicted vs actual by the leaned pick&apos;s probability. A positive gap = the
             Seer is underconfident; negative = overconfident.

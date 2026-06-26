@@ -39,6 +39,8 @@ export async function GET(request: Request) {
         continue;
       }
 
+      const marketPulse = match.forecast.marketPulse;
+
       samples.push({
         probabilities: {
           home: match.forecast.home,
@@ -48,6 +50,14 @@ export async function GET(request: Request) {
         actual,
         confidence: match.forecast.confidence,
         chaos: match.forecast.chaos,
+        market: marketPulse
+          ? {
+              leader: marketPulse.leader,
+              liquidityScore: marketPulse.liquidityScore,
+              alignment: marketPulse.alignment,
+              nudgeApplied: marketPulse.nudge?.applied ?? false,
+            }
+          : null,
       });
     }
 

@@ -12,6 +12,12 @@ export type CalibrationSample = {
   actual: ForecastOutcome;
   confidence?: number | null;
   chaos?: number | null;
+  market?: {
+    leader: ForecastOutcome;
+    liquidityScore?: number | null;
+    alignment?: "aligned" | "split" | "thin" | null;
+    nudgeApplied?: boolean | null;
+  } | null;
 };
 
 export type CalibrationBucket = {
@@ -30,6 +36,7 @@ export type CalibrationReport = {
   byPredictedProbability: CalibrationBucket[]; // bucketed by the leaned pick's probability
   byConfidence: CalibrationBucket[]; // bucketed by the model's stated confidence
   diagnostics: CalibrationDiagnostics;
+  tuning: CalibrationTuningReport;
 };
 
 export type CalibrationSegment = {
@@ -62,6 +69,44 @@ export type CalibrationDiagnostics = {
   favorite: CalibrationSegment;
   draw: CalibrationSegment;
   chaos: ChaosCalibration;
+};
+
+export type MarketCalibration = {
+  count: number;
+  modelHitPct: number;
+  marketHitPct: number;
+  edgePct: number;
+  alignedCount: number;
+  splitCount: number;
+  nudgeAppliedCount: number;
+  averageLiquidity: number;
+  verdict: string;
+};
+
+export type CalibrationTuningRecommendation = {
+  id:
+    | "favorite-scale"
+    | "draw-lane"
+    | "confidence-bias"
+    | "chaos-sensitivity"
+    | "market-nudge-weight";
+  label: string;
+  currentValue: number;
+  recommendedValue: number;
+  unit: "multiplier" | "points" | "weight";
+  direction: "increase" | "decrease" | "hold" | "collect";
+  sampleSize: number;
+  confidence: "collecting" | "early" | "actionable";
+  evidence: string;
+  rationale: string;
+};
+
+export type CalibrationTuningReport = {
+  sampleSize: number;
+  readiness: "collecting" | "early" | "actionable";
+  summary: string;
+  market: MarketCalibration;
+  recommendations: CalibrationTuningRecommendation[];
 };
 
 const OUTCOMES: ForecastOutcome[] = ["home", "draw", "away"];
@@ -130,6 +175,14 @@ function bucketize(
 
 function round1(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function round3(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function emptyDiagnostics(): CalibrationDiagnostics {
@@ -327,10 +380,300 @@ function chaosVerdict(trend: ChaosCalibration["trend"], sampleSize: number) {
   return "Chaos is not separating misses yet. Tighten the chaos scale or add sharper volatility signals.";
 }
 
+function tuningReadiness(sampleSize: number): CalibrationTuningReport["readiness"] {
+  if (sampleSize < 5) {
+    return "collecting";
+  }
+
+  if (sampleSize < 12) {
+    return "early";
+  }
+
+  return "actionable";
+}
+
+function recommendationConfidence(
+  sampleSize: number,
+): CalibrationTuningRecommendation["confidence"] {
+  return tuningReadiness(sampleSize);
+}
+
+function tuningDirection({
+  currentValue,
+  recommendedValue,
+  confidence,
+}: {
+  currentValue: number;
+  recommendedValue: number;
+  confidence: CalibrationTuningRecommendation["confidence"];
+}): CalibrationTuningRecommendation["direction"] {
+  if (confidence === "collecting") {
+    return "collect";
+  }
+
+  if (Math.abs(recommendedValue - currentValue) < 0.01) {
+    return "hold";
+  }
+
+  return recommendedValue > currentValue ? "increase" : "decrease";
+}
+
+function weightedBucketGap(rows: CalibrationBucket[]) {
+  const count = rows.reduce((sum, row) => sum + row.count, 0);
+
+  if (count === 0) {
+    return {
+      count,
+      gap: 0,
+    };
+  }
+
+  return {
+    count,
+    gap: rows.reduce((sum, row) => sum + row.gap * row.count, 0) / count,
+  };
+}
+
+function marketCalibration(
+  rows: {
+    modelHit: boolean;
+    marketHit: boolean;
+    aligned: boolean;
+    nudgeApplied: boolean;
+    liquidityScore: number | null;
+  }[],
+): MarketCalibration {
+  if (rows.length === 0) {
+    return {
+      count: 0,
+      modelHitPct: 0,
+      marketHitPct: 0,
+      edgePct: 0,
+      alignedCount: 0,
+      splitCount: 0,
+      nudgeAppliedCount: 0,
+      averageLiquidity: 0,
+      verdict: "No crowd-signal finals yet.",
+    };
+  }
+
+  const modelHitPct =
+    (rows.filter((row) => row.modelHit).length / rows.length) * 100;
+  const marketHitPct =
+    (rows.filter((row) => row.marketHit).length / rows.length) * 100;
+  const alignedCount = rows.filter((row) => row.aligned).length;
+  const liquidityRows = rows.filter((row) => row.liquidityScore !== null);
+  const averageLiquidity =
+    liquidityRows.length === 0
+      ? 0
+      : liquidityRows.reduce(
+          (sum, row) => sum + (row.liquidityScore ?? 0),
+          0,
+        ) / liquidityRows.length;
+  const edgePct = marketHitPct - modelHitPct;
+
+  let verdict = "Crowd signal is roughly in line with the model receipts.";
+
+  if (rows.length < 5) {
+    verdict = "Early read: collect more crowd-signal finals before moving the market dial.";
+  } else if (edgePct >= 6) {
+    verdict = "Crowd leader is beating the model call. Give the market nudge a little more room.";
+  } else if (edgePct <= -6) {
+    verdict = "Crowd leader is trailing the model call. Tighten the market nudge.";
+  }
+
+  return {
+    count: rows.length,
+    modelHitPct: round1(modelHitPct),
+    marketHitPct: round1(marketHitPct),
+    edgePct: round1(edgePct),
+    alignedCount,
+    splitCount: rows.length - alignedCount,
+    nudgeAppliedCount: rows.filter((row) => row.nudgeApplied).length,
+    averageLiquidity: round3(averageLiquidity),
+    verdict,
+  };
+}
+
+function tuneFromGap({
+  currentValue,
+  gap,
+  sampleSize,
+  scale,
+  min,
+  max,
+}: {
+  currentValue: number;
+  gap: number;
+  sampleSize: number;
+  scale: number;
+  min: number;
+  max: number;
+}) {
+  if (sampleSize < 5) {
+    return currentValue;
+  }
+
+  return round3(clamp(currentValue + (gap / 100) * scale, min, max));
+}
+
+function tuningRecommendation({
+  id,
+  label,
+  currentValue,
+  recommendedValue,
+  unit,
+  sampleSize,
+  evidence,
+  rationale,
+}: Omit<CalibrationTuningRecommendation, "confidence" | "direction">) {
+  const confidence = recommendationConfidence(sampleSize);
+
+  return {
+    id,
+    label,
+    currentValue,
+    recommendedValue,
+    unit,
+    direction: tuningDirection({
+      currentValue,
+      recommendedValue,
+      confidence,
+    }),
+    sampleSize,
+    confidence,
+    evidence,
+    rationale,
+  };
+}
+
+function calibrationTuningSummary(readiness: CalibrationTuningReport["readiness"]) {
+  if (readiness === "collecting") {
+    return "Receipts are being collected. Keep current weights until the sample clears the early-noise zone.";
+  }
+
+  if (readiness === "early") {
+    return "Early tuning read: use these as guardrails, not automatic rewrites.";
+  }
+
+  return "Enough receipts are in play for bounded model-weight tuning.";
+}
+
+function buildTuningReport({
+  sampleSize,
+  diagnostics,
+  byConfidence,
+  market,
+}: {
+  sampleSize: number;
+  diagnostics: CalibrationDiagnostics;
+  byConfidence: CalibrationBucket[];
+  market: MarketCalibration;
+}): CalibrationTuningReport {
+  const confidenceGap = weightedBucketGap(byConfidence);
+  const confidenceBias = confidenceGap.count < 5
+    ? 0
+    : round1(clamp(confidenceGap.gap * 0.22, -5, 5));
+  const chaosSensitivity = diagnostics.chaos.sampleSize < 5
+    ? 1
+    : diagnostics.chaos.trend === "rising"
+      ? 1.08
+      : diagnostics.chaos.trend === "inverted"
+        ? 0.92
+        : diagnostics.chaos.trend === "flat"
+          ? 1.03
+          : 1;
+  const marketWeight = market.count < 5
+    ? 0.18
+    : round3(clamp(0.18 + (market.edgePct / 100) * 0.16, 0.12, 0.24));
+  const readiness = tuningReadiness(sampleSize);
+
+  return {
+    sampleSize,
+    readiness,
+    summary: calibrationTuningSummary(readiness),
+    market,
+    recommendations: [
+      tuningRecommendation({
+        id: "favorite-scale",
+        label: "Favorite probability scale",
+        currentValue: 1,
+        recommendedValue: tuneFromGap({
+          currentValue: 1,
+          gap: diagnostics.favorite.gap,
+          sampleSize: diagnostics.favorite.count,
+          scale: 0.45,
+          min: 0.88,
+          max: 1.12,
+        }),
+        unit: "multiplier",
+        sampleSize: diagnostics.favorite.count,
+        evidence: `${diagnostics.favorite.actualPct}% actual vs ${diagnostics.favorite.predictedPct}% predicted.`,
+        rationale: diagnostics.favorite.verdict,
+      }),
+      tuningRecommendation({
+        id: "draw-lane",
+        label: "Draw lane multiplier",
+        currentValue: 1,
+        recommendedValue: tuneFromGap({
+          currentValue: 1,
+          gap: diagnostics.draw.gap,
+          sampleSize: diagnostics.draw.count,
+          scale: 0.55,
+          min: 0.9,
+          max: 1.16,
+        }),
+        unit: "multiplier",
+        sampleSize: diagnostics.draw.count,
+        evidence: `${diagnostics.draw.actualPct}% actual vs ${diagnostics.draw.predictedPct}% predicted.`,
+        rationale: diagnostics.draw.verdict,
+      }),
+      tuningRecommendation({
+        id: "confidence-bias",
+        label: "Confidence bias",
+        currentValue: 0,
+        recommendedValue: confidenceBias,
+        unit: "points",
+        sampleSize: confidenceGap.count,
+        evidence: `${round1(confidenceGap.gap)} pt weighted confidence gap.`,
+        rationale:
+          confidenceBias < 0
+            ? "Stated confidence is running hotter than hit rate. Cool the displayed confidence before kickoff."
+            : confidenceBias > 0
+              ? "Stated confidence is conservative against receipts. The Seer can speak a touch firmer."
+              : "Confidence bands need more receipts or are already close.",
+      }),
+      tuningRecommendation({
+        id: "chaos-sensitivity",
+        label: "Chaos miss sensitivity",
+        currentValue: 1,
+        recommendedValue: chaosSensitivity,
+        unit: "multiplier",
+        sampleSize: diagnostics.chaos.sampleSize,
+        evidence: `${diagnostics.chaos.missRatePct}% miss rate, ${diagnostics.chaos.trend.replace("-", " ")} trend.`,
+        rationale: diagnostics.chaos.verdict,
+      }),
+      tuningRecommendation({
+        id: "market-nudge-weight",
+        label: "Crowd nudge max weight",
+        currentValue: 0.18,
+        recommendedValue: marketWeight,
+        unit: "weight",
+        sampleSize: market.count,
+        evidence: `Crowd ${market.marketHitPct}% vs model ${market.modelHitPct}% on ${market.count} finals.`,
+        rationale: market.verdict,
+      }),
+    ],
+  };
+}
+
 export function computeCalibration(samples: CalibrationSample[]): CalibrationReport {
   const sampleSize = samples.length;
 
   if (sampleSize === 0) {
+    const diagnostics = emptyDiagnostics();
+    const market = marketCalibration([]);
+
     return {
       sampleSize: 0,
       accuracy: 0,
@@ -338,7 +681,13 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
       logLoss: 0,
       byPredictedProbability: [],
       byConfidence: [],
-      diagnostics: emptyDiagnostics(),
+      diagnostics,
+      tuning: buildTuningReport({
+        sampleSize: 0,
+        diagnostics,
+        byConfidence: [],
+        market,
+      }),
     };
   }
 
@@ -350,6 +699,13 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
   const favoriteRows: { predicted: number; hit: boolean }[] = [];
   const drawRows: { predicted: number; hit: boolean }[] = [];
   const chaosRows: { chaos: number; miss: boolean }[] = [];
+  const marketRows: {
+    modelHit: boolean;
+    marketHit: boolean;
+    aligned: boolean;
+    nudgeApplied: boolean;
+    liquidityScore: number | null;
+  }[] = [];
 
   for (const sample of samples) {
     const p = normalize(sample.probabilities);
@@ -382,7 +738,38 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
     if (sample.chaos != null && Number.isFinite(sample.chaos)) {
       chaosRows.push({ chaos: sample.chaos, miss: !hit });
     }
+
+    if (sample.market) {
+      marketRows.push({
+        modelHit: hit,
+        marketHit: sample.market.leader === sample.actual,
+        aligned: sample.market.leader === pick || sample.market.alignment === "aligned",
+        nudgeApplied: Boolean(sample.market.nudgeApplied),
+        liquidityScore:
+          sample.market.liquidityScore != null &&
+          Number.isFinite(sample.market.liquidityScore)
+            ? sample.market.liquidityScore
+            : null,
+      });
+    }
   }
+  const byConfidence = bucketize(confidenceRows, [40, 50, 60, 70, 80, 90]);
+  const diagnostics = {
+    favorite: calibrationSegment({
+      label: "Favorite calls",
+      rows: favoriteRows,
+      emptyVerdict: "No favorite receipts yet.",
+      verdict: favoriteVerdict,
+    }),
+    draw: calibrationSegment({
+      label: "Draw lane",
+      rows: drawRows,
+      emptyVerdict: "No draw receipts yet.",
+      verdict: drawVerdict,
+    }),
+    chaos: computeChaosCalibration(chaosRows),
+  };
+  const market = marketCalibration(marketRows);
 
   return {
     sampleSize,
@@ -393,21 +780,13 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
       probabilityRows,
       [30, 40, 50, 60, 70, 80, 90, 100],
     ),
-    byConfidence: bucketize(confidenceRows, [40, 50, 60, 70, 80, 90]),
-    diagnostics: {
-      favorite: calibrationSegment({
-        label: "Favorite calls",
-        rows: favoriteRows,
-        emptyVerdict: "No favorite receipts yet.",
-        verdict: favoriteVerdict,
-      }),
-      draw: calibrationSegment({
-        label: "Draw lane",
-        rows: drawRows,
-        emptyVerdict: "No draw receipts yet.",
-        verdict: drawVerdict,
-      }),
-      chaos: computeChaosCalibration(chaosRows),
-    },
+    byConfidence,
+    diagnostics,
+    tuning: buildTuningReport({
+      sampleSize,
+      diagnostics,
+      byConfidence,
+      market,
+    }),
   };
 }

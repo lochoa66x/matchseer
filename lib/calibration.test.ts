@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { computeCalibration, type CalibrationSample } from "./calibration";
 
+function recommendation(report: ReturnType<typeof computeCalibration>, id: string) {
+  const match = report.tuning.recommendations.find((item) => item.id === id);
+
+  if (!match) {
+    throw new Error(`Missing recommendation ${id}`);
+  }
+
+  return match;
+}
+
 describe("computeCalibration", () => {
   it("returns zeroed report for an empty sample set", () => {
     const report = computeCalibration([]);
@@ -13,6 +23,9 @@ describe("computeCalibration", () => {
     expect(report.byConfidence).toEqual([]);
     expect(report.diagnostics.favorite.count).toBe(0);
     expect(report.diagnostics.chaos.trend).toBe("insufficient-data");
+    expect(report.tuning.readiness).toBe("collecting");
+    expect(report.tuning.recommendations).toHaveLength(5);
+    expect(recommendation(report, "favorite-scale").direction).toBe("collect");
   });
 
   it("computes accuracy, Brier score and log loss with hand-checked values", () => {
@@ -166,5 +179,73 @@ describe("computeCalibration", () => {
         gapFromAverage: 50,
       },
     ]);
+  });
+
+  it("turns calibration receipts into bounded tuning recommendations", () => {
+    const samples: CalibrationSample[] = [
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "home",
+        confidence: 80,
+        chaos: 44,
+        market: { leader: "home", liquidityScore: 0.8, alignment: "aligned" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 46,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 48,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "draw",
+        confidence: 80,
+        chaos: 72,
+        market: { leader: "draw", liquidityScore: 0.9, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "draw",
+        confidence: 80,
+        chaos: 74,
+        market: { leader: "draw", liquidityScore: 0.9, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 76,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+    ];
+    const report = computeCalibration(samples);
+
+    expect(report.tuning.readiness).toBe("early");
+    expect(recommendation(report, "favorite-scale")).toMatchObject({
+      direction: "decrease",
+      recommendedValue: 0.88,
+    });
+    expect(recommendation(report, "draw-lane").direction).toBe("increase");
+    expect(recommendation(report, "confidence-bias")).toMatchObject({
+      direction: "decrease",
+      recommendedValue: -5,
+    });
+    expect(recommendation(report, "chaos-sensitivity")).toMatchObject({
+      direction: "increase",
+      recommendedValue: 1.08,
+    });
+    expect(report.tuning.market.edgePct).toBe(83.3);
+    expect(recommendation(report, "market-nudge-weight")).toMatchObject({
+      direction: "increase",
+      recommendedValue: 0.24,
+    });
   });
 });
