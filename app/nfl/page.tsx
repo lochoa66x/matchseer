@@ -105,6 +105,33 @@ type NflScoutingAnalysis = {
 
 type ScoutStatus = "idle" | "loading" | "ready" | "error";
 
+type ScenarioLevers = {
+  wind: number;
+  healthSwing: number;
+  tempo: number;
+  homeNoise: number;
+};
+
+type ScenarioFactor = {
+  label: string;
+  value: string;
+  detail: string;
+};
+
+type ScenarioImpact = {
+  awayWin: number;
+  homeWin: number;
+  projected: string;
+  confidence: number;
+  chaos: number;
+  pace: number;
+  weatherDrag: number;
+  leanCode: string;
+  leanProbability: number;
+  read: string;
+  factors: ScenarioFactor[];
+};
+
 const scoringLabels: Record<ScoringFormat, string> = {
   standard: "Standard",
   halfPpr: "Half PPR",
@@ -380,8 +407,21 @@ export default function NflPage() {
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
+  const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
+    Record<string, ScenarioLevers>
+  >({});
   const activeMatchup =
     matchups.find((matchup) => matchup.id === activeMatchupId) ?? matchups[0];
+  const activeScenarioLevers = useMemo(
+    () =>
+      scenarioLeversByMatchup[activeMatchup.id] ??
+      defaultScenarioLevers(activeMatchup),
+    [activeMatchup, scenarioLeversByMatchup],
+  );
+  const activeScenario = useMemo(
+    () => buildScenarioImpact(activeMatchup, activeScenarioLevers),
+    [activeMatchup, activeScenarioLevers],
+  );
   const leftPlayer =
     fantasyPlayers.find((player) => player.id === leftPlayerId) ?? playerPair[0];
   const rightPlayer =
@@ -394,6 +434,25 @@ export default function NflPage() {
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
     [scoringFormat],
   );
+
+  function updateScenarioLever(key: keyof ScenarioLevers, value: number) {
+    setScenarioLeversByMatchup((current) => ({
+      ...current,
+      [activeMatchup.id]: {
+        ...defaultScenarioLevers(activeMatchup),
+        ...(current[activeMatchup.id] ?? {}),
+        [key]: value,
+      },
+    }));
+  }
+
+  function resetScenarioLevers() {
+    setScenarioLeversByMatchup((current) => {
+      const next = { ...current };
+      delete next[activeMatchup.id];
+      return next;
+    });
+  }
 
   async function requestScoutingRead() {
     setScoutStatus("loading");
@@ -451,6 +510,7 @@ export default function NflPage() {
         </a>
         <nav aria-label="NFL navigation">
           <a href="#team-seer">Team Seer</a>
+          <a href="#scenario-lab">What-if Lab</a>
           <a href="#fantasy-seer">Fantasy Seer</a>
           <a href="#player-compare">Player vs player</a>
         </nav>
@@ -507,34 +567,31 @@ export default function NflPage() {
             <div>
               <span>Seer lean</span>
               <strong>
-                {activeMatchup.awayWin > activeMatchup.homeWin
-                  ? activeMatchup.away.code
-                  : activeMatchup.home.code}{" "}
-                {Math.max(activeMatchup.awayWin, activeMatchup.homeWin)}%
+                {activeScenario.leanCode} {activeScenario.leanProbability}%
               </strong>
             </div>
             <div>
               <span>Projected</span>
-              <strong>{activeMatchup.projected}</strong>
+              <strong>{activeScenario.projected}</strong>
             </div>
             <div>
               <span>Game script</span>
-              <strong>{activeMatchup.pace}% pace</strong>
+              <strong>{activeScenario.pace}% pace</strong>
             </div>
           </div>
-          <p className="nfl-seer-read">{activeMatchup.read}</p>
+          <p className="nfl-seer-read">{activeScenario.read}</p>
           <ProbabilityBar
             leftColor={activeMatchup.away.color}
             leftLabel={activeMatchup.away.code}
-            leftValue={activeMatchup.awayWin}
+            leftValue={activeScenario.awayWin}
             rightColor={activeMatchup.home.color}
             rightLabel={activeMatchup.home.code}
-            rightValue={activeMatchup.homeWin}
+            rightValue={activeScenario.homeWin}
           />
           <div className="nfl-meter-grid">
-            <MiniMeter icon={<Gauge size={16} />} label="Confidence" value={activeMatchup.confidence} />
-            <MiniMeter icon={<Activity size={16} />} label="Chaos" value={activeMatchup.chaos} hot />
-            <MiniMeter icon={<Wind size={16} />} label="Weather drag" value={weatherDrag(activeMatchup)} />
+            <MiniMeter icon={<Gauge size={16} />} label="Confidence" value={activeScenario.confidence} />
+            <MiniMeter icon={<Activity size={16} />} label="Chaos" value={activeScenario.chaos} hot />
+            <MiniMeter icon={<Wind size={16} />} label="Weather drag" value={activeScenario.weatherDrag} />
           </div>
           <div className="nfl-edge-row">
             {activeMatchup.edges.map((edge) => (
@@ -543,6 +600,14 @@ export default function NflPage() {
           </div>
         </article>
       </section>
+
+      <ScenarioLab
+        impact={activeScenario}
+        levers={activeScenarioLevers}
+        matchup={activeMatchup}
+        onChange={updateScenarioLever}
+        onReset={resetScenarioLevers}
+      />
 
       <section className="nfl-grid-section">
         <div className="nfl-team-compare">
@@ -633,6 +698,137 @@ export default function NflPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function ScenarioLab({
+  impact,
+  levers,
+  matchup,
+  onChange,
+  onReset,
+}: {
+  impact: ScenarioImpact;
+  levers: ScenarioLevers;
+  matchup: NflMatchup;
+  onChange: (key: keyof ScenarioLevers, value: number) => void;
+  onReset: () => void;
+}) {
+  return (
+    <section className="nfl-scenario-lab" id="scenario-lab">
+      <div className="nfl-scenario-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Gauge size={17} />
+            What-if lab
+          </div>
+          <h2>Live scenario pressure</h2>
+        </div>
+        <button className="nfl-reset-button" onClick={onReset} type="button">
+          <Sparkles size={16} />
+          Reset read
+        </button>
+      </div>
+      <div className="nfl-scenario-body">
+        <div className="nfl-scenario-controls">
+          <ScenarioControl
+            icon={<Wind size={16} />}
+            label="Wind stress"
+            max={100}
+            min={0}
+            onChange={(value) => onChange("wind", value)}
+            value={levers.wind}
+            valueLabel={`${levers.wind}%`}
+          />
+          <ScenarioControl
+            icon={<HeartPulse size={16} />}
+            label="Health swing"
+            max={20}
+            min={-20}
+            onChange={(value) => onChange("healthSwing", value)}
+            value={levers.healthSwing}
+            valueLabel={formatHealthSwing(matchup, levers.healthSwing)}
+          />
+          <ScenarioControl
+            icon={<Timer size={16} />}
+            label="Tempo"
+            max={95}
+            min={45}
+            onChange={(value) => onChange("tempo", value)}
+            value={levers.tempo}
+            valueLabel={`${levers.tempo}%`}
+          />
+          <ScenarioControl
+            icon={<Activity size={16} />}
+            label="Home noise"
+            max={100}
+            min={0}
+            onChange={(value) => onChange("homeNoise", value)}
+            value={levers.homeNoise}
+            valueLabel={`${levers.homeNoise}%`}
+          />
+        </div>
+        <article className="nfl-scenario-read">
+          <div className="nfl-card-topline">
+            <span>Scenario lean</span>
+            <strong>
+              {impact.leanCode} {impact.leanProbability}%
+            </strong>
+          </div>
+          <p>{impact.read}</p>
+          <div className="nfl-scenario-score">
+            <span>Projected</span>
+            <strong>{impact.projected}</strong>
+          </div>
+          <div className="nfl-scenario-factors">
+            {impact.factors.map((factor) => (
+              <div key={factor.label}>
+                <span>{factor.label}</span>
+                <strong>{factor.value}</strong>
+                <em>{factor.detail}</em>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function ScenarioControl({
+  icon,
+  label,
+  max,
+  min,
+  onChange,
+  value,
+  valueLabel,
+}: {
+  icon: ReactNode;
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  value: number;
+  valueLabel: string;
+}) {
+  return (
+    <label className="nfl-scenario-control">
+      <div>
+        <span>
+          {icon}
+          <strong>{label}</strong>
+        </span>
+        <em>{valueLabel}</em>
+      </div>
+      <input
+        max={max}
+        min={min}
+        onChange={(event) => onChange(Number(event.target.value))}
+        type="range"
+        value={value}
+      />
+    </label>
   );
 }
 
@@ -1041,8 +1237,290 @@ function fantasyProjection(
   };
 }
 
+function defaultScenarioLevers(matchup: NflMatchup): ScenarioLevers {
+  return {
+    wind: weatherDrag(matchup),
+    healthSwing: Math.round((matchup.home.injuries - matchup.away.injuries) / 2),
+    tempo: matchup.pace,
+    homeNoise: homeNoiseBaseline(matchup),
+  };
+}
+
+function buildScenarioImpact(
+  matchup: NflMatchup,
+  levers: ScenarioLevers,
+): ScenarioImpact {
+  const baseline = defaultScenarioLevers(matchup);
+  const windDelta = levers.wind - baseline.wind;
+  const healthDelta = levers.healthSwing - baseline.healthSwing;
+  const tempoDelta = levers.tempo - baseline.tempo;
+  const homeNoiseDelta = levers.homeNoise - baseline.homeNoise;
+  const awayWeatherProfile =
+    matchup.away.trenches * 0.46 + matchup.away.qb * 0.34 + matchup.away.offense * 0.2;
+  const homeWeatherProfile =
+    matchup.home.trenches * 0.46 + matchup.home.qb * 0.34 + matchup.home.offense * 0.2;
+  const weatherLeanToAway =
+    ((awayWeatherProfile - homeWeatherProfile) / 10) * (windDelta / 18);
+  const healthLeanToHome = healthDelta * 0.46;
+  const noiseLeanToHome = homeNoiseDelta * 0.09;
+  const tempoLeanToHome =
+    ((matchup.home.offense - matchup.away.offense) / 10) * (tempoDelta / 18);
+  const homeShift =
+    healthLeanToHome + noiseLeanToHome + tempoLeanToHome - weatherLeanToAway;
+  const homeWin = clampProbability(Math.round(matchup.homeWin + homeShift));
+  const awayWin = 100 - homeWin;
+  const confidence = clampMeter(
+    Math.round(
+      matchup.confidence +
+        Math.abs(homeWin - matchup.homeWin) * 1.2 -
+        Math.abs(windDelta) * 0.05 -
+        Math.abs(tempoDelta) * 0.04,
+    ),
+  );
+  const chaos = clampMeter(
+    Math.round(
+      matchup.chaos +
+        Math.abs(windDelta) * 0.18 +
+        Math.abs(healthDelta) * 0.5 +
+        Math.max(0, levers.tempo - baseline.tempo) * 0.12 +
+        Math.max(0, 64 - levers.tempo) * 0.08,
+    ),
+  );
+  const projected = projectScenarioScore(matchup, homeWin, levers, baseline);
+  const leanCode = homeWin >= awayWin ? matchup.home.code : matchup.away.code;
+  const leanProbability = Math.max(homeWin, awayWin);
+
+  return {
+    awayWin,
+    homeWin,
+    projected,
+    confidence,
+    chaos,
+    pace: clampMeter(levers.tempo),
+    weatherDrag: clampMeter(levers.wind),
+    leanCode,
+    leanProbability,
+    read: scenarioRead({
+      awayWin,
+      baseline,
+      homeWin,
+      levers,
+      matchup,
+      projected,
+    }),
+    factors: scenarioFactors(matchup, levers, baseline),
+  };
+}
+
+function projectScenarioScore(
+  matchup: NflMatchup,
+  homeWin: number,
+  levers: ScenarioLevers,
+  baseline: ScenarioLevers,
+) {
+  const baseTotal = projectedTotal(matchup.projected);
+  const tempoDelta = levers.tempo - baseline.tempo;
+  const windDelta = levers.wind - baseline.wind;
+  const healthPressure = Math.abs(levers.healthSwing - baseline.healthSwing);
+  const total = Math.max(
+    31,
+    Math.min(
+      68,
+      baseTotal +
+        tempoDelta * 0.22 -
+        Math.max(0, windDelta) * 0.1 +
+        Math.min(0, windDelta) * 0.04 -
+        healthPressure * 0.05,
+    ),
+  );
+  const homeMargin = (homeWin - 50) / 2.7;
+  let homeScore = Math.round(total / 2 + homeMargin / 2);
+  let awayScore = Math.round(total - homeScore);
+
+  if (homeWin > 50 && homeScore <= awayScore) {
+    homeScore = awayScore + 1;
+  }
+
+  if (homeWin < 50 && awayScore <= homeScore) {
+    awayScore = homeScore + 1;
+  }
+
+  if (homeScore >= awayScore) {
+    return `${matchup.home.code} ${homeScore}-${awayScore}`;
+  }
+
+  return `${matchup.away.code} ${awayScore}-${homeScore}`;
+}
+
+function scenarioRead({
+  awayWin,
+  baseline,
+  homeWin,
+  levers,
+  matchup,
+  projected,
+}: {
+  awayWin: number;
+  baseline: ScenarioLevers;
+  homeWin: number;
+  levers: ScenarioLevers;
+  matchup: NflMatchup;
+  projected: string;
+}) {
+  const leader = homeWin >= awayWin ? matchup.home : matchup.away;
+  const leanProbability = Math.max(homeWin, awayWin);
+  const gap = Math.abs(homeWin - awayWin);
+  const drivers = [
+    {
+      name: "wind",
+      delta: Math.abs(levers.wind - baseline.wind),
+      copy:
+        levers.wind > baseline.wind
+          ? "weather starts dragging the pretty stuff into the mud"
+          : "the passing lanes clean up",
+    },
+    {
+      name: "health",
+      delta: Math.abs(levers.healthSwing - baseline.healthSwing) * 2,
+      copy:
+        levers.healthSwing > baseline.healthSwing
+          ? `${matchup.home.code} gets the cleaner availability lane`
+          : `${matchup.away.code} gets the cleaner availability lane`,
+    },
+    {
+      name: "tempo",
+      delta: Math.abs(levers.tempo - baseline.tempo),
+      copy:
+        levers.tempo > baseline.tempo
+          ? "extra snaps raise the ceiling"
+          : "the clock starts taking air out of the shootout",
+    },
+    {
+      name: "home noise",
+      delta: Math.abs(levers.homeNoise - baseline.homeNoise),
+      copy:
+        levers.homeNoise > baseline.homeNoise
+          ? `${matchup.home.code} gets more help from the building`
+          : `${matchup.away.code} can hear itself think`,
+    },
+  ].sort((a, b) => b.delta - a.delta);
+  const driver = drivers[0];
+
+  if (driver.delta < 4) {
+    return matchup.read;
+  }
+
+  if (gap <= 6) {
+    return `This stays in the coin-flip fog: ${projected}, with ${driver.copy}. The Seer is leaning, not shouting.`;
+  }
+
+  return `${leader.code} owns the ${leanProbability}% lane after ${driver.copy}. ${projected} is the scratchpad score.`;
+}
+
+function scenarioFactors(
+  matchup: NflMatchup,
+  levers: ScenarioLevers,
+  baseline: ScenarioLevers,
+): ScenarioFactor[] {
+  const windDelta = levers.wind - baseline.wind;
+  const healthDelta = levers.healthSwing - baseline.healthSwing;
+  const tempoDelta = levers.tempo - baseline.tempo;
+  const noiseDelta = levers.homeNoise - baseline.homeNoise;
+  const awayWeatherProfile =
+    matchup.away.trenches * 0.46 + matchup.away.qb * 0.34 + matchup.away.offense * 0.2;
+  const homeWeatherProfile =
+    matchup.home.trenches * 0.46 + matchup.home.qb * 0.34 + matchup.home.offense * 0.2;
+  const weatherTeam =
+    awayWeatherProfile >= homeWeatherProfile ? matchup.away.code : matchup.home.code;
+
+  return [
+    {
+      label: "Wind",
+      value: `${levers.wind}%`,
+      detail:
+        Math.abs(windDelta) < 8
+          ? "Weather stays near the original read."
+          : windDelta > 0
+            ? `${weatherTeam} gets the steadier bad-air profile.`
+            : "Cleaner air gives the passing menu back.",
+    },
+    {
+      label: "Health",
+      value: formatHealthSwing(matchup, levers.healthSwing),
+      detail:
+        Math.abs(healthDelta) < 3
+          ? "No major injury swing."
+          : levers.healthSwing > baseline.healthSwing
+            ? `${matchup.home.code} gets the cleaner availability lane.`
+            : `${matchup.away.code} gets the cleaner availability lane.`,
+    },
+    {
+      label: "Tempo",
+      value: `${levers.tempo}%`,
+      detail:
+        Math.abs(tempoDelta) < 7
+          ? "Script speed holds steady."
+          : tempoDelta > 0
+            ? "More snaps lift total and volatility."
+            : "Clock burn trims the ceiling.",
+    },
+    {
+      label: "Noise",
+      value: `${levers.homeNoise}%`,
+      detail:
+        Math.abs(noiseDelta) < 8
+          ? "Venue pressure stays baked in."
+          : noiseDelta > 0
+            ? `${matchup.home.code} gets more pre-snap friction.`
+            : `${matchup.away.code} gets a cleaner operation.`,
+    },
+  ];
+}
+
+function formatHealthSwing(matchup: NflMatchup, value: number) {
+  if (value > 0) {
+    return `${matchup.home.code} +${value}`;
+  }
+
+  if (value < 0) {
+    return `${matchup.away.code} +${Math.abs(value)}`;
+  }
+
+  return "Even";
+}
+
+function homeNoiseBaseline(matchup: NflMatchup) {
+  if (matchup.venue.includes("Arrowhead")) {
+    return 78;
+  }
+
+  if (matchup.venue.includes("Highmark")) {
+    return 68;
+  }
+
+  if (matchup.venue.includes("Lincoln")) {
+    return 64;
+  }
+
+  return 58;
+}
+
+function projectedTotal(projected: string) {
+  const scores = projected.match(/(\d+)-(\d+)/);
+
+  if (!scores) {
+    return 47;
+  }
+
+  return Number(scores[1]) + Number(scores[2]);
+}
+
 function weatherDrag(matchup: NflMatchup) {
   return matchup.weather.toLowerCase().includes("wind") ? 68 : 24;
+}
+
+function clampProbability(value: number) {
+  return Math.max(25, Math.min(75, value));
 }
 
 function clampMeter(value: number) {
