@@ -18,7 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 
@@ -104,6 +104,24 @@ type NflScoutingAnalysis = {
 };
 
 type ScoutStatus = "idle" | "loading" | "ready" | "error";
+
+type NflDataStatus = "loading" | "ready" | "fallback";
+
+type NflProviderStatus = {
+  schedule: "live" | "fallback";
+  fantasy: "live" | "fallback";
+  notes: string[];
+};
+
+type NflSeerDataset = {
+  source: "espn-scoreboard" | "configured-feed" | "seeded-fallback";
+  season: string;
+  weekLabel: string;
+  updatedAt: string;
+  matchups: NflMatchup[];
+  fantasyPlayers: FantasyPlayer[];
+  providerStatus: NflProviderStatus;
+};
 
 type ScenarioLevers = {
   wind: number;
@@ -228,7 +246,7 @@ const teams = {
   },
 } satisfies Record<string, NflTeam>;
 
-const matchups: NflMatchup[] = [
+const seededMatchups: NflMatchup[] = [
   {
     id: "bal-buf",
     week: "Week 1 lab",
@@ -285,7 +303,7 @@ const matchups: NflMatchup[] = [
   },
 ];
 
-const fantasyPlayers: FantasyPlayer[] = [
+const seededFantasyPlayers: FantasyPlayer[] = [
   {
     id: "st-brown",
     name: "Amon-Ra St. Brown",
@@ -398,18 +416,47 @@ const fantasyPlayers: FantasyPlayer[] = [
   },
 ];
 
-const playerPair = [fantasyPlayers[0], fantasyPlayers[1]] as const;
+const seededPlayerPair = [seededFantasyPlayers[0], seededFantasyPlayers[1]] as const;
+
+const seededNflDataset: NflSeerDataset = {
+  source: "seeded-fallback",
+  season: "2026",
+  weekLabel: "Week 1 lab",
+  updatedAt: new Date(0).toISOString(),
+  matchups: seededMatchups,
+  fantasyPlayers: seededFantasyPlayers,
+  providerStatus: {
+    schedule: "fallback",
+    fantasy: "fallback",
+    notes: ["Using seeded lab data until the NFL feed responds."],
+  },
+};
 
 export default function NflPage() {
-  const [activeMatchupId, setActiveMatchupId] = useState(matchups[0].id);
-  const [leftPlayerId, setLeftPlayerId] = useState(playerPair[0].id);
-  const [rightPlayerId, setRightPlayerId] = useState(playerPair[1].id);
+  const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
+  const [nflDataStatus, setNflDataStatus] = useState<NflDataStatus>("loading");
+  const [activeMatchupId, setActiveMatchupId] = useState(seededMatchups[0].id);
+  const [leftPlayerId, setLeftPlayerId] = useState(seededPlayerPair[0].id);
+  const [rightPlayerId, setRightPlayerId] = useState(seededPlayerPair[1].id);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
     Record<string, ScenarioLevers>
   >({});
+  const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
+  const fantasyPlayers =
+    nflDataset.fantasyPlayers.length > 0
+      ? nflDataset.fantasyPlayers
+      : seededFantasyPlayers;
+  const defaultPlayerPair = useMemo(
+    () =>
+      [
+        fantasyPlayers[0] ?? seededPlayerPair[0],
+        fantasyPlayers[1] ?? fantasyPlayers[0] ?? seededPlayerPair[1],
+      ] as const,
+    [fantasyPlayers],
+  );
   const activeMatchup =
     matchups.find((matchup) => matchup.id === activeMatchupId) ?? matchups[0];
   const activeScenarioLevers = useMemo(
@@ -423,17 +470,71 @@ export default function NflPage() {
     [activeMatchup, activeScenarioLevers],
   );
   const leftPlayer =
-    fantasyPlayers.find((player) => player.id === leftPlayerId) ?? playerPair[0];
+    fantasyPlayers.find((player) => player.id === leftPlayerId) ??
+    defaultPlayerPair[0];
   const rightPlayer =
-    fantasyPlayers.find((player) => player.id === rightPlayerId) ?? playerPair[1];
+    fantasyPlayers.find((player) => player.id === rightPlayerId) ??
+    defaultPlayerPair[1];
   const startLean = useMemo(
     () => compareFantasyPlayers(leftPlayer, rightPlayer, scoringFormat),
     [leftPlayer, rightPlayer, scoringFormat],
   );
   const scoutingBoard = useMemo(
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
-    [scoringFormat],
+    [fantasyPlayers, scoringFormat],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNflDataset() {
+      try {
+        const response = await fetch("/api/nfl/seer", { cache: "no-store" });
+        const payload = (await response.json()) as Partial<NflSeerDataset>;
+
+        if (!response.ok) {
+          throw new Error("NFL data feed failed");
+        }
+
+        const nextDataset = mergeNflDataset(payload);
+
+        if (cancelled) {
+          return;
+        }
+
+        setNflDataset(nextDataset);
+        setNflDataStatus(
+          nextDataset.providerStatus.schedule === "live" ? "ready" : "fallback",
+        );
+      } catch {
+        if (!cancelled) {
+          setNflDataStatus("fallback");
+        }
+      }
+    }
+
+    void loadNflDataset();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!matchups.some((matchup) => matchup.id === activeMatchupId)) {
+      setActiveMatchupId(matchups[0]?.id ?? seededMatchups[0].id);
+    }
+  }, [activeMatchupId, matchups]);
+
+  useEffect(() => {
+    if (!fantasyPlayers.some((player) => player.id === leftPlayerId)) {
+      setLeftPlayerId(defaultPlayerPair[0].id);
+    }
+
+    if (!fantasyPlayers.some((player) => player.id === rightPlayerId)) {
+      setRightPlayerId(defaultPlayerPair[1].id);
+    }
+  }, [defaultPlayerPair, fantasyPlayers, leftPlayerId, rightPlayerId]);
 
   function updateScenarioLever(key: keyof ScenarioLevers, value: number) {
     setScenarioLeversByMatchup((current) => ({
@@ -520,6 +621,8 @@ export default function NflPage() {
         <ShieldCheck size={17} />
         <span>{nflIndependenceDisclaimer}</span>
       </div>
+
+      <NflDataRibbon dataset={nflDataset} status={nflDataStatus} />
 
       <section className="nfl-hero" id="team-seer">
         <div className="nfl-matchup-rail" aria-label="NFL matchup list">
@@ -698,6 +801,42 @@ export default function NflPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+function NflDataRibbon({
+  dataset,
+  status,
+}: {
+  dataset: NflSeerDataset;
+  status: NflDataStatus;
+}) {
+  const updatedAt =
+    dataset.updatedAt === new Date(0).toISOString()
+      ? "waiting"
+      : formatDataUpdated(dataset.updatedAt);
+
+  return (
+    <section className="nfl-data-ribbon" aria-label="NFL data status">
+      <div>
+        <span className={cx("nfl-live-dot", status === "ready" && "live")} />
+        <strong>{dataSourceLabel(dataset.source, status)}</strong>
+        <em>
+          {dataset.season} · {dataset.weekLabel} · {updatedAt}
+        </em>
+      </div>
+      <div className="nfl-data-pills">
+        <span className={cx(dataset.providerStatus.schedule === "live" && "live")}>
+          Schedule {dataset.providerStatus.schedule}
+        </span>
+        <span className={cx(dataset.providerStatus.fantasy === "live" && "live")}>
+          Fantasy {dataset.providerStatus.fantasy}
+        </span>
+      </div>
+      {dataset.providerStatus.notes.length > 0 ? (
+        <p>{dataset.providerStatus.notes.slice(0, 2).join(" ")}</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -1487,6 +1626,176 @@ function formatHealthSwing(matchup: NflMatchup, value: number) {
   }
 
   return "Even";
+}
+
+function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
+  const incomingMatchups = Array.isArray(payload.matchups)
+    ? payload.matchups.filter(isNflMatchup)
+    : [];
+  const incomingFantasyPlayers = Array.isArray(payload.fantasyPlayers)
+    ? payload.fantasyPlayers.filter(isFantasyPlayer)
+    : [];
+  const matchups =
+    incomingMatchups.length > 0 ? incomingMatchups : seededNflDataset.matchups;
+  const fantasyPlayers =
+    incomingFantasyPlayers.length > 0
+      ? incomingFantasyPlayers
+      : seededNflDataset.fantasyPlayers;
+  const providerStatus = payload.providerStatus ?? seededNflDataset.providerStatus;
+
+  return {
+    source: isNflDatasetSource(payload.source)
+      ? payload.source
+      : incomingMatchups.length > 0
+        ? "configured-feed"
+        : "seeded-fallback",
+    season: typeof payload.season === "string" ? payload.season : seededNflDataset.season,
+    weekLabel:
+      typeof payload.weekLabel === "string"
+        ? payload.weekLabel
+        : seededNflDataset.weekLabel,
+    updatedAt:
+      typeof payload.updatedAt === "string"
+        ? payload.updatedAt
+        : new Date().toISOString(),
+    matchups,
+    fantasyPlayers,
+    providerStatus: {
+      schedule: providerStatus.schedule === "live" ? "live" : "fallback",
+      fantasy:
+        providerStatus.fantasy === "live" && incomingFantasyPlayers.length > 0
+          ? "live"
+          : "fallback",
+      notes:
+        Array.isArray(providerStatus.notes) && providerStatus.notes.length > 0
+          ? providerStatus.notes.filter((note) => typeof note === "string")
+          : incomingFantasyPlayers.length > 0
+            ? []
+            : ["Fantasy board is still using the seeded preseason rail."],
+    },
+  };
+}
+
+function isNflMatchup(value: unknown): value is NflMatchup {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const matchup = value as Partial<NflMatchup>;
+
+  return (
+    typeof matchup.id === "string" &&
+    typeof matchup.week === "string" &&
+    typeof matchup.slot === "string" &&
+    typeof matchup.venue === "string" &&
+    typeof matchup.weather === "string" &&
+    isNflTeam(matchup.home) &&
+    isNflTeam(matchup.away) &&
+    typeof matchup.homeWin === "number" &&
+    typeof matchup.awayWin === "number" &&
+    typeof matchup.projected === "string" &&
+    typeof matchup.confidence === "number" &&
+    typeof matchup.chaos === "number" &&
+    typeof matchup.pace === "number" &&
+    typeof matchup.read === "string" &&
+    Array.isArray(matchup.edges)
+  );
+}
+
+function isNflTeam(value: unknown): value is NflTeam {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const team = value as Partial<NflTeam>;
+
+  return (
+    typeof team.code === "string" &&
+    typeof team.name === "string" &&
+    typeof team.city === "string" &&
+    typeof team.color === "string" &&
+    typeof team.offense === "number" &&
+    typeof team.defense === "number" &&
+    typeof team.qb === "number" &&
+    typeof team.trenches === "number" &&
+    typeof team.coaching === "number" &&
+    typeof team.injuries === "number"
+  );
+}
+
+function isFantasyPlayer(value: unknown): value is FantasyPlayer {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const player = value as Partial<FantasyPlayer>;
+  const baseline = player.baseline as Partial<FantasyPlayer["baseline"]> | undefined;
+
+  return (
+    typeof player.id === "string" &&
+    typeof player.name === "string" &&
+    typeof player.team === "string" &&
+    typeof player.position === "string" &&
+    typeof player.opponent === "string" &&
+    typeof player.color === "string" &&
+    typeof baseline === "object" &&
+    baseline !== null &&
+    typeof baseline.rushYards === "number" &&
+    typeof baseline.rushTd === "number" &&
+    typeof baseline.receivingYards === "number" &&
+    typeof baseline.receivingTd === "number" &&
+    typeof baseline.receptions === "number" &&
+    typeof player.targetShare === "number" &&
+    typeof player.carryShare === "number" &&
+    typeof player.touchdownPulse === "number" &&
+    typeof player.matchup === "number" &&
+    typeof player.health === "number" &&
+    typeof player.chaos === "number" &&
+    typeof player.nflRank === "number" &&
+    typeof player.seerRank === "number" &&
+    Array.isArray(player.traits) &&
+    typeof player.read === "string"
+  );
+}
+
+function isNflDatasetSource(value: unknown): value is NflSeerDataset["source"] {
+  return (
+    value === "espn-scoreboard" ||
+    value === "configured-feed" ||
+    value === "seeded-fallback"
+  );
+}
+
+function dataSourceLabel(source: NflSeerDataset["source"], status: NflDataStatus) {
+  if (status === "loading") {
+    return "Syncing NFL data";
+  }
+
+  if (source === "espn-scoreboard") {
+    return "NFL slate live";
+  }
+
+  if (source === "configured-feed") {
+    return "NFL feed live";
+  }
+
+  return "Seeded lab mode";
+}
+
+function formatDataUpdated(value: string) {
+  const updatedAt = new Date(value);
+
+  if (Number.isNaN(updatedAt.getTime())) {
+    return "freshness unknown";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "America/New_York",
+  }).format(updatedAt);
 }
 
 function homeNoiseBaseline(matchup: NflMatchup) {

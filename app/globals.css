@@ -8811,6 +8811,7 @@ body {
 
 .nfl-topbar,
 .nfl-disclaimer,
+.nfl-data-ribbon,
 .nfl-hero,
 .nfl-scenario-lab,
 .nfl-grid-section,
@@ -8832,6 +8833,9 @@ body {
 .nfl-brand,
 .nfl-topbar nav,
 .nfl-disclaimer,
+.nfl-data-ribbon,
+.nfl-data-ribbon > div:first-child,
+.nfl-data-pills,
 .nfl-section-kicker,
 .nfl-team-pill,
 .nfl-card-topline,
@@ -8918,6 +8922,74 @@ body {
 .nfl-disclaimer svg {
   flex: 0 0 auto;
   color: #8ff0c1;
+}
+
+.nfl-data-ribbon {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 8px;
+}
+
+.nfl-data-ribbon > div:first-child {
+  min-width: min(100%, 340px);
+  gap: 9px;
+}
+
+.nfl-live-dot {
+  width: 10px;
+  height: 10px;
+  background: #f7c51d;
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(247, 197, 29, 0.12);
+}
+
+.nfl-live-dot.live {
+  background: #34f5a6;
+  box-shadow: 0 0 0 4px rgba(52, 245, 166, 0.12);
+}
+
+.nfl-data-ribbon strong {
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.nfl-data-ribbon em {
+  font-size: 0.72rem;
+}
+
+.nfl-data-ribbon p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.nfl-data-pills {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.nfl-data-pills span {
+  padding: 7px 9px;
+  color: var(--nfl-muted);
+  background: rgba(143, 160, 189, 0.12);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: capitalize;
+}
+
+.nfl-data-pills span.live {
+  color: #06100f;
+  background: #c8f7dc;
+  border-color: transparent;
 }
 
 .nfl-hero {
@@ -9022,6 +9094,8 @@ body {
 .nfl-matchup-button span,
 .nfl-matchup-button em,
 .nfl-card-topline span,
+.nfl-data-ribbon em,
+.nfl-data-ribbon p,
 .nfl-projection-strip span,
 .nfl-mini-meter span,
 .nfl-fantasy-score span,
@@ -9849,6 +9923,17 @@ body {
   }
 
   .nfl-topbar nav {
+    justify-content: flex-start;
+  }
+
+  .nfl-data-ribbon,
+  .nfl-data-ribbon > div:first-child,
+  .nfl-data-pills {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nfl-data-pills {
     justify-content: flex-start;
   }
 
