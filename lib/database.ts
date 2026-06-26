@@ -37,6 +37,14 @@ import {
   toCupSnapshotCandidates,
   type CupSnapshotCandidate,
 } from "./cup-seer";
+import {
+  CALIBRATION_TUNING_VERSION,
+  DEFAULT_CALIBRATION_TUNING_KNOBS,
+  computeCalibration,
+  type AppliedCalibrationTuning,
+  type CalibrationSample,
+  type ForecastOutcome,
+} from "./calibration";
 import { isKnockoutPhase, normalizeMatchPhase } from "./match-stage";
 
 const ENABLE_PLAYER_SPARKS = false;
@@ -347,6 +355,9 @@ export type ModelControlForecastVersion = {
   supersedesVersion: number | null;
   previousProjected: string | null;
   movementSummary: string | null;
+  calibrationTuningVersion: string | null;
+  calibrationTuningApplied: boolean;
+  calibrationTuningReadiness: string | null;
 };
 
 export type ModelControlDashboard = {
@@ -481,6 +492,17 @@ type ExistingForecastLockRow = {
   draw_probability: string | number | null;
   away_win_probability: string | number | null;
   projected_score: string | null;
+  confidence: number | null;
+  chaos: number | null;
+  source_payload: Record<string, unknown> | string | null;
+};
+
+type CalibrationForecastRow = {
+  home_score: number | null;
+  away_score: number | null;
+  home_win_probability: string | number | null;
+  draw_probability: string | number | null;
+  away_win_probability: string | number | null;
   confidence: number | null;
   chaos: number | null;
   source_payload: Record<string, unknown> | string | null;
@@ -1455,6 +1477,7 @@ function toModelControlForecastVersion(
   const payload = parseJsonPayload(row.source_payload);
   const previousForecast = readPayloadRecord(payload?.previousForecast);
   const movementTrail = readForecastMovementTrail(payload);
+  const calibrationTuning = readPayloadRecord(payload?.calibrationTuning);
 
   return {
     matchId: row.match_id,
@@ -1478,6 +1501,10 @@ function toModelControlForecastVersion(
     supersedesVersion: readPayloadNumber(payload?.supersedesVersion),
     previousProjected: readPayloadString(previousForecast?.projected),
     movementSummary: movementTrail[0]?.adminText ?? null,
+    calibrationTuningVersion: readPayloadString(calibrationTuning?.version),
+    calibrationTuningApplied:
+      readPayloadBoolean(calibrationTuning?.applied) ?? false,
+    calibrationTuningReadiness: readPayloadString(calibrationTuning?.readiness),
   };
 }
 
@@ -2005,6 +2032,7 @@ export async function syncFootballDataSnapshot(
   const teamSlugByProviderId = new Map(
     snapshot.teams.map((team) => [team.id, team.slug] as const),
   );
+  const calibrationTuning = await readAppliedCalibrationTuning(sql);
   let forecasts = 0;
   let venuesMapped = 0;
   let placeholderMatches = 0;
@@ -2499,6 +2527,7 @@ export async function syncFootballDataSnapshot(
       venueSlug: match.venueSlug,
       context: forecastContext,
       marketPulse: storedMarketPulse,
+      calibrationTuning,
       liveState: {
         status: match.status,
         homeScore: match.homeScore,
@@ -2546,7 +2575,7 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v4",
-      modelVersion: "matchseer-v4.0-lineups",
+      modelVersion: "matchseer-v4.1-receipt-tuning",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -2557,6 +2586,7 @@ export async function syncFootballDataSnapshot(
       awayRatings,
       goalModel: forecast.goalModel,
       knockout: forecast.knockout,
+      calibrationTuning: forecast.calibrationTuning,
       marketNudge: forecast.marketNudge,
       liveModel: forecast.liveModel,
       modifiers: forecast.modifiers,
@@ -2574,7 +2604,7 @@ export async function syncFootballDataSnapshot(
           : null,
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, altitude, heat load, travel distance, rest windows, referee rhythm, spotlight gravity, VIP stage pressure, player availability, yellow-card accumulation, suspension risk, confirmed lineups, team dependency, fatigue signals, extra-time hangover, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, altitude, heat load, travel distance, rest windows, referee rhythm, spotlight gravity, VIP stage pressure, player availability, yellow-card accumulation, suspension risk, confirmed lineups, team dependency, fatigue signals, extra-time hangover, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, guarded receipt tuning, capped crowd nudges, and live-state probability reads.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -5451,6 +5481,237 @@ function formatSignedDelta(value: number) {
   return `${value > 0 ? "+" : ""}${Math.round(value)}`;
 }
 
+function baselineAppliedCalibrationTuning(
+  reason = "No actionable receipt sample yet.",
+): AppliedCalibrationTuning {
+  return {
+    version: CALIBRATION_TUNING_VERSION,
+    readiness: "collecting",
+    sampleSize: 0,
+    applied: false,
+    reason,
+    knobs: DEFAULT_CALIBRATION_TUNING_KNOBS,
+    recommendedKnobs: DEFAULT_CALIBRATION_TUNING_KNOBS,
+  };
+}
+
+async function readAppliedCalibrationTuning(
+  sql: NeonQuery,
+): Promise<AppliedCalibrationTuning> {
+  try {
+    const rows = (await sql`
+      select distinct on (forecasts.match_id)
+        matches.home_score,
+        matches.away_score,
+        forecasts.home_win_probability,
+        forecasts.draw_probability,
+        forecasts.away_win_probability,
+        forecasts.confidence,
+        forecasts.chaos,
+        forecasts.source_payload
+      from forecasts
+      join matches on matches.id = forecasts.match_id
+      where lower(matches.status) = 'final'
+        and matches.home_score is not null
+        and matches.away_score is not null
+      order by forecasts.match_id, forecasts.version desc, forecasts.created_at desc;
+    `) as unknown as CalibrationForecastRow[];
+    const samples = rows.flatMap((row) => {
+      const sample = calibrationSampleFromForecastRow(row);
+
+      return sample ? [sample] : [];
+    });
+
+    return computeCalibration(samples).tuning.application;
+  } catch (error) {
+    console.error("MatchSeer calibration tuning read failed", error);
+
+    return baselineAppliedCalibrationTuning("Calibration read failed; baseline knobs kept.");
+  }
+}
+
+function calibrationSampleFromForecastRow(
+  row: CalibrationForecastRow,
+): CalibrationSample | null {
+  const actual = scoreToForecastOutcome(row.home_score, row.away_score);
+
+  if (!actual) {
+    return null;
+  }
+
+  const payload = parseJsonPayload(row.source_payload);
+  const marketPulse =
+    readPayloadRecord(payload?.marketPulse) ??
+    readPayloadRecord(readPayloadRecord(payload?.marketNudge)?.market);
+  const marketHome = readPayloadNumber(marketPulse?.home);
+  const marketDraw = readPayloadNumber(marketPulse?.draw);
+  const marketAway = readPayloadNumber(marketPulse?.away);
+  const marketNudge = readPayloadRecord(payload?.marketNudge);
+  const marketLeader =
+    marketHome !== null && marketDraw !== null && marketAway !== null
+      ? leadingSide(marketHome, marketDraw, marketAway)
+      : null;
+
+  return {
+    probabilities: {
+      home: toNumber(row.home_win_probability),
+      draw: toNumber(row.draw_probability),
+      away: toNumber(row.away_win_probability),
+    },
+    actual,
+    confidence: row.confidence,
+    chaos: row.chaos,
+    market: marketLeader
+      ? {
+          leader: marketLeader,
+          liquidityScore:
+            readPayloadNumber(marketPulse?.liquidityScore) ??
+            readPayloadNumber(marketNudge?.liquidityScore),
+          alignment: null,
+          nudgeApplied: readPayloadBoolean(marketNudge?.applied) ?? false,
+        }
+      : null,
+  };
+}
+
+function scoreToForecastOutcome(
+  homeScore: number | null,
+  awayScore: number | null,
+): ForecastOutcome | null {
+  if (homeScore === null || awayScore === null) {
+    return null;
+  }
+
+  if (homeScore > awayScore) {
+    return "home";
+  }
+
+  if (homeScore < awayScore) {
+    return "away";
+  }
+
+  return "draw";
+}
+
+export function applyCalibrationTuningToExpectedGoals({
+  homeXg,
+  awayXg,
+  calibrationTuning,
+}: {
+  homeXg: number;
+  awayXg: number;
+  calibrationTuning?: AppliedCalibrationTuning | null;
+}) {
+  const preTuning = {
+    homeXg: roundXg(homeXg),
+    awayXg: roundXg(awayXg),
+  };
+
+  if (!calibrationTuning?.applied) {
+    return {
+      applied: false,
+      version: calibrationTuning?.version ?? CALIBRATION_TUNING_VERSION,
+      readiness: calibrationTuning?.readiness ?? "collecting",
+      reason: calibrationTuning?.reason ?? "Baseline xG kept.",
+      knobs: calibrationTuning?.knobs ?? DEFAULT_CALIBRATION_TUNING_KNOBS,
+      preTuning,
+      homeXg: preTuning.homeXg,
+      awayXg: preTuning.awayXg,
+      deltas: { homeXg: 0, awayXg: 0 },
+    };
+  }
+
+  const knobs = calibrationTuning.knobs;
+  const totalXg = clampNumber(homeXg + awayXg, 0.8, 5.2);
+  const xgGap = homeXg - awayXg;
+  const drawPressure = clampNumber(knobs.drawLaneMultiplier - 1, -0.1, 0.16);
+  const gapScale = clampNumber(
+    knobs.favoriteScale * (1 - drawPressure * 0.7),
+    0.78,
+    1.22,
+  );
+  const totalScale = clampNumber(
+    1 - Math.max(0, drawPressure) * 0.16,
+    0.92,
+    1.04,
+  );
+  const tunedGap = clampNumber(xgGap * gapScale, xgGap - 0.3, xgGap + 0.3);
+  const tunedTotal = clampNumber(totalXg * totalScale, 0.8, 5.2);
+  const tunedHome = clampNumber((tunedTotal + tunedGap) / 2, 0.25, 3.8);
+  const tunedAway = clampNumber((tunedTotal - tunedGap) / 2, 0.25, 3.8);
+  const nextHomeXg = roundXg(tunedHome);
+  const nextAwayXg = roundXg(tunedAway);
+
+  return {
+    applied:
+      Math.abs(nextHomeXg - preTuning.homeXg) > 0.001 ||
+      Math.abs(nextAwayXg - preTuning.awayXg) > 0.001,
+    version: calibrationTuning.version,
+    readiness: calibrationTuning.readiness,
+    reason: calibrationTuning.reason,
+    knobs,
+    preTuning,
+    homeXg: nextHomeXg,
+    awayXg: nextAwayXg,
+    deltas: {
+      homeXg: roundXg(nextHomeXg - preTuning.homeXg),
+      awayXg: roundXg(nextAwayXg - preTuning.awayXg),
+    },
+  };
+}
+
+function applyCalibrationTuningToChaos(
+  chaos: number,
+  calibrationTuning?: AppliedCalibrationTuning | null,
+) {
+  if (!calibrationTuning?.applied) {
+    return {
+      applied: false,
+      raw: chaos,
+      chaos,
+      sensitivity: DEFAULT_CALIBRATION_TUNING_KNOBS.chaosSensitivity,
+      delta: 0,
+    };
+  }
+
+  const sensitivity = calibrationTuning.knobs.chaosSensitivity;
+  const tunedChaos = clamp(Math.round(60 + (chaos - 60) * sensitivity), 36, 82);
+
+  return {
+    applied: tunedChaos !== chaos,
+    raw: chaos,
+    chaos: tunedChaos,
+    sensitivity,
+    delta: tunedChaos - chaos,
+  };
+}
+
+function applyCalibrationTuningToConfidence(
+  confidence: number,
+  calibrationTuning?: AppliedCalibrationTuning | null,
+) {
+  if (!calibrationTuning?.applied) {
+    return {
+      applied: false,
+      raw: confidence,
+      confidence,
+      bias: 0,
+      delta: 0,
+    };
+  }
+
+  const bias = calibrationTuning.knobs.confidenceBias;
+  const tunedConfidence = clamp(Math.round(confidence + bias), 45, 80);
+
+  return {
+    applied: tunedConfidence !== confidence,
+    raw: confidence,
+    confidence: tunedConfidence,
+    bias,
+    delta: tunedConfidence - confidence,
+  };
+}
+
 function readForecastFingerprint(
   payload: ExistingForecastLockRow["source_payload"] | undefined,
 ) {
@@ -5537,6 +5798,7 @@ function matchseerV3Forecast({
   venueSlug,
   context,
   marketPulse,
+  calibrationTuning,
   liveState,
 }: {
   homeTeam: FootballDataTeam;
@@ -5547,6 +5809,7 @@ function matchseerV3Forecast({
   venueSlug: string | null;
   context: ForecastContextRow | null;
   marketPulse?: unknown;
+  calibrationTuning?: AppliedCalibrationTuning | null;
   liveState?: ForecastLiveState;
 }) {
   const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
@@ -5608,7 +5871,7 @@ function matchseerV3Forecast({
     Math.abs(powerGap) * 0.9 +
     Math.abs(homeRatings.attack - awayRatings.defense) * 0.05 +
     Math.abs(awayRatings.attack - homeRatings.defense) * 0.05;
-  const chaos = clamp(
+  const rawChaos = clamp(
     Math.round(
       baseChaos +
         weather.chaosDelta +
@@ -5624,6 +5887,11 @@ function matchseerV3Forecast({
     36,
     82,
   );
+  const calibrationChaos = applyCalibrationTuningToChaos(
+    rawChaos,
+    calibrationTuning,
+  );
+  const chaos = calibrationChaos.chaos;
   const xgPowerSwing = clampNumber(powerGap * 0.014, -0.38, 0.38);
   const rawHomeXg = expectedGoals(
     homeRatings,
@@ -5676,7 +5944,14 @@ function matchseerV3Forecast({
     awayXg: rawAwayXg,
     tournamentReality,
   });
-  const goalModel = deriveForecastFromExpectedGoals(finalXg);
+  const tunedXg = applyCalibrationTuningToExpectedGoals({
+    ...finalXg,
+    calibrationTuning,
+  });
+  const goalModel = deriveForecastFromExpectedGoals({
+    homeXg: tunedXg.homeXg,
+    awayXg: tunedXg.awayXg,
+  });
   const projected = goalModel.projectedScore;
   const dynamicDrag =
     Math.abs(weather.chaosDelta) +
@@ -5686,7 +5961,7 @@ function matchseerV3Forecast({
     Math.abs(bodyCost.chaosDelta) +
     Math.abs(availability.chaosDelta) +
     Math.abs(fatigue.chaosDelta);
-  const baseConfidence = clamp(
+  const rawBaseConfidence = clamp(
     Math.round(
       50 +
         Math.abs(powerGap) * 1.04 +
@@ -5702,6 +5977,11 @@ function matchseerV3Forecast({
     45,
     80,
   );
+  const calibrationConfidence = applyCalibrationTuningToConfidence(
+    rawBaseConfidence,
+    calibrationTuning,
+  );
+  const baseConfidence = calibrationConfidence.confidence;
   const marketNudge = applyMarketPulseProbabilityNudge({
     probabilities: {
       home: goalModel.homeWin,
@@ -5709,6 +5989,9 @@ function matchseerV3Forecast({
       away: goalModel.awayWin,
     },
     marketPulse,
+    maxWeight:
+      calibrationTuning?.knobs.marketNudgeMaxWeight ??
+      DEFAULT_CALIBRATION_TUNING_KNOBS.marketNudgeMaxWeight,
   });
   const liveModel = applyLiveMatchProbabilityNudge({
     probabilities: marketNudge.probabilities,
@@ -5762,6 +6045,13 @@ function matchseerV3Forecast({
         explanation: `Crowd signal moved the lanes ${formatSignedDelta(marketNudge.deltas.home)} home, ${formatSignedDelta(marketNudge.deltas.draw)} draw, and ${formatSignedDelta(marketNudge.deltas.away)} away with a ${marketNudge.cap}-point cap.`,
       }
     : null;
+  const calibrationTuningFactor = calibrationTuning?.applied
+    ? {
+        label: "Receipt tuning",
+        weight: 0.64,
+        explanation: `Actionable calibration receipts activated ${calibrationTuning.version}: favorite ${calibrationTuning.knobs.favoriteScale}x, draw ${calibrationTuning.knobs.drawLaneMultiplier}x, confidence ${formatSignedDelta(calibrationTuning.knobs.confidenceBias)}, chaos ${calibrationTuning.knobs.chaosSensitivity}x, crowd weight ${calibrationTuning.knobs.marketNudgeMaxWeight}.`,
+      }
+    : null;
   const liveMinuteLabel =
     liveModel.minuteSource === "feed" && liveModel.minute !== null
       ? `${liveModel.minute}'`
@@ -5791,6 +6081,7 @@ function matchseerV3Forecast({
     fatigue.factor,
     knockout.factor,
     tournamentReality.factor,
+    calibrationTuningFactor,
     marketNudgeFactor,
     liveModelFactor,
     {
@@ -5816,6 +6107,7 @@ function matchseerV3Forecast({
     projected,
     goalModel,
     knockout: knockoutLane,
+    calibrationTuning: calibrationTuning ?? baselineAppliedCalibrationTuning(),
     marketNudge,
     liveModel,
     modifiers: {
@@ -5840,6 +6132,8 @@ function matchseerV3Forecast({
       xg: {
         rawHome: roundXg(rawHomeXg),
         rawAway: roundXg(rawAwayXg),
+        tunedHome: tunedXg.homeXg,
+        tunedAway: tunedXg.awayXg,
         home: goalModel.homeXg,
         away: goalModel.awayXg,
         total: goalModel.totalXg,
@@ -5863,6 +6157,12 @@ function matchseerV3Forecast({
       availability: availability.payload,
       fatigue: fatigue.payload,
       knockout: knockout.payload,
+      calibrationTuning: {
+        ...(calibrationTuning ?? baselineAppliedCalibrationTuning()),
+        expectedGoals: tunedXg,
+        chaos: calibrationChaos,
+        confidence: calibrationConfidence,
+      },
       tournamentReality: tournamentReality.payload,
       marketNudge,
       liveModel,

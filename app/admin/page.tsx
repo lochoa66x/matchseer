@@ -266,6 +266,9 @@ type ForecastVersionRow = {
   supersedesVersion: number | null;
   previousProjected: string | null;
   movementSummary: string | null;
+  calibrationTuningVersion: string | null;
+  calibrationTuningApplied: boolean;
+  calibrationTuningReadiness: string | null;
 };
 
 type ModelControlDashboard = {
@@ -1764,6 +1767,13 @@ function ModelControlPanel({
                     {forecast.movementSummary ? (
                       <small>Movement: {forecast.movementSummary}</small>
                     ) : null}
+                    {forecast.calibrationTuningVersion ? (
+                      <small>
+                        Tuning: {forecast.calibrationTuningApplied ? "active" : "held"} ·{" "}
+                        {forecast.calibrationTuningReadiness ?? "collecting"} ·{" "}
+                        {forecast.calibrationTuningVersion}
+                      </small>
+                    ) : null}
                   </article>
                 ))
               )}
@@ -2383,12 +2393,31 @@ type CalibrationTuningRecommendation = {
   rationale: string;
 };
 
+type CalibrationTuningKnobs = {
+  favoriteScale: number;
+  drawLaneMultiplier: number;
+  confidenceBias: number;
+  chaosSensitivity: number;
+  marketNudgeMaxWeight: number;
+};
+
+type AppliedCalibrationTuning = {
+  version: string;
+  readiness: "collecting" | "early" | "actionable";
+  sampleSize: number;
+  applied: boolean;
+  reason: string;
+  knobs: CalibrationTuningKnobs;
+  recommendedKnobs: CalibrationTuningKnobs;
+};
+
 type CalibrationTuningReport = {
   sampleSize: number;
   readiness: "collecting" | "early" | "actionable";
   summary: string;
   market: MarketCalibrationRow;
   recommendations: CalibrationTuningRecommendation[];
+  application: AppliedCalibrationTuning;
 };
 
 type CalibrationDashboard = {
@@ -2533,6 +2562,10 @@ function CalibrationPanel({
     return direction;
   }
 
+  function formatKnobs(knobs: CalibrationTuningKnobs) {
+    return `fav ${knobs.favoriteScale.toFixed(3)}x · draw ${knobs.drawLaneMultiplier.toFixed(3)}x · conf ${knobs.confidenceBias > 0 ? "+" : ""}${knobs.confidenceBias.toFixed(1)} · chaos ${knobs.chaosSensitivity.toFixed(3)}x · crowd ${knobs.marketNudgeMaxWeight.toFixed(3)}`;
+  }
+
   function renderChaosTable(rows: ChaosMissBucketRow[]) {
     return (
       <table
@@ -2643,9 +2676,22 @@ function CalibrationPanel({
               <div className="calibration-tuning-header">
                 <div>
                   <span>Tuning plan</span>
-                  <strong>{calibration.tuning.readiness}</strong>
+                  <strong>
+                    {calibration.tuning.readiness} ·{" "}
+                    {calibration.tuning.application.applied ? "active" : "watching"}
+                  </strong>
                 </div>
                 <p>{calibration.tuning.summary}</p>
+              </div>
+              <div className="calibration-market-read">
+                <span>Active knobs</span>
+                <strong>
+                  {calibration.tuning.application.applied
+                    ? "Applied to new forecasts"
+                    : "Recommendations only"}
+                </strong>
+                <small>{formatKnobs(calibration.tuning.application.knobs)}</small>
+                <p>{calibration.tuning.application.reason}</p>
               </div>
               <div className="calibration-market-read">
                 <span>Crowd backtest</span>

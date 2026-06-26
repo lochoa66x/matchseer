@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyCalibrationTuningToExpectedGoals,
   applyLiveMatchProbabilityNudge,
   applyMarketPulseProbabilityNudge,
   availabilityForecastModifier,
@@ -14,6 +15,7 @@ import {
   travelBodyCostModifier,
   type ForecastPlayerContext,
 } from "./database";
+import { computeCalibration, type CalibrationSample } from "./calibration";
 
 function player(
   overrides: Partial<ForecastPlayerContext> = {},
@@ -241,6 +243,49 @@ describe("xG-derived forecast spine", () => {
     expect(openGame.signals.some((signal) => signal.id === "over-lean")).toBe(true);
     expect(tightGame.under25).toBeGreaterThan(tightGame.over25);
     expect(tightGame.signals.some((signal) => signal.id === "under-lean")).toBe(true);
+  });
+});
+
+describe("receipt-tuned forecast knobs", () => {
+  const receiptSamples: CalibrationSample[] = [
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "home", confidence: 80, chaos: 44 },
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", confidence: 80, chaos: 46 },
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", confidence: 80, chaos: 48 },
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "draw", confidence: 80, chaos: 72 },
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "draw", confidence: 80, chaos: 74 },
+    { probabilities: { home: 0.6, draw: 0.2, away: 0.2 }, actual: "away", confidence: 80, chaos: 76 },
+  ];
+
+  it("keeps early receipt recommendations out of forecast xG", () => {
+    const tuning = computeCalibration(receiptSamples).tuning.application;
+    const tuned = applyCalibrationTuningToExpectedGoals({
+      homeXg: 1.9,
+      awayXg: 0.8,
+      calibrationTuning: tuning,
+    });
+
+    expect(tuning.applied).toBe(false);
+    expect(tuned.applied).toBe(false);
+    expect(tuned.homeXg).toBe(1.9);
+    expect(tuned.awayXg).toBe(0.8);
+  });
+
+  it("applies actionable receipt tuning gently to the xG spine", () => {
+    const tuning = computeCalibration([
+      ...receiptSamples,
+      ...receiptSamples,
+    ]).tuning.application;
+    const tuned = applyCalibrationTuningToExpectedGoals({
+      homeXg: 1.9,
+      awayXg: 0.8,
+      calibrationTuning: tuning,
+    });
+
+    expect(tuning.applied).toBe(true);
+    expect(tuned.applied).toBe(true);
+    expect(tuned.homeXg - tuned.awayXg).toBeLessThan(1.1);
+    expect(Math.abs(tuned.deltas.homeXg)).toBeLessThanOrEqual(0.3);
+    expect(Math.abs(tuned.deltas.awayXg)).toBeLessThanOrEqual(0.3);
   });
 });
 

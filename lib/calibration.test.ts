@@ -26,6 +26,18 @@ describe("computeCalibration", () => {
     expect(report.tuning.readiness).toBe("collecting");
     expect(report.tuning.recommendations).toHaveLength(5);
     expect(recommendation(report, "favorite-scale").direction).toBe("collect");
+    expect(report.tuning.application).toMatchObject({
+      applied: false,
+      sampleSize: 0,
+      readiness: "collecting",
+      knobs: {
+        favoriteScale: 1,
+        drawLaneMultiplier: 1,
+        confidenceBias: 0,
+        chaosSensitivity: 1,
+        marketNudgeMaxWeight: 0.18,
+      },
+    });
   });
 
   it("computes accuracy, Brier score and log loss with hand-checked values", () => {
@@ -229,6 +241,7 @@ describe("computeCalibration", () => {
     const report = computeCalibration(samples);
 
     expect(report.tuning.readiness).toBe("early");
+    expect(report.tuning.application.applied).toBe(false);
     expect(recommendation(report, "favorite-scale")).toMatchObject({
       direction: "decrease",
       recommendedValue: 0.88,
@@ -246,6 +259,68 @@ describe("computeCalibration", () => {
     expect(recommendation(report, "market-nudge-weight")).toMatchObject({
       direction: "increase",
       recommendedValue: 0.24,
+    });
+  });
+
+  it("activates capped tuning knobs once receipt readiness is actionable", () => {
+    const baseSamples: CalibrationSample[] = [
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "home",
+        confidence: 80,
+        chaos: 44,
+        market: { leader: "home", liquidityScore: 0.8, alignment: "aligned" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 46,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 48,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "draw",
+        confidence: 80,
+        chaos: 72,
+        market: { leader: "draw", liquidityScore: 0.9, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "draw",
+        confidence: 80,
+        chaos: 74,
+        market: { leader: "draw", liquidityScore: 0.9, alignment: "split" },
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+        chaos: 76,
+        market: { leader: "away", liquidityScore: 0.7, alignment: "split" },
+      },
+    ];
+    const report = computeCalibration([...baseSamples, ...baseSamples]);
+
+    expect(report.tuning.readiness).toBe("actionable");
+    expect(report.tuning.application).toMatchObject({
+      applied: true,
+      sampleSize: 12,
+      readiness: "actionable",
+      knobs: {
+        favoriteScale: 0.88,
+        drawLaneMultiplier: 1.073,
+        confidenceBias: -5,
+        chaosSensitivity: 1.08,
+        marketNudgeMaxWeight: 0.24,
+      },
     });
   });
 });

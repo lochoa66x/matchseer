@@ -101,15 +101,42 @@ export type CalibrationTuningRecommendation = {
   rationale: string;
 };
 
+export type CalibrationTuningKnobs = {
+  favoriteScale: number;
+  drawLaneMultiplier: number;
+  confidenceBias: number;
+  chaosSensitivity: number;
+  marketNudgeMaxWeight: number;
+};
+
+export type AppliedCalibrationTuning = {
+  version: string;
+  readiness: "collecting" | "early" | "actionable";
+  sampleSize: number;
+  applied: boolean;
+  reason: string;
+  knobs: CalibrationTuningKnobs;
+  recommendedKnobs: CalibrationTuningKnobs;
+};
+
 export type CalibrationTuningReport = {
   sampleSize: number;
   readiness: "collecting" | "early" | "actionable";
   summary: string;
   market: MarketCalibration;
   recommendations: CalibrationTuningRecommendation[];
+  application: AppliedCalibrationTuning;
 };
 
 const OUTCOMES: ForecastOutcome[] = ["home", "draw", "away"];
+export const CALIBRATION_TUNING_VERSION = "calibration-tuning-v1";
+export const DEFAULT_CALIBRATION_TUNING_KNOBS: CalibrationTuningKnobs = {
+  favoriteScale: 1,
+  drawLaneMultiplier: 1,
+  confidenceBias: 0,
+  chaosSensitivity: 1,
+  marketNudgeMaxWeight: 0.18,
+};
 
 function normalize(probabilities: CalibrationSample["probabilities"]) {
   const total = probabilities.home + probabilities.draw + probabilities.away;
@@ -559,6 +586,104 @@ function calibrationTuningSummary(readiness: CalibrationTuningReport["readiness"
   return "Enough receipts are in play for bounded model-weight tuning.";
 }
 
+function recommendationValue(
+  recommendations: CalibrationTuningRecommendation[],
+  id: CalibrationTuningRecommendation["id"],
+  fallback: number,
+) {
+  const recommendation = recommendations.find((item) => item.id === id);
+  const value = recommendation?.recommendedValue;
+
+  return value !== undefined && Number.isFinite(value) ? value : fallback;
+}
+
+function recommendedKnobsFromRecommendations(
+  recommendations: CalibrationTuningRecommendation[],
+): CalibrationTuningKnobs {
+  return {
+    favoriteScale: round3(
+      clamp(
+        recommendationValue(
+          recommendations,
+          "favorite-scale",
+          DEFAULT_CALIBRATION_TUNING_KNOBS.favoriteScale,
+        ),
+        0.88,
+        1.12,
+      ),
+    ),
+    drawLaneMultiplier: round3(
+      clamp(
+        recommendationValue(
+          recommendations,
+          "draw-lane",
+          DEFAULT_CALIBRATION_TUNING_KNOBS.drawLaneMultiplier,
+        ),
+        0.9,
+        1.16,
+      ),
+    ),
+    confidenceBias: round1(
+      clamp(
+        recommendationValue(
+          recommendations,
+          "confidence-bias",
+          DEFAULT_CALIBRATION_TUNING_KNOBS.confidenceBias,
+        ),
+        -5,
+        5,
+      ),
+    ),
+    chaosSensitivity: round3(
+      clamp(
+        recommendationValue(
+          recommendations,
+          "chaos-sensitivity",
+          DEFAULT_CALIBRATION_TUNING_KNOBS.chaosSensitivity,
+        ),
+        0.92,
+        1.08,
+      ),
+    ),
+    marketNudgeMaxWeight: round3(
+      clamp(
+        recommendationValue(
+          recommendations,
+          "market-nudge-weight",
+          DEFAULT_CALIBRATION_TUNING_KNOBS.marketNudgeMaxWeight,
+        ),
+        0.12,
+        0.24,
+      ),
+    ),
+  };
+}
+
+function appliedTuningFromRecommendations({
+  readiness,
+  sampleSize,
+  recommendations,
+}: {
+  readiness: CalibrationTuningReport["readiness"];
+  sampleSize: number;
+  recommendations: CalibrationTuningRecommendation[];
+}): AppliedCalibrationTuning {
+  const recommendedKnobs = recommendedKnobsFromRecommendations(recommendations);
+  const applied = readiness === "actionable";
+
+  return {
+    version: CALIBRATION_TUNING_VERSION,
+    readiness,
+    sampleSize,
+    applied,
+    reason: applied
+      ? "Actionable receipt sample; capped tuning knobs are active."
+      : "Receipt sample is not actionable yet; forecasts keep baseline knobs.",
+    knobs: applied ? recommendedKnobs : DEFAULT_CALIBRATION_TUNING_KNOBS,
+    recommendedKnobs,
+  };
+}
+
 function buildTuningReport({
   sampleSize,
   diagnostics,
@@ -587,83 +712,89 @@ function buildTuningReport({
     ? 0.18
     : round3(clamp(0.18 + (market.edgePct / 100) * 0.16, 0.12, 0.24));
   const readiness = tuningReadiness(sampleSize);
+  const recommendations = [
+    tuningRecommendation({
+      id: "favorite-scale",
+      label: "Favorite probability scale",
+      currentValue: 1,
+      recommendedValue: tuneFromGap({
+        currentValue: 1,
+        gap: diagnostics.favorite.gap,
+        sampleSize: diagnostics.favorite.count,
+        scale: 0.45,
+        min: 0.88,
+        max: 1.12,
+      }),
+      unit: "multiplier",
+      sampleSize: diagnostics.favorite.count,
+      evidence: `${diagnostics.favorite.actualPct}% actual vs ${diagnostics.favorite.predictedPct}% predicted.`,
+      rationale: diagnostics.favorite.verdict,
+    }),
+    tuningRecommendation({
+      id: "draw-lane",
+      label: "Draw lane multiplier",
+      currentValue: 1,
+      recommendedValue: tuneFromGap({
+        currentValue: 1,
+        gap: diagnostics.draw.gap,
+        sampleSize: diagnostics.draw.count,
+        scale: 0.55,
+        min: 0.9,
+        max: 1.16,
+      }),
+      unit: "multiplier",
+      sampleSize: diagnostics.draw.count,
+      evidence: `${diagnostics.draw.actualPct}% actual vs ${diagnostics.draw.predictedPct}% predicted.`,
+      rationale: diagnostics.draw.verdict,
+    }),
+    tuningRecommendation({
+      id: "confidence-bias",
+      label: "Confidence bias",
+      currentValue: 0,
+      recommendedValue: confidenceBias,
+      unit: "points",
+      sampleSize: confidenceGap.count,
+      evidence: `${round1(confidenceGap.gap)} pt weighted confidence gap.`,
+      rationale:
+        confidenceBias < 0
+          ? "Stated confidence is running hotter than hit rate. Cool the displayed confidence before kickoff."
+          : confidenceBias > 0
+            ? "Stated confidence is conservative against receipts. The Seer can speak a touch firmer."
+            : "Confidence bands need more receipts or are already close.",
+    }),
+    tuningRecommendation({
+      id: "chaos-sensitivity",
+      label: "Chaos miss sensitivity",
+      currentValue: 1,
+      recommendedValue: chaosSensitivity,
+      unit: "multiplier",
+      sampleSize: diagnostics.chaos.sampleSize,
+      evidence: `${diagnostics.chaos.missRatePct}% miss rate, ${diagnostics.chaos.trend.replace("-", " ")} trend.`,
+      rationale: diagnostics.chaos.verdict,
+    }),
+    tuningRecommendation({
+      id: "market-nudge-weight",
+      label: "Crowd nudge max weight",
+      currentValue: 0.18,
+      recommendedValue: marketWeight,
+      unit: "weight",
+      sampleSize: market.count,
+      evidence: `Crowd ${market.marketHitPct}% vs model ${market.modelHitPct}% on ${market.count} finals.`,
+      rationale: market.verdict,
+    }),
+  ];
 
   return {
     sampleSize,
     readiness,
     summary: calibrationTuningSummary(readiness),
     market,
-    recommendations: [
-      tuningRecommendation({
-        id: "favorite-scale",
-        label: "Favorite probability scale",
-        currentValue: 1,
-        recommendedValue: tuneFromGap({
-          currentValue: 1,
-          gap: diagnostics.favorite.gap,
-          sampleSize: diagnostics.favorite.count,
-          scale: 0.45,
-          min: 0.88,
-          max: 1.12,
-        }),
-        unit: "multiplier",
-        sampleSize: diagnostics.favorite.count,
-        evidence: `${diagnostics.favorite.actualPct}% actual vs ${diagnostics.favorite.predictedPct}% predicted.`,
-        rationale: diagnostics.favorite.verdict,
-      }),
-      tuningRecommendation({
-        id: "draw-lane",
-        label: "Draw lane multiplier",
-        currentValue: 1,
-        recommendedValue: tuneFromGap({
-          currentValue: 1,
-          gap: diagnostics.draw.gap,
-          sampleSize: diagnostics.draw.count,
-          scale: 0.55,
-          min: 0.9,
-          max: 1.16,
-        }),
-        unit: "multiplier",
-        sampleSize: diagnostics.draw.count,
-        evidence: `${diagnostics.draw.actualPct}% actual vs ${diagnostics.draw.predictedPct}% predicted.`,
-        rationale: diagnostics.draw.verdict,
-      }),
-      tuningRecommendation({
-        id: "confidence-bias",
-        label: "Confidence bias",
-        currentValue: 0,
-        recommendedValue: confidenceBias,
-        unit: "points",
-        sampleSize: confidenceGap.count,
-        evidence: `${round1(confidenceGap.gap)} pt weighted confidence gap.`,
-        rationale:
-          confidenceBias < 0
-            ? "Stated confidence is running hotter than hit rate. Cool the displayed confidence before kickoff."
-            : confidenceBias > 0
-              ? "Stated confidence is conservative against receipts. The Seer can speak a touch firmer."
-              : "Confidence bands need more receipts or are already close.",
-      }),
-      tuningRecommendation({
-        id: "chaos-sensitivity",
-        label: "Chaos miss sensitivity",
-        currentValue: 1,
-        recommendedValue: chaosSensitivity,
-        unit: "multiplier",
-        sampleSize: diagnostics.chaos.sampleSize,
-        evidence: `${diagnostics.chaos.missRatePct}% miss rate, ${diagnostics.chaos.trend.replace("-", " ")} trend.`,
-        rationale: diagnostics.chaos.verdict,
-      }),
-      tuningRecommendation({
-        id: "market-nudge-weight",
-        label: "Crowd nudge max weight",
-        currentValue: 0.18,
-        recommendedValue: marketWeight,
-        unit: "weight",
-        sampleSize: market.count,
-        evidence: `Crowd ${market.marketHitPct}% vs model ${market.modelHitPct}% on ${market.count} finals.`,
-        rationale: market.verdict,
-      }),
-    ],
+    recommendations,
+    application: appliedTuningFromRecommendations({
+      readiness,
+      sampleSize,
+      recommendations,
+    }),
   };
 }
 
