@@ -128,6 +128,23 @@ export type MarketPulseSyncResult = {
   fetchedAt: string;
 };
 
+type ProbabilityTriplet = {
+  home: number;
+  draw: number;
+  away: number;
+};
+
+type ForecastLiveState = {
+  status?: "scheduled" | "live" | "final" | string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  minute?: number | string | null;
+  homeRedCards?: number | null;
+  awayRedCards?: number | null;
+};
+
+const probabilitySides = ["home", "draw", "away"] as const;
+
 type ForecastMovementTrailItem = {
   id: string;
   label: string;
@@ -2064,10 +2081,11 @@ export async function syncFootballDataSnapshot(
       order by forecasts.version desc, forecasts.created_at desc
       limit 1;
     `) as unknown as ExistingForecastLockRow[];
+    const existingForecast = existingForecastRows[0] ?? null;
 
     if (
-      existingForecastRows[0] &&
-      shouldPreserveModelForecast(existingForecastRows[0])
+      existingForecast &&
+      shouldPreserveModelForecast(existingForecast)
     ) {
       forecasts += 1;
       continue;
@@ -2307,6 +2325,9 @@ export async function syncFootballDataSnapshot(
       limit 1;
     `) as unknown as ForecastContextRow[];
     const forecastContext = forecastContextRows[0] ?? null;
+    const storedMarketPulse = extractStoredMarketPulse(
+      existingForecast?.source_payload,
+    );
     const phase = normalizeMatchPhase(match.stage, match.groupName);
     const forecast = matchseerV3Forecast({
       homeTeam,
@@ -2316,13 +2337,21 @@ export async function syncFootballDataSnapshot(
       phase,
       venueSlug: match.venueSlug,
       context: forecastContext,
+      marketPulse: storedMarketPulse,
+      liveState: {
+        status: match.status,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+        minute: match.minute ?? null,
+        homeRedCards: match.homeRedCards ?? 0,
+        awayRedCards: match.awayRedCards ?? 0,
+      },
     });
     const forecastFingerprint = createForecastFingerprint({
       forecast,
       homeRatings,
       awayRatings,
     });
-    const existingForecast = existingForecastRows[0] ?? null;
     const existingFingerprint = readForecastFingerprint(
       existingForecast?.source_payload,
     );
@@ -2356,7 +2385,7 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.7-xg-source",
+      modelVersion: "matchseer-v3.8-market-live",
       phase,
       forecastFingerprint,
       forecastStatus: "open",
@@ -2367,13 +2396,15 @@ export async function syncFootballDataSnapshot(
       awayRatings,
       goalModel: forecast.goalModel,
       knockout: forecast.knockout,
+      marketNudge: forecast.marketNudge,
+      liveModel: forecast.liveModel,
       modifiers: forecast.modifiers,
       // Carry any saved crowd signal forward so it survives forecast re-versioning
       // (manual pulses were silently orphaned on old versions before this).
-      marketPulse: extractStoredMarketPulse(existingForecast?.source_payload),
+      marketPulse: storedMarketPulse,
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, knockout resolution logic, and xG-derived outcome probabilities.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, knockout resolution logic, xG-derived outcome probabilities, capped crowd nudges, and live-state probability reads.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -3287,21 +3318,72 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const projectedScore = normalizeProjectedScore(
     publishedProjectedScoreCorrections[row.id] ?? row.projected_score,
   );
-  const homeForecast = toNumber(row.home_win_probability);
-  const drawForecast = toNumber(row.draw_probability);
-  const awayForecast = toNumber(row.away_win_probability);
+  const storedProbabilities = normalizeProbabilityTriplet({
+    home: toNumber(row.home_win_probability),
+    draw: toNumber(row.draw_probability),
+    away: toNumber(row.away_win_probability),
+  });
+  const storedMarketNudge = toMarketPulseNudge(sourcePayload);
+  const displayMarketNudge = storedMarketNudge
+    ? null
+    : applyMarketPulseProbabilityNudge({
+        probabilities: storedProbabilities,
+        marketPulse: sourcePayload?.marketPulse,
+      });
+  const marketAdjustedProbabilities =
+    displayMarketNudge?.probabilities ?? storedProbabilities;
+  const modifiers = readPayloadRecord(sourcePayload?.modifiers);
+  const hasStoredLiveModel = Boolean(
+    readPayloadRecord(sourcePayload?.liveModel) ??
+      readPayloadRecord(modifiers?.liveModel),
+  );
   const confidence = toNumber(row.confidence);
   const chaos = toNumber(row.chaos);
+  const displayLiveModel = hasStoredLiveModel
+    ? null
+    : applyLiveMatchProbabilityNudge({
+        probabilities: marketAdjustedProbabilities,
+        status: row.status,
+        homeScore: row.home_score,
+        awayScore: row.away_score,
+        confidence,
+        chaos,
+      });
+  const displayProbabilities =
+    displayLiveModel?.probabilities ?? marketAdjustedProbabilities;
+  const displayConfidence = displayLiveModel
+    ? clamp(confidence + displayLiveModel.confidenceDelta, 35, 90)
+    : confidence;
+  const displayChaos = displayLiveModel
+    ? clamp(chaos + displayLiveModel.chaosDelta, 30, 90)
+    : chaos;
+  const displayMarketPulseNudge =
+    storedMarketNudge ??
+    (displayMarketNudge?.applied
+      ? {
+          applied: displayMarketNudge.applied,
+          weight: displayMarketNudge.weight,
+          cap: displayMarketNudge.cap,
+          homeDelta: displayMarketNudge.deltas.home,
+          drawDelta: displayMarketNudge.deltas.draw,
+          awayDelta: displayMarketNudge.deltas.away,
+          summary: displayMarketNudge.summary,
+        }
+      : null);
+  const homeForecast = displayProbabilities.home;
+  const drawForecast = displayProbabilities.draw;
+  const awayForecast = displayProbabilities.away;
   const goalModel = toGoalModelForecast(sourcePayload);
   const knockout = toKnockoutForecast(sourcePayload);
   const marketPulse = toMarketPulse(sourcePayload, {
     homeForecast,
     drawForecast,
     awayForecast,
-    confidence,
-    chaos,
+    confidence: displayConfidence,
+    chaos: displayChaos,
     homeName: row.home_name,
     awayName: row.away_name,
+    nudge: displayMarketPulseNudge,
   });
   const homeIsPlaceholder = isPlaceholderTeamRow(row.home_record, row.home_code);
   const awayIsPlaceholder = isPlaceholderTeamRow(row.away_record, row.away_code);
@@ -3356,8 +3438,8 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
           generatedAt: row.forecast_created_at
             ? new Date(row.forecast_created_at).toISOString()
             : null,
-          confidence,
-          chaos,
+          confidence: displayConfidence,
+          chaos: displayChaos,
           projected: projectedScore,
           marketPulse,
           goalModel,
@@ -3562,6 +3644,7 @@ function toMarketPulse(
     chaos: number;
     homeName: string;
     awayName: string;
+    nudge?: MarketPulse["nudge"] | null;
   },
 ): MarketPulse | null {
   const payload = parseJsonPayload(sourcePayload);
@@ -3625,6 +3708,7 @@ function toMarketPulse(
     rawPulse.source === "manual" || rawPulse.source === "polymarket"
       ? rawPulse.source
       : "polymarket";
+  const nudge = base.nudge ?? toMarketPulseNudge(payload);
 
   return {
     source,
@@ -3639,12 +3723,55 @@ function toMarketPulse(
     adjustedChaos,
     alignment,
     leader: marketLeader,
-    summary: marketPulseSummary({
-      alignment,
-      leader: marketLeader,
-      homeName: base.homeName,
-      awayName: base.awayName,
-    }),
+    nudge,
+    summary:
+      nudge?.applied === true
+        ? nudge.summary
+        : marketPulseSummary({
+            alignment,
+            leader: marketLeader,
+            homeName: base.homeName,
+            awayName: base.awayName,
+          }),
+  };
+}
+
+function toMarketPulseNudge(
+  payload: Record<string, unknown> | null,
+): MarketPulse["nudge"] {
+  const modifiers = readPayloadRecord(payload?.modifiers);
+  const rawNudge =
+    readPayloadRecord(payload?.marketNudge) ??
+    readPayloadRecord(modifiers?.marketNudge);
+
+  if (!rawNudge) {
+    return null;
+  }
+
+  const deltas = readPayloadRecord(rawNudge.deltas);
+  const fallbackSummary = marketProbabilityNudgeSummary({
+    applied: readPayloadBoolean(rawNudge.applied),
+    deltas: {
+      home: Math.round(readPayloadNumber(deltas?.home) ?? 0),
+      draw: Math.round(readPayloadNumber(deltas?.draw) ?? 0),
+      away: Math.round(readPayloadNumber(deltas?.away) ?? 0),
+    },
+    cap: Math.round(readPayloadNumber(rawNudge.cap) ?? 0),
+  });
+  const rawSummary = readPayloadRecord(rawNudge.summary);
+
+  return {
+    applied: readPayloadBoolean(rawNudge.applied),
+    weight: readPayloadNumber(rawNudge.weight) ?? 0,
+    cap: Math.round(readPayloadNumber(rawNudge.cap) ?? 0),
+    homeDelta: Math.round(readPayloadNumber(deltas?.home) ?? 0),
+    drawDelta: Math.round(readPayloadNumber(deltas?.draw) ?? 0),
+    awayDelta: Math.round(readPayloadNumber(deltas?.away) ?? 0),
+    summary: {
+      en: readPayloadString(rawSummary?.en) ?? fallbackSummary.en,
+      es: readPayloadString(rawSummary?.es) ?? fallbackSummary.es,
+      fr: readPayloadString(rawSummary?.fr) ?? fallbackSummary.fr,
+    },
   };
 }
 
@@ -3720,6 +3847,549 @@ function leadingSide(
   }
 
   return home >= away ? "home" : "away";
+}
+
+function normalizeProbabilityTriplet({
+  home,
+  draw,
+  away,
+}: ProbabilityTriplet): ProbabilityTriplet {
+  const values = [home, draw, away].map((value) =>
+    Number.isFinite(value) ? Math.max(0, value) : 0,
+  );
+  const total = values.reduce((sum, value) => sum + value, 0);
+
+  if (total <= 0) {
+    return { home: 34, draw: 33, away: 33 };
+  }
+
+  const exact = values.map((value) => (value / total) * 100);
+  const rounded = exact.map(Math.floor);
+  let remainder = 100 - rounded.reduce((sum, value) => sum + value, 0);
+  const order = [0, 1, 2].sort(
+    (left, right) =>
+      exact[right] - Math.floor(exact[right]) -
+      (exact[left] - Math.floor(exact[left])),
+  );
+
+  for (const index of order) {
+    if (remainder <= 0) {
+      break;
+    }
+
+    rounded[index] += 1;
+    remainder -= 1;
+  }
+
+  return {
+    home: rounded[0],
+    draw: rounded[1],
+    away: rounded[2],
+  };
+}
+
+function probabilityDeltas(
+  before: ProbabilityTriplet,
+  after: ProbabilityTriplet,
+) {
+  return {
+    home: after.home - before.home,
+    draw: after.draw - before.draw,
+    away: after.away - before.away,
+  };
+}
+
+function maxAbsProbabilityDelta(deltas: ProbabilityTriplet) {
+  return Math.max(
+    Math.abs(deltas.home),
+    Math.abs(deltas.draw),
+    Math.abs(deltas.away),
+  );
+}
+
+function rebalanceProbabilityDeltas(
+  deltas: ProbabilityTriplet,
+  cap: number,
+): ProbabilityTriplet {
+  const balanced: ProbabilityTriplet = {
+    home: clampNumber(deltas.home, -cap, cap),
+    draw: clampNumber(deltas.draw, -cap, cap),
+    away: clampNumber(deltas.away, -cap, cap),
+  };
+
+  for (let attempts = 0; attempts < 8; attempts += 1) {
+    const total = probabilitySides.reduce((sum, side) => sum + balanced[side], 0);
+
+    if (Math.abs(total) < 0.001) {
+      break;
+    }
+
+    const adjustable = probabilitySides.filter((side) =>
+      total > 0 ? balanced[side] > -cap : balanced[side] < cap,
+    );
+
+    if (adjustable.length === 0) {
+      break;
+    }
+
+    const adjustment = total / adjustable.length;
+
+    for (const side of adjustable) {
+      balanced[side] = clampNumber(balanced[side] - adjustment, -cap, cap);
+    }
+  }
+
+  return balanced;
+}
+
+function shiftProbabilityTriplet(
+  probabilities: ProbabilityTriplet,
+  deltas: ProbabilityTriplet,
+) {
+  return normalizeProbabilityTriplet({
+    home: probabilities.home + deltas.home,
+    draw: probabilities.draw + deltas.draw,
+    away: probabilities.away + deltas.away,
+  });
+}
+
+function emptyProbabilityDeltas(): ProbabilityTriplet {
+  return {
+    home: 0,
+    draw: 0,
+    away: 0,
+  };
+}
+
+export function applyMarketPulseProbabilityNudge({
+  probabilities,
+  marketPulse,
+  maxShift = 6,
+  maxWeight = 0.18,
+}: {
+  probabilities: ProbabilityTriplet;
+  marketPulse: unknown;
+  maxShift?: number;
+  maxWeight?: number;
+}) {
+  const preNudge = normalizeProbabilityTriplet(probabilities);
+  const rawPulse = readPayloadRecord(marketPulse);
+
+  function unchanged(reason: string, market: ProbabilityTriplet | null = null) {
+    const deltas = emptyProbabilityDeltas();
+
+    return {
+      applied: false,
+      reason,
+      liquidityScore: 0,
+      weight: 0,
+      cap: maxShift,
+      preNudge,
+      market,
+      probabilities: preNudge,
+      deltas,
+      summary: marketProbabilityNudgeSummary({
+        applied: false,
+        deltas,
+        cap: maxShift,
+      }),
+    };
+  }
+
+  if (!rawPulse) {
+    return unchanged("no-market-pulse");
+  }
+
+  const rawHome = readPayloadNumber(rawPulse.home);
+  const rawDraw = readPayloadNumber(rawPulse.draw);
+  const rawAway = readPayloadNumber(rawPulse.away);
+
+  if (rawHome === null || rawDraw === null || rawAway === null) {
+    return unchanged("incomplete-market-pulse");
+  }
+
+  const market = normalizePulseProbabilities(rawHome, rawDraw, rawAway);
+
+  if (!hasUsablePulse(market)) {
+    return unchanged("empty-market-pulse", market);
+  }
+
+  const liquidityScore = clampNumber(
+    readPayloadNumber(rawPulse.liquidityScore) ??
+      liquidityToTrust(
+        readPayloadNumber(rawPulse.liquidity),
+        readPayloadNumber(rawPulse.volume),
+      ),
+    0,
+    1,
+  );
+
+  if (liquidityScore < 0.2) {
+    return {
+      ...unchanged("thin-market-pulse", market),
+      liquidityScore: roundModifier(liquidityScore),
+    };
+  }
+
+  const disagreement =
+    maxAbsProbabilityDelta({
+      home: market.home - preNudge.home,
+      draw: market.draw - preNudge.draw,
+      away: market.away - preNudge.away,
+    }) / 100;
+  const sortedMarket = [market.home, market.draw, market.away].sort(
+    (left, right) => right - left,
+  );
+  const conviction = clampNumber((sortedMarket[0] - sortedMarket[1]) / 30, 0, 1);
+  const weight = clampNumber(
+    liquidityScore * (0.06 + disagreement * 0.18 + conviction * 0.04),
+    0,
+    maxWeight,
+  );
+  const rawDeltas = rebalanceProbabilityDeltas(
+    {
+      home: (market.home - preNudge.home) * weight,
+      draw: (market.draw - preNudge.draw) * weight,
+      away: (market.away - preNudge.away) * weight,
+    },
+    maxShift,
+  );
+  const nudged = shiftProbabilityTriplet(preNudge, rawDeltas);
+  const deltas = probabilityDeltas(preNudge, nudged);
+  const applied = maxAbsProbabilityDelta(deltas) > 0;
+
+  return {
+    applied,
+    reason: applied ? "market-pulse-nudge" : "no-material-market-move",
+    liquidityScore: roundModifier(liquidityScore),
+    weight: Math.round(weight * 1000) / 1000,
+    cap: maxShift,
+    preNudge,
+    market,
+    probabilities: nudged,
+    deltas,
+    summary: marketProbabilityNudgeSummary({
+      applied,
+      deltas,
+      cap: maxShift,
+    }),
+  };
+}
+
+function marketProbabilityNudgeSummary({
+  applied,
+  deltas,
+  cap,
+}: {
+  applied: boolean;
+  deltas: ProbabilityTriplet;
+  cap: number;
+}): Record<Language, string> {
+  if (!applied) {
+    return {
+      en: "Crowd prices were too thin or too close to move the actual probabilities.",
+      es: "Los precios de la gente fueron muy flojos o muy parejos para mover las probabilidades reales.",
+      fr: "Les prix du public etaient trop faibles ou trop proches pour bouger les probabilites reelles.",
+    };
+  }
+
+  return {
+    en: `Crowd signal nudged the probability lanes, capped at ${cap} points per side (${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away).`,
+    es: `La senal de la gente ajusto las probabilidades con tope de ${cap} puntos por lado (${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante).`,
+    fr: `Le signal du public a ajuste les probabilites avec un plafond de ${cap} points par cote (${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur).`,
+  };
+}
+
+export function applyLiveMatchProbabilityNudge({
+  probabilities,
+  status,
+  homeScore,
+  awayScore,
+  minute,
+  homeRedCards = 0,
+  awayRedCards = 0,
+  confidence,
+  chaos,
+}: {
+  probabilities: ProbabilityTriplet;
+  status?: ForecastLiveState["status"];
+  homeScore?: number | null;
+  awayScore?: number | null;
+  minute?: number | string | null;
+  homeRedCards?: number | null;
+  awayRedCards?: number | null;
+  confidence: number;
+  chaos: number;
+}) {
+  const preLive = normalizeProbabilityTriplet(probabilities);
+  const statusLabel = typeof status === "string" ? status.toLowerCase() : "";
+  const isLive =
+    statusLabel === "live" ||
+    statusLabel === "in_play" ||
+    statusLabel === "paused";
+
+  function unchanged(reason: string) {
+    const deltas = emptyProbabilityDeltas();
+
+    return {
+      applied: false,
+      reason,
+      minute: null as number | null,
+      minuteSource: "none" as "feed" | "fallback" | "none",
+      homeScore: homeScore ?? null,
+      awayScore: awayScore ?? null,
+      homeRedCards: homeRedCards ?? 0,
+      awayRedCards: awayRedCards ?? 0,
+      preLive,
+      probabilities: preLive,
+      deltas,
+      confidenceDelta: 0,
+      chaosDelta: 0,
+      summary: liveProbabilitySummary({
+        applied: false,
+        score: null,
+        minute: null,
+        deltas,
+      }),
+    };
+  }
+
+  if (!isLive) {
+    return unchanged("not-live");
+  }
+
+  if (homeScore === null || homeScore === undefined || awayScore === null || awayScore === undefined) {
+    return unchanged("missing-live-score");
+  }
+
+  const parsedMinute = normalizeLiveMinute(minute);
+  const liveMinute = parsedMinute ?? 55;
+  const minuteSource = parsedMinute === null ? "fallback" : "feed";
+  const remainingShare = clampNumber((90 - liveMinute) / 90, 0.04, 0.98);
+  const elapsedShare = 1 - remainingShare;
+  const scoreGap = homeScore - awayScore;
+  const absoluteGap = Math.abs(scoreGap);
+  const confidenceLean = clampNumber((confidence - 52) / 42, -0.25, 0.4);
+  const chaosBrake = clampNumber((chaos - 58) / 75, -0.12, 0.24);
+  const baseBlend = clampNumber(
+    0.28 + elapsedShare * 0.58 + confidenceLean - chaosBrake,
+    0.18,
+    0.88,
+  );
+  const target =
+    scoreGap > 0
+      ? liveLeaderTarget({
+          leader: "home",
+          elapsedShare,
+          absoluteGap,
+          chaos,
+        })
+      : scoreGap < 0
+        ? liveLeaderTarget({
+            leader: "away",
+            elapsedShare,
+            absoluteGap,
+            chaos,
+          })
+        : liveLevelTarget({
+            preLive,
+            elapsedShare,
+            chaos,
+          });
+  const blended = normalizeProbabilityTriplet({
+    home: preLive.home + (target.home - preLive.home) * baseBlend,
+    draw: preLive.draw + (target.draw - preLive.draw) * baseBlend,
+    away: preLive.away + (target.away - preLive.away) * baseBlend,
+  });
+  const redCardAdjusted = applyLiveRedCardSwing({
+    probabilities: blended,
+    homeRedCards: homeRedCards ?? 0,
+    awayRedCards: awayRedCards ?? 0,
+    remainingShare,
+    chaos,
+  });
+  const deltas = probabilityDeltas(preLive, redCardAdjusted);
+  const cardGap = Math.abs((homeRedCards ?? 0) - (awayRedCards ?? 0));
+  const confidenceDelta =
+    scoreGap === 0
+      ? -Math.round(elapsedShare * 5 + cardGap * 2)
+      : Math.round(elapsedShare * 7 + absoluteGap * 2 - cardGap * 1.5);
+  const chaosDelta = Math.round(
+    (scoreGap === 0 ? 2 + elapsedShare * 4 : -elapsedShare * 3) +
+      cardGap * 5 +
+      (absoluteGap === 1 && liveMinute < 75 ? 2 : 0),
+  );
+
+  return {
+    applied: maxAbsProbabilityDelta(deltas) > 0,
+    reason: "live-match-state",
+    minute: liveMinute,
+    minuteSource,
+    homeScore,
+    awayScore,
+    homeRedCards: homeRedCards ?? 0,
+    awayRedCards: awayRedCards ?? 0,
+    preLive,
+    probabilities: redCardAdjusted,
+    deltas,
+    confidenceDelta,
+    chaosDelta,
+    summary: liveProbabilitySummary({
+      applied: true,
+      score: `${homeScore}-${awayScore}`,
+      minute: liveMinute,
+      deltas,
+    }),
+  };
+}
+
+function normalizeLiveMinute(value: number | string | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return clamp(Math.round(value), 1, 130);
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/\d+/);
+
+    if (match) {
+      return clamp(Number(match[0]), 1, 130);
+    }
+  }
+
+  return null;
+}
+
+function liveLeaderTarget({
+  leader,
+  elapsedShare,
+  absoluteGap,
+  chaos,
+}: {
+  leader: "home" | "away";
+  elapsedShare: number;
+  absoluteGap: number;
+  chaos: number;
+}): ProbabilityTriplet {
+  const leaderTarget = clamp(
+    Math.round(
+      52 +
+        elapsedShare * 42 +
+        absoluteGap * 8 -
+        clampNumber((chaos - 60) * 0.12, -3, 4),
+    ),
+    56,
+    96,
+  );
+  const trailingFloor = clamp(18 - Math.round(elapsedShare * 14), 2, 18);
+  const drawTarget = clamp(
+    Math.round((100 - leaderTarget) * (0.6 - elapsedShare * 0.28)),
+    2,
+    Math.max(2, 100 - leaderTarget - trailingFloor),
+  );
+  const trailingTarget = Math.max(1, 100 - leaderTarget - drawTarget);
+
+  return leader === "home"
+    ? normalizeProbabilityTriplet({
+        home: leaderTarget,
+        draw: drawTarget,
+        away: trailingTarget,
+      })
+    : normalizeProbabilityTriplet({
+        home: trailingTarget,
+        draw: drawTarget,
+        away: leaderTarget,
+      });
+}
+
+function liveLevelTarget({
+  preLive,
+  elapsedShare,
+  chaos,
+}: {
+  preLive: ProbabilityTriplet;
+  elapsedShare: number;
+  chaos: number;
+}): ProbabilityTriplet {
+  const drawTarget = clamp(
+    Math.round(27 + elapsedShare * 42 - clampNumber((chaos - 60) * 0.08, -2, 4)),
+    25,
+    74,
+  );
+  const winMass = 100 - drawTarget;
+  const winTotal = Math.max(1, preLive.home + preLive.away);
+  const homeShare = preLive.home / winTotal;
+
+  return normalizeProbabilityTriplet({
+    home: winMass * homeShare,
+    draw: drawTarget,
+    away: winMass * (1 - homeShare),
+  });
+}
+
+function applyLiveRedCardSwing({
+  probabilities,
+  homeRedCards,
+  awayRedCards,
+  remainingShare,
+  chaos,
+}: {
+  probabilities: ProbabilityTriplet;
+  homeRedCards: number;
+  awayRedCards: number;
+  remainingShare: number;
+  chaos: number;
+}) {
+  const cardGap = homeRedCards - awayRedCards;
+
+  if (cardGap === 0) {
+    return probabilities;
+  }
+
+  const swing = clampNumber(
+    Math.abs(cardGap) * (4.5 + remainingShare * 4 + Math.max(0, chaos - 58) * 0.03),
+    3,
+    13,
+  );
+
+  if (cardGap > 0) {
+    return normalizeProbabilityTriplet({
+      home: probabilities.home - swing,
+      draw: probabilities.draw + swing * 0.25,
+      away: probabilities.away + swing * 0.75,
+    });
+  }
+
+  return normalizeProbabilityTriplet({
+    home: probabilities.home + swing * 0.75,
+    draw: probabilities.draw + swing * 0.25,
+    away: probabilities.away - swing,
+  });
+}
+
+function liveProbabilitySummary({
+  applied,
+  score,
+  minute,
+  deltas,
+}: {
+  applied: boolean;
+  score: string | null;
+  minute: number | null;
+  deltas: ProbabilityTriplet;
+}): Record<Language, string> {
+  if (!applied || !score || minute === null) {
+    return {
+      en: "No live-state probability adjustment is active.",
+      es: "No hay ajuste de probabilidad en vivo activo.",
+      fr: "Aucun ajustement de probabilite en direct n'est actif.",
+    };
+  }
+
+  return {
+    en: `Live state (${score}, ${minute}') moved the read ${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away.`,
+    es: `El estado en vivo (${score}, ${minute}') movio la lectura ${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante.`,
+    fr: `L'etat en direct (${score}, ${minute}') a bouge la lecture ${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur.`,
+  };
 }
 
 function marketPulseSummary({
@@ -4632,6 +5302,8 @@ function matchseerV3Forecast({
   phase,
   venueSlug,
   context,
+  marketPulse,
+  liveState,
 }: {
   homeTeam: FootballDataTeam;
   awayTeam: FootballDataTeam;
@@ -4640,6 +5312,8 @@ function matchseerV3Forecast({
   phase: string;
   venueSlug: string | null;
   context: ForecastContextRow | null;
+  marketPulse?: unknown;
+  liveState?: ForecastLiveState;
 }) {
   const homeVenueBoost = venueCountryBoost(homeTeam, venueSlug);
   const awayVenueBoost = venueCountryBoost(awayTeam, venueSlug);
@@ -4753,10 +5427,52 @@ function matchseerV3Forecast({
     tournamentReality,
   });
   const goalModel = deriveForecastFromExpectedGoals(finalXg);
-  const home = goalModel.homeWin;
-  const draw = goalModel.draw;
-  const away = goalModel.awayWin;
   const projected = goalModel.projectedScore;
+  const dynamicDrag =
+    Math.abs(weather.chaosDelta) +
+    Math.abs(referee.chaosDelta) +
+    Math.abs(vipSpotlight.chaosDelta) +
+    Math.abs(tournamentForm.chaosDelta) +
+    Math.abs(availability.chaosDelta) +
+    Math.abs(fatigue.chaosDelta);
+  const baseConfidence = clamp(
+    Math.round(
+      50 +
+        Math.abs(powerGap) * 1.04 +
+        (78 - chaos) * 0.08 -
+        dynamicDrag * 0.24 +
+        weather.confidenceDelta +
+        vipSpotlight.confidenceDelta +
+        tournamentForm.confidenceDelta +
+        knockout.confidenceDelta,
+    ),
+    45,
+    80,
+  );
+  const marketNudge = applyMarketPulseProbabilityNudge({
+    probabilities: {
+      home: goalModel.homeWin,
+      draw: goalModel.draw,
+      away: goalModel.awayWin,
+    },
+    marketPulse,
+  });
+  const liveModel = applyLiveMatchProbabilityNudge({
+    probabilities: marketNudge.probabilities,
+    status: liveState?.status,
+    homeScore: liveState?.homeScore,
+    awayScore: liveState?.awayScore,
+    minute: liveState?.minute,
+    homeRedCards: liveState?.homeRedCards,
+    awayRedCards: liveState?.awayRedCards,
+    confidence: baseConfidence,
+    chaos,
+  });
+  const home = liveModel.probabilities.home;
+  const draw = liveModel.probabilities.draw;
+  const away = liveModel.probabilities.away;
+  const finalChaos = clamp(chaos + liveModel.chaosDelta, 30, 90);
+  const confidence = clamp(baseConfidence + liveModel.confidenceDelta, 35, 90);
   const knockoutLane = knockout.isKnockout
     ? buildKnockoutResolutionLane({
         phase,
@@ -4766,7 +5482,7 @@ function matchseerV3Forecast({
         drawProbability: draw,
         awayProbability: away,
         powerGap,
-        chaos,
+        chaos: finalChaos,
       })
     : null;
   const favorite =
@@ -4786,13 +5502,24 @@ function matchseerV3Forecast({
       : awayVenueBoost > homeVenueBoost
         ? `${awayTeam.name} get a small venue familiarity lift.`
         : "The venue profile stays close to neutral for this dynamic read.";
-  const dynamicDrag =
-    Math.abs(weather.chaosDelta) +
-    Math.abs(referee.chaosDelta) +
-    Math.abs(vipSpotlight.chaosDelta) +
-    Math.abs(tournamentForm.chaosDelta) +
-    Math.abs(availability.chaosDelta) +
-    Math.abs(fatigue.chaosDelta);
+  const marketNudgeFactor = marketNudge.applied
+    ? {
+        label: "Crowd price nudge",
+        weight: 0.42,
+        explanation: `Crowd signal moved the lanes ${formatSignedDelta(marketNudge.deltas.home)} home, ${formatSignedDelta(marketNudge.deltas.draw)} draw, and ${formatSignedDelta(marketNudge.deltas.away)} away with a ${marketNudge.cap}-point cap.`,
+      }
+    : null;
+  const liveMinuteLabel =
+    liveModel.minuteSource === "feed" && liveModel.minute !== null
+      ? `${liveModel.minute}'`
+      : "the live window";
+  const liveModelFactor = liveModel.applied
+    ? {
+        label: "Live match state",
+        weight: 0.86,
+        explanation: `The live score (${liveModel.homeScore}-${liveModel.awayScore}) at ${liveMinuteLabel} reshaped the pre-match lanes before the Seer settled the read.`,
+      }
+    : null;
   const factors = [
     {
       label: favorite ? "Team profile signal" : "Balanced profile signal",
@@ -4810,6 +5537,8 @@ function matchseerV3Forecast({
     fatigue.factor,
     knockout.factor,
     tournamentReality.factor,
+    marketNudgeFactor,
+    liveModelFactor,
     {
       label: "Venue context",
       weight: 0.55,
@@ -4828,24 +5557,13 @@ function matchseerV3Forecast({
     home,
     draw,
     away,
-    confidence: clamp(
-      Math.round(
-        50 +
-          Math.abs(powerGap) * 1.04 +
-          (78 - chaos) * 0.08 -
-          dynamicDrag * 0.24 +
-          weather.confidenceDelta +
-          vipSpotlight.confidenceDelta +
-          tournamentForm.confidenceDelta +
-          knockout.confidenceDelta,
-      ),
-      45,
-      80,
-    ),
-    chaos,
+    confidence,
+    chaos: finalChaos,
     projected,
     goalModel,
     knockout: knockoutLane,
+    marketNudge,
+    liveModel,
     modifiers: {
       basePower: {
         home: roundModifier(homeBasePower),
@@ -4890,6 +5608,8 @@ function matchseerV3Forecast({
       fatigue: fatigue.payload,
       knockout: knockout.payload,
       tournamentReality: tournamentReality.payload,
+      marketNudge,
+      liveModel,
     },
     factors,
   };

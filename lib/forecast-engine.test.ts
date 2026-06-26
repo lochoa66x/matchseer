@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyLiveMatchProbabilityNudge,
+  applyMarketPulseProbabilityNudge,
   availabilityForecastModifier,
   buildKnockoutResolutionLane,
   buildPublicSeerTrail,
@@ -104,6 +106,104 @@ describe("market pulse write safety", () => {
         home: 52,
       },
     });
+  });
+});
+
+describe("market pulse probability nudge", () => {
+  it("blends crowd signal into probabilities without becoming the market", () => {
+    const nudge = applyMarketPulseProbabilityNudge({
+      probabilities: { home: 58, draw: 24, away: 18 },
+      marketPulse: {
+        home: 30,
+        draw: 20,
+        away: 50,
+        liquidityScore: 1,
+      },
+      maxShift: 5,
+      maxWeight: 0.6,
+    });
+
+    expect(nudge.applied).toBe(true);
+    expect(nudge.probabilities.home + nudge.probabilities.draw + nudge.probabilities.away).toBe(100);
+    expect(nudge.probabilities.away).toBeGreaterThan(18);
+    expect(nudge.probabilities.away).toBeLessThan(50);
+    expect(Math.abs(nudge.deltas.home)).toBeLessThanOrEqual(5);
+    expect(Math.abs(nudge.deltas.draw)).toBeLessThanOrEqual(5);
+    expect(Math.abs(nudge.deltas.away)).toBeLessThanOrEqual(5);
+  });
+
+  it("keeps thin crowd signal out of the probability lanes", () => {
+    const nudge = applyMarketPulseProbabilityNudge({
+      probabilities: { home: 52, draw: 27, away: 21 },
+      marketPulse: {
+        home: 15,
+        draw: 20,
+        away: 65,
+        liquidityScore: 0.08,
+      },
+    });
+
+    expect(nudge.applied).toBe(false);
+    expect(nudge.probabilities).toEqual({ home: 52, draw: 27, away: 21 });
+  });
+});
+
+describe("live match probability model", () => {
+  it("moves a late live lead toward the leading team", () => {
+    const live = applyLiveMatchProbabilityNudge({
+      probabilities: { home: 45, draw: 25, away: 30 },
+      status: "live",
+      homeScore: 1,
+      awayScore: 0,
+      minute: 75,
+      confidence: 62,
+      chaos: 54,
+    });
+
+    expect(live.applied).toBe(true);
+    expect(live.probabilities.home).toBeGreaterThan(45);
+    expect(live.probabilities.draw).toBeLessThan(25);
+    expect(live.probabilities.home + live.probabilities.draw + live.probabilities.away).toBe(100);
+  });
+
+  it("prices a late level match as more draw-heavy", () => {
+    const live = applyLiveMatchProbabilityNudge({
+      probabilities: { home: 42, draw: 26, away: 32 },
+      status: "live",
+      homeScore: 0,
+      awayScore: 0,
+      minute: 82,
+      confidence: 55,
+      chaos: 60,
+    });
+
+    expect(live.probabilities.draw).toBeGreaterThan(26);
+    expect(live.confidenceDelta).toBeLessThan(0);
+  });
+
+  it("uses live red cards to tilt the remaining match state", () => {
+    const noCard = applyLiveMatchProbabilityNudge({
+      probabilities: { home: 44, draw: 28, away: 28 },
+      status: "live",
+      homeScore: 0,
+      awayScore: 0,
+      minute: 35,
+      confidence: 58,
+      chaos: 62,
+    });
+    const awayRed = applyLiveMatchProbabilityNudge({
+      probabilities: { home: 44, draw: 28, away: 28 },
+      status: "live",
+      homeScore: 0,
+      awayScore: 0,
+      minute: 35,
+      awayRedCards: 1,
+      confidence: 58,
+      chaos: 62,
+    });
+
+    expect(awayRed.probabilities.home).toBeGreaterThan(noCard.probabilities.home);
+    expect(awayRed.chaosDelta).toBeGreaterThan(noCard.chaosDelta);
   });
 });
 

@@ -98,6 +98,15 @@ export type MarketPulse = {
   adjustedChaos: number;
   alignment: "aligned" | "split" | "thin";
   leader: "home" | "draw" | "away";
+  nudge?: {
+    applied: boolean;
+    weight: number;
+    cap: number;
+    homeDelta: number;
+    drawDelta: number;
+    awayDelta: number;
+    summary: Record<Language, string>;
+  } | null;
   summary: Record<Language, string>;
 };
 

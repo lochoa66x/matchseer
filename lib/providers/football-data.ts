@@ -26,6 +26,9 @@ export type FootballDataMatch = {
   startsAt: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  minute: number | null;
+  homeRedCards: number | null;
+  awayRedCards: number | null;
   homeTeamProviderId: number;
   awayTeamProviderId: number;
   homeTeamIsPlaceholder: boolean;
@@ -207,7 +210,7 @@ function buildTeamList(
 
 function toFootballDataMatch(
   match: NonNullable<FootballDataMatchesResponse["matches"]>[number],
-) {
+): FootballDataMatch {
   const homeTeam = toSnapshotTeamFromMatch(match, "home");
   const awayTeam = toSnapshotTeamFromMatch(match, "away");
   const venueName = readVenueName(match);
@@ -229,6 +232,9 @@ function toFootballDataMatch(
     startsAt: match.utcDate ?? null,
     homeScore: score.home,
     awayScore: score.away,
+    minute: null,
+    homeRedCards: null,
+    awayRedCards: null,
     homeTeamProviderId: homeTeam.id,
     awayTeamProviderId: awayTeam.id,
     homeTeamIsPlaceholder: Boolean(homeTeam.isPlaceholder),
@@ -342,7 +348,7 @@ function readVenueName(
   return null;
 }
 
-function toMatchStatus(status: string | null | undefined) {
+function toMatchStatus(status: string | null | undefined): FootballDataMatch["status"] {
   if (status === "FINISHED") {
     return "final";
   }
