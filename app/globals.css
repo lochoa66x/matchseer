@@ -8880,14 +8880,13 @@ body {
   text-decoration: none;
 }
 
-.nfl-brand > span {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  color: #06100f;
-  background: linear-gradient(135deg, #f7c51d, #2dd4bf);
-  border-radius: 8px;
+.nfl-brand-logo {
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
 }
 
 .nfl-brand strong {

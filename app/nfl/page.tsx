@@ -989,9 +989,12 @@ export default function NflPage() {
     <main className="nfl-shell">
       <header className="nfl-topbar">
         <a className="nfl-brand" href="/">
-          <span>
-            <Sparkles size={18} />
-          </span>
+          <img
+            alt=""
+            aria-hidden="true"
+            className="nfl-brand-logo"
+            src="/brand/matchseer-app-icon.svg"
+          />
           <strong>MatchSeer</strong>
           <em>NFL Lab</em>
         </a>
