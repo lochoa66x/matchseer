@@ -39,10 +39,13 @@ type NflMatchup = {
   id: string;
   week: string;
   slot: string;
+  startsAt?: string | null;
   venue: string;
   weather: string;
   home: NflTeam;
   away: NflTeam;
+  sourceHomeWin?: number;
+  sourceAwayWin?: number;
   homeWin: number;
   awayWin: number;
   projected: string;
@@ -51,6 +54,7 @@ type NflMatchup = {
   pace: number;
   read: string;
   edges: string[];
+  marketPulse?: NflMarketPulse | null;
 };
 
 type FantasyPlayer = {
@@ -110,6 +114,7 @@ type NflDataStatus = "loading" | "ready" | "fallback";
 type NflProviderStatus = {
   schedule: "live" | "fallback";
   fantasy: "live" | "fallback";
+  market: "live" | "fallback";
   notes: string[];
 };
 
@@ -121,6 +126,25 @@ type NflSeerDataset = {
   matchups: NflMatchup[];
   fantasyPlayers: FantasyPlayer[];
   providerStatus: NflProviderStatus;
+};
+
+type NflMarketPulse = {
+  source: "polymarket";
+  capturedAt: string | null;
+  home: number;
+  away: number;
+  liquidityScore: number;
+  leader: "home" | "away";
+  alignment: "aligned" | "split";
+  marketSlug: string | null;
+  question: string | null;
+  nudge: {
+    applied: boolean;
+    homeDelta: number;
+    awayDelta: number;
+    cap: number;
+    summary: string;
+  };
 };
 
 type ScenarioLevers = {
@@ -428,6 +452,7 @@ const seededNflDataset: NflSeerDataset = {
   providerStatus: {
     schedule: "fallback",
     fantasy: "fallback",
+    market: "fallback",
     notes: ["Using seeded lab data until the NFL feed responds."],
   },
 };
@@ -691,6 +716,7 @@ export default function NflPage() {
             rightLabel={activeMatchup.home.code}
             rightValue={activeScenario.homeWin}
           />
+          <MarketBlendStrip matchup={activeMatchup} />
           <div className="nfl-meter-grid">
             <MiniMeter icon={<Gauge size={16} />} label="Confidence" value={activeScenario.confidence} />
             <MiniMeter icon={<Activity size={16} />} label="Chaos" value={activeScenario.chaos} hot />
@@ -831,6 +857,9 @@ function NflDataRibbon({
         </span>
         <span className={cx(dataset.providerStatus.fantasy === "live" && "live")}>
           Fantasy {dataset.providerStatus.fantasy}
+        </span>
+        <span className={cx(dataset.providerStatus.market === "live" && "live")}>
+          Crowd {dataset.providerStatus.market}
         </span>
       </div>
       {dataset.providerStatus.notes.length > 0 ? (
@@ -1035,6 +1064,43 @@ function ProbabilityBar({
         <span>{rightLabel}</span>
         <strong>{rightValue}%</strong>
       </div>
+    </div>
+  );
+}
+
+function MarketBlendStrip({ matchup }: { matchup: NflMatchup }) {
+  const sourceHome = matchup.sourceHomeWin ?? matchup.homeWin;
+  const sourceAway = matchup.sourceAwayWin ?? matchup.awayWin;
+  const marketPulse = matchup.marketPulse;
+  const marketHome = marketPulse?.home ?? null;
+  const marketAway = marketPulse?.away ?? null;
+
+  return (
+    <div className="nfl-market-blend">
+      <div>
+        <span>Source model</span>
+        <strong>
+          {matchup.home.code} {sourceHome}% · {matchup.away.code} {sourceAway}%
+        </strong>
+      </div>
+      <div className={cx(marketPulse?.nudge.applied && "active")}>
+        <span>Crowd signal</span>
+        <strong>
+          {marketPulse
+            ? `${matchup.home.code} ${marketHome}% · ${matchup.away.code} ${marketAway}%`
+            : "Waiting"}
+        </strong>
+      </div>
+      <div>
+        <span>Seer blend</span>
+        <strong>
+          {matchup.home.code} {matchup.homeWin}% · {matchup.away.code} {matchup.awayWin}%
+        </strong>
+      </div>
+      <p>
+        {marketPulse?.nudge.summary ??
+          "The crowd lane is not live yet, so the Seer is running from schedule, roster, venue, and matchup priors."}
+      </p>
     </div>
   );
 }
@@ -1666,6 +1732,11 @@ function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
         providerStatus.fantasy === "live" && incomingFantasyPlayers.length > 0
           ? "live"
           : "fallback",
+      market:
+        providerStatus.market === "live" &&
+        incomingMatchups.some((matchup) => matchup.marketPulse)
+          ? "live"
+          : "fallback",
       notes:
         Array.isArray(providerStatus.notes) && providerStatus.notes.length > 0
           ? providerStatus.notes.filter((note) => typeof note === "string")
@@ -1698,7 +1769,36 @@ function isNflMatchup(value: unknown): value is NflMatchup {
     typeof matchup.chaos === "number" &&
     typeof matchup.pace === "number" &&
     typeof matchup.read === "string" &&
-    Array.isArray(matchup.edges)
+    Array.isArray(matchup.edges) &&
+    (matchup.marketPulse == null || isNflMarketPulse(matchup.marketPulse))
+  );
+}
+
+function isNflMarketPulse(value: unknown): value is NflMarketPulse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const pulse = value as Partial<NflMarketPulse>;
+  const nudge = pulse.nudge as Partial<NflMarketPulse["nudge"]> | undefined;
+
+  return (
+    pulse.source === "polymarket" &&
+    (typeof pulse.capturedAt === "string" || pulse.capturedAt === null) &&
+    typeof pulse.home === "number" &&
+    typeof pulse.away === "number" &&
+    typeof pulse.liquidityScore === "number" &&
+    (pulse.leader === "home" || pulse.leader === "away") &&
+    (pulse.alignment === "aligned" || pulse.alignment === "split") &&
+    (typeof pulse.marketSlug === "string" || pulse.marketSlug === null) &&
+    (typeof pulse.question === "string" || pulse.question === null) &&
+    typeof nudge === "object" &&
+    nudge !== null &&
+    typeof nudge.applied === "boolean" &&
+    typeof nudge.homeDelta === "number" &&
+    typeof nudge.awayDelta === "number" &&
+    typeof nudge.cap === "number" &&
+    typeof nudge.summary === "string"
   );
 }
 

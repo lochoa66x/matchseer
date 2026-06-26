@@ -8836,6 +8836,7 @@ body {
 .nfl-data-ribbon,
 .nfl-data-ribbon > div:first-child,
 .nfl-data-pills,
+.nfl-market-blend,
 .nfl-section-kicker,
 .nfl-team-pill,
 .nfl-card-topline,
@@ -9096,6 +9097,8 @@ body {
 .nfl-card-topline span,
 .nfl-data-ribbon em,
 .nfl-data-ribbon p,
+.nfl-market-blend span,
+.nfl-market-blend p,
 .nfl-projection-strip span,
 .nfl-mini-meter span,
 .nfl-fantasy-score span,
@@ -9217,6 +9220,7 @@ body {
 
 .nfl-projection-strip div,
 .nfl-mini-meter,
+.nfl-market-blend,
 .nfl-fantasy-card,
 .nfl-scenario-read,
 .nfl-scenario-control,
@@ -9283,6 +9287,40 @@ body {
 
 .nfl-probability-track span {
   min-width: 0;
+}
+
+.nfl-market-blend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.nfl-market-blend div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nfl-market-blend div.active strong {
+  color: #8ff0c1;
+}
+
+.nfl-market-blend strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-market-blend p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .nfl-meter-grid {
@@ -9940,6 +9978,7 @@ body {
   .nfl-teams,
   .nfl-projection-strip,
   .nfl-meter-grid,
+  .nfl-market-blend,
   .nfl-scenario-factors,
   .nfl-probability,
   .nfl-player-selectors {

@@ -1,3 +1,9 @@
+import {
+  fetchPolymarketPulseForTarget,
+  type MarketPulseTarget,
+  type PulseSkipReason,
+} from "./providers/polymarket";
+
 export type NflTeamFeed = {
   code: string;
   name: string;
@@ -11,14 +17,36 @@ export type NflTeamFeed = {
   injuries: number;
 };
 
+export type NflMarketPulseFeed = {
+  source: "polymarket";
+  capturedAt: string | null;
+  home: number;
+  away: number;
+  liquidityScore: number;
+  leader: "home" | "away";
+  alignment: "aligned" | "split";
+  marketSlug: string | null;
+  question: string | null;
+  nudge: {
+    applied: boolean;
+    homeDelta: number;
+    awayDelta: number;
+    cap: number;
+    summary: string;
+  };
+};
+
 export type NflMatchupFeed = {
   id: string;
   week: string;
   slot: string;
+  startsAt?: string | null;
   venue: string;
   weather: string;
   home: NflTeamFeed;
   away: NflTeamFeed;
+  sourceHomeWin?: number;
+  sourceAwayWin?: number;
   homeWin: number;
   awayWin: number;
   projected: string;
@@ -27,11 +55,13 @@ export type NflMatchupFeed = {
   pace: number;
   read: string;
   edges: string[];
+  marketPulse?: NflMarketPulseFeed | null;
 };
 
 export type NflSeerProviderStatus = {
   schedule: "live" | "fallback";
   fantasy: "live" | "fallback";
+  market: "live" | "fallback";
   notes: string[];
 };
 
@@ -91,6 +121,10 @@ type EspnCompetitor = {
 
 const espnScoreboardUrl =
   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=16";
+const nflPolymarketEnabled = process.env.NFL_POLYMARKET_ENABLED !== "0";
+const nflPolymarketMaxGames = Number(process.env.NFL_POLYMARKET_MAX_GAMES ?? "6");
+const nflPolymarketMaxShift = Number(process.env.NFL_POLYMARKET_MAX_SHIFT ?? "4");
+const nflPolymarketMaxWeight = Number(process.env.NFL_POLYMARKET_MAX_WEIGHT ?? "0.16");
 
 export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
   const fetchedAt = new Date().toISOString();
@@ -124,15 +158,22 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       throw new Error("NFL schedule feed returned no usable matchups");
     }
 
+    const marketResult = await applyNflMarketPulses(dataset);
+
     return {
-      ...dataset,
+      ...marketResult.dataset,
       providerStatus: {
         schedule: "live",
         fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+        market: marketResult.status,
         notes:
           fantasyPlayers.length > 0
-            ? notes
-            : [...notes, "Fantasy board is still using the seeded preseason rail."],
+            ? [...notes, ...marketResult.notes]
+            : [
+                ...notes,
+                "Fantasy board is still using the seeded preseason rail.",
+                ...marketResult.notes,
+              ],
       },
     };
   } catch (error) {
@@ -149,6 +190,7 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       providerStatus: {
         schedule: "fallback",
         fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+        market: "fallback",
         notes: [
           message,
           fantasyPlayers.length > 0
@@ -184,6 +226,7 @@ export function toNflSeerDataset(
           payload.fantasyPlayers.length > 0 || fantasyPlayers.length > 0
             ? "live"
             : "fallback",
+        market: payload.providerStatus?.market ?? "fallback",
         notes: payload.providerStatus?.notes ?? [],
       },
     };
@@ -228,6 +271,7 @@ function fromEspnScoreboard(
     providerStatus: {
       schedule: matchups.length > 0 ? "live" : "fallback",
       fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+      market: matchups.some((matchup) => matchup.marketPulse) ? "live" : "fallback",
       notes: [],
     },
   };
@@ -270,10 +314,13 @@ function espnEventToMatchup(
     id: `espn-${event.id ?? `${awayTeam.code}-${homeTeam.code}`}`,
     week: typeof weekNumber === "number" ? `Week ${weekNumber}` : String(weekNumber),
     slot: formatKickoff(competition?.date ?? event.date),
+    startsAt: competition?.date ?? event.date ?? null,
     venue: venueName,
     weather,
     home: homeTeam,
     away: awayTeam,
+    sourceHomeWin: homeWin,
+    sourceAwayWin: awayWin,
     homeWin,
     awayWin,
     projected,
@@ -286,6 +333,212 @@ function espnEventToMatchup(
         : `${leader.code} has the first ${Math.max(homeWin, awayWin)}% lane from the real slate pull, with roster strength and venue pressure doing the early work.`,
     edges: matchupEdges({ away: awayTeam, home: homeTeam, venueName, weather }),
   };
+}
+
+async function applyNflMarketPulses(dataset: NflSeerDataset): Promise<{
+  dataset: NflSeerDataset;
+  status: "live" | "fallback";
+  notes: string[];
+}> {
+  if (!nflPolymarketEnabled) {
+    return {
+      dataset,
+      status: "fallback",
+      notes: ["Crowd signal is disabled for this environment."],
+    };
+  }
+
+  const maxGames = Number.isFinite(nflPolymarketMaxGames)
+    ? Math.max(0, Math.min(10, Math.floor(nflPolymarketMaxGames)))
+    : 6;
+  const targets = dataset.matchups.slice(0, maxGames);
+
+  if (targets.length === 0) {
+    return { dataset, status: "fallback", notes: [] };
+  }
+
+  const skipped: Partial<Record<PulseSkipReason, number>> = {};
+  const lookups = await Promise.all(
+    targets.map(async (matchup) => {
+      try {
+        const lookup = await fetchPolymarketPulseForTarget(
+          nflMarketTarget(matchup),
+          dataset.updatedAt,
+        );
+
+        if (!lookup.update) {
+          skipped[lookup.reason] = (skipped[lookup.reason] ?? 0) + 1;
+        }
+
+        return {
+          matchId: matchup.id,
+          update: lookup.update,
+        };
+      } catch {
+        skipped["fetch-error"] = (skipped["fetch-error"] ?? 0) + 1;
+
+        return {
+          matchId: matchup.id,
+          update: null,
+        };
+      }
+    }),
+  );
+  const updates = new Map(
+    lookups
+      .filter((lookup) => lookup.update)
+      .map((lookup) => [lookup.matchId, lookup.update]),
+  );
+
+  if (updates.size === 0) {
+    return {
+      dataset,
+      status: "fallback",
+      notes: [`No usable Polymarket NFL crowd signal yet${skipSummary(skipped)}.`],
+    };
+  }
+
+  return {
+    dataset: {
+      ...dataset,
+      matchups: dataset.matchups.map((matchup) => {
+        const update = updates.get(matchup.id);
+
+        return update ? applyNflMarketPulse(matchup, update) : matchup;
+      }),
+    },
+    status: "live",
+    notes: [
+      `Polymarket crowd signal nudged ${updates.size} game${
+        updates.size === 1 ? "" : "s"
+      }; each move is capped at ${marketMaxShift()} points.`,
+    ],
+  };
+}
+
+function nflMarketTarget(matchup: NflMatchupFeed): MarketPulseTarget {
+  return {
+    matchId: matchup.id,
+    sport: "football",
+    league: "nfl",
+    marketShape: "two-way",
+    startsAt: matchup.startsAt ?? null,
+    home: {
+      name: `${matchup.home.city} ${matchup.home.name}`,
+      code: matchup.home.code,
+      aliases: teamMarketAliases(matchup.home),
+    },
+    away: {
+      name: `${matchup.away.city} ${matchup.away.name}`,
+      code: matchup.away.code,
+      aliases: teamMarketAliases(matchup.away),
+    },
+  };
+}
+
+function teamMarketAliases(team: NflTeamFeed) {
+  return [team.code, team.name, team.city, `${team.city} ${team.name}`];
+}
+
+function applyNflMarketPulse(
+  matchup: NflMatchupFeed,
+  update: NonNullable<
+    Awaited<ReturnType<typeof fetchPolymarketPulseForTarget>>["update"]
+  >,
+): NflMatchupFeed {
+  const sourceHomeWin = matchup.sourceHomeWin ?? matchup.homeWin;
+  const sourceAwayWin = matchup.sourceAwayWin ?? matchup.awayWin;
+  const market = normalizeTwoWayMarket(update.home, update.away);
+  const liquidityScore = clampNumber(
+    update.liquidityScore ?? liquidityToTrust(update.liquidity, update.volume),
+    0,
+    1,
+  );
+  const disagreement = Math.abs(market.home - sourceHomeWin) / 100;
+  const conviction = Math.abs(market.home - market.away) / 100;
+  const weight = clampNumber(
+    liquidityScore * (0.07 + disagreement * 0.16 + conviction * 0.05),
+    0,
+    marketMaxWeight(),
+  );
+  const rawDelta = (market.home - sourceHomeWin) * weight;
+  const homeDelta = clampRoundedDelta(rawDelta, marketMaxShift());
+  const nudgedHomeWin = clampProbability(sourceHomeWin + homeDelta);
+  const nudgedAwayWin = 100 - nudgedHomeWin;
+  const sourceLeader = sourceHomeWin >= sourceAwayWin ? "home" : "away";
+  const marketLeader = market.home >= market.away ? "home" : "away";
+  const alignment = sourceLeader === marketLeader ? "aligned" : "split";
+  const applied = homeDelta !== 0;
+
+  return {
+    ...matchup,
+    sourceHomeWin,
+    sourceAwayWin,
+    homeWin: nudgedHomeWin,
+    awayWin: nudgedAwayWin,
+    projected: projectedScore({
+      away: matchup.away,
+      awayWin: nudgedAwayWin,
+      home: matchup.home,
+      homeWin: nudgedHomeWin,
+    }),
+    confidence: clampMeter(
+      matchup.confidence + (applied && alignment === "aligned" ? 2 : 0),
+    ),
+    chaos: clampMeter(
+      matchup.chaos + (applied && alignment === "split" ? 3 : 0),
+    ),
+    edges: applied
+      ? [...new Set(["Crowd nudge", ...matchup.edges])].slice(0, 3)
+      : matchup.edges,
+    marketPulse: {
+      source: "polymarket",
+      capturedAt: update.capturedAt ?? null,
+      home: market.home,
+      away: market.away,
+      liquidityScore: Math.round(liquidityScore * 100) / 100,
+      leader: marketLeader,
+      alignment,
+      marketSlug: update.marketSlug ?? null,
+      question: update.question ?? null,
+      nudge: {
+        applied,
+        homeDelta,
+        awayDelta: -homeDelta,
+        cap: marketMaxShift(),
+        summary: applied
+          ? `Crowd signal moved the Seer ${formatSigned(homeDelta)} toward ${homeDelta > 0 ? matchup.home.code : matchup.away.code}, capped so the model still owns the read.`
+          : "Crowd signal was close to the source model, so the Seer kept the read untouched.",
+      },
+    },
+  };
+}
+
+function normalizeTwoWayMarket(home: number, away: number) {
+  const rawHome = home <= 1 ? home * 100 : home;
+  const rawAway = away <= 1 ? away * 100 : away;
+  const total = rawHome + rawAway;
+
+  if (total <= 0) {
+    return { home: 50, away: 50 };
+  }
+
+  const normalizedHome = Math.round((rawHome / total) * 100);
+
+  return {
+    home: normalizedHome,
+    away: 100 - normalizedHome,
+  };
+}
+
+function liquidityToTrust(liquidity: number | null | undefined, volume: number | null | undefined) {
+  const signal = Math.max(liquidity ?? 0, volume ?? 0);
+
+  if (signal <= 0) {
+    return 0.25;
+  }
+
+  return clampNumber(Math.log10(signal + 1) / 5, 0.12, 1);
 }
 
 function espnCompetitorToTeam(competitor: EspnCompetitor): NflTeamFeed {
@@ -489,10 +742,48 @@ function cleanLine(value: string | null | undefined) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function skipSummary(skipped: Partial<Record<PulseSkipReason, number>>) {
+  const parts = Object.entries(skipped)
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `${count} ${reason}`);
+
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
+function marketMaxShift() {
+  return Number.isFinite(nflPolymarketMaxShift)
+    ? Math.max(0, Math.min(8, Math.round(nflPolymarketMaxShift)))
+    : 4;
+}
+
+function marketMaxWeight() {
+  return Number.isFinite(nflPolymarketMaxWeight)
+    ? clampNumber(nflPolymarketMaxWeight, 0.02, 0.3)
+    : 0.16;
+}
+
+function clampRoundedDelta(value: number, cap: number) {
+  const rounded = Math.round(value);
+
+  if (rounded === 0 && Math.abs(value) >= 0.45) {
+    return value > 0 ? 1 : -1;
+  }
+
+  return clampNumber(rounded, -cap, cap);
+}
+
+function formatSigned(value: number) {
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
 function clampProbability(value: number) {
   return Math.max(35, Math.min(65, value));
 }
 
 function clampMeter(value: number) {
   return Math.max(0, Math.min(100, value));
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
