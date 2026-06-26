@@ -9,9 +9,11 @@ import {
   deriveForecastFromExpectedGoals,
   knockoutRoundForecastModifier,
   marketPulseMatchIdentifiers,
+  opponentAdjustedExpectedGoals,
   playerDependencyImpact,
   shouldApplyMarketPulseUpdate,
   sourcePayloadWithRecoveredMarketPulse,
+  tacticalMatchupModifier,
   travelBodyCostModifier,
   type ForecastPlayerContext,
 } from "./database";
@@ -135,9 +137,12 @@ describe("market pulse probability nudge", () => {
     expect(Math.abs(nudge.deltas.home)).toBeLessThanOrEqual(5);
     expect(Math.abs(nudge.deltas.draw)).toBeLessThanOrEqual(5);
     expect(Math.abs(nudge.deltas.away)).toBeLessThanOrEqual(5);
+    expect(nudge.summary.en).toContain("crowd breeze");
+    expect(nudge.summary.en).toContain("Seer");
+    expect(nudge.summary.en).not.toContain("probability lanes");
   });
 
-  it("keeps thin crowd signal out of the probability lanes", () => {
+  it("keeps thin crowd signal out of the live read", () => {
     const nudge = applyMarketPulseProbabilityNudge({
       probabilities: { home: 52, draw: 27, away: 21 },
       marketPulse: {
@@ -150,6 +155,8 @@ describe("market pulse probability nudge", () => {
 
     expect(nudge.applied).toBe(false);
     expect(nudge.probabilities).toEqual({ home: 52, draw: 27, away: 21 });
+    expect(nudge.summary.en).toContain("crowd murmur");
+    expect(nudge.summary.en).not.toContain("actual probabilities");
   });
 });
 
@@ -244,6 +251,77 @@ describe("xG-derived forecast spine", () => {
     expect(tightGame.under25).toBeGreaterThan(tightGame.over25);
     expect(tightGame.signals.some((signal) => signal.id === "under-lean")).toBe(true);
   });
+
+  it("rewards xG created against strong defenses and discounts easy defensive matchups", () => {
+    const attackingSide = { attack: 82, control: 78, defense: 70, setPieces: 72 };
+    const strongDefense = { attack: 70, control: 82, defense: 90, setPieces: 74 };
+    const weakDefense = { attack: 70, control: 58, defense: 52, setPieces: 60 };
+
+    const againstStrongDefense = opponentAdjustedExpectedGoals({
+      homeXg: 1.3,
+      awayXg: 1,
+      homeRatings: attackingSide,
+      awayRatings: strongDefense,
+    });
+    const againstWeakDefense = opponentAdjustedExpectedGoals({
+      homeXg: 1.3,
+      awayXg: 1,
+      homeRatings: attackingSide,
+      awayRatings: weakDefense,
+    });
+
+    expect(againstStrongDefense.homeXg).toBeGreaterThan(1.3);
+    expect(againstWeakDefense.homeXg).toBeLessThan(1.3);
+    expect(againstStrongDefense.homeXg).toBeGreaterThan(againstWeakDefense.homeXg);
+  });
+
+  it("rewards low xG allowed against dangerous attacks", () => {
+    const suppressingDefense = { attack: 70, control: 76, defense: 86, setPieces: 70 };
+    const dangerousAttack = { attack: 90, control: 86, defense: 68, setPieces: 74 };
+    const limitedAttack = { attack: 52, control: 55, defense: 68, setPieces: 58 };
+
+    const suppressedDanger = opponentAdjustedExpectedGoals({
+      homeXg: 1,
+      awayXg: 0.65,
+      homeRatings: suppressingDefense,
+      awayRatings: dangerousAttack,
+    });
+    const suppressedLimited = opponentAdjustedExpectedGoals({
+      homeXg: 1,
+      awayXg: 0.65,
+      homeRatings: suppressingDefense,
+      awayRatings: limitedAttack,
+    });
+
+    expect(suppressedDanger.awayXg).toBeLessThan(suppressedLimited.awayXg);
+    expect(suppressedDanger.away.defensiveSuppression).toBeLessThan(0);
+    expect(suppressedLimited.away.defensiveSuppression).toBeGreaterThan(0);
+  });
+
+  it("lets tournament form lightly shade opponent-adjusted xG", () => {
+    const homeRatings = { attack: 76, control: 74, defense: 72, setPieces: 70 };
+    const awayRatings = { attack: 74, control: 73, defense: 72, setPieces: 70 };
+    const neutral = opponentAdjustedExpectedGoals({
+      homeXg: 1.25,
+      awayXg: 1.1,
+      homeRatings,
+      awayRatings,
+    });
+    const formLift = opponentAdjustedExpectedGoals({
+      homeXg: 1.25,
+      awayXg: 1.1,
+      homeRatings,
+      awayRatings,
+      tournamentForm: {
+        formGap: 0.9,
+        home: { signal: 0.72 },
+        away: { signal: -0.18 },
+      },
+    });
+
+    expect(formLift.homeXg).toBeGreaterThan(neutral.homeXg);
+    expect(formLift.awayXg).toBeLessThan(neutral.awayXg);
+  });
 });
 
 describe("receipt-tuned forecast knobs", () => {
@@ -286,6 +364,92 @@ describe("receipt-tuned forecast knobs", () => {
     expect(tuned.homeXg - tuned.awayXg).toBeLessThan(1.1);
     expect(Math.abs(tuned.deltas.homeXg)).toBeLessThanOrEqual(0.3);
     expect(Math.abs(tuned.deltas.awayXg)).toBeLessThanOrEqual(0.3);
+  });
+});
+
+describe("tactical matchup modifier", () => {
+  it("turns a press-versus-weak-control clash into a bounded xG nudge", () => {
+    const modifier = tacticalMatchupModifier({
+      homeName: "Press FC",
+      awayName: "Loose Buildout",
+      homeRatings: { attack: 88, control: 82, defense: 86, setPieces: 70 },
+      awayRatings: { attack: 66, control: 60, defense: 68, setPieces: 65 },
+    });
+
+    expect(modifier.homeXgDelta).toBeGreaterThan(0);
+    expect(modifier.homeXgDelta).toBeLessThanOrEqual(0.18);
+    expect(modifier.payload.signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "home-press-trap" }),
+      ]),
+    );
+  });
+
+  it("makes set pieces louder when the referee profile is card heavy", () => {
+    const modifier = tacticalMatchupModifier({
+      homeName: "Restart Kings",
+      awayName: "Open Play FC",
+      homeRatings: { attack: 76, control: 74, defense: 72, setPieces: 90 },
+      awayRatings: { attack: 76, control: 74, defense: 72, setPieces: 62 },
+      context: { cards_per_match: 4.8 } as never,
+    });
+
+    expect(modifier.homeXgDelta).toBeGreaterThan(0);
+    expect(modifier.chaosDelta).toBeGreaterThan(0);
+    expect(modifier.payload.signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "home-set-piece-referee" }),
+      ]),
+    );
+  });
+
+  it("lets heat and body cost mute a high press", () => {
+    const shared = {
+      homeName: "Press FC",
+      awayName: "Loose Buildout",
+      homeRatings: { attack: 88, control: 82, defense: 86, setPieces: 70 },
+      awayRatings: { attack: 66, control: 60, defense: 68, setPieces: 65 },
+    };
+    const cool = tacticalMatchupModifier(shared);
+    const hot = tacticalMatchupModifier({
+      ...shared,
+      bodyCost: {
+        heatStress: 1.2,
+        home: { totalStress: 0.9 },
+        away: { totalStress: 0.2 },
+      },
+    });
+
+    expect(hot.homeXgDelta).toBeLessThan(cool.homeXgDelta);
+    expect(hot.payload.signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "home-heat-press-drag" }),
+      ]),
+    );
+  });
+
+  it("rewards transition attacks against travel-tired opponents without breaking the cap", () => {
+    const modifier = tacticalMatchupModifier({
+      homeName: "Counter FC",
+      awayName: "Heavy Legs",
+      homeRatings: { attack: 94, control: 58, defense: 72, setPieces: 78 },
+      awayRatings: { attack: 72, control: 64, defense: 66, setPieces: 68 },
+      bodyCost: {
+        heatStress: 0.2,
+        home: { totalStress: 0.1 },
+        away: { totalStress: 2.8 },
+      },
+      referee: { cardsPerMatch: 5.4 },
+    });
+
+    expect(modifier.homeXgDelta).toBeGreaterThan(0);
+    expect(modifier.homeXgDelta).toBeLessThanOrEqual(0.18);
+    expect(modifier.chaosDelta).toBeLessThanOrEqual(5);
+    expect(modifier.payload.signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "home-transition-vs-tired-legs" }),
+      ]),
+    );
   });
 });
 

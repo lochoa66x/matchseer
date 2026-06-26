@@ -4299,16 +4299,16 @@ function marketProbabilityNudgeSummary({
 }): Record<Language, string> {
   if (!applied) {
     return {
-      en: "Crowd prices were too thin or too close to move the actual probabilities.",
-      es: "Los precios de la gente fueron muy flojos o muy parejos para mover las probabilidades reales.",
-      fr: "Les prix du public etaient trop faibles ou trop proches pour bouger les probabilites reelles.",
+      en: "The crowd murmur was too faint or too evenly split, so the Seer kept the read untouched.",
+      es: "El murmullo de la gente fue muy flojo o muy dividido, asi que el Vidente dejo la lectura intacta.",
+      fr: "Le murmure du public etait trop faible ou trop partage, donc le voyant a garde la lecture intacte.",
     };
   }
 
   return {
-    en: `Crowd signal nudged the probability lanes, capped at ${cap} points per side (${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away).`,
-    es: `La senal de la gente ajusto las probabilidades con tope de ${cap} puntos por lado (${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante).`,
-    fr: `Le signal du public a ajuste les probabilites avec un plafond de ${cap} points par cote (${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur).`,
+    en: `The crowd breeze tugged the read ${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away; the Seer kept that omen inside a ${cap}-point circle.`,
+    es: `La brisa de la gente movio la lectura ${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante; el Vidente guardo ese presagio dentro de un circulo de ${cap} puntos.`,
+    fr: `Le souffle du public a tire la lecture ${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur; le voyant a garde ce presage dans un cercle de ${cap} points.`,
   };
 }
 
@@ -4620,24 +4620,24 @@ function marketPulseSummary({
 
   if (alignment === "thin") {
     return {
-      en: "Crowd signal is thin, so the Seer barely lets it touch the read.",
-      es: "La señal de la gente viene floja, así que el Vidente apenas la roza.",
-      fr: "Le signal du public est léger, donc le voyant le laisse à peine peser.",
+      en: "The crowd is only a murmur, so the Seer keeps that whisper behind the glass.",
+      es: "La gente apenas murmura, asi que el Vidente deja ese susurro detras del cristal.",
+      fr: "Le public n'est qu'un murmure, donc le voyant garde ce souffle derriere la vitre.",
     };
   }
 
   if (alignment === "aligned") {
     return {
-      en: `Crowd signal leans ${leaderLabel}; it backs the Seer without changing the pick.`,
-      es: `La señal de la gente se inclina por ${leaderLabel}; acompaña al Vidente sin cambiar la lectura.`,
-      fr: `Le signal du public penche vers ${leaderLabel}; il soutient le voyant sans changer la lecture.`,
+      en: `The crowd hum leans toward ${leaderLabel}; it warms the read without taking the wheel.`,
+      es: `El zumbido de la gente se inclina por ${leaderLabel}; calienta la lectura sin tomar el volante.`,
+      fr: `Le bourdonnement du public penche vers ${leaderLabel}; il rechauffe la lecture sans prendre le volant.`,
     };
   }
 
   return {
-    en: `Crowd signal leans ${leaderLabel}; the Seer keeps the pick, but chaos gets louder.`,
-    es: `La señal de la gente se inclina por ${leaderLabel}; el Vidente mantiene la lectura, pero sube el caos.`,
-    fr: `Le signal du public penche vers ${leaderLabel}; le voyant garde sa lecture, mais le chaos monte.`,
+    en: `The crowd drums for ${leaderLabel}; the Seer holds the read, but the room gets noisier.`,
+    es: `La gente marca el ritmo por ${leaderLabel}; el Vidente sostiene la lectura, pero la sala suena mas fuerte.`,
+    fr: `Le public bat le rythme pour ${leaderLabel}; le voyant garde la lecture, mais la salle devient plus bruyante.`,
   };
 }
 
@@ -5052,9 +5052,9 @@ function marketPulseTrailSignal(marketPulse: MarketPulse): TrailSignal {
       label: "Crowd whisper",
       tone: "steady",
       text: {
-        en: "The crowd signal is thin, so the Seer barely lets it touch the read.",
-        es: "La señal de la gente viene floja, así que el Vidente apenas la roza.",
-        fr: "Le signal du public est léger, donc le voyant le laisse à peine peser.",
+        en: "The crowd is only a murmur, so the Seer keeps that whisper behind the glass.",
+        es: "La gente apenas murmura, asi que el Vidente deja ese susurro detras del cristal.",
+        fr: "Le public n'est qu'un murmure, donc le voyant garde ce souffle derriere la vitre.",
       },
     };
   }
@@ -5065,9 +5065,9 @@ function marketPulseTrailSignal(marketPulse: MarketPulse): TrailSignal {
       label: "Crowd backs",
       tone: "boost",
       text: {
-        en: "The crowd leans the same way, backing the read without taking the wheel.",
-        es: "La gente se inclina igual y acompaña la lectura sin tomar el volante.",
-        fr: "Le public penche dans le même sens et soutient la lecture sans prendre le volant.",
+        en: "The crowd hums in the same direction, warming the read without taking the wheel.",
+        es: "La gente zumba en la misma direccion, calentando la lectura sin tomar el volante.",
+        fr: "Le public bourdonne dans le meme sens, rechauffant la lecture sans prendre le volant.",
       },
     };
   }
@@ -5077,9 +5077,9 @@ function marketPulseTrailSignal(marketPulse: MarketPulse): TrailSignal {
     label: "Crowd split",
     tone: "chaos",
     text: {
-      en: "The crowd points elsewhere, so the Seer keeps the pick but hears louder noise.",
-      es: "La gente apunta a otro lado, así que el Vidente mantiene la lectura pero oye más ruido.",
-      fr: "Le public regarde ailleurs, donc le voyant garde le choix mais entend plus de bruit.",
+      en: "The crowd drums another rhythm, so the Seer keeps the read but hears louder noise.",
+      es: "La gente marca otro ritmo, asi que el Vidente mantiene la lectura pero oye mas ruido.",
+      fr: "Le public bat un autre rythme, donc le voyant garde la lecture mais entend plus de bruit.",
     },
   };
 }
@@ -5482,6 +5482,10 @@ function formatSignedDelta(value: number) {
   return `${value > 0 ? "+" : ""}${Math.round(value)}`;
 }
 
+function formatSignedDecimal(value: number) {
+  return `${value > 0 ? "+" : ""}${roundModifier(value)}`;
+}
+
 function baselineAppliedCalibrationTuning(
   reason = "No actionable receipt sample yet.",
 ): AppliedCalibrationTuning {
@@ -5839,6 +5843,16 @@ function matchseerV3Forecast({
     awayRatings,
     context,
   });
+  const tactical = tacticalMatchupModifier({
+    homeName: homeTeam.name,
+    awayName: awayTeam.name,
+    homeRatings,
+    awayRatings,
+    context,
+    referee: referee.payload,
+    bodyCost: bodyCost.payload,
+    availability: availability.payload,
+  });
   const homePower =
     homeBasePower +
     homeVenueBoost +
@@ -5883,7 +5897,8 @@ function matchseerV3Forecast({
         bodyCost.chaosDelta +
         availability.chaosDelta +
         fatigue.chaosDelta +
-        knockout.chaosDelta,
+        knockout.chaosDelta +
+        tactical.chaosDelta,
     ),
     36,
     82,
@@ -5898,9 +5913,10 @@ function matchseerV3Forecast({
     homeRatings,
     awayRatings,
     homeVenueBoost,
-      weather.xgDelta +
+    weather.xgDelta +
       knockout.xgDelta +
       xgPowerSwing +
+      tactical.homeXgDelta +
       weather.homeXgDelta +
       referee.homeXgDelta +
       vipSpotlight.homeXgDelta +
@@ -5916,6 +5932,7 @@ function matchseerV3Forecast({
     weather.xgDelta +
       knockout.xgDelta +
       -xgPowerSwing +
+      tactical.awayXgDelta +
       weather.awayXgDelta +
       referee.awayXgDelta +
       vipSpotlight.awayXgDelta +
@@ -5945,8 +5962,16 @@ function matchseerV3Forecast({
     awayXg: rawAwayXg,
     tournamentReality,
   });
+  const opponentAdjustedXg = opponentAdjustedExpectedGoals({
+    homeXg: finalXg.homeXg,
+    awayXg: finalXg.awayXg,
+    homeRatings,
+    awayRatings,
+    tournamentForm: tournamentForm.payload,
+  });
   const tunedXg = applyCalibrationTuningToExpectedGoals({
-    ...finalXg,
+    homeXg: opponentAdjustedXg.homeXg,
+    awayXg: opponentAdjustedXg.awayXg,
     calibrationTuning,
   });
   const goalModel = deriveForecastFromExpectedGoals({
@@ -5961,7 +5986,8 @@ function matchseerV3Forecast({
     Math.abs(tournamentForm.chaosDelta) +
     Math.abs(bodyCost.chaosDelta) +
     Math.abs(availability.chaosDelta) +
-    Math.abs(fatigue.chaosDelta);
+    Math.abs(fatigue.chaosDelta) +
+    Math.abs(tactical.chaosDelta);
   const rawBaseConfidence = clamp(
     Math.round(
       50 +
@@ -5973,7 +5999,8 @@ function matchseerV3Forecast({
         tournamentForm.confidenceDelta +
         bodyCost.confidenceDelta +
         availability.confidenceDelta +
-        knockout.confidenceDelta,
+        knockout.confidenceDelta +
+        tactical.confidenceDelta,
     ),
     45,
     80,
@@ -6053,6 +6080,13 @@ function matchseerV3Forecast({
         explanation: `Actionable calibration receipts activated ${calibrationTuning.version}: favorite ${calibrationTuning.knobs.favoriteScale}x, draw ${calibrationTuning.knobs.drawLaneMultiplier}x, confidence ${formatSignedDelta(calibrationTuning.knobs.confidenceBias)}, chaos ${calibrationTuning.knobs.chaosSensitivity}x, crowd weight ${calibrationTuning.knobs.marketNudgeMaxWeight}.`,
       }
     : null;
+  const opponentAdjustedXgFactor = opponentAdjustedXg.applied
+    ? {
+        label: "Opponent-adjusted xG",
+        weight: 0.62,
+        explanation: `Raw xG was normalized for opponent strength: ${homeTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.homeXg)} xG and ${awayTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.awayXg)} xG after defensive and attacking context.`,
+      }
+    : null;
   const liveMinuteLabel =
     liveModel.minuteSource === "feed" && liveModel.minute !== null
       ? `${liveModel.minute}'`
@@ -6080,8 +6114,10 @@ function matchseerV3Forecast({
     bodyCost.factor,
     availability.factor,
     fatigue.factor,
+    tactical.factor,
     knockout.factor,
     tournamentReality.factor,
+    opponentAdjustedXgFactor,
     calibrationTuningFactor,
     marketNudgeFactor,
     liveModelFactor,
@@ -6133,6 +6169,12 @@ function matchseerV3Forecast({
       xg: {
         rawHome: roundXg(rawHomeXg),
         rawAway: roundXg(rawAwayXg),
+        tournamentHome: roundXg(finalXg.homeXg),
+        tournamentAway: roundXg(finalXg.awayXg),
+        tacticalHome: roundModifier(tactical.homeXgDelta),
+        tacticalAway: roundModifier(tactical.awayXgDelta),
+        adjustedHome: opponentAdjustedXg.homeXg,
+        adjustedAway: opponentAdjustedXg.awayXg,
         tunedHome: tunedXg.homeXg,
         tunedAway: tunedXg.awayXg,
         home: goalModel.homeXg,
@@ -6157,7 +6199,9 @@ function matchseerV3Forecast({
       bodyCost: bodyCost.payload,
       availability: availability.payload,
       fatigue: fatigue.payload,
+      tacticalMatchup: tactical.payload,
       knockout: knockout.payload,
+      opponentAdjustedXg,
       calibrationTuning: {
         ...(calibrationTuning ?? baselineAppliedCalibrationTuning()),
         expectedGoals: tunedXg,
@@ -6469,6 +6513,423 @@ export function travelBodyCostModifier({
       confidenceDelta,
     },
   };
+}
+
+export function tacticalMatchupModifier({
+  homeName = "Home",
+  awayName = "Away",
+  homeRatings,
+  awayRatings,
+  context = null,
+  referee = null,
+  bodyCost = null,
+  availability = null,
+}: {
+  homeName?: string;
+  awayName?: string;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  context?: Pick<
+    ForecastContextRow,
+    "cards_per_match" | "temperature_c" | "humidity" | "weather_summary" | "starts_at"
+  > | null;
+  referee?: Record<string, unknown> | null;
+  bodyCost?: Record<string, unknown> | null;
+  availability?: Record<string, unknown> | null;
+}) {
+  const refereePayload = referee ?? {};
+  const bodyCostPayload = bodyCost ?? {};
+  const availabilityPayload = availability ?? {};
+  const homeBody = readPayloadRecord(bodyCostPayload.home);
+  const awayBody = readPayloadRecord(bodyCostPayload.away);
+  const cardsPerMatch =
+    readPayloadNumber(refereePayload.cardsPerMatch) ??
+    toOptionalNumber(context?.cards_per_match);
+  const heatStress =
+    readPayloadNumber(bodyCostPayload.heatStress) ??
+    bodyHeatStress(
+      toOptionalNumber(context?.temperature_c),
+      toOptionalNumber(context?.humidity),
+      kickoffHourInTournamentZone(context?.starts_at) !== null &&
+        (kickoffHourInTournamentZone(context?.starts_at) ?? 0) >= 11 &&
+        (kickoffHourInTournamentZone(context?.starts_at) ?? 0) < 18,
+      context?.weather_summary?.toLowerCase() ?? "",
+    );
+  const homeStress = readPayloadNumber(homeBody?.totalStress) ?? 0;
+  const awayStress = readPayloadNumber(awayBody?.totalStress) ?? 0;
+  const homeAvailabilityPenalty =
+    readPayloadNumber(availabilityPayload.homeXgPenalty) ?? 0;
+  const awayAvailabilityPenalty =
+    readPayloadNumber(availabilityPayload.awayXgPenalty) ?? 0;
+  const homePressBase = tacticalPressRating(homeRatings);
+  const awayPressBase = tacticalPressRating(awayRatings);
+  const homePress = tacticalAvailablePressRating(
+    homePressBase,
+    heatStress,
+    homeStress,
+    homeAvailabilityPenalty,
+  );
+  const awayPress = tacticalAvailablePressRating(
+    awayPressBase,
+    heatStress,
+    awayStress,
+    awayAvailabilityPenalty,
+  );
+  const signals: Array<{
+    id: string;
+    label: string;
+    side: "home" | "away";
+    xgDelta: number;
+    chaosDelta: number;
+    confidenceDelta: number;
+    note: string;
+  }> = [];
+  let homeXgDelta = 0;
+  let awayXgDelta = 0;
+  let chaosDelta = 0;
+  let confidenceDelta = 0;
+
+  const applySignal = ({
+    chaos = 0,
+    confidence = 0,
+    delta,
+    id,
+    label,
+    note,
+    side,
+  }: {
+    chaos?: number;
+    confidence?: number;
+    delta: number;
+    id: string;
+    label: string;
+    note: string;
+    side: "home" | "away";
+  }) => {
+    if (Math.abs(delta) < 0.01 && chaos === 0 && confidence === 0) {
+      return;
+    }
+
+    if (side === "home") {
+      homeXgDelta += delta;
+    } else {
+      awayXgDelta += delta;
+    }
+
+    chaosDelta += chaos;
+    confidenceDelta += confidence;
+    signals.push({
+      id,
+      label,
+      side,
+      xgDelta: roundModifier(delta),
+      chaosDelta: chaos,
+      confidenceDelta: confidence,
+      note,
+    });
+  };
+
+  const homePressEdge = homePress - tacticalPressureResistance(awayRatings);
+  const awayPressEdge = awayPress - tacticalPressureResistance(homeRatings);
+
+  if (homePressEdge >= 6.5) {
+    applySignal({
+      id: "home-press-trap",
+      label: "Press trap",
+      side: "home",
+      delta: clampNumber(homePressEdge * 0.007, 0.03, 0.12),
+      chaos: 1,
+      note: `${homeName}'s press can bother ${awayName}'s buildup.`,
+    });
+  }
+
+  if (awayPressEdge >= 6.5) {
+    applySignal({
+      id: "away-press-trap",
+      label: "Press trap",
+      side: "away",
+      delta: clampNumber(awayPressEdge * 0.007, 0.03, 0.12),
+      chaos: 1,
+      note: `${awayName}'s press can bother ${homeName}'s buildup.`,
+    });
+  }
+
+  const homeHeatPressTax = tacticalHeatPressTax(homePressBase, heatStress, homeStress);
+  const awayHeatPressTax = tacticalHeatPressTax(awayPressBase, heatStress, awayStress);
+
+  if (homeHeatPressTax > 0) {
+    applySignal({
+      id: "home-heat-press-drag",
+      label: "Heat press drag",
+      side: "home",
+      delta: -homeHeatPressTax,
+      confidence: -1,
+      note: `Heat and body load make ${homeName}'s press harder to hold.`,
+    });
+  }
+
+  if (awayHeatPressTax > 0) {
+    applySignal({
+      id: "away-heat-press-drag",
+      label: "Heat press drag",
+      side: "away",
+      delta: -awayHeatPressTax,
+      confidence: -1,
+      note: `Heat and body load make ${awayName}'s press harder to hold.`,
+    });
+  }
+
+  const cardRestarts = tacticalCardRestartWeight(cardsPerMatch);
+  const setPieceGap = homeRatings.setPieces - awayRatings.setPieces;
+
+  if (cardRestarts > 0 && Math.abs(setPieceGap) >= 8) {
+    const side = setPieceGap > 0 ? "home" : "away";
+    const sideName = side === "home" ? homeName : awayName;
+
+    applySignal({
+      id: `${side}-set-piece-referee`,
+      label: "Restart edge",
+      side,
+      delta: clampNumber(Math.abs(setPieceGap) * 0.0045 * (0.75 + cardRestarts), 0.03, 0.11),
+      chaos: cardsPerMatch !== null && cardsPerMatch >= 4.2 ? 2 : 1,
+      note: `${sideName}'s set pieces get louder with this referee/card rhythm.`,
+    });
+  }
+
+  const homeLowBlockDelta = possessionLowBlockXgDelta(homeRatings, awayRatings);
+  const awayLowBlockDelta = possessionLowBlockXgDelta(awayRatings, homeRatings);
+
+  if (homeLowBlockDelta !== 0) {
+    applySignal({
+      id: "home-possession-low-block",
+      label: "Low-block puzzle",
+      side: "home",
+      delta: homeLowBlockDelta,
+      confidence: homeLowBlockDelta < 0 ? -1 : 0,
+      note:
+        homeLowBlockDelta < 0
+          ? `${awayName}'s low block can turn ${homeName}'s control sterile.`
+          : `${homeName}'s control has enough lock-picking against the low block.`,
+    });
+  }
+
+  if (awayLowBlockDelta !== 0) {
+    applySignal({
+      id: "away-possession-low-block",
+      label: "Low-block puzzle",
+      side: "away",
+      delta: awayLowBlockDelta,
+      confidence: awayLowBlockDelta < 0 ? -1 : 0,
+      note:
+        awayLowBlockDelta < 0
+          ? `${homeName}'s low block can turn ${awayName}'s control sterile.`
+          : `${awayName}'s control has enough lock-picking against the low block.`,
+    });
+  }
+
+  const homeTransitionEdge =
+    tacticalTransitionRating(homeRatings) - tacticalTransitionResistance(awayRatings);
+  const awayTransitionEdge =
+    tacticalTransitionRating(awayRatings) - tacticalTransitionResistance(homeRatings);
+
+  if (awayStress >= 0.65 && homeTransitionEdge >= 5) {
+    applySignal({
+      id: "home-transition-vs-tired-legs",
+      label: "Transition lane",
+      side: "home",
+      delta: clampNumber(awayStress * 0.035 + homeTransitionEdge * 0.004, 0.03, 0.13),
+      chaos: 1,
+      note: `${homeName}'s transition game can hit ${awayName}'s travel-tired legs.`,
+    });
+  }
+
+  if (homeStress >= 0.65 && awayTransitionEdge >= 5) {
+    applySignal({
+      id: "away-transition-vs-tired-legs",
+      label: "Transition lane",
+      side: "away",
+      delta: clampNumber(homeStress * 0.035 + awayTransitionEdge * 0.004, 0.03, 0.13),
+      chaos: 1,
+      note: `${awayName}'s transition game can hit ${homeName}'s travel-tired legs.`,
+    });
+  }
+
+  if (homeAvailabilityPenalty >= 0.08 && homeXgDelta > 0) {
+    applySignal({
+      id: "home-availability-tactical-drag",
+      label: "Role dependency",
+      side: "home",
+      delta: -clampNumber(homeAvailabilityPenalty * 0.45, 0.02, 0.08),
+      confidence: -1,
+      note: `${homeName}'s tactical edge is muted by the key-player board.`,
+    });
+  }
+
+  if (awayAvailabilityPenalty >= 0.08 && awayXgDelta > 0) {
+    applySignal({
+      id: "away-availability-tactical-drag",
+      label: "Role dependency",
+      side: "away",
+      delta: -clampNumber(awayAvailabilityPenalty * 0.45, 0.02, 0.08),
+      confidence: -1,
+      note: `${awayName}'s tactical edge is muted by the key-player board.`,
+    });
+  }
+
+  homeXgDelta = roundModifier(clampNumber(homeXgDelta, -0.18, 0.18));
+  awayXgDelta = roundModifier(clampNumber(awayXgDelta, -0.18, 0.18));
+  chaosDelta = clamp(Math.round(chaosDelta), -2, 5);
+  confidenceDelta = clamp(Math.round(confidenceDelta), -3, 2);
+
+  const activeSignals = signals
+    .filter((signal) => Math.abs(signal.xgDelta) >= 0.02 || signal.chaosDelta !== 0)
+    .slice(0, 5);
+  const active =
+    activeSignals.length > 0 ||
+    Math.abs(homeXgDelta) >= 0.03 ||
+    Math.abs(awayXgDelta) >= 0.03;
+  const factor = active
+    ? {
+        label: "Tactical matchup",
+        weight: 0.57,
+        explanation: `Style clash nudges the read: ${sentenceList(
+          activeSignals.slice(0, 3).map((signal) => signal.note),
+        )}.`,
+      }
+    : null;
+
+  return {
+    homeXgDelta,
+    awayXgDelta,
+    chaosDelta,
+    confidenceDelta,
+    factor,
+    payload: {
+      status: active ? "active" : "quiet",
+      cap: 0.18,
+      cardsPerMatch,
+      heatStress: roundModifier(heatStress),
+      home: {
+        press: roundModifier(homePress),
+        transition: roundModifier(tacticalTransitionRating(homeRatings)),
+        bodyStress: roundModifier(homeStress),
+        availabilityXgPenalty: roundModifier(homeAvailabilityPenalty),
+        xgDelta: homeXgDelta,
+      },
+      away: {
+        press: roundModifier(awayPress),
+        transition: roundModifier(tacticalTransitionRating(awayRatings)),
+        bodyStress: roundModifier(awayStress),
+        availabilityXgPenalty: roundModifier(awayAvailabilityPenalty),
+        xgDelta: awayXgDelta,
+      },
+      signals: activeSignals,
+      chaosDelta,
+      confidenceDelta,
+    },
+  };
+}
+
+function tacticalAvailablePressRating(
+  press: number,
+  heatStress: number,
+  bodyStress: number,
+  availabilityPenalty: number,
+) {
+  return press - heatStress * 7.5 - bodyStress * 1.7 - availabilityPenalty * 10;
+}
+
+function tacticalPressRating(ratings: TeamRatings) {
+  return (
+    ratings.attack * 0.34 +
+    ratings.defense * 0.38 +
+    ratings.control * 0.2 +
+    ratings.setPieces * 0.08
+  );
+}
+
+function tacticalPressureResistance(ratings: TeamRatings) {
+  return (
+    ratings.control * 0.62 +
+    ratings.defense * 0.2 +
+    ratings.attack * 0.12 +
+    ratings.setPieces * 0.06
+  );
+}
+
+function tacticalHeatPressTax(
+  press: number,
+  heatStress: number,
+  bodyStress: number,
+) {
+  if (heatStress < 0.55 || press < 74) {
+    return 0;
+  }
+
+  return clampNumber((press - 74) * 0.004 * heatStress + bodyStress * 0.006, 0.02, 0.08);
+}
+
+function tacticalCardRestartWeight(cardsPerMatch: number | null) {
+  if (cardsPerMatch === null) {
+    return 0;
+  }
+
+  if (cardsPerMatch >= 4.2) {
+    return 1;
+  }
+
+  if (cardsPerMatch >= 3.3) {
+    return 0.55;
+  }
+
+  if (cardsPerMatch >= 2.8) {
+    return 0.25;
+  }
+
+  return 0;
+}
+
+function possessionLowBlockXgDelta(
+  possessionRatings: TeamRatings,
+  blockRatings: TeamRatings,
+) {
+  const lowBlockScore =
+    blockRatings.defense * 0.68 +
+    (100 - blockRatings.attack) * 0.18 +
+    (100 - blockRatings.control) * 0.14;
+
+  if (
+    possessionRatings.control < 76 ||
+    blockRatings.defense < 77 ||
+    lowBlockScore < 72
+  ) {
+    return 0;
+  }
+
+  const lockpickScore =
+    possessionRatings.attack * 0.42 +
+    possessionRatings.control * 0.5 +
+    possessionRatings.setPieces * 0.08 -
+    lowBlockScore;
+
+  if (lockpickScore >= 4) {
+    return clampNumber(lockpickScore * 0.004, 0.02, 0.07);
+  }
+
+  return -clampNumber((4 - lockpickScore) * 0.006, 0.025, 0.09);
+}
+
+function tacticalTransitionRating(ratings: TeamRatings) {
+  return (
+    ratings.attack * 0.58 +
+    (100 - ratings.control) * 0.18 +
+    ratings.setPieces * 0.12 +
+    ratings.defense * 0.12
+  );
+}
+
+function tacticalTransitionResistance(ratings: TeamRatings) {
+  return ratings.control * 0.45 + ratings.defense * 0.35 + ratings.attack * 0.2;
 }
 
 function travelBodySideCost({
@@ -8199,6 +8660,121 @@ function expectedGoals(
     0.35,
     3.2,
   );
+}
+
+export function opponentAdjustedExpectedGoals({
+  homeXg,
+  awayXg,
+  homeRatings,
+  awayRatings,
+  tournamentForm,
+}: {
+  homeXg: number;
+  awayXg: number;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  tournamentForm?: Record<string, unknown> | null;
+}) {
+  const homeContext = opponentXgSideAdjustment({
+    rawXg: homeXg,
+    attackRatings: homeRatings,
+    opponentRatings: awayRatings,
+    side: "home",
+    tournamentForm,
+  });
+  const awayContext = opponentXgSideAdjustment({
+    rawXg: awayXg,
+    attackRatings: awayRatings,
+    opponentRatings: homeRatings,
+    side: "away",
+    tournamentForm,
+  });
+  const adjustedHomeXg = roundXg(clampNumber(homeXg + homeContext.delta, 0.25, 3.8));
+  const adjustedAwayXg = roundXg(clampNumber(awayXg + awayContext.delta, 0.25, 3.8));
+
+  return {
+    applied:
+      Math.abs(adjustedHomeXg - roundXg(homeXg)) > 0.001 ||
+      Math.abs(adjustedAwayXg - roundXg(awayXg)) > 0.001,
+    homeXg: adjustedHomeXg,
+    awayXg: adjustedAwayXg,
+    preAdjustment: {
+      homeXg: roundXg(homeXg),
+      awayXg: roundXg(awayXg),
+    },
+    deltas: {
+      homeXg: roundXg(adjustedHomeXg - roundXg(homeXg)),
+      awayXg: roundXg(adjustedAwayXg - roundXg(awayXg)),
+    },
+    home: homeContext,
+    away: awayContext,
+  };
+}
+
+function opponentXgSideAdjustment({
+  rawXg,
+  attackRatings,
+  opponentRatings,
+  side,
+  tournamentForm,
+}: {
+  rawXg: number;
+  attackRatings: TeamRatings;
+  opponentRatings: TeamRatings;
+  side: "home" | "away";
+  tournamentForm?: Record<string, unknown> | null;
+}) {
+  const opponentDefenseStrength =
+    (opponentRatings.defense - 70) * 0.0042 +
+    (opponentRatings.control - 70) * 0.0018;
+  const attackQuality =
+    (attackRatings.attack - 70) * 0.0015 +
+    (attackRatings.control - 70) * 0.0008;
+  const attackDanger =
+    (attackRatings.attack - 70) * 0.003 +
+    (attackRatings.control - 70) * 0.002;
+  const form = readOpponentAdjustmentFormSignal(tournamentForm, side);
+  const qualityGate = clampNumber((rawXg - 0.9) * 0.06, -0.025, 0.08);
+  const defenseAdjustment = clampNumber(opponentDefenseStrength * (0.65 + rawXg * 0.22), -0.2, 0.2);
+  const attackAdjustment = clampNumber(attackQuality * rawXg, -0.08, 0.08);
+  const defensiveSuppression = clampNumber(0.95 - rawXg, 0, 0.65);
+  const defensiveSuppressionAdjustment = clampNumber(
+    -attackDanger * defensiveSuppression * 2.6,
+    -0.12,
+    0.12,
+  );
+  const formAdjustment = clampNumber(form * 0.035, -0.1, 0.1);
+  const delta = clampNumber(
+    defenseAdjustment +
+      attackAdjustment +
+      defensiveSuppressionAdjustment +
+      formAdjustment +
+      qualityGate,
+    -0.28,
+    0.28,
+  );
+
+  return {
+    rawXg: roundXg(rawXg),
+    adjustedXg: roundXg(clampNumber(rawXg + delta, 0.25, 3.8)),
+    delta: roundXg(delta),
+    opponentDefenseStrength: roundModifier(opponentDefenseStrength),
+    attackQuality: roundModifier(attackQuality),
+    defensiveSuppression: roundModifier(defensiveSuppressionAdjustment),
+    tournamentFormSignal: roundModifier(form),
+  };
+}
+
+function readOpponentAdjustmentFormSignal(
+  tournamentForm: Record<string, unknown> | null | undefined,
+  side: "home" | "away",
+) {
+  const sidePayload = readPayloadRecord(tournamentForm?.[side]);
+  const formGap = readPayloadNumber(tournamentForm?.formGap) ?? 0;
+  const teamSignal = readPayloadNumber(sidePayload?.signal) ?? 0;
+  const gapSignal = side === "home" ? formGap * 0.08 : -formGap * 0.08;
+
+  return clampNumber(teamSignal + gapSignal, -1.4, 1.4);
 }
 
 type GoalOutcomeSide = "home" | "draw" | "away";
