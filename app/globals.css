@@ -875,6 +875,135 @@ h1 {
   line-height: 1.35;
 }
 
+.forecast-waterfall {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  color: rgba(226, 235, 250, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(126, 231, 178, 0.18);
+  border-radius: 10px;
+}
+
+.forecast-waterfall-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: rgba(225, 235, 250, 0.9);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.forecast-waterfall-toggle span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: #9af0c2;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.forecast-waterfall-toggle strong {
+  margin-left: auto;
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.forecast-waterfall-toggle > svg {
+  display: none;
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.forecast-waterfall.expanded .forecast-waterfall-toggle > svg {
+  transform: rotate(180deg);
+}
+
+.forecast-waterfall-list {
+  display: grid;
+  gap: 8px;
+}
+
+.forecast-waterfall-step {
+  display: grid;
+  grid-template-columns: 24px auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  background: rgba(5, 10, 22, 0.38);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.forecast-waterfall-step > em {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  color: rgba(5, 12, 24, 0.92);
+  background: rgba(126, 231, 178, 0.84);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.forecast-waterfall-step > svg {
+  margin-top: 3px;
+  color: rgba(160, 246, 210, 0.86);
+}
+
+.forecast-waterfall-step.drag > svg {
+  color: rgba(255, 204, 105, 0.9);
+}
+
+.forecast-waterfall-step.chaos > svg {
+  color: rgba(255, 126, 92, 0.92);
+}
+
+.forecast-waterfall-step.steady > svg {
+  color: rgba(159, 178, 210, 0.9);
+}
+
+.forecast-waterfall-step span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.forecast-waterfall-step strong {
+  min-width: 0;
+  color: #f6f9ff;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.forecast-waterfall-step small {
+  flex: 0 0 auto;
+  color: #dfffea;
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.forecast-waterfall-step p {
+  margin: 4px 0 0;
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.74rem;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
 .market-pulse-note {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
@@ -7474,6 +7603,20 @@ body {
 
   .seer-trail-toggle > svg {
     display: block;
+  }
+
+  .forecast-waterfall-toggle > svg {
+    display: block;
+  }
+
+  .forecast-waterfall:not(.expanded) .forecast-waterfall-list {
+    display: none;
+  }
+
+  .forecast-waterfall-step span {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 
   .seer-trail:not(.expanded) .seer-trail-list {

@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type {
   ForecastInterpretation,
+  ForecastWaterfallStep,
   GoalModelForecast,
   KnockoutForecast,
   Language,
@@ -3662,6 +3663,11 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
             marketPulse,
             sourcePayload,
           }),
+          waterfall: buildForecastWaterfall({
+            awayName: row.away_name,
+            homeName: row.home_name,
+            sourcePayload,
+          }),
           tone: {
             ...toLanguageRecord("Forecast copy pending."),
             ...(row.tone ?? {}),
@@ -3768,7 +3774,7 @@ function toGoalModelForecast(
       const signalTone: GoalModelForecast["signals"][number]["tone"] = tone;
       const englishLabel = readPayloadString(label?.en) ?? "Goal model";
       const englishText =
-        readPayloadString(text?.en) ?? "The xG model keeps this goal script live.";
+        readPayloadString(text?.en) ?? "The chance map keeps this goal script live.";
 
       return [
         {
@@ -4591,16 +4597,16 @@ function liveProbabilitySummary({
 }): Record<Language, string> {
   if (!applied || !score || minute === null) {
     return {
-      en: "No live-state probability adjustment is active.",
-      es: "No hay ajuste de probabilidad en vivo activo.",
-      fr: "Aucun ajustement de probabilite en direct n'est actif.",
+      en: "No live-match pulse is moving the read yet.",
+      es: "Ningun pulso en vivo esta moviendo la lectura todavia.",
+      fr: "Aucun pouls en direct ne fait bouger la lecture pour l'instant.",
     };
   }
 
   return {
-    en: `Live state (${score}, ${minute}') moved the read ${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away.`,
-    es: `El estado en vivo (${score}, ${minute}') movio la lectura ${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante.`,
-    fr: `L'etat en direct (${score}, ${minute}') a bouge la lecture ${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur.`,
+    en: `The live pulse (${score}, ${minute}') tugged the read ${formatSignedDelta(deltas.home)} home, ${formatSignedDelta(deltas.draw)} draw, ${formatSignedDelta(deltas.away)} away.`,
+    es: `El pulso en vivo (${score}, ${minute}') movio la lectura ${formatSignedDelta(deltas.home)} local, ${formatSignedDelta(deltas.draw)} empate, ${formatSignedDelta(deltas.away)} visitante.`,
+    fr: `Le pouls en direct (${score}, ${minute}') a tire la lecture ${formatSignedDelta(deltas.home)} domicile, ${formatSignedDelta(deltas.draw)} nul, ${formatSignedDelta(deltas.away)} exterieur.`,
   };
 }
 
@@ -4672,9 +4678,9 @@ export function buildPublicSeerTrail({
         label: "Knockout path",
         tone: "steady",
         text: {
-          en: "This round cannot end level, so the Seer separates the 90-minute deadlock from the advance path.",
-          es: "Esta ronda no puede terminar empatada, así que el Vidente separa el empate a 90 minutos de la ruta para avanzar.",
-          fr: "Ce tour ne peut pas finir à égalité, donc le voyant sépare le blocage après 90 minutes de la voie de qualification.",
+          en: "This round cannot end level, so the Seer splits the 90-minute deadlock from the road through.",
+          es: "Esta ronda no puede terminar igualada, asi que el Vidente separa el bloqueo a 90 minutos del camino para seguir.",
+          fr: "Ce tour ne peut pas finir a egalite, donc le voyant separe le blocage apres 90 minutes de la route pour passer.",
         },
       });
     }
@@ -4737,9 +4743,9 @@ export function buildPublicSeerTrail({
         label: "Lineup sheet",
         tone: "steady",
         text: {
-          en: "Confirmed lineup signals are in, so the player board is less guessy before kickoff.",
-          es: "Ya entraron señales de alineación confirmada, así que el tablero de jugadores llega con menos duda.",
-          fr: "Les signaux de composition confirmée sont là, donc le tableau joueurs est moins flou avant le coup d'envoi.",
+          en: "The lineup sheet is in, so the player board stops squinting before kickoff.",
+          es: "La hoja de alineaciones ya entro, asi que el tablero de jugadores deja de entrecerrar los ojos antes del inicio.",
+          fr: "La feuille de match est tombee, donc le tableau joueurs cesse de plisser les yeux avant le coup d'envoi.",
         },
       });
     }
@@ -4777,9 +4783,9 @@ export function buildPublicSeerTrail({
         label: "Body cost",
         tone: maxBodyStress >= 1.6 ? "chaos" : "drag",
         text: {
-          en: "Altitude, travel, heat, or rest load leaves a body-cost mark on the read.",
-          es: "La altura, el viaje, el calor o el descanso dejan una marca física en la lectura.",
-          fr: "Altitude, voyage, chaleur ou repos court laissent une marque physique sur la lecture.",
+          en: "Altitude, travel, heat, or short rest leaves fingerprints on the legs.",
+          es: "La altura, el viaje, el calor o el poco descanso dejan huellas en las piernas.",
+          fr: "Altitude, voyage, chaleur ou repos court laissent des traces dans les jambes.",
         },
       });
     }
@@ -4841,9 +4847,9 @@ export function buildPublicSeerTrail({
         label: "Tournament pulse",
         tone: readPayloadBoolean(tournamentForm?.contradictsPrior) ? "chaos" : "boost",
         text: {
-          en: `${formLeader} have put fresher proof on tape, so the read gives that pulse a little room.`,
-          es: `${formLeader} ya dejó prueba fresca en la cancha, y la lectura le abre un poco de espacio.`,
-          fr: `${formLeader} a montré une preuve fraîche sur le terrain, et la lecture lui laisse un peu de place.`,
+          en: `${formLeader} have left fresher footprints on the grass, so the read gives that pulse a little room.`,
+          es: `${formLeader} dejo huellas mas frescas en el cesped, asi que la lectura le abre un poco de espacio.`,
+          fr: `${formLeader} a laisse des traces plus fraiches sur l'herbe, donc la lecture lui laisse un peu de place.`,
         },
       });
     }
@@ -4860,9 +4866,9 @@ export function buildPublicSeerTrail({
         label: "Spotlight",
         tone: "boost",
         text: {
-          en: "Global attention gives the bigger stage team a small invisible push.",
-          es: "La atención global le da al equipo de mayor escenario un pequeño empujón invisible.",
-          fr: "L'attention mondiale donne à l'équipe la plus exposée une petite poussée invisible.",
+          en: "Global attention gives the bigger-stage team a small invisible glow.",
+          es: "La atencion global le da al equipo de mayor escenario un pequeno brillo invisible.",
+          fr: "L'attention mondiale donne a l'equipe la plus exposee une petite lueur invisible.",
         },
       });
     }
@@ -4878,14 +4884,14 @@ export function buildPublicSeerTrail({
         tone: "boost",
         text: {
           en: strongerTeam
-            ? `${strongerTeam} feel a tiny stage-pressure nudge from the bigger room.`
-            : "The bigger room adds a tiny stage-pressure nudge to the read.",
+            ? `${strongerTeam} feel a tiny stage-pressure glow from the bigger room.`
+            : "The bigger room adds a tiny stage-pressure glow to the read.",
           es: strongerTeam
-            ? `${strongerTeam} siente un pequeño empujón de escenario grande.`
-            : "El escenario grande mete un pequeño empujón de presión en la lectura.",
+            ? `${strongerTeam} siente un pequeno brillo de escenario grande.`
+            : "El escenario grande mete un pequeno brillo de presion en la lectura.",
           fr: strongerTeam
-            ? `${strongerTeam} reçoit une petite poussée de grande scène.`
-            : "La grande scène ajoute une petite poussée de pression à la lecture.",
+            ? `${strongerTeam} recoit une petite lueur de grande scene.`
+            : "La grande scene ajoute une petite lueur de pression a la lecture.",
         },
       });
     }
@@ -4896,6 +4902,307 @@ export function buildPublicSeerTrail({
   }
 
   return uniqueTrailSignals(signals).slice(0, 4);
+}
+
+export function buildForecastWaterfall({
+  awayName,
+  homeName,
+  sourcePayload,
+}: {
+  awayName: string;
+  homeName: string;
+  sourcePayload: Record<string, unknown> | null;
+}): ForecastWaterfallStep[] {
+  const modifiers = readPayloadRecord(sourcePayload?.modifiers);
+
+  if (!modifiers) {
+    return [];
+  }
+
+  const steps: ForecastWaterfallStep[] = [];
+  const pushStep = (step: ForecastWaterfallStep) => {
+    if (!Number.isFinite(step.impact) || step.impact <= 0) {
+      return;
+    }
+
+    steps.push(step);
+  };
+  const basePower = readPayloadRecord(modifiers.basePower);
+  const adjustedPower = readPayloadRecord(modifiers.adjustedPower);
+  const homeBasePower = readPayloadNumber(basePower?.home);
+  const awayBasePower = readPayloadNumber(basePower?.away);
+  const homeAdjustedPower = readPayloadNumber(adjustedPower?.home);
+  const awayAdjustedPower = readPayloadNumber(adjustedPower?.away);
+  const profileGap =
+    homeBasePower !== null && awayBasePower !== null
+      ? homeBasePower - awayBasePower
+      : homeAdjustedPower !== null && awayAdjustedPower !== null
+        ? homeAdjustedPower - awayAdjustedPower
+        : null;
+
+  if (profileGap !== null && Math.abs(profileGap) >= 4) {
+    const leaderName = profileGap > 0 ? homeName : awayName;
+
+    pushStep({
+      id: "team-profile",
+      label: "Team profile",
+      tone: "boost",
+      side: profileGap > 0 ? "home" : "away",
+      impact: clampNumber(Math.abs(profileGap) / 6, 0.25, 4),
+      impactLabel: `${Math.round(Math.abs(profileGap))} profile`,
+      text: {
+        en: `${leaderName} started with the brighter profile before the match room added its shadows.`,
+        es: `${leaderName} arranco con el perfil mas brillante antes de que la sala del partido metiera sus sombras.`,
+        fr: `${leaderName} partait avec le profil le plus lumineux avant que la salle du match ajoute ses ombres.`,
+      },
+    });
+  }
+
+  const xg = readPayloadRecord(modifiers.xg);
+  const homeChance = readPayloadNumber(xg?.home);
+  const awayChance = readPayloadNumber(xg?.away);
+
+  if (homeChance !== null && awayChance !== null) {
+    const chanceGap = homeChance - awayChance;
+
+    if (Math.abs(chanceGap) >= 0.12) {
+      const leaderName = chanceGap > 0 ? homeName : awayName;
+
+      pushStep({
+        id: "chance-map",
+        label: "Chance map",
+        tone: "boost",
+        side: chanceGap > 0 ? "home" : "away",
+        impact: clampNumber(Math.abs(chanceGap) * 5, 0.25, 4),
+        impactLabel: `${formatWaterfallXg(Math.abs(chanceGap))} xG edge`,
+        text: {
+          en: `${leaderName} carried the fuller chance path once the score script settled.`,
+          es: `${leaderName} cargo la ruta de ocasiones mas llena cuando el guion del marcador se calmo.`,
+          fr: `${leaderName} portait la route d'occasions la plus pleine une fois le scenario du score pose.`,
+        },
+      });
+    }
+  }
+
+  const tactical = readPayloadRecord(modifiers.tacticalMatchup);
+  const tacticalHome =
+    readPayloadNumber(readPayloadRecord(tactical?.home)?.xgDelta) ??
+    readPayloadNumber(xg?.tacticalHome) ??
+    0;
+  const tacticalAway =
+    readPayloadNumber(readPayloadRecord(tactical?.away)?.xgDelta) ??
+    readPayloadNumber(xg?.tacticalAway) ??
+    0;
+  const tacticalSide = dominantWaterfallSide(tacticalHome, tacticalAway);
+
+  if (tacticalSide && tacticalSide.magnitude >= 0.03) {
+    const signal = readPayloadRecord(readPayloadArray(tactical?.signals)[0]);
+    const note = readPayloadString(signal?.note);
+
+    pushStep({
+      id: "tactical-matchup",
+      label: "Style map",
+      tone: tacticalSide.value >= 0 ? "boost" : "drag",
+      side: tacticalSide.side,
+      impact: clampNumber(tacticalSide.magnitude * 10, 0.25, 3),
+      impactLabel: `${formatSignedDecimal(tacticalSide.value)} xG`,
+      text: {
+        en:
+          note ??
+          "The style map found a matchup edge and let that pressure into the read.",
+        es: "El mapa de estilos encontro una ventaja de cruce y dejo que esa presion entrara en la lectura.",
+        fr: "La carte des styles a trouve un avantage de duel et l'a laisse entrer dans la lecture.",
+      },
+    });
+  }
+
+  const opponentAdjusted = readPayloadRecord(modifiers.opponentAdjustedXg);
+  const opponentDeltas = readPayloadRecord(opponentAdjusted?.deltas);
+  const opponentHome = readPayloadNumber(opponentDeltas?.homeXg) ?? 0;
+  const opponentAway = readPayloadNumber(opponentDeltas?.awayXg) ?? 0;
+  const opponentSide = dominantWaterfallSide(opponentHome, opponentAway);
+
+  if (opponentSide && opponentSide.magnitude >= 0.03) {
+    pushStep({
+      id: "opponent-xg-mirror",
+      label: "Opponent mirror",
+      tone: opponentSide.value >= 0 ? "boost" : "drag",
+      side: opponentSide.side,
+      impact: clampNumber(opponentSide.magnitude * 10, 0.25, 3),
+      impactLabel: `${formatSignedDecimal(opponentSide.value)} xG`,
+      text: {
+        en: "The chance mirror asked who those chances came against, then trimmed or brightened the path.",
+        es: "El espejo de ocasiones pregunto contra quien llegaron esas ocasiones y luego recorto o ilumino la ruta.",
+        fr: "Le miroir des occasions a demande contre qui elles etaient venues, puis a coupe ou eclaire la route.",
+      },
+    });
+  }
+
+  const bodyCost = readPayloadRecord(modifiers.bodyCost);
+  const bodyHome = readPayloadNumber(readPayloadRecord(bodyCost?.home)?.xgPenalty) ?? 0;
+  const bodyAway = readPayloadNumber(readPayloadRecord(bodyCost?.away)?.xgPenalty) ?? 0;
+  const bodySide = dominantPenaltySide(bodyHome, bodyAway);
+
+  if (bodySide && bodySide.magnitude >= 0.04) {
+    const teamName = bodySide.side === "home" ? homeName : awayName;
+
+    pushStep({
+      id: "body-cost",
+      label: "Body ledger",
+      tone: "drag",
+      side: bodySide.side,
+      impact: clampNumber(bodySide.magnitude * 10, 0.25, 3),
+      impactLabel: `-${formatWaterfallXg(bodySide.magnitude)} xG`,
+      text: {
+        en: `${teamName}'s legs carried the louder tax from travel, heat, altitude, or rest.`,
+        es: `Las piernas de ${teamName} cargaron el impuesto mas fuerte de viaje, calor, altura o descanso.`,
+        fr: `Les jambes de ${teamName} portaient la taxe la plus forte du voyage, de la chaleur, de l'altitude ou du repos.`,
+      },
+    });
+  }
+
+  const availability = readPayloadRecord(modifiers.availability);
+  const availabilityHome = readPayloadNumber(availability?.homeXgPenalty) ?? 0;
+  const availabilityAway = readPayloadNumber(availability?.awayXgPenalty) ?? 0;
+  const availabilitySide = dominantPenaltySide(availabilityHome, availabilityAway);
+
+  if (availabilitySide && availabilitySide.magnitude >= 0.04) {
+    const teamName = availabilitySide.side === "home" ? homeName : awayName;
+
+    pushStep({
+      id: "player-board",
+      label: "Player board",
+      tone: "drag",
+      side: availabilitySide.side,
+      impact: clampNumber(availabilitySide.magnitude * 10, 0.25, 3),
+      impactLabel: `-${formatWaterfallXg(availabilitySide.magnitude)} xG`,
+      text: {
+        en: `${teamName}'s key-player board blinked and took a little bite out of the attack.`,
+        es: `El tablero de jugadores clave de ${teamName} parpadeo y le quito algo de filo al ataque.`,
+        fr: `Le tableau des joueurs cles de ${teamName} a clignote et a retire un peu de mordant a l'attaque.`,
+      },
+    });
+  }
+
+  const knockout = readPayloadRecord(modifiers.knockout);
+  const knockoutDraw = readPayloadNumber(knockout?.drawDelta) ?? 0;
+  const knockoutXg = readPayloadNumber(knockout?.xgDelta) ?? 0;
+
+  if (readPayloadBoolean(knockout?.isKnockout) && (knockoutDraw > 0 || knockoutXg < 0)) {
+    pushStep({
+      id: "knockout-pressure",
+      label: "Knockout breath",
+      tone: "steady",
+      side: "draw",
+      impact: clampNumber(knockoutDraw / 3 + Math.abs(knockoutXg) * 5, 0.3, 3),
+      impactLabel: `+${Math.round(knockoutDraw)} draw`,
+      text: {
+        en: "Knockout breath tightened the room: the deadlock path got louder, but the bracket still needs a survivor.",
+        es: "El aliento eliminatorio apreto la sala: el camino de bloqueo sono mas fuerte, pero el cuadro aun necesita sobreviviente.",
+        fr: "Le souffle couperet a serre la salle : le chemin du blocage sonnait plus fort, mais le tableau veut encore un survivant.",
+      },
+    });
+  }
+
+  const marketNudge =
+    readPayloadRecord(modifiers.marketNudge) ??
+    readPayloadRecord(sourcePayload?.marketNudge);
+  const marketDeltas = readPayloadRecord(marketNudge?.deltas);
+  const marketSide = dominantProbabilitySide({
+    home: readPayloadNumber(marketDeltas?.home) ?? 0,
+    draw: readPayloadNumber(marketDeltas?.draw) ?? 0,
+    away: readPayloadNumber(marketDeltas?.away) ?? 0,
+  });
+
+  if (readPayloadBoolean(marketNudge?.applied) && marketSide && marketSide.magnitude >= 1) {
+    pushStep({
+      id: "crowd-breeze",
+      label: "Crowd breeze",
+      tone: marketSide.value >= 0 ? "boost" : "drag",
+      side: marketSide.side,
+      impact: clampNumber(marketSide.magnitude / 2, 0.25, 3),
+      impactLabel: `${formatSignedDelta(marketSide.value)} ${marketSide.side}`,
+      text: {
+        en: "The crowd breeze tugged the read, and the Seer kept that omen inside its small circle.",
+        es: "La brisa de la gente movio la lectura, y el Vidente guardo ese presagio dentro de su circulo pequeno.",
+        fr: "Le souffle du public a tire la lecture, et le voyant a garde ce presage dans son petit cercle.",
+      },
+    });
+  }
+
+  const liveModel =
+    readPayloadRecord(modifiers.liveModel) ??
+    readPayloadRecord(sourcePayload?.liveModel);
+  const liveDeltas = readPayloadRecord(liveModel?.deltas);
+  const liveSide = dominantProbabilitySide({
+    home: readPayloadNumber(liveDeltas?.home) ?? 0,
+    draw: readPayloadNumber(liveDeltas?.draw) ?? 0,
+    away: readPayloadNumber(liveDeltas?.away) ?? 0,
+  });
+
+  if (readPayloadBoolean(liveModel?.applied) && liveSide && liveSide.magnitude >= 1) {
+    pushStep({
+      id: "live-pulse",
+      label: "Live pulse",
+      tone: liveSide.value >= 0 ? "boost" : "drag",
+      side: liveSide.side,
+      impact: clampNumber(liveSide.magnitude / 2, 0.25, 4),
+      impactLabel: `${formatSignedDelta(liveSide.value)} ${liveSide.side}`,
+      text: {
+        en: "The live match pulse pulled the old read into the moving score.",
+        es: "El pulso en vivo llevo la lectura anterior hacia el marcador en movimiento.",
+        fr: "Le pouls en direct a tire l'ancienne lecture vers le score en mouvement.",
+      },
+    });
+  }
+
+  return steps
+    .sort((left, right) => right.impact - left.impact)
+    .slice(0, 5);
+}
+
+function formatWaterfallXg(value: number) {
+  return roundModifier(Math.abs(value)).toString();
+}
+
+function dominantWaterfallSide(home: number, away: number) {
+  if (Math.abs(home) === 0 && Math.abs(away) === 0) {
+    return null;
+  }
+
+  if (Math.abs(home) >= Math.abs(away)) {
+    return {
+      side: "home" as const,
+      value: home,
+      magnitude: Math.abs(home),
+    };
+  }
+
+  return {
+    side: "away" as const,
+    value: away,
+    magnitude: Math.abs(away),
+  };
+}
+
+function dominantPenaltySide(homePenalty: number, awayPenalty: number) {
+  if (homePenalty <= 0 && awayPenalty <= 0) {
+    return null;
+  }
+
+  return homePenalty >= awayPenalty
+    ? { side: "home" as const, magnitude: homePenalty }
+    : { side: "away" as const, magnitude: awayPenalty };
+}
+
+function dominantProbabilitySide(deltas: ProbabilityTriplet) {
+  const entries = [
+    { side: "home" as const, value: deltas.home, magnitude: Math.abs(deltas.home) },
+    { side: "draw" as const, value: deltas.draw, magnitude: Math.abs(deltas.draw) },
+    { side: "away" as const, value: deltas.away, magnitude: Math.abs(deltas.away) },
+  ].sort((left, right) => right.magnitude - left.magnitude);
+
+  return entries[0]?.magnitude ? entries[0] : null;
 }
 
 function readForecastMovementTrail(
@@ -6062,29 +6369,29 @@ function matchseerV3Forecast({
       : `${awayTeam.name}'s attack against ${homeTeam.name}'s defensive shape`;
   const venueExplanation =
     homeVenueBoost > awayVenueBoost
-      ? `${homeTeam.name} get a small venue familiarity lift.`
+      ? `${homeTeam.name} feel a small lift from the room and the routine around it.`
       : awayVenueBoost > homeVenueBoost
-        ? `${awayTeam.name} get a small venue familiarity lift.`
-        : "The venue profile stays close to neutral for this dynamic read.";
+        ? `${awayTeam.name} feel a small lift from the room and the routine around it.`
+        : "The room stays close to neutral, so the venue leaves only a light fingerprint.";
   const marketNudgeFactor = marketNudge.applied
     ? {
-        label: "Crowd price nudge",
+        label: "Crowd breeze",
         weight: 0.42,
-        explanation: `Crowd signal moved the lanes ${formatSignedDelta(marketNudge.deltas.home)} home, ${formatSignedDelta(marketNudge.deltas.draw)} draw, and ${formatSignedDelta(marketNudge.deltas.away)} away with a ${marketNudge.cap}-point cap.`,
+        explanation: `The crowd breeze tugged the read ${formatSignedDelta(marketNudge.deltas.home)} home, ${formatSignedDelta(marketNudge.deltas.draw)} draw, ${formatSignedDelta(marketNudge.deltas.away)} away; the Seer kept it inside a ${marketNudge.cap}-point circle.`,
       }
     : null;
   const calibrationTuningFactor = calibrationTuning?.applied
     ? {
-        label: "Receipt tuning",
+        label: "Receipt memory",
         weight: 0.64,
-        explanation: `Actionable calibration receipts activated ${calibrationTuning.version}: favorite ${calibrationTuning.knobs.favoriteScale}x, draw ${calibrationTuning.knobs.drawLaneMultiplier}x, confidence ${formatSignedDelta(calibrationTuning.knobs.confidenceBias)}, chaos ${calibrationTuning.knobs.chaosSensitivity}x, crowd weight ${calibrationTuning.knobs.marketNudgeMaxWeight}.`,
+        explanation: `Old receipts whispered into this read: favorite pull ${calibrationTuning.knobs.favoriteScale}x, draw pull ${calibrationTuning.knobs.drawLaneMultiplier}x, confidence ${formatSignedDelta(calibrationTuning.knobs.confidenceBias)}, chaos ${calibrationTuning.knobs.chaosSensitivity}x, crowd breeze ${calibrationTuning.knobs.marketNudgeMaxWeight}.`,
       }
     : null;
   const opponentAdjustedXgFactor = opponentAdjustedXg.applied
     ? {
-        label: "Opponent-adjusted xG",
+        label: "Opponent xG mirror",
         weight: 0.62,
-        explanation: `Raw xG was normalized for opponent strength: ${homeTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.homeXg)} xG and ${awayTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.awayXg)} xG after defensive and attacking context.`,
+        explanation: `The xG mirror asked who those chances came against: ${homeTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.homeXg)} xG and ${awayTeam.name} ${formatSignedDecimal(opponentAdjustedXg.deltas.awayXg)} xG after opponent strength entered the glass.`,
       }
     : null;
   const liveMinuteLabel =
@@ -6093,9 +6400,9 @@ function matchseerV3Forecast({
       : "the live window";
   const liveModelFactor = liveModel.applied
     ? {
-        label: "Live match state",
+        label: "Live match pulse",
         weight: 0.86,
-        explanation: `The live score (${liveModel.homeScore}-${liveModel.awayScore}) at ${liveMinuteLabel} reshaped the pre-match lanes before the Seer settled the read.`,
+        explanation: `The live score (${liveModel.homeScore}-${liveModel.awayScore}) at ${liveMinuteLabel} tugged the old read into the moving match before the Seer settled again.`,
       }
     : null;
   const factors = [
@@ -6103,8 +6410,8 @@ function matchseerV3Forecast({
       label: favorite ? "Team profile signal" : "Balanced profile signal",
       weight: 1,
       explanation: favorite
-        ? `${favorite.team.name} carry the stronger Seer profile at ${favorite.probability}%.`
-        : "The Seer team profiles are close enough to keep the match balanced.",
+        ? `${favorite.team.name} carry the brighter profile at ${favorite.probability}%, but the read still leaves room for the match to breathe.`
+        : "The team profiles sit close together, so the Seer keeps the read balanced.",
     },
     weather.factor,
     referee.factor,
@@ -6129,7 +6436,7 @@ function matchseerV3Forecast({
     {
       label: "Attack and defense shape",
       weight: 0.7,
-      explanation: `The sharpest matchup is ${pressurePoint}.`,
+      explanation: `The loudest pressure point is ${pressurePoint}.`,
     },
   ].filter((factor): factor is { label: string; weight: number; explanation: string } =>
     Boolean(factor),
@@ -6235,7 +6542,7 @@ export function knockoutRoundForecastModifier(phase: string | null | undefined) 
           label: "Knockout pressure",
           weight: 0.72,
           explanation:
-            "Knockout football shrinks risk appetite: the 90-minute draw lane gets louder, but the match still needs an advancer.",
+            "Knockout football tightens the breath: a 90-minute deadlock gets louder, but someone still has to walk out.",
         }
       : null,
     payload: {
@@ -6307,9 +6614,9 @@ export function buildKnockoutResolutionLane({
     awayAdvance,
     projectedAdvancer,
     summary: {
-      en: `${phase} cannot end level, so ${drawProbability}% is a 90-minute deadlock lane. ${advancerName} hold the stronger advance path at ${advancerProbability}% once extra time and penalties are folded in.`,
-      es: `${phase} no puede terminar empatado, así que ${drawProbability}% es una ruta de empate a 90 minutos. ${advancerName} tiene la vía más fuerte para avanzar con ${advancerProbability}% al incluir prórroga y penales.`,
-      fr: `${phase} ne peut pas finir à égalité, donc ${drawProbability}% devient la voie du blocage après 90 minutes. ${advancerName} garde la meilleure voie de qualification à ${advancerProbability}% avec prolongation et tirs au but.`,
+      en: `${phase} cannot end level, so ${drawProbability}% becomes the 90-minute deadlock omen. ${advancerName} hold the stronger path through extra time and penalties at ${advancerProbability}%.`,
+      es: `${phase} no puede terminar empatado, asi que ${drawProbability}% se vuelve el presagio de bloqueo a 90 minutos. ${advancerName} tiene la ruta mas fuerte por prorroga y penales con ${advancerProbability}%.`,
+      fr: `${phase} ne peut pas finir a egalite, donc ${drawProbability}% devient le presage du blocage apres 90 minutes. ${advancerName} garde la meilleure route avec prolongation et tirs au but a ${advancerProbability}%.`,
     },
   };
 }
@@ -6478,14 +6785,14 @@ export function travelBodyCostModifier({
       ? {
           label: "Travel and body cost",
           weight: 0.58,
-          explanation: `Travel load nudges the read: ${sentenceList(activeNotes)}.`,
+          explanation: `The body ledger leaves marks on the read: ${sentenceList(activeNotes)}.`,
         }
       : active
         ? {
             label: "Travel and body cost",
             weight: 0.38,
             explanation:
-              "Venue altitude, travel, heat, and rest are synced but do not shove either side hard.",
+              "Altitude, travel, heat, and rest are on the board, but no side carries a loud body tax.",
           }
         : null;
 
@@ -6761,7 +7068,7 @@ export function tacticalMatchupModifier({
       side: "home",
       delta: -clampNumber(homeAvailabilityPenalty * 0.45, 0.02, 0.08),
       confidence: -1,
-      note: `${homeName}'s tactical edge is muted by the key-player board.`,
+      note: `${homeName}'s tactical edge loses bite because the key-player board is blinking.`,
     });
   }
 
@@ -6772,7 +7079,7 @@ export function tacticalMatchupModifier({
       side: "away",
       delta: -clampNumber(awayAvailabilityPenalty * 0.45, 0.02, 0.08),
       confidence: -1,
-      note: `${awayName}'s tactical edge is muted by the key-player board.`,
+      note: `${awayName}'s tactical edge loses bite because the key-player board is blinking.`,
     });
   }
 
@@ -6792,7 +7099,7 @@ export function tacticalMatchupModifier({
     ? {
         label: "Tactical matchup",
         weight: 0.57,
-        explanation: `Style clash nudges the read: ${sentenceList(
+        explanation: `The style map tilts the read: ${sentenceList(
           activeSignals.slice(0, 3).map((signal) => signal.note),
         )}.`,
       }
@@ -7447,8 +7754,8 @@ function weatherForecastModifier(
         weight: 0.5,
         explanation:
           notes.length > 0
-            ? `Weather nudges the read: ${sentenceList(notes)}.`
-            : "Weather is synced but not forceful enough to move the forecast lane.",
+            ? `Weather leaves fingerprints on the read: ${sentenceList(notes)}.`
+            : "Weather is on the board, but it does not push the read hard.",
       }
     : null;
 
@@ -7515,14 +7822,14 @@ function tournamentFormModifier({
       ? {
           label: "Tournament form",
           weight: 0.52,
-          explanation: `${leader} have shown the better tournament pulse so far, but the Seer keeps the adjustment bounded until the sample grows.`,
+          explanation: `${leader} have shown the brighter tournament pulse so far, but the Seer keeps that spark inside a small circle until the sample grows.`,
         }
       : active
         ? {
             label: "Tournament form",
             weight: 0.38,
             explanation:
-              "Early tournament results are in the model, but the form gap is not loud enough to shove the forecast.",
+              "Fresh tournament footprints are on the board, but the form gap is still too soft to shove the read.",
           }
         : null;
 
@@ -7658,15 +7965,15 @@ function refereeForecastModifier(
       homeXgDelta += setPiecePower.home > 0 ? 0.04 : 0;
       awayXgDelta += setPiecePower.away > 0 ? 0.04 : 0;
       explanation =
-        "the assigned referee profile points to a choppier match, so set pieces and cards get louder";
+        "the whistle points to a choppier room, so restarts and cards get louder";
     } else if (cardsPerMatch >= 3.3) {
       chaosDelta += 1;
       explanation =
-        "the referee rhythm is active enough to keep contact and restarts in the read";
+        "the whistle has enough snap to keep contact and restarts in the read";
     } else {
       chaosDelta -= 2;
       explanation =
-        "the referee profile looks calmer, which trims some card noise from the forecast";
+        "the whistle looks calmer, trimming some card noise from the read";
     }
   }
 
@@ -7718,7 +8025,7 @@ function spotlightGravityModifier(
           label: "Spotlight gravity",
           weight: 0.35,
           explanation:
-            `${strongerTeam} carry more global attention and neutral fan pull, a small nudge that matters most in tight rooms.`,
+            `${strongerTeam} carry more global attention and neutral fan pull; it is a small glow, loudest in tight rooms.`,
         }
       : null;
 
@@ -7760,7 +8067,7 @@ function vipSpotlightModifier(
           label: "VIP spotlight",
           weight: 0.22,
           explanation:
-            `${strongerTeam} get a tiny stage-pressure nudge from the bigger room. It colours tight calls, but it does not drive the forecast.`,
+            `${strongerTeam} get a tiny stage-pressure glow from the bigger room. It colours tight calls, but it does not steer the read.`,
         }
       : null;
 
@@ -7952,7 +8259,7 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
       ? {
           label: "Availability watch",
           weight: 0.65,
-          explanation: `Key-player board moved: ${sentenceList(
+          explanation: `The key-player board is blinking: ${sentenceList(
             impacted.map((player) =>
               `${player.name} ${player.reason}${
                 player.multiplier >= 1.05 ? " with extra team dependency" : ""
@@ -7966,12 +8273,12 @@ export function availabilityForecastModifier(players: ForecastPlayerContext[]) {
             weight: 0.48,
             explanation:
               confirmedStarters.length > 0
-                ? `Lineup sheet steadies the read: ${sentenceList(
+                ? `The lineup sheet steadies the room: ${sentenceList(
                     confirmedStarters
                       .slice(0, 3)
                       .map((player) => `${player.name} is confirmed in the XI`),
                   )}.`
-                : "Lineup sheet is synced, and the key-player board does not flag a major absence.",
+                : "The lineup sheet is in, and the key-player board is not blinking red.",
           }
       : null;
 
@@ -8092,7 +8399,7 @@ export function fatigueForecastModifier(
       ? {
           label: "Legs and recovery",
           weight: 0.45,
-          explanation: `Fatigue nudges the read: ${sentenceList(
+          explanation: `Tired legs leave wobble in the read: ${sentenceList(
             impacted.map((player) => `${player.name} ${player.reason}`),
           )}.`,
         }
@@ -8964,9 +9271,9 @@ function goalModelSignals({
       value: over25,
       tone: "over",
       text: {
-        en: "The xG profile points toward a fuller scoreboard.",
-        es: "El perfil xG apunta a un marcador más cargado.",
-        fr: "Le profil xG pointe vers un score plus rempli.",
+        en: "The chance map points toward a fuller scoreboard.",
+        es: "El mapa de ocasiones apunta a un marcador mas cargado.",
+        fr: "La carte des occasions pointe vers un score plus rempli.",
       },
     });
   } else if (under25 >= 57) {
@@ -8976,9 +9283,9 @@ function goalModelSignals({
       value: under25,
       tone: "under",
       text: {
-        en: "The xG profile sees a tighter total-goals lane.",
-        es: "El perfil xG ve una ruta más cerrada de goles totales.",
-        fr: "Le profil xG voit une voie plus serrée sur le total de buts.",
+        en: "The chance map sees a tighter scoreboard path.",
+        es: "El mapa de ocasiones ve una ruta mas cerrada de marcador.",
+        fr: "La carte des occasions voit une route de score plus serree.",
       },
     });
   }
@@ -8990,9 +9297,9 @@ function goalModelSignals({
       value: bothTeamsScore,
       tone: "over",
       text: {
-        en: "Both attacks have enough xG oxygen to find one.",
-        es: "Ambos ataques tienen suficiente oxígeno xG para encontrar uno.",
-        fr: "Les deux attaques ont assez d'oxygène xG pour en trouver un.",
+        en: "Both attacks have enough chance oxygen to find one.",
+        es: "Ambos ataques tienen suficiente oxigeno de ocasiones para encontrar uno.",
+        fr: "Les deux attaques ont assez d'oxygene d'occasions pour en trouver un.",
       },
     });
   }
@@ -9004,9 +9311,9 @@ function goalModelSignals({
       value: cleanSheet,
       tone: "clean",
       text: {
-        en: "One side has a live shutout lane in the xG model.",
+        en: "One side has a live shutout path in the chance map.",
         es: "Un lado tiene una ruta viva para dejar el arco en cero.",
-        fr: "Un côté garde une vraie voie vers le match sans encaisser.",
+        fr: "Un cote garde une vraie route vers le match sans encaisser.",
       },
     });
   }
@@ -9018,9 +9325,9 @@ function goalModelSignals({
       value: Math.max(over25, under25),
       tone: "balanced",
       text: {
-        en: "The xG total stays near the middle: neither goal script dominates.",
-        es: "El total xG queda en el medio: ningún guion de goles domina.",
-        fr: "Le total xG reste au milieu : aucun scénario de buts ne domine.",
+        en: "The chance total stays near the middle: neither goal script dominates.",
+        es: "El total de ocasiones queda en el medio: ningun guion de goles domina.",
+        fr: "Le total d'occasions reste au milieu : aucun scenario de buts ne domine.",
       },
     });
   }

@@ -29,6 +29,7 @@ import {
 import type {
   Language,
   ForecastInterpretation,
+  ForecastWaterfallStep,
   MatchSummary as Match,
   PlayerSpark as Player,
   TeamRating as Team,
@@ -122,9 +123,9 @@ const copy = {
     sampleReadout: "Canada has chaos energy, Morocco has structure.",
     matchExplorer: "Match explorer",
     selectedMatch: "Selected match",
-    seerScoreboard: "Model receipts",
-    seerScoreboardTitle: "Did the model survive the whistle?",
-    seerScoreboardIntro: "Every final score gets a receipt: the model forecast, what happened, and whether the call held up. Live matches stay open and do not count yet.",
+    seerScoreboard: "Seer receipts",
+    seerScoreboardTitle: "Did the Seer survive the whistle?",
+    seerScoreboardIntro: "Every final score gets a receipt: what the Seer called, what happened, and whether the read held up. Live matches stay open and do not count yet.",
     reviewedMatches: "Reviewed matches",
     winnerCalls: "Direction hits",
     exactScores: "Exact scores",
@@ -132,7 +133,7 @@ const copy = {
     modelSurvival: "Model hit rate",
     latestReceipts: "All receipts",
     waitingForFinals: "Waiting for final whistles",
-    called: "Model forecast",
+    called: "Seer call",
     finished: "Finished",
     seerHit: "Direction hit",
     seerMiss: "Model missed",
@@ -160,6 +161,8 @@ const copy = {
     marketPending: "The crowd signal hasn't formed yet — the Seer reads on its own for now.",
     trail: "The trail",
     trailSignals: "signals",
+    waterfall: "Why it moved",
+    waterfallSteps: "movements",
     projected: "Projected",
     goalModel: "Goal model",
     cleanSheet: "Clean sheet",
@@ -321,6 +324,8 @@ const copy = {
     marketPending: "La señal de la gente aún no se forma — por ahora el Vidente lee por su cuenta.",
     trail: "El rastro",
     trailSignals: "señales",
+    waterfall: "Por que se movio",
+    waterfallSteps: "movimientos",
     projected: "Proyectado",
     goalModel: "Modelo xG",
     cleanSheet: "Arco en cero",
@@ -482,6 +487,8 @@ const copy = {
     marketPending: "Le signal du public n'a pas encore pris forme — pour l'instant, le voyant lit seul.",
     trail: "La piste",
     trailSignals: "signaux",
+    waterfall: "Pourquoi ca bouge",
+    waterfallSteps: "mouvements",
     projected: "Projeté",
     goalModel: "Modèle xG",
     cleanSheet: "Clean sheet",
@@ -2609,34 +2616,34 @@ function receiptSummary(
   }
 
   if (outcome === "exact") {
-    return "The model forecast landed on the exact score. Clean receipt.";
+      return "The Seer landed on the exact score. Clean receipt.";
   }
 
   if (outcome === "hit") {
     if (predicted === "draw") {
-      return "The model called the draw. The scoreline moved, but the direction held.";
+      return "The Seer called the draw. The scoreline moved, but the direction held.";
     }
 
-    return `${predictedName} came through even if the scoreline moved. The model direction held.`;
+    return `${predictedName} came through even if the scoreline moved. The Seer direction held.`;
   }
 
   if (outcome === "miss") {
     if (actual === "draw" && predicted !== "draw") {
-      return `The model leaned ${predictedName}, but ${spoiler} held the line. Direction missed; draw survived.`;
+      return `The Seer leaned ${predictedName}, but ${spoiler} held the line. Direction missed; draw survived.`;
     }
 
     if (predicted === "draw" && actual) {
-      return `The model saw a draw lane, but ${actualName} broke it open. Direction missed; receipt filed.`;
+      return `The Seer saw a draw path, but ${actualName} broke it open. Direction missed; receipt filed.`;
     }
 
-    return `The model leaned ${predictedName}, but ${actualName} took the receipt. Direction missed; model takes the note.`;
+    return `The Seer leaned ${predictedName}, but ${actualName} took the receipt. Direction missed; the note goes on the shelf.`;
   }
 
   if (outcome === "live") {
-    return `${fixture} is live. The model receipt stays open until the final whistle.`;
+    return `${fixture} is live. The Seer receipt stays open until the final whistle.`;
   }
 
-  return "Waiting for the final score to grade the model forecast.";
+  return "Waiting for the final score to grade the Seer call.";
 }
 
 function getCupPulseLabel(language: Language) {
@@ -3323,10 +3330,12 @@ function ForecastView({
 }) {
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [showTrailDetails, setShowTrailDetails] = useState(false);
+  const [showWaterfallDetails, setShowWaterfallDetails] = useState(false);
   const interpretation = oracleRead?.interpretation;
   const signalCopy = interpretation?.summary ?? match.forecast.tone[language];
   const marketPulse = usableMarketPulse(match.forecast.marketPulse);
   const trail = match.forecast.trail ?? [];
+  const waterfall = match.forecast.waterfall ?? [];
   const isFinal = match.status === "Final";
   const readIsPending = isPendingMatchRead(match);
   const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
@@ -3423,6 +3432,15 @@ function ForecastView({
             </div>
             <GoalModelPanel match={match} t={t} language={language} />
             <KnockoutLanePanel match={match} t={t} language={language} />
+            {waterfall.length > 0 && (
+              <ForecastWaterfall
+                expanded={showWaterfallDetails}
+                language={language}
+                onToggle={() => setShowWaterfallDetails((current) => !current)}
+                steps={waterfall}
+                t={t}
+              />
+            )}
             <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
               <span>
                 <Activity size={15} />
@@ -3621,6 +3639,79 @@ function KnockoutLanePanel({
       <p>{lane.summary[language] ?? lane.summary.en}</p>
     </section>
   );
+}
+
+function ForecastWaterfall({
+  expanded,
+  language,
+  onToggle,
+  steps,
+  t,
+}: {
+  expanded: boolean;
+  language: Language;
+  onToggle: () => void;
+  steps: ForecastWaterfallStep[];
+  t: Record<string, string>;
+}) {
+  return (
+    <section className={cx("forecast-waterfall", expanded && "expanded")}>
+      <button
+        aria-expanded={expanded}
+        className="forecast-waterfall-toggle"
+        onClick={onToggle}
+        type="button"
+      >
+        <span>
+          <BarChart3 size={15} />
+          {t.waterfall}
+        </span>
+        <strong>
+          {steps.length} {t.waterfallSteps}
+        </strong>
+        <ChevronDown size={15} />
+      </button>
+      <div className="forecast-waterfall-list">
+        {steps.map((step, index) => (
+          <div className={cx("forecast-waterfall-step", step.tone)} key={step.id}>
+            <em>{index + 1}</em>
+            <WaterfallStepIcon step={step} />
+            <div>
+              <span>
+                <strong>{step.label}</strong>
+                <small>{step.impactLabel}</small>
+              </span>
+              <p>{step.text[language] ?? step.text.en}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WaterfallStepIcon({ step }: { step: ForecastWaterfallStep }) {
+  if (step.id.includes("crowd") || step.id.includes("live")) {
+    return <Activity size={16} />;
+  }
+
+  if (step.id.includes("body") || step.id.includes("player")) {
+    return <Timer size={16} />;
+  }
+
+  if (step.id.includes("knockout")) {
+    return <Trophy size={16} />;
+  }
+
+  if (step.id.includes("tactical") || step.id.includes("style")) {
+    return <Zap size={16} />;
+  }
+
+  if (step.id.includes("opponent") || step.id.includes("chance")) {
+    return <BarChart3 size={16} />;
+  }
+
+  return <Sparkles size={16} />;
 }
 
 function SeerTrail({

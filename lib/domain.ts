@@ -37,6 +37,16 @@ export type TrailSignal = {
   text: Record<Language, string>;
 };
 
+export type ForecastWaterfallStep = {
+  id: string;
+  label: string;
+  tone: "boost" | "drag" | "chaos" | "steady";
+  impact: number;
+  impactLabel: string;
+  side: "home" | "away" | "draw" | "match";
+  text: Record<Language, string>;
+};
+
 export type MatchForecast = ForecastCopy & {
   home: number;
   draw: number;
@@ -51,6 +61,7 @@ export type MatchForecast = ForecastCopy & {
   goalModel?: GoalModelForecast | null;
   knockout?: KnockoutForecast | null;
   trail?: TrailSignal[];
+  waterfall?: ForecastWaterfallStep[];
 };
 
 export type GoalModelSignal = {

@@ -5,8 +5,10 @@ import {
   applyMarketPulseProbabilityNudge,
   availabilityForecastModifier,
   buildKnockoutResolutionLane,
+  buildForecastWaterfall,
   buildPublicSeerTrail,
   deriveForecastFromExpectedGoals,
+  fatigueForecastModifier,
   knockoutRoundForecastModifier,
   marketPulseMatchIdentifiers,
   opponentAdjustedExpectedGoals,
@@ -41,6 +43,35 @@ function player(
     minutesRecent: 0,
     ...overrides,
   };
+}
+
+function expectSeerifiedPublicCopy(fragments: Array<string | undefined | null>) {
+  const stalePhrases = [
+    "probability lanes",
+    "actual probabilities",
+    "pre-match lanes",
+    "forecast lane",
+    "xg model",
+    "raw xg",
+    "normalized",
+    "probability adjustment",
+    "actionable calibration",
+    "crowd price",
+    "model forecast",
+    "the model",
+  ];
+
+  for (const fragment of fragments) {
+    if (!fragment) {
+      continue;
+    }
+
+    const normalized = fragment.toLowerCase();
+
+    for (const phrase of stalePhrases) {
+      expect(normalized).not.toContain(phrase);
+    }
+  }
 }
 
 describe("market pulse write safety", () => {
@@ -738,5 +769,193 @@ describe("public Seer trail", () => {
     expect(
       trail.find((signal) => signal.id === "star-gravity")?.text.en,
     ).toContain("team orbit");
+  });
+
+  it("keeps public factor and trail copy in Seer voice", () => {
+    const mexico = {
+      id: 1,
+      slug: "mexico",
+      name: "Mexico",
+      code: "MEX",
+      color: "#0b8f5a",
+      country: "Mexico",
+    };
+    const canada = {
+      id: 2,
+      slug: "canada",
+      name: "Canada",
+      code: "CAN",
+      color: "#d91e36",
+      country: "Canada",
+    };
+    const market = applyMarketPulseProbabilityNudge({
+      probabilities: { home: 58, draw: 24, away: 18 },
+      marketPulse: { home: 30, draw: 20, away: 50, liquidityScore: 1 },
+      maxShift: 5,
+      maxWeight: 0.6,
+    });
+    const live = applyLiveMatchProbabilityNudge({
+      probabilities: { home: 45, draw: 25, away: 30 },
+      status: "live",
+      homeScore: 1,
+      awayScore: 0,
+      minute: 75,
+      confidence: 62,
+      chaos: 54,
+    });
+    const knockout = knockoutRoundForecastModifier("Round of 16");
+    const knockoutLane = buildKnockoutResolutionLane({
+      phase: "Round of 16",
+      homeTeam: mexico,
+      awayTeam: canada,
+      homeProbability: 44,
+      drawProbability: 29,
+      awayProbability: 27,
+      powerGap: 5,
+      chaos: 62,
+    });
+    const bodyCost = travelBodyCostModifier({
+      homeTeam: mexico,
+      awayTeam: canada,
+      phase: "Round of 16",
+      venueSlug: "mexico-city-stadium",
+      context: {
+        starts_at: "2026-07-04T19:00:00.000Z",
+        temperature_c: 30,
+        humidity: 70,
+        home_rest_hours: 110,
+        away_rest_hours: 68,
+        home_previous_match: { venueSlug: "guadalajara-stadium" },
+        away_previous_match: { venueSlug: "vancouver-stadium" },
+      } as never,
+    });
+    const tactical = tacticalMatchupModifier({
+      homeName: "Press FC",
+      awayName: "Loose Buildout",
+      homeRatings: { attack: 88, control: 82, defense: 86, setPieces: 70 },
+      awayRatings: { attack: 66, control: 60, defense: 68, setPieces: 65 },
+    });
+    const availability = availabilityForecastModifier([
+      player({ availabilityStatus: "limited" }),
+    ]);
+    const fatigue = fatigueForecastModifier(
+      [player({ minutesRecent: 245, age: 38 })],
+      { home_rest_hours: 68, away_rest_hours: 120 } as never,
+    );
+    const goalModel = deriveForecastFromExpectedGoals({
+      homeXg: 2.05,
+      awayXg: 1.45,
+    });
+    const trail = buildPublicSeerTrail({
+      homeName: "Mexico",
+      awayName: "Canada",
+      marketPulse: null,
+      sourcePayload: {
+        modifiers: {
+          knockout: { isKnockout: true },
+          bodyCost: {
+            status: "active",
+            home: { totalStress: 0.2 },
+            away: { totalStress: 1.8 },
+          },
+          referee: { chaosDelta: 3 },
+          venue: { home: 3, away: 0 },
+        },
+      },
+    });
+
+    expectSeerifiedPublicCopy([
+      market.summary.en,
+      live.summary.en,
+      knockout.factor?.explanation,
+      knockoutLane.summary.en,
+      bodyCost.factor?.explanation,
+      tactical.factor?.explanation,
+      availability.factor?.explanation,
+      fatigue.factor?.explanation,
+      ...goalModel.signals.map((signal) => signal.text.en),
+      ...trail.map((signal) => signal.text.en),
+    ]);
+  });
+});
+
+describe("forecast waterfall", () => {
+  it("ranks the loudest read movements and keeps the copy public-safe", () => {
+    const waterfall = buildForecastWaterfall({
+      homeName: "Mexico",
+      awayName: "Canada",
+      sourcePayload: {
+        modifiers: {
+          xg: {
+            home: 1.7,
+            away: 1.28,
+          },
+          tacticalMatchup: {
+            home: { xgDelta: 0.12 },
+            away: { xgDelta: -0.02 },
+            signals: [
+              {
+                note: "Mexico's press can bother Canada's buildup.",
+              },
+            ],
+          },
+          opponentAdjustedXg: {
+            deltas: {
+              homeXg: 0.1,
+              awayXg: -0.03,
+            },
+          },
+          bodyCost: {
+            home: { xgPenalty: 0.02 },
+            away: { xgPenalty: 0.14 },
+          },
+          availability: {
+            homeXgPenalty: 0.03,
+            awayXgPenalty: 0.07,
+          },
+          knockout: {
+            isKnockout: true,
+            drawDelta: 4,
+            xgDelta: -0.12,
+          },
+          marketNudge: {
+            applied: true,
+            deltas: {
+              home: 3,
+              draw: 0,
+              away: -3,
+            },
+          },
+        },
+      },
+    });
+
+    expect(waterfall.length).toBeLessThanOrEqual(5);
+    expect(waterfall.length).toBeGreaterThan(2);
+    expect(waterfall.map((step) => step.impact)).toEqual(
+      [...waterfall.map((step) => step.impact)].sort((left, right) => right - left),
+    );
+    expect(waterfall[0]?.id).toBe("chance-map");
+    expect(waterfall.some((step) => step.id === "crowd-breeze")).toBe(true);
+    expect(waterfall.some((step) => step.id === "body-cost")).toBe(true);
+    expect(waterfall.some((step) => step.id === "knockout-pressure")).toBe(true);
+    expectSeerifiedPublicCopy(waterfall.map((step) => step.text.en));
+  });
+
+  it("stays quiet when modifier data is missing", () => {
+    expect(
+      buildForecastWaterfall({
+        homeName: "Mexico",
+        awayName: "Canada",
+        sourcePayload: null,
+      }),
+    ).toEqual([]);
+    expect(
+      buildForecastWaterfall({
+        homeName: "Mexico",
+        awayName: "Canada",
+        sourcePayload: { modifiers: {} },
+      }),
+    ).toEqual([]);
   });
 });
