@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   approveCalibrationTuningForForecasts,
   getApprovedCalibrationTuning,
+  getCalibrationImpactPreview,
   listMatches,
   revertCalibrationTuningApproval,
 } from "../../../../lib/database";
@@ -34,10 +35,15 @@ export async function GET(request: Request) {
   try {
     const report = await buildCalibrationReport();
     const activeTuning = await getApprovedCalibrationTuning();
+    const impactPreview = await getCalibrationImpactPreview({
+      activeTuning,
+      stagedTuning: report.tuning.application,
+    });
 
     return NextResponse.json({
       ...report,
       activeTuning,
+      impactPreview,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

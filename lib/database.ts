@@ -371,6 +371,48 @@ export type ModelControlDashboard = {
   forecasts: ModelControlForecastVersion[];
 };
 
+export type CalibrationImpactPreviewItem = {
+  matchId: string;
+  startsAt: string | null;
+  stage: string | null;
+  home: string;
+  homeCode: string;
+  away: string;
+  awayCode: string;
+  current: {
+    home: number;
+    draw: number;
+    away: number;
+    projected: string;
+    confidence: number;
+    chaos: number;
+  };
+  preview: {
+    home: number;
+    draw: number;
+    away: number;
+    projected: string;
+    confidence: number;
+    chaos: number;
+  };
+  deltas: {
+    home: number;
+    draw: number;
+    away: number;
+    confidence: number;
+    chaos: number;
+  };
+  movementScore: number;
+  hasPublicChange: boolean;
+  summary: string;
+};
+
+export type CalibrationImpactPreview = {
+  mode: "staged" | "active" | "collecting";
+  summary: string;
+  items: CalibrationImpactPreviewItem[];
+};
+
 type NeonQuery = (
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -520,6 +562,26 @@ type CalibrationTuningGateRow = {
   knobs: Record<string, unknown> | string | null;
   recommended_knobs: Record<string, unknown> | string | null;
   updated_at: Date | string | null;
+};
+
+type CalibrationImpactForecastRow = {
+  match_id: string;
+  starts_at: Date | string | null;
+  stage: string | null;
+  group_name: string | null;
+  status: string | null;
+  home_name: string;
+  home_code: string;
+  away_name: string;
+  away_code: string;
+  home_win_probability: string | number | null;
+  draw_probability: string | number | null;
+  away_win_probability: string | number | null;
+  projected_score: string | null;
+  confidence: number | null;
+  chaos: number | null;
+  source_payload: Record<string, unknown> | string | null;
+  market_pulse_payload: Record<string, unknown> | string | null;
 };
 
 type ForecastContextRow = {
@@ -6017,6 +6079,311 @@ export async function revertCalibrationTuningApproval(): Promise<AppliedCalibrat
   `;
 
   return readCalibrationTuningGate(sql);
+}
+
+export async function getCalibrationImpactPreview({
+  activeTuning,
+  stagedTuning,
+}: {
+  activeTuning: AppliedCalibrationTuning;
+  stagedTuning: AppliedCalibrationTuning;
+}): Promise<CalibrationImpactPreview> {
+  const previewTuning = activeTuning.applied
+    ? activeTuning
+    : stagedTuning.readiness === "collecting"
+      ? null
+      : activateCalibrationTuning(stagedTuning);
+  const mode: CalibrationImpactPreview["mode"] = activeTuning.applied
+    ? "active"
+    : previewTuning
+      ? "staged"
+      : "collecting";
+
+  if (!previewTuning) {
+    return {
+      mode,
+      summary:
+        "No impact preview yet. The Seer wants a few more receipts before sketching match moves.",
+      items: [],
+    };
+  }
+
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    return {
+      mode,
+      summary: "Impact preview needs the match database before it can compare upcoming reads.",
+      items: [],
+    };
+  }
+
+  const sql = connection.sql;
+
+  try {
+    const rows = (await sql`
+      with target_matches as (
+        select matches.id
+        from matches
+        where lower(matches.status) <> 'final'
+        order by matches.starts_at nulls last, matches.external_id
+        limit 18
+      ),
+      latest_forecast as (
+        select distinct on (forecasts.match_id)
+          forecasts.match_id,
+          forecasts.home_win_probability,
+          forecasts.draw_probability,
+          forecasts.away_win_probability,
+          forecasts.projected_score,
+          forecasts.confidence,
+          forecasts.chaos,
+          forecasts.source_payload,
+          forecasts.created_at
+        from forecasts
+        join target_matches on target_matches.id = forecasts.match_id
+        order by forecasts.match_id, forecasts.version desc, forecasts.created_at desc
+      ),
+      latest_market_pulse as (
+        select distinct on (forecasts.match_id)
+          forecasts.match_id,
+          forecasts.source_payload -> 'marketPulse' as market_pulse_payload
+        from forecasts
+        join target_matches on target_matches.id = forecasts.match_id
+        where forecasts.source_payload -> 'marketPulse' is not null
+        order by
+          forecasts.match_id,
+          case
+            when forecasts.source_payload -> 'marketPulse' ->> 'source' = 'manual' then 0
+            else 1
+          end,
+          forecasts.source_payload -> 'marketPulse' ->> 'capturedAt' desc nulls last,
+          forecasts.version desc,
+          forecasts.created_at desc
+      )
+      select
+        matches.external_id as match_id,
+        matches.starts_at,
+        matches.stage,
+        matches.group_name,
+        matches.status,
+        home_team.name as home_name,
+        home_team.code as home_code,
+        away_team.name as away_name,
+        away_team.code as away_code,
+        latest_forecast.home_win_probability,
+        latest_forecast.draw_probability,
+        latest_forecast.away_win_probability,
+        latest_forecast.projected_score,
+        latest_forecast.confidence,
+        latest_forecast.chaos,
+        latest_forecast.source_payload,
+        latest_market_pulse.market_pulse_payload
+      from matches
+      join target_matches on target_matches.id = matches.id
+      join teams home_team on home_team.id = matches.home_team_id
+      join teams away_team on away_team.id = matches.away_team_id
+      join latest_forecast on latest_forecast.match_id = matches.id
+      left join latest_market_pulse on latest_market_pulse.match_id = matches.id
+      order by matches.starts_at nulls last, matches.external_id;
+    `) as unknown as CalibrationImpactForecastRow[];
+    const items = rows
+      .flatMap((row) => {
+        const item = calibrationImpactPreviewItem(row, previewTuning);
+
+        return item ? [item] : [];
+      })
+      .sort((left, right) => {
+        if (right.movementScore !== left.movementScore) {
+          return right.movementScore - left.movementScore;
+        }
+
+        return (left.startsAt ?? "").localeCompare(right.startsAt ?? "");
+      })
+      .slice(0, 8);
+    const movedCount = items.filter((item) => item.hasPublicChange).length;
+
+    return {
+      mode,
+      summary:
+        movedCount === 0
+          ? "No public change yet. The staged knobs leave upcoming reads essentially steady."
+          : `${movedCount} upcoming read${movedCount === 1 ? "" : "s"} would visibly move if these knobs minted fresh forecasts.`,
+      items,
+    };
+  } catch (error) {
+    console.error("MatchSeer calibration impact preview failed", error);
+
+    return {
+      mode,
+      summary: "Impact preview could not read upcoming forecasts yet.",
+      items: [],
+    };
+  }
+}
+
+function calibrationImpactPreviewItem(
+  row: CalibrationImpactForecastRow,
+  tuning: AppliedCalibrationTuning,
+): CalibrationImpactPreviewItem | null {
+  const sourcePayload = sourcePayloadWithRecoveredMarketPulse(
+    row.source_payload,
+    row.market_pulse_payload,
+  );
+  const modifiers = readPayloadRecord(sourcePayload?.modifiers);
+  const xg = readPayloadRecord(modifiers?.xg);
+  const baseHomeXg =
+    readPayloadNumber(xg?.adjustedHome) ??
+    readPayloadNumber(xg?.home) ??
+    readPayloadNumber(xg?.tunedHome);
+  const baseAwayXg =
+    readPayloadNumber(xg?.adjustedAway) ??
+    readPayloadNumber(xg?.away) ??
+    readPayloadNumber(xg?.tunedAway);
+
+  if (baseHomeXg === null || baseAwayXg === null) {
+    return null;
+  }
+
+  const current = normalizeProbabilityTriplet({
+    home: toNumber(row.home_win_probability),
+    draw: toNumber(row.draw_probability),
+    away: toNumber(row.away_win_probability),
+  });
+  const tunedXg = applyCalibrationTuningToExpectedGoals({
+    homeXg: baseHomeXg,
+    awayXg: baseAwayXg,
+    calibrationTuning: tuning,
+  });
+  const tunedGoalModel = deriveForecastFromExpectedGoals({
+    homeXg: tunedXg.homeXg,
+    awayXg: tunedXg.awayXg,
+  });
+  const marketNudge = applyMarketPulseProbabilityNudge({
+    probabilities: {
+      home: tunedGoalModel.homeWin,
+      draw: tunedGoalModel.draw,
+      away: tunedGoalModel.awayWin,
+    },
+    marketPulse: sourcePayload?.marketPulse,
+    maxWeight: tuning.knobs.marketNudgeMaxWeight,
+  });
+  const preview = marketNudge.probabilities;
+  const calibrationPayload = readPayloadRecord(modifiers?.calibrationTuning);
+  const confidencePayload = readPayloadRecord(calibrationPayload?.confidence);
+  const chaosPayload = readPayloadRecord(calibrationPayload?.chaos);
+  const rawConfidence =
+    readPayloadNumber(confidencePayload?.raw) ?? toNumber(row.confidence);
+  const rawChaos = readPayloadNumber(chaosPayload?.raw) ?? toNumber(row.chaos);
+  const tunedConfidence = applyCalibrationTuningToConfidence(
+    rawConfidence,
+    tuning,
+  ).confidence;
+  const tunedChaos = applyCalibrationTuningToChaos(rawChaos, tuning).chaos;
+  const currentProjected = normalizeProjectedScore(row.projected_score);
+  const previewProjected = tunedGoalModel.projectedScore;
+  const deltas = {
+    home: preview.home - current.home,
+    draw: preview.draw - current.draw,
+    away: preview.away - current.away,
+    confidence: tunedConfidence - toNumber(row.confidence),
+    chaos: tunedChaos - toNumber(row.chaos),
+  };
+  const movementScore = roundModifier(
+    Math.max(Math.abs(deltas.home), Math.abs(deltas.draw), Math.abs(deltas.away)) +
+      Math.abs(deltas.confidence) * 0.18 +
+      Math.abs(deltas.chaos) * 0.14 +
+      (previewProjected !== currentProjected ? 1.25 : 0),
+  );
+  const hasPublicChange =
+    Math.max(Math.abs(deltas.home), Math.abs(deltas.draw), Math.abs(deltas.away)) >= 1 ||
+    Math.abs(deltas.confidence) >= 2 ||
+    Math.abs(deltas.chaos) >= 2 ||
+    previewProjected !== currentProjected;
+
+  return {
+    matchId: row.match_id,
+    startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
+    stage: normalizeMatchPhase(row.stage, row.group_name),
+    home: row.home_name,
+    homeCode: row.home_code,
+    away: row.away_name,
+    awayCode: row.away_code,
+    current: {
+      home: current.home,
+      draw: current.draw,
+      away: current.away,
+      projected: currentProjected,
+      confidence: toNumber(row.confidence),
+      chaos: toNumber(row.chaos),
+    },
+    preview: {
+      home: preview.home,
+      draw: preview.draw,
+      away: preview.away,
+      projected: previewProjected,
+      confidence: tunedConfidence,
+      chaos: tunedChaos,
+    },
+    deltas: {
+      home: roundModifier(deltas.home),
+      draw: roundModifier(deltas.draw),
+      away: roundModifier(deltas.away),
+      confidence: Math.round(deltas.confidence),
+      chaos: Math.round(deltas.chaos),
+    },
+    movementScore,
+    hasPublicChange,
+    summary: calibrationImpactSummary({
+      homeCode: row.home_code,
+      awayCode: row.away_code,
+      deltas,
+      currentProjected,
+      previewProjected,
+      hasPublicChange,
+    }),
+  };
+}
+
+function calibrationImpactSummary({
+  awayCode,
+  currentProjected,
+  deltas,
+  hasPublicChange,
+  homeCode,
+  previewProjected,
+}: {
+  awayCode: string;
+  currentProjected: string;
+  deltas: { home: number; draw: number; away: number; confidence: number; chaos: number };
+  hasPublicChange: boolean;
+  homeCode: string;
+  previewProjected: string;
+}) {
+  if (!hasPublicChange) {
+    return "No public change yet; the current read stays basically where it is.";
+  }
+
+  if (previewProjected !== currentProjected) {
+    return `Projected score would move from ${currentProjected} to ${previewProjected} as receipt memory touches the xG spine.`;
+  }
+
+  const probabilityMoves = [
+    { label: homeCode, value: deltas.home },
+    { label: "draw", value: deltas.draw },
+    { label: awayCode, value: deltas.away },
+  ].sort((left, right) => Math.abs(right.value) - Math.abs(left.value));
+  const loudest = probabilityMoves[0];
+
+  if (Math.abs(loudest.value) >= 1) {
+    return `${loudest.label} gets ${loudest.value > 0 ? "a little louder" : "softened"} by ${Math.abs(roundModifier(loudest.value))} points.`;
+  }
+
+  if (Math.abs(deltas.confidence) >= 2) {
+    return `The match read stays pointed the same way, but confidence ${deltas.confidence > 0 ? "firms up" : "cools"} by ${Math.abs(Math.round(deltas.confidence))} points.`;
+  }
+
+  return `The match read stays pointed the same way, but chaos ${deltas.chaos > 0 ? "glows hotter" : "settles"} by ${Math.abs(Math.round(deltas.chaos))} points.`;
 }
 
 function parseCalibrationReadiness(value: string | null | undefined) {

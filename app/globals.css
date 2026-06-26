@@ -6917,6 +6917,134 @@ body {
   min-height: 40px;
 }
 
+.calibration-impact-preview {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.calibration-impact-preview > p,
+.calibration-impact-empty span,
+.calibration-impact-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.calibration-impact-empty {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  background: rgba(16, 22, 36, 0.04);
+  border: 1px solid rgba(16, 22, 36, 0.06);
+  border-radius: 8px;
+}
+
+.calibration-impact-empty strong {
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.calibration-impact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.calibration-impact-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(16, 22, 36, 0.04);
+  border: 1px solid rgba(16, 22, 36, 0.08);
+  border-radius: 8px;
+}
+
+.calibration-impact-row.quiet {
+  opacity: 0.82;
+}
+
+.calibration-impact-head,
+.calibration-impact-meta,
+.calibration-impact-probs {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+}
+
+.calibration-impact-head {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.calibration-impact-head div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.calibration-impact-head strong,
+.calibration-impact-meta strong,
+.calibration-impact-prob strong {
+  color: var(--ink);
+}
+
+.calibration-impact-head span,
+.calibration-impact-meta,
+.calibration-impact-prob small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.calibration-impact-head em,
+.calibration-impact-prob em {
+  width: max-content;
+  padding: 3px 7px;
+  color: #116b40;
+  background: rgba(93, 202, 143, 0.18);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.calibration-impact-head em {
+  flex: 0 0 auto;
+}
+
+.calibration-impact-row.quiet .calibration-impact-head em {
+  color: #725a10;
+  background: rgba(232, 186, 70, 0.2);
+}
+
+.calibration-impact-probs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.calibration-impact-prob {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(16, 22, 36, 0.06);
+  border-radius: 8px;
+}
+
+.calibration-impact-prob em.negative {
+  color: #9d3e20;
+  background: rgba(226, 115, 75, 0.18);
+}
+
+.calibration-impact-meta {
+  flex-wrap: wrap;
+}
+
 .calibration-tuning-card em {
   flex: 0 0 auto;
   padding: 3px 7px;
@@ -7619,6 +7747,7 @@ body {
   }
 
   .calibration-seer-says,
+  .calibration-impact-probs,
   .calibration-split-grid,
   .calibration-tuning-grid {
     grid-template-columns: 1fr;

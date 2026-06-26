@@ -2469,6 +2469,48 @@ type AppliedCalibrationTuning = {
   recommendedKnobs: CalibrationTuningKnobs;
 };
 
+type CalibrationImpactPreviewItem = {
+  matchId: string;
+  startsAt: string | null;
+  stage: string | null;
+  home: string;
+  homeCode: string;
+  away: string;
+  awayCode: string;
+  current: {
+    home: number;
+    draw: number;
+    away: number;
+    projected: string;
+    confidence: number;
+    chaos: number;
+  };
+  preview: {
+    home: number;
+    draw: number;
+    away: number;
+    projected: string;
+    confidence: number;
+    chaos: number;
+  };
+  deltas: {
+    home: number;
+    draw: number;
+    away: number;
+    confidence: number;
+    chaos: number;
+  };
+  movementScore: number;
+  hasPublicChange: boolean;
+  summary: string;
+};
+
+type CalibrationImpactPreview = {
+  mode: "staged" | "active" | "collecting";
+  summary: string;
+  items: CalibrationImpactPreviewItem[];
+};
+
 type CalibrationTuningReport = {
   sampleSize: number;
   readiness: "collecting" | "early" | "actionable";
@@ -2491,6 +2533,7 @@ type CalibrationDashboard = {
   diagnostics: CalibrationDiagnostics;
   tuning?: CalibrationTuningReport;
   activeTuning?: AppliedCalibrationTuning;
+  impactPreview?: CalibrationImpactPreview;
   completedMatchesConsidered?: number;
   generatedAt?: string;
   error?: string;
@@ -2697,6 +2740,103 @@ function CalibrationPanel({
     return `The crowd breeze gets ${move}; the market can nudge, but it still cannot steer the Seer.`;
   }
 
+  function formatDelta(value: number, suffix = "") {
+    if (value === 0) {
+      return `0${suffix}`;
+    }
+
+    return `${value > 0 ? "+" : ""}${value}${suffix}`;
+  }
+
+  function renderProbabilityShift(
+    item: CalibrationImpactPreviewItem,
+    side: "home" | "draw" | "away",
+  ) {
+    const label =
+      side === "home" ? item.homeCode : side === "away" ? item.awayCode : "Draw";
+
+    return (
+      <span className="calibration-impact-prob">
+        <small>{label}</small>
+        <strong>
+          {item.current[side]}% → {item.preview[side]}%
+        </strong>
+        <em className={item.deltas[side] >= 0 ? "positive" : "negative"}>
+          {formatDelta(item.deltas[side], " pts")}
+        </em>
+      </span>
+    );
+  }
+
+  function renderImpactPreview(preview: CalibrationImpactPreview | undefined) {
+    if (!preview) {
+      return null;
+    }
+
+    return (
+      <div className="calibration-impact-preview">
+        <div className="calibration-split-header">
+          <span>Impact preview</span>
+          <small>
+            {preview.mode === "active"
+              ? "approved knobs"
+              : preview.mode === "staged"
+                ? "staged knobs"
+                : "collecting receipts"}
+          </small>
+        </div>
+        <p>{preview.summary}</p>
+        {preview.items.length === 0 ? (
+          <div className="calibration-impact-empty">
+            <strong>No public change yet</strong>
+            <span>Upcoming reads stay untouched until a fresh sync mints versions.</span>
+          </div>
+        ) : (
+          <div className="calibration-impact-list">
+            {preview.items.map((item) => (
+              <article
+                className={`calibration-impact-row${item.hasPublicChange ? "" : " quiet"}`}
+                key={item.matchId}
+              >
+                <div className="calibration-impact-head">
+                  <div>
+                    <strong>
+                      {item.homeCode} vs {item.awayCode}
+                    </strong>
+                    <span>
+                      {item.stage ?? "Match"} ·{" "}
+                      {item.startsAt ? formatAdminTime(item.startsAt) : "time pending"}
+                    </span>
+                  </div>
+                  <em>{item.hasPublicChange ? "would move" : "no public change"}</em>
+                </div>
+                <div className="calibration-impact-probs">
+                  {renderProbabilityShift(item, "home")}
+                  {renderProbabilityShift(item, "draw")}
+                  {renderProbabilityShift(item, "away")}
+                </div>
+                <div className="calibration-impact-meta">
+                  <span>
+                    Score <strong>{item.current.projected}</strong> →{" "}
+                    <strong>{item.preview.projected}</strong>
+                  </span>
+                  <span>
+                    Confidence{" "}
+                    <strong>{formatDelta(item.deltas.confidence, " pts")}</strong>
+                  </span>
+                  <span>
+                    Chaos <strong>{formatDelta(item.deltas.chaos, " pts")}</strong>
+                  </span>
+                </div>
+                <p>{item.summary}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderChaosTable(rows: ChaosMissBucketRow[]) {
     return (
       <table
@@ -2883,6 +3023,7 @@ function CalibrationPanel({
                   the live forecast dials.
                 </p>
               </div>
+              {renderImpactPreview(calibration.impactPreview)}
               <div className="calibration-market-read">
                 <span>Crowd backtest</span>
                 <strong>
