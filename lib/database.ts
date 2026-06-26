@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type {
   ForecastInterpretation,
+  KnockoutForecast,
   Language,
   MarketPulse,
   MatchForecast,
@@ -35,7 +36,7 @@ import {
   toCupSnapshotCandidates,
   type CupSnapshotCandidate,
 } from "./cup-seer";
-import { normalizeMatchPhase } from "./match-stage";
+import { isKnockoutPhase, normalizeMatchPhase } from "./match-stage";
 
 const ENABLE_PLAYER_SPARKS = false;
 
@@ -2305,11 +2306,13 @@ export async function syncFootballDataSnapshot(
       limit 1;
     `) as unknown as ForecastContextRow[];
     const forecastContext = forecastContextRows[0] ?? null;
+    const phase = normalizeMatchPhase(match.stage, match.groupName);
     const forecast = matchseerV3Forecast({
       homeTeam,
       awayTeam,
       homeRatings,
       awayRatings,
+      phase,
       venueSlug: match.venueSlug,
       context: forecastContext,
     });
@@ -2352,7 +2355,8 @@ export async function syncFootballDataSnapshot(
       providerMatchId: match.providerId,
       fetchedAt: snapshot.fetchedAt,
       forecastEngine: "matchseer-v3",
-      modelVersion: "matchseer-v3.5-tournament-form",
+      modelVersion: "matchseer-v3.6-knockout-rounds",
+      phase,
       forecastFingerprint,
       forecastStatus: "open",
       supersedesVersion: existingForecast
@@ -2360,13 +2364,14 @@ export async function syncFootballDataSnapshot(
         : null,
       homeRatings,
       awayRatings,
+      knockout: forecast.knockout,
       modifiers: forecast.modifiers,
       // Carry any saved crowd signal forward so it survives forecast re-versioning
       // (manual pulses were silently orphaned on old versions before this).
       marketPulse: extractStoredMarketPulse(existingForecast?.source_payload),
       previousForecast,
       movementTrail,
-      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, and tournament-floor score pressure.",
+      note: "Versioned dynamic forecast from team profiles, venue, weather, referee rhythm, spotlight gravity, VIP stage pressure, player availability, fatigue signals, tournament-floor score pressure, and stage-specific knockout resolution logic.",
     };
     const forecastRows = await sql`
       insert into forecasts (
@@ -3285,6 +3290,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const awayForecast = toNumber(row.away_win_probability);
   const confidence = toNumber(row.confidence);
   const chaos = toNumber(row.chaos);
+  const knockout = toKnockoutForecast(sourcePayload);
   const marketPulse = toMarketPulse(sourcePayload, {
     homeForecast,
     drawForecast,
@@ -3351,6 +3357,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
           chaos,
           projected: projectedScore,
           marketPulse,
+          knockout,
           trail: buildPublicSeerTrail({
             awayName: row.away_name,
             homeName: row.home_name,
@@ -3413,6 +3420,58 @@ export function sourcePayloadWithRecoveredMarketPulse(
   return {
     ...(payload ?? {}),
     marketPulse: recovered,
+  };
+}
+
+function toKnockoutForecast(
+  sourcePayload: Record<string, unknown> | null,
+): KnockoutForecast | null {
+  const rawKnockout = readPayloadRecord(sourcePayload?.knockout);
+
+  if (!rawKnockout) {
+    return null;
+  }
+
+  const projectedAdvancer = readPayloadString(rawKnockout.projectedAdvancer);
+
+  if (projectedAdvancer !== "home" && projectedAdvancer !== "away") {
+    return null;
+  }
+
+  const phase =
+    readPayloadString(rawKnockout.phase) ??
+    readPayloadString(sourcePayload?.phase) ??
+    "Knockout";
+  const regulationDraw = clampInteger(
+    readPayloadNumber(rawKnockout.regulationDraw) ??
+      readPayloadNumber(rawKnockout.extraTime),
+    0,
+    100,
+  );
+  const extraTime = clampInteger(
+    readPayloadNumber(rawKnockout.extraTime) ?? regulationDraw,
+    0,
+    100,
+  );
+  const penalties = clampInteger(readPayloadNumber(rawKnockout.penalties), 0, 100);
+  const homeAdvance = clampInteger(readPayloadNumber(rawKnockout.homeAdvance), 0, 100);
+  const awayAdvance = clampInteger(readPayloadNumber(rawKnockout.awayAdvance), 0, 100);
+  const summary = readPayloadRecord(rawKnockout.summary);
+  const fallbackSummary = `${phase} cannot end level; the draw lane means deadlocked after 90 minutes.`;
+
+  return {
+    phase,
+    regulationDraw,
+    extraTime,
+    penalties,
+    homeAdvance,
+    awayAdvance,
+    projectedAdvancer,
+    summary: {
+      en: readPayloadString(summary?.en) ?? fallbackSummary,
+      es: readPayloadString(summary?.es) ?? readPayloadString(summary?.en) ?? fallbackSummary,
+      fr: readPayloadString(summary?.fr) ?? readPayloadString(summary?.en) ?? fallbackSummary,
+    },
   };
 }
 
@@ -3647,6 +3706,21 @@ export function buildPublicSeerTrail({
 
     if (marketPulse) {
       signals.push(marketPulseTrailSignal(marketPulse));
+    }
+
+    const knockout = readPayloadRecord(modifiers.knockout);
+
+    if (readPayloadBoolean(knockout?.isKnockout)) {
+      signals.push({
+        id: "knockout-path",
+        label: "Knockout path",
+        tone: "steady",
+        text: {
+          en: "This round cannot end level, so the Seer separates the 90-minute deadlock from the advance path.",
+          es: "Esta ronda no puede terminar empatada, así que el Vidente separa el empate a 90 minutos de la ruta para avanzar.",
+          fr: "Ce tour ne peut pas finir à égalité, donc le voyant sépare le blocage après 90 minutes de la voie de qualification.",
+        },
+      });
     }
 
     const availability = readPayloadRecord(modifiers.availability);
@@ -4181,6 +4255,7 @@ function createForecastFingerprint({
         confidence: forecast.confidence,
         chaos: forecast.chaos,
         projected: forecast.projected,
+        knockout: forecast.knockout,
         modifiers: forecast.modifiers,
         factorExplanations: forecast.factors.map((factor) => ({
           label: factor.label,
@@ -4479,6 +4554,7 @@ function matchseerV3Forecast({
   awayTeam,
   homeRatings,
   awayRatings,
+  phase,
   venueSlug,
   context,
 }: {
@@ -4486,6 +4562,7 @@ function matchseerV3Forecast({
   awayTeam: FootballDataTeam;
   homeRatings: TeamRatings;
   awayRatings: TeamRatings;
+  phase: string;
   venueSlug: string | null;
   context: ForecastContextRow | null;
 }) {
@@ -4500,6 +4577,7 @@ function matchseerV3Forecast({
   const playerContext = forecastPlayerContexts(context);
   const availability = availabilityForecastModifier(playerContext);
   const fatigue = fatigueForecastModifier(playerContext, context);
+  const knockout = knockoutRoundForecastModifier(phase);
   const tournamentForm = tournamentFormModifier({
     homeTeam,
     awayTeam,
@@ -4528,7 +4606,7 @@ function matchseerV3Forecast({
     availability.awayPenalty -
     fatigue.awayPenalty;
   const rawPowerGap = homePower - awayPower;
-  const powerGap = rawPowerGap * weather.gapMultiplier;
+  const powerGap = rawPowerGap * weather.gapMultiplier * knockout.gapMultiplier;
   const baseChaos =
     64 -
     Math.abs(powerGap) * 0.9 +
@@ -4543,17 +4621,23 @@ function matchseerV3Forecast({
         vipSpotlight.chaosDelta +
         tournamentForm.chaosDelta +
         availability.chaosDelta +
-        fatigue.chaosDelta,
+        fatigue.chaosDelta +
+        knockout.chaosDelta,
     ),
     36,
     82,
   );
+  const rawDraw = Math.round(
+    28 +
+      (chaos - 58) * 0.09 -
+      Math.abs(powerGap) * 0.4 +
+      weather.drawDelta +
+      knockout.drawDelta,
+  );
   const draw = clamp(
-    Math.round(
-      28 + (chaos - 58) * 0.09 - Math.abs(powerGap) * 0.4 + weather.drawDelta,
-    ),
-    15,
-    34,
+    rawDraw,
+    knockout.drawFloor,
+    knockout.drawCeiling,
   );
   const nonDrawPool = 100 - draw;
   const homeShare = 1 / (1 + Math.exp(-powerGap / 10));
@@ -4575,6 +4659,7 @@ function matchseerV3Forecast({
     awayRatings,
     homeVenueBoost,
     weather.xgDelta +
+      knockout.xgDelta +
       weather.homeXgDelta +
       referee.homeXgDelta +
       vipSpotlight.homeXgDelta +
@@ -4587,6 +4672,7 @@ function matchseerV3Forecast({
     homeRatings,
     awayVenueBoost,
     weather.xgDelta +
+      knockout.xgDelta +
       weather.awayXgDelta +
       referee.awayXgDelta +
       vipSpotlight.awayXgDelta +
@@ -4614,6 +4700,18 @@ function matchseerV3Forecast({
     awayXg,
     tournamentReality,
   });
+  const knockoutLane = knockout.isKnockout
+    ? buildKnockoutResolutionLane({
+        phase,
+        homeTeam,
+        awayTeam,
+        homeProbability: home,
+        drawProbability: draw,
+        awayProbability: away,
+        powerGap,
+        chaos,
+      })
+    : null;
   const favorite =
     home === away
       ? null
@@ -4653,6 +4751,7 @@ function matchseerV3Forecast({
     tournamentForm.factor,
     availability.factor,
     fatigue.factor,
+    knockout.factor,
     tournamentReality.factor,
     {
       label: "Venue context",
@@ -4680,13 +4779,15 @@ function matchseerV3Forecast({
           dynamicDrag * 0.24 +
           weather.confidenceDelta +
           vipSpotlight.confidenceDelta +
-          tournamentForm.confidenceDelta,
+          tournamentForm.confidenceDelta +
+          knockout.confidenceDelta,
       ),
       45,
       80,
     ),
     chaos,
     projected,
+    knockout: knockoutLane,
     modifiers: {
       basePower: {
         home: roundModifier(homeBasePower),
@@ -4712,9 +4813,108 @@ function matchseerV3Forecast({
       tournamentForm: tournamentForm.payload,
       availability: availability.payload,
       fatigue: fatigue.payload,
+      knockout: knockout.payload,
       tournamentReality: tournamentReality.payload,
     },
     factors,
+  };
+}
+
+export function knockoutRoundForecastModifier(phase: string | null | undefined) {
+  const isKnockout = isKnockoutPhase(phase);
+  const isFinalLane = phase === "Final" || phase === "Semi-finals";
+  const drawDelta = isKnockout ? (isFinalLane ? 5 : 4) : 0;
+
+  return {
+    isKnockout,
+    gapMultiplier: isKnockout ? 0.86 : 1,
+    drawDelta,
+    drawFloor: isKnockout ? 22 : 15,
+    drawCeiling: isKnockout ? 40 : 34,
+    xgDelta: isKnockout ? -0.12 : 0,
+    chaosDelta: isKnockout ? 2 : 0,
+    confidenceDelta: isKnockout ? -2 : 0,
+    factor: isKnockout
+      ? {
+          label: "Knockout pressure",
+          weight: 0.72,
+          explanation:
+            "Knockout football shrinks risk appetite: the 90-minute draw lane gets louder, but the match still needs an advancer.",
+        }
+      : null,
+    payload: {
+      phase: phase ?? "Group stage",
+      isKnockout,
+      gapMultiplier: isKnockout ? 0.86 : 1,
+      drawDelta,
+      drawFloor: isKnockout ? 22 : 15,
+      drawCeiling: isKnockout ? 40 : 34,
+      xgDelta: isKnockout ? -0.12 : 0,
+      chaosDelta: isKnockout ? 2 : 0,
+      confidenceDelta: isKnockout ? -2 : 0,
+    },
+  };
+}
+
+export function buildKnockoutResolutionLane({
+  phase,
+  homeTeam,
+  awayTeam,
+  homeProbability,
+  drawProbability,
+  awayProbability,
+  powerGap,
+  chaos,
+}: {
+  phase: string;
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  homeProbability: number;
+  drawProbability: number;
+  awayProbability: number;
+  powerGap: number;
+  chaos: number;
+}): KnockoutForecast {
+  const penaltyRate = clampNumber(
+    0.42 + (chaos - 58) * 0.006 - Math.abs(powerGap) * 0.009,
+    0.26,
+    0.58,
+  );
+  const penaltyFloor = drawProbability >= 16 ? 8 : 4;
+  const penalties = clamp(
+    Math.round(drawProbability * penaltyRate),
+    penaltyFloor,
+    Math.max(penaltyFloor, drawProbability - 4),
+  );
+  const homeResolutionShare = clampNumber(0.5 + powerGap / 120, 0.38, 0.62);
+  const homeAdvanceRaw = homeProbability + drawProbability * homeResolutionShare;
+  const awayAdvanceRaw = awayProbability + drawProbability * (1 - homeResolutionShare);
+  const advanceTotal = homeAdvanceRaw + awayAdvanceRaw;
+  const homeAdvance = clamp(
+    Math.round((homeAdvanceRaw / advanceTotal) * 100),
+    1,
+    99,
+  );
+  const awayAdvance = 100 - homeAdvance;
+  const projectedAdvancer = homeAdvance >= awayAdvance ? "home" : "away";
+  const advancerName =
+    projectedAdvancer === "home" ? homeTeam.name : awayTeam.name;
+  const advancerProbability =
+    projectedAdvancer === "home" ? homeAdvance : awayAdvance;
+
+  return {
+    phase,
+    regulationDraw: drawProbability,
+    extraTime: drawProbability,
+    penalties,
+    homeAdvance,
+    awayAdvance,
+    projectedAdvancer,
+    summary: {
+      en: `${phase} cannot end level, so ${drawProbability}% is a 90-minute deadlock lane. ${advancerName} hold the stronger advance path at ${advancerProbability}% once extra time and penalties are folded in.`,
+      es: `${phase} no puede terminar empatado, así que ${drawProbability}% es una ruta de empate a 90 minutos. ${advancerName} tiene la vía más fuerte para avanzar con ${advancerProbability}% al incluir prórroga y penales.`,
+      fr: `${phase} ne peut pas finir à égalité, donc ${drawProbability}% devient la voie du blocage après 90 minutes. ${advancerName} garde la meilleure voie de qualification à ${advancerProbability}% avec prolongation et tirs au but.`,
+    },
   };
 }
 

@@ -48,7 +48,19 @@ export type MatchForecast = ForecastCopy & {
   projected: string;
   isPending?: boolean;
   marketPulse?: MarketPulse | null;
+  knockout?: KnockoutForecast | null;
   trail?: TrailSignal[];
+};
+
+export type KnockoutForecast = {
+  phase: string;
+  regulationDraw: number;
+  extraTime: number;
+  penalties: number;
+  homeAdvance: number;
+  awayAdvance: number;
+  projectedAdvancer: "home" | "away";
+  summary: Record<Language, string>;
 };
 
 export type MarketPulse = {

@@ -705,6 +705,78 @@ h1 {
   background: var(--gold);
 }
 
+.knockout-lane-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  color: rgba(226, 235, 250, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 203, 68, 0.2);
+  border-radius: 10px;
+}
+
+.knockout-lane-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.knockout-lane-head span,
+.knockout-lane-head strong {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.knockout-lane-head span {
+  color: #ffe08a;
+}
+
+.knockout-lane-head strong {
+  color: #fff;
+}
+
+.knockout-lane-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.knockout-lane-grid span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  background: rgba(6, 10, 20, 0.22);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.knockout-lane-grid small {
+  color: rgba(202, 214, 234, 0.78);
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.knockout-lane-grid strong {
+  color: #fff;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.knockout-lane-panel p {
+  margin: 0;
+  color: rgba(202, 214, 234, 0.82);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
 .market-pulse-note {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
@@ -1069,6 +1141,7 @@ h1 {
   .quick-signals,
   .probability-grid,
   .metric-row,
+  .knockout-lane-grid,
   .weather-grid {
     grid-template-columns: 1fr;
   }

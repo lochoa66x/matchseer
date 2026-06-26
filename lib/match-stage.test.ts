@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isKnockoutPhase,
   isKnownPlaceholderTeamName,
   normalizeMatchPhase,
   normalizeStageLabel,
@@ -32,6 +33,14 @@ describe("match stage labels", () => {
   it("normalizes open-ended round numbers", () => {
     expect(normalizeStageLabel("R32")).toBe("Round of 32");
     expect(normalizeStageLabel("ROUND_OF_64")).toBe("Round of 64");
+  });
+
+  it("detects knockout phases without treating groups as knockouts", () => {
+    expect(isKnockoutPhase("Round of 16")).toBe(true);
+    expect(isKnockoutPhase("QUARTER_FINALS")).toBe(true);
+    expect(isKnockoutPhase("Final")).toBe(true);
+    expect(isKnockoutPhase("Group A")).toBe(false);
+    expect(isKnockoutPhase("GROUP_STAGE")).toBe(false);
   });
 
   it("detects generic placeholder team names", () => {

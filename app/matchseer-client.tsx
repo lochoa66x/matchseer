@@ -161,6 +161,12 @@ const copy = {
     trail: "The trail",
     trailSignals: "signals",
     projected: "Projected",
+    knockoutPath: "Knockout path",
+    deadlock90: "90' deadlock",
+    extraTime: "Extra time",
+    penalties: "Penalties",
+    advancePath: "Advance path",
+    advances: "advances",
     teamEdge: "Team edge",
     compareTeams: "Compare teams",
     comparePlayers: "Player sparks",
@@ -311,6 +317,12 @@ const copy = {
     trail: "El rastro",
     trailSignals: "señales",
     projected: "Proyectado",
+    knockoutPath: "Ruta eliminatoria",
+    deadlock90: "Empate 90'",
+    extraTime: "Prórroga",
+    penalties: "Penales",
+    advancePath: "Ruta para avanzar",
+    advances: "avanza",
     teamEdge: "Ventaja",
     compareTeams: "Comparar equipos",
     comparePlayers: "Chispas de jugadores",
@@ -461,6 +473,12 @@ const copy = {
     trail: "La piste",
     trailSignals: "signaux",
     projected: "Projeté",
+    knockoutPath: "Voie éliminatoire",
+    deadlock90: "Blocage 90'",
+    extraTime: "Prolongation",
+    penalties: "Tirs au but",
+    advancePath: "Voie de qualification",
+    advances: "se qualifie",
     teamEdge: "Avantage",
     compareTeams: "Comparer les équipes",
     comparePlayers: "Étincelles joueurs",
@@ -2201,7 +2219,7 @@ function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors
       color: accents.home,
     },
     {
-      label: "DRAW",
+      label: match.forecast.knockout ? "90' DRAW" : "DRAW",
       value: match.forecast.draw,
       color: "#8fa2c4",
     },
@@ -3388,6 +3406,7 @@ function ForecastView({
               <Meter label={t.confidence} value={displayConfidence(match)} />
               <Meter label={t.chaos} value={displayChaos(match)} hot />
             </div>
+            <KnockoutLanePanel match={match} t={t} language={language} />
             <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
               <span>
                 <Activity size={15} />
@@ -3463,6 +3482,65 @@ function Meter({ label, value, hot = false }: { label: string; value: number; ho
         <span className={cx("meter-fill", hot && "hot")} style={{ width: `${value}%` }} />
       </div>
     </div>
+  );
+}
+
+function KnockoutLanePanel({
+  match,
+  t,
+  language,
+}: {
+  match: Match;
+  t: Record<string, string>;
+  language: Language;
+}) {
+  const lane = match.forecast.knockout;
+
+  if (!lane) {
+    return null;
+  }
+
+  const advancerTeam =
+    lane.projectedAdvancer === "home" ? match.home : match.away;
+  const advancerProbability =
+    lane.projectedAdvancer === "home" ? lane.homeAdvance : lane.awayAdvance;
+  const advancerColor =
+    lane.projectedAdvancer === "home"
+      ? match.home.color
+      : match.away.color;
+
+  return (
+    <section className="knockout-lane-panel">
+      <div className="knockout-lane-head">
+        <span>
+          <Trophy size={15} />
+          {t.knockoutPath}
+        </span>
+        <strong>
+          <TeamFlag accentColor={advancerColor} team={advancerTeam} compact />
+          {advancerTeam.code} {t.advances}
+        </strong>
+      </div>
+      <div className="knockout-lane-grid">
+        <span>
+          <small>{t.deadlock90}</small>
+          <strong>{lane.regulationDraw}%</strong>
+        </span>
+        <span>
+          <small>{t.extraTime}</small>
+          <strong>{lane.extraTime}%</strong>
+        </span>
+        <span>
+          <small>{t.penalties}</small>
+          <strong>{lane.penalties}%</strong>
+        </span>
+        <span>
+          <small>{t.advancePath}</small>
+          <strong>{advancerProbability}%</strong>
+        </span>
+      </div>
+      <p>{lane.summary[language] ?? lane.summary.en}</p>
+    </section>
   );
 }
 

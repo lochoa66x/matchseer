@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   availabilityForecastModifier,
+  buildKnockoutResolutionLane,
   buildPublicSeerTrail,
+  knockoutRoundForecastModifier,
   marketPulseMatchIdentifiers,
   playerDependencyImpact,
   shouldApplyMarketPulseUpdate,
@@ -101,6 +103,69 @@ describe("market pulse write safety", () => {
         home: 52,
       },
     });
+  });
+});
+
+describe("knockout-round forecast logic", () => {
+  const homeTeam = {
+    id: 1,
+    slug: "mexico",
+    name: "Mexico",
+    code: "MEX",
+    color: "#0b8f5a",
+    country: "Mexico",
+  };
+  const awayTeam = {
+    id: 2,
+    slug: "netherlands",
+    name: "Netherlands",
+    code: "NED",
+    color: "#f58220",
+    country: "Netherlands",
+  };
+
+  it("keeps group matches on normal draw logic", () => {
+    expect(knockoutRoundForecastModifier("Group A")).toMatchObject({
+      isKnockout: false,
+      gapMultiplier: 1,
+      drawDelta: 0,
+      drawFloor: 15,
+      drawCeiling: 34,
+    });
+  });
+
+  it("makes knockout matches tighter and more cautious", () => {
+    expect(knockoutRoundForecastModifier("Round of 16")).toMatchObject({
+      isKnockout: true,
+      gapMultiplier: 0.86,
+      drawDelta: 4,
+      drawFloor: 22,
+      drawCeiling: 40,
+      xgDelta: -0.12,
+      chaosDelta: 2,
+      confidenceDelta: -2,
+    });
+  });
+
+  it("turns a 90-minute deadlock into extra-time and penalties lanes", () => {
+    const lane = buildKnockoutResolutionLane({
+      phase: "Quarter-finals",
+      homeTeam,
+      awayTeam,
+      homeProbability: 42,
+      drawProbability: 30,
+      awayProbability: 28,
+      powerGap: 6,
+      chaos: 64,
+    });
+
+    expect(lane.regulationDraw).toBe(30);
+    expect(lane.extraTime).toBe(30);
+    expect(lane.penalties).toBeGreaterThan(0);
+    expect(lane.penalties).toBeLessThan(lane.extraTime);
+    expect(lane.homeAdvance + lane.awayAdvance).toBe(100);
+    expect(lane.projectedAdvancer).toBe("home");
+    expect(lane.summary.en).toContain("cannot end level");
   });
 });
 

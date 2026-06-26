@@ -75,6 +75,22 @@ export function isKnownPlaceholderTeamName(name: string | null | undefined) {
   ].includes(normalized);
 }
 
+export function isKnockoutPhase(phase: string | null | undefined) {
+  const normalized = normalizeStageLabel(phase);
+
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /^Round of \d+$/i.test(normalized) ||
+    normalized === "Quarter-finals" ||
+    normalized === "Semi-finals" ||
+    normalized === "Third place" ||
+    normalized === "Final"
+  );
+}
+
 function isGroupLabel(value: string) {
   return /^Group(?:\s+[A-Z0-9]+)?$/i.test(value) || value === "Group Stage";
 }
