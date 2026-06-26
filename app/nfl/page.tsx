@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
+type FantasyTeamLens = "redraft" | "dynasty";
 
 type NflTeam = {
   code: string;
@@ -96,6 +97,41 @@ type ScoutingRow = FantasyPlayer & {
   fantasy: FantasyProjection;
   rankDelta: number;
   score: number;
+};
+
+type FantasyTeam = {
+  id: string;
+  name: string;
+  manager: string;
+  rosterIds: string[];
+  identity: string;
+};
+
+type FantasyTeamReport = {
+  team: FantasyTeam;
+  players: ScoutingRow[];
+  projection: number;
+  floor: number;
+  ceiling: number;
+  score: number;
+  balance: number;
+  depth: number;
+  risk: number;
+  dynastyCore: number;
+  strengths: string[];
+  weaknesses: string[];
+  moves: string[];
+  tradeIdeas: string[];
+};
+
+type FantasyMatchupReport = {
+  left: FantasyTeamReport;
+  right: FantasyTeamReport;
+  edgeTeam: FantasyTeam;
+  edgeLabel: string;
+  projectionGap: number;
+  swingFactors: string[];
+  recommendation: string;
 };
 
 type NflScoutingAnalysis = {
@@ -184,6 +220,11 @@ const scoringCopy: Record<ScoringFormat, string> = {
   standard: "Touchdowns and yardage carry the lantern.",
   halfPpr: "Volume matters, but touchdowns still get teeth.",
   fullPpr: "Targets glow brighter; reception magnets rise.",
+};
+
+const teamLensLabels: Record<FantasyTeamLens, string> = {
+  redraft: "Season-now",
+  dynasty: "Dynasty",
 };
 
 const receptionPoints: Record<ScoringFormat, number> = {
@@ -464,6 +505,9 @@ export default function NflPage() {
   const [leftPlayerId, setLeftPlayerId] = useState(seededPlayerPair[0].id);
   const [rightPlayerId, setRightPlayerId] = useState(seededPlayerPair[1].id);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
+  const [teamLens, setTeamLens] = useState<FantasyTeamLens>("redraft");
+  const [activeFantasyTeamId, setActiveFantasyTeamId] = useState("seer-house");
+  const [opponentFantasyTeamId, setOpponentFantasyTeamId] = useState("rival-house");
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
@@ -507,6 +551,37 @@ export default function NflPage() {
   const scoutingBoard = useMemo(
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
     [fantasyPlayers, scoringFormat],
+  );
+  const fantasyTeams = useMemo(
+    () => buildFantasyTeams(fantasyPlayers),
+    [fantasyPlayers],
+  );
+  const activeFantasyTeam =
+    fantasyTeams.find((team) => team.id === activeFantasyTeamId) ?? fantasyTeams[0];
+  const opponentFantasyTeam =
+    fantasyTeams.find((team) => team.id === opponentFantasyTeamId) ??
+    fantasyTeams.find((team) => team.id !== activeFantasyTeam.id) ??
+    fantasyTeams[0];
+  const activeTeamReport = useMemo(
+    () =>
+      analyzeFantasyTeam({
+        allPlayers: fantasyPlayers,
+        lens: teamLens,
+        scoringFormat,
+        team: activeFantasyTeam,
+      }),
+    [activeFantasyTeam, fantasyPlayers, scoringFormat, teamLens],
+  );
+  const fantasyMatchupReport = useMemo(
+    () =>
+      compareFantasyTeams({
+        allPlayers: fantasyPlayers,
+        left: activeFantasyTeam,
+        lens: teamLens,
+        right: opponentFantasyTeam,
+        scoringFormat,
+      }),
+    [activeFantasyTeam, fantasyPlayers, opponentFantasyTeam, scoringFormat, teamLens],
   );
 
   useEffect(() => {
@@ -560,6 +635,23 @@ export default function NflPage() {
       setRightPlayerId(defaultPlayerPair[1].id);
     }
   }, [defaultPlayerPair, fantasyPlayers, leftPlayerId, rightPlayerId]);
+
+  useEffect(() => {
+    if (!fantasyTeams.some((team) => team.id === activeFantasyTeamId)) {
+      setActiveFantasyTeamId(fantasyTeams[0]?.id ?? "seer-house");
+    }
+
+    if (
+      !fantasyTeams.some((team) => team.id === opponentFantasyTeamId) ||
+      (opponentFantasyTeamId === activeFantasyTeamId && fantasyTeams.length > 1)
+    ) {
+      setOpponentFantasyTeamId(
+        fantasyTeams.find((team) => team.id !== activeFantasyTeamId)?.id ??
+          fantasyTeams[0]?.id ??
+          "rival-house",
+      );
+    }
+  }, [activeFantasyTeamId, fantasyTeams, opponentFantasyTeamId]);
 
   function updateScenarioLever(key: keyof ScenarioLevers, value: number) {
     setScenarioLeversByMatchup((current) => ({
@@ -638,6 +730,7 @@ export default function NflPage() {
           <a href="#team-seer">Team Seer</a>
           <a href="#scenario-lab">What-if Lab</a>
           <a href="#fantasy-seer">Fantasy Seer</a>
+          <a href="#fantasy-team-lab">Team Lab</a>
           <a href="#player-compare">Player vs player</a>
         </nav>
       </header>
@@ -777,6 +870,19 @@ export default function NflPage() {
         rows={scoutingBoard}
         scoringFormat={scoringFormat}
         status={scoutStatus}
+      />
+
+      <FantasyTeamLab
+        activeReport={activeTeamReport}
+        matchupReport={fantasyMatchupReport}
+        onLensChange={setTeamLens}
+        onOpponentTeamChange={setOpponentFantasyTeamId}
+        onScoringChange={setScoringFormat}
+        onTeamChange={setActiveFantasyTeamId}
+        opponentTeamId={opponentFantasyTeam.id}
+        scoringFormat={scoringFormat}
+        teamLens={teamLens}
+        teams={fantasyTeams}
       />
 
       <section className="nfl-player-compare" id="player-compare">
@@ -1362,6 +1468,622 @@ function ScoutingBoard({
       </div>
     </section>
   );
+}
+
+function FantasyTeamLab({
+  activeReport,
+  matchupReport,
+  onLensChange,
+  onOpponentTeamChange,
+  onScoringChange,
+  onTeamChange,
+  opponentTeamId,
+  scoringFormat,
+  teamLens,
+  teams,
+}: {
+  activeReport: FantasyTeamReport;
+  matchupReport: FantasyMatchupReport;
+  onLensChange: (lens: FantasyTeamLens) => void;
+  onOpponentTeamChange: (teamId: string) => void;
+  onScoringChange: (format: ScoringFormat) => void;
+  onTeamChange: (teamId: string) => void;
+  opponentTeamId: string;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+  teams: FantasyTeam[];
+}) {
+  return (
+    <section className="nfl-fantasy-team-lab" id="fantasy-team-lab">
+      <div className="nfl-fantasy-team-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Trophy size={17} />
+            Fantasy team lab
+          </div>
+          <h2>Analyze my squad</h2>
+          <p>
+            Roster shape, matchup pressure, trade paths, and start/sit texture.
+            Pure fantasy fun, with the Seer doing the math in the background.
+          </p>
+        </div>
+        <div className="nfl-fantasy-team-controls">
+          <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
+          <div className="nfl-lens-toggle" aria-label="Fantasy roster lens">
+            {(Object.keys(teamLensLabels) as FantasyTeamLens[]).map((lens) => (
+              <button
+                className={cx(teamLens === lens && "active")}
+                key={lens}
+                onClick={() => onLensChange(lens)}
+                type="button"
+              >
+                {teamLensLabels[lens]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="nfl-team-lab-selectors">
+        <label>
+          <span>My team</span>
+          <select
+            onChange={(event) => onTeamChange(event.target.value)}
+            value={activeReport.team.id}
+          >
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ChevronRight size={18} />
+        <label>
+          <span>Opponent</span>
+          <select
+            onChange={(event) => onOpponentTeamChange(event.target.value)}
+            value={opponentTeamId}
+          >
+            {teams.map((team) => (
+              <option
+                disabled={team.id === activeReport.team.id && teams.length > 1}
+                key={team.id}
+                value={team.id}
+              >
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="nfl-team-lab-grid">
+        <article className="nfl-team-report-card">
+          <div className="nfl-team-report-top">
+            <div>
+              <span>{activeReport.team.manager}</span>
+              <strong>{activeReport.team.name}</strong>
+              <em>{activeReport.team.identity}</em>
+            </div>
+            <b>{activeReport.score}</b>
+          </div>
+          <div className="nfl-team-score-strip">
+            <div>
+              <span>Projection</span>
+              <strong>{activeReport.projection.toFixed(1)}</strong>
+            </div>
+            <div>
+              <span>Floor</span>
+              <strong>{activeReport.floor.toFixed(1)}</strong>
+            </div>
+            <div>
+              <span>Ceiling</span>
+              <strong>{activeReport.ceiling.toFixed(1)}</strong>
+            </div>
+          </div>
+          <div className="nfl-team-meter-grid">
+            <MiniMeter icon={<Gauge size={16} />} label="Balance" value={activeReport.balance} />
+            <MiniMeter icon={<UsersRound size={16} />} label="Depth" value={activeReport.depth} />
+            <MiniMeter icon={<Timer size={16} />} label="Risk" value={activeReport.risk} hot />
+            <MiniMeter icon={<Sparkles size={16} />} label="Dynasty core" value={activeReport.dynastyCore} />
+          </div>
+          <div className="nfl-roster-stack">
+            {activeReport.players.map((player) => (
+              <div key={player.id}>
+                <div className="nfl-player-id">
+                  <span style={{ background: player.color }}>{player.team}</span>
+                  <div>
+                    <strong>{player.name}</strong>
+                    <em>
+                      {player.position} · {player.opponent}
+                    </em>
+                  </div>
+                </div>
+                <strong>{player.fantasy.projection.toFixed(1)}</strong>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="nfl-team-advice-card">
+          <div className="nfl-card-topline">
+            <span>Seer coaching note</span>
+            <strong>{teamLensLabels[teamLens]}</strong>
+          </div>
+          <p>{teamAdviceSummary(activeReport, teamLens)}</p>
+          <AdviceList title="Strengths" items={activeReport.strengths} />
+          <AdviceList title="Weak spots" items={activeReport.weaknesses} />
+          <AdviceList title="Moves to consider" items={activeReport.moves} />
+          <AdviceList title="Trade paths" items={activeReport.tradeIdeas} />
+        </article>
+      </div>
+
+      <article className="nfl-fantasy-matchup-card">
+        <div className="nfl-fantasy-matchup-head">
+          <div>
+            <span>Fantasy matchup</span>
+            <strong>
+              {matchupReport.left.team.name} vs {matchupReport.right.team.name}
+            </strong>
+          </div>
+          <b>{matchupReport.edgeLabel}</b>
+        </div>
+        <div className="nfl-matchup-score-grid">
+          <FantasyTeamMiniReport report={matchupReport.left} />
+          <div className="nfl-matchup-verdict">
+            <Sparkles size={20} />
+            <span>Seer edge</span>
+            <strong>{matchupReport.edgeTeam.name}</strong>
+            <p>{matchupReport.recommendation}</p>
+          </div>
+          <FantasyTeamMiniReport report={matchupReport.right} />
+        </div>
+        <div className="nfl-swing-list">
+          {matchupReport.swingFactors.map((factor) => (
+            <span key={factor}>{factor}</span>
+          ))}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function AdviceList({ items, title }: { items: string[]; title: string }) {
+  const visibleItems =
+    items.length > 0 ? items : ["No glaring leak here; keep monitoring roles and health."];
+
+  return (
+    <div className="nfl-advice-list">
+      <span>{title}</span>
+      {visibleItems.map((item) => (
+        <p key={item}>{item}</p>
+      ))}
+    </div>
+  );
+}
+
+function FantasyTeamMiniReport({ report }: { report: FantasyTeamReport }) {
+  return (
+    <div className="nfl-team-mini-report">
+      <span>{report.team.manager}</span>
+      <strong>{report.team.name}</strong>
+      <div>
+        <em>{report.projection.toFixed(1)} proj</em>
+        <em>{report.ceiling.toFixed(1)} ceiling</em>
+      </div>
+      <i>
+        <b style={{ width: `${report.score}%` }} />
+      </i>
+    </div>
+  );
+}
+
+function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
+  const rankedPlayers = [...players].sort(
+    (left, right) => left.seerRank - right.seerRank || left.nflRank - right.nflRank,
+  );
+  const homeRoster = rankedPlayers
+    .filter((_, index) => index % 2 === 0)
+    .map((player) => player.id);
+  const awayRoster = rankedPlayers
+    .filter((_, index) => index % 2 === 1)
+    .map((player) => player.id);
+
+  return [
+    {
+      id: "seer-house",
+      name: "Seer House",
+      manager: "My squad",
+      rosterIds:
+        homeRoster.length > 0
+          ? homeRoster
+          : rankedPlayers.slice(0, 1).map((player) => player.id),
+      identity: "Floor plus flash, built to survive weird game scripts.",
+    },
+    {
+      id: "rival-house",
+      name: "Rival House",
+      manager: "Opponent",
+      rosterIds:
+        awayRoster.length > 0
+          ? awayRoster
+          : rankedPlayers.slice(0, 1).map((player) => player.id),
+      identity: "Ceiling hunter with a little more weekly wobble.",
+    },
+  ];
+}
+
+function analyzeFantasyTeam({
+  allPlayers,
+  lens,
+  scoringFormat,
+  team,
+}: {
+  allPlayers: FantasyPlayer[];
+  lens: FantasyTeamLens;
+  scoringFormat: ScoringFormat;
+  team: FantasyTeam;
+}): FantasyTeamReport {
+  const board = buildScoutingBoard(allPlayers, scoringFormat);
+  const players = board.filter((player) => team.rosterIds.includes(player.id));
+  const roster = players.length > 0 ? players : board.slice(0, 1);
+  const projection = round1(sum(roster.map((player) => player.fantasy.projection)));
+  const floor = round1(sum(roster.map((player) => player.fantasy.floor)));
+  const ceiling = round1(sum(roster.map((player) => player.fantasy.ceiling)));
+  const balance = teamBalance(roster);
+  const depth = teamDepth(roster);
+  const risk = teamRisk(roster);
+  const dynastyCore = teamDynastyCore(roster);
+  const score = clampMeter(
+    Math.round(
+      projection * 2.25 +
+        floor * 1.05 +
+        ceiling * 0.42 +
+        balance * 0.16 +
+        depth * 0.16 +
+        (lens === "dynasty" ? dynastyCore * 0.28 : (100 - risk) * 0.2),
+    ),
+  );
+
+  return {
+    team,
+    players: roster,
+    projection,
+    floor,
+    ceiling,
+    score,
+    balance,
+    depth,
+    risk,
+    dynastyCore,
+    strengths: fantasyStrengths(roster, scoringFormat, lens),
+    weaknesses: fantasyWeaknesses(roster, scoringFormat, lens, balance, depth, risk),
+    moves: fantasyMoves(roster, scoringFormat, lens),
+    tradeIdeas: fantasyTradeIdeas({
+      allPlayers: board,
+      lens,
+      roster,
+      scoringFormat,
+    }),
+  };
+}
+
+function compareFantasyTeams({
+  allPlayers,
+  left,
+  lens,
+  right,
+  scoringFormat,
+}: {
+  allPlayers: FantasyPlayer[];
+  left: FantasyTeam;
+  lens: FantasyTeamLens;
+  right: FantasyTeam;
+  scoringFormat: ScoringFormat;
+}): FantasyMatchupReport {
+  const leftReport = analyzeFantasyTeam({ allPlayers, lens, scoringFormat, team: left });
+  const rightReport = analyzeFantasyTeam({ allPlayers, lens, scoringFormat, team: right });
+  const projectionGap = round1(leftReport.projection - rightReport.projection);
+  const edgeTeam = projectionGap >= 0 ? leftReport.team : rightReport.team;
+  const edgeMagnitude = Math.abs(projectionGap);
+  const edgeLabel =
+    edgeMagnitude < 2
+      ? "True toss-up"
+      : `${edgeTeam.name} +${edgeMagnitude.toFixed(1)}`;
+
+  return {
+    left: leftReport,
+    right: rightReport,
+    edgeTeam,
+    edgeLabel,
+    projectionGap,
+    swingFactors: fantasySwingFactors(leftReport, rightReport),
+    recommendation:
+      edgeMagnitude < 2
+        ? "This matchup is close enough that one lineup choice can swing it. Chase role clarity over name value."
+        : `${edgeTeam.name} has the cleaner projected lane, but the lower side can close it by attacking floor and reducing chaos.`,
+  };
+}
+
+function fantasyStrengths(
+  roster: ScoutingRow[],
+  scoringFormat: ScoringFormat,
+  lens: FantasyTeamLens,
+) {
+  const top = roster[0];
+  const receivingFloor = average(
+    roster.map((player) => player.baseline.receptions + player.targetShare / 12),
+  );
+  const rushingControl = average(roster.map((player) => player.carryShare));
+  const health = average(roster.map((player) => player.health));
+
+  return [
+    `${top.name} is the lineup anchor at ${top.fantasy.projection.toFixed(1)} projected points.`,
+    receivingFloor >= 6 && scoringFormat !== "standard"
+      ? "Reception volume gives this roster a nice PPR safety net."
+      : rushingControl >= 22
+        ? "Touch volume gives this roster a sturdy weekly base."
+        : "The top-end players carry enough ceiling to make the matchup interesting.",
+    lens === "dynasty" && health >= 84
+      ? "The core is healthy enough to build around instead of panic-selling."
+      : "The roster has a clear identity, which makes lineup decisions easier.",
+  ];
+}
+
+function fantasyWeaknesses(
+  roster: ScoutingRow[],
+  scoringFormat: ScoringFormat,
+  lens: FantasyTeamLens,
+  balance: number,
+  depth: number,
+  risk: number,
+) {
+  const positionCounts = countPositions(roster);
+  const weakSpots: string[] = [];
+
+  if (!positionCounts.WR && scoringFormat !== "standard") {
+    weakSpots.push("PPR formats want more target volume than this roster is showing.");
+  }
+
+  if (!positionCounts.RB) {
+    weakSpots.push("RB depth is thin, so one injury or committee shift can bite.");
+  }
+
+  if (balance < 62) {
+    weakSpots.push("The roster is tilted toward one position bucket.");
+  }
+
+  if (depth < 62) {
+    weakSpots.push("Depth is light; the bench needs another usable weekly option.");
+  }
+
+  if (risk > 58) {
+    weakSpots.push("Chaos is a little loud, so floor protection matters.");
+  }
+
+  if (lens === "dynasty" && teamDynastyCore(roster) < 62) {
+    weakSpots.push("Dynasty value needs a younger, steadier core piece.");
+  }
+
+  return weakSpots.slice(0, 3);
+}
+
+function fantasyMoves(
+  roster: ScoutingRow[],
+  scoringFormat: ScoringFormat,
+  lens: FantasyTeamLens,
+) {
+  const positionCounts = countPositions(roster);
+  const moves: string[] = [];
+  const highChaos = [...roster].sort((left, right) => right.chaos - left.chaos)[0];
+  const bestFloor = [...roster].sort(
+    (left, right) => right.fantasy.floor - left.fantasy.floor,
+  )[0];
+
+  if ((positionCounts.QB ?? 0) > 1) {
+    moves.push("If another manager needs a QB, shop the surplus for WR/RB depth.");
+  }
+
+  if (scoringFormat !== "standard") {
+    moves.push("Prioritize target earners; a quiet 7-catch player can patch a lot of leaks.");
+  } else {
+    moves.push("In standard scoring, chase touchdown equity and early-down work first.");
+  }
+
+  if (highChaos.chaos > 55) {
+    moves.push(`Pair ${highChaos.name}'s ceiling with a steadier floor play when possible.`);
+  } else {
+    moves.push(`${bestFloor.name} is the kind of stabilizer to keep in tight matchups.`);
+  }
+
+  if (lens === "dynasty") {
+    moves.push("In dynasty, do not trade away role growth unless the return fixes two roster holes.");
+  }
+
+  return moves.slice(0, 4);
+}
+
+function fantasyTradeIdeas({
+  allPlayers,
+  lens,
+  roster,
+  scoringFormat,
+}: {
+  allPlayers: ScoutingRow[];
+  lens: FantasyTeamLens;
+  roster: ScoutingRow[];
+  scoringFormat: ScoringFormat;
+}) {
+  const rosterIds = new Set(roster.map((player) => player.id));
+  const needs = rosterNeeds(roster, scoringFormat, lens);
+  const candidates = allPlayers
+    .filter((player) => !rosterIds.has(player.id))
+    .sort(
+      (left, right) =>
+        tradeFitScore(right, needs, lens, scoringFormat) -
+        tradeFitScore(left, needs, lens, scoringFormat),
+    )
+    .slice(0, 2);
+
+  if (candidates.length === 0) {
+    return ["Hold the core for now; the best move is improving bench flexibility."];
+  }
+
+  return candidates.map((player) => {
+    const reason =
+      player.position === "WR" && scoringFormat !== "standard"
+        ? "target volume"
+        : player.position === "RB"
+          ? "touch stability"
+          : player.position === "QB"
+            ? "weekly ceiling"
+            : "lineup flexibility";
+
+    return `Ask about ${player.name} if the price is reasonable: ${reason} fits the current roster need.`;
+  });
+}
+
+function teamAdviceSummary(report: FantasyTeamReport, lens: FantasyTeamLens) {
+  if (lens === "dynasty") {
+    return `${report.team.name} grades ${report.score}/100 with a ${report.dynastyCore}% dynasty core. The Seer likes moves that add durable role growth without draining the weekly lineup.`;
+  }
+
+  return `${report.team.name} grades ${report.score}/100 for the current matchup window. The cleanest path is protecting floor while keeping one ceiling lever in the lineup.`;
+}
+
+function fantasySwingFactors(
+  leftReport: FantasyTeamReport,
+  rightReport: FantasyTeamReport,
+) {
+  const factors = [
+    Math.abs(leftReport.ceiling - rightReport.ceiling) >= 4
+      ? `${leftReport.ceiling > rightReport.ceiling ? leftReport.team.name : rightReport.team.name} has the better ceiling lane.`
+      : "Ceiling is close; floor choices matter more.",
+    Math.abs(leftReport.risk - rightReport.risk) >= 8
+      ? `${leftReport.risk > rightReport.risk ? leftReport.team.name : rightReport.team.name} carries more chaos.`
+      : "Risk profile is fairly even.",
+    Math.abs(leftReport.depth - rightReport.depth) >= 8
+      ? `${leftReport.depth > rightReport.depth ? leftReport.team.name : rightReport.team.name} has the deeper bench shape.`
+      : "Depth is close enough that one waiver-style move can matter.",
+  ];
+
+  return factors;
+}
+
+function rosterNeeds(
+  roster: ScoutingRow[],
+  scoringFormat: ScoringFormat,
+  lens: FantasyTeamLens,
+) {
+  const counts = countPositions(roster);
+  const needs = new Set<string>();
+
+  if (!counts.RB) {
+    needs.add("RB");
+  }
+
+  if (!counts.WR || (scoringFormat !== "standard" && counts.WR < 2)) {
+    needs.add("WR");
+  }
+
+  if (lens === "dynasty") {
+    needs.add("core");
+  }
+
+  if (teamRisk(roster) > 58) {
+    needs.add("floor");
+  }
+
+  return needs;
+}
+
+function tradeFitScore(
+  player: ScoutingRow,
+  needs: Set<string>,
+  lens: FantasyTeamLens,
+  scoringFormat: ScoringFormat,
+) {
+  let score = player.score;
+
+  if (needs.has(player.position)) {
+    score += 18;
+  }
+
+  if (needs.has("floor")) {
+    score += player.fantasy.floor * 1.2 - player.chaos * 0.2;
+  }
+
+  if (needs.has("core") || lens === "dynasty") {
+    score += player.health * 0.2 + (100 - player.nflRank) * 0.12;
+  }
+
+  if (scoringFormat !== "standard") {
+    score += player.baseline.receptions * 1.4 + player.targetShare * 0.08;
+  }
+
+  return score;
+}
+
+function teamBalance(roster: ScoutingRow[]) {
+  const counts = countPositions(roster);
+  const uniquePositions = Object.keys(counts).length;
+  const hasSkillSpread = Number(Boolean(counts.RB)) + Number(Boolean(counts.WR));
+
+  return clampMeter(44 + uniquePositions * 12 + hasSkillSpread * 10);
+}
+
+function teamDepth(roster: ScoutingRow[]) {
+  const playable = roster.filter((player) => player.fantasy.projection >= 12).length;
+
+  return clampMeter(42 + roster.length * 8 + playable * 8);
+}
+
+function teamRisk(roster: ScoutingRow[]) {
+  const chaos = average(roster.map((player) => player.chaos));
+  const healthDrag = 100 - average(roster.map((player) => player.health));
+  const touchdownDependence = average(
+    roster.map((player) => player.touchdownPulse - player.targetShare / 2),
+  );
+
+  return clampMeter(Math.round(chaos * 0.55 + healthDrag * 0.3 + touchdownDependence * 0.15));
+}
+
+function teamDynastyCore(roster: ScoutingRow[]) {
+  return clampMeter(
+    Math.round(
+      average(
+        roster.map(
+          (player) =>
+            player.health * 0.36 +
+            (100 - player.nflRank) * 0.24 +
+            player.targetShare * 0.22 +
+            player.carryShare * 0.12 +
+            (100 - player.chaos) * 0.06,
+        ),
+      ),
+    ),
+  );
+}
+
+function countPositions(roster: ScoutingRow[]) {
+  return roster.reduce<Record<string, number>>((counts, player) => {
+    counts[player.position] = (counts[player.position] ?? 0) + 1;
+
+    return counts;
+  }, {});
+}
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return sum(values) / values.length;
 }
 
 function compareFantasyPlayers(

@@ -8816,6 +8816,7 @@ body {
 .nfl-scenario-lab,
 .nfl-grid-section,
 .nfl-scouting-board,
+.nfl-fantasy-team-lab,
 .nfl-player-compare {
   max-width: 1240px;
   margin-right: auto;
@@ -8844,6 +8845,15 @@ body {
 .nfl-fantasy-head,
 .nfl-player-compare-head,
 .nfl-player-selectors,
+.nfl-fantasy-team-head,
+.nfl-fantasy-team-controls,
+.nfl-lens-toggle,
+.nfl-team-lab-selectors,
+.nfl-team-lab-selectors label,
+.nfl-team-report-top,
+.nfl-team-score-strip,
+.nfl-fantasy-matchup-head,
+.nfl-swing-list,
 .nfl-scenario-head,
 .nfl-scenario-control > div,
 .nfl-scenario-control span,
@@ -9007,6 +9017,7 @@ body {
 .nfl-fantasy-panel,
 .nfl-scenario-lab,
 .nfl-scouting-board,
+.nfl-fantasy-team-lab,
 .nfl-player-compare {
   background: var(--nfl-panel);
   border: 1px solid var(--nfl-line);
@@ -9020,6 +9031,7 @@ body {
 .nfl-fantasy-panel,
 .nfl-scenario-lab,
 .nfl-scouting-board,
+.nfl-fantasy-team-lab,
 .nfl-player-compare {
   padding: 18px;
 }
@@ -9037,6 +9049,7 @@ body {
 .nfl-scenario-lab h2,
 .nfl-fantasy-panel h2,
 .nfl-scouting-board h2,
+.nfl-fantasy-team-lab h2,
 .nfl-player-compare h2 {
   margin: 8px 0 10px;
   color: #fff;
@@ -9048,6 +9061,7 @@ body {
 .nfl-fantasy-panel h2,
 .nfl-scenario-lab h2,
 .nfl-scouting-board h2,
+.nfl-fantasy-team-lab h2,
 .nfl-player-compare h2 {
   font-size: clamp(1.55rem, 3vw, 2.4rem);
 }
@@ -9055,7 +9069,8 @@ body {
 .nfl-matchup-rail p,
 .nfl-fantasy-head p,
 .nfl-scenario-read p,
-.nfl-scouting-head p {
+.nfl-scouting-head p,
+.nfl-fantasy-team-head p {
   margin: 0 0 16px;
   color: var(--nfl-muted);
   font-size: 0.95rem;
@@ -9101,6 +9116,15 @@ body {
 .nfl-market-blend p,
 .nfl-projection-strip span,
 .nfl-mini-meter span,
+.nfl-team-lab-selectors span,
+.nfl-team-report-top span,
+.nfl-team-report-top em,
+.nfl-team-score-strip span,
+.nfl-advice-list span,
+.nfl-fantasy-matchup-head span,
+.nfl-team-mini-report span,
+.nfl-team-mini-report em,
+.nfl-matchup-verdict span,
 .nfl-fantasy-score span,
 .nfl-fantasy-range span,
 .nfl-fantasy-tags span,
@@ -9222,6 +9246,13 @@ body {
 .nfl-mini-meter,
 .nfl-market-blend,
 .nfl-fantasy-card,
+.nfl-team-report-card,
+.nfl-team-advice-card,
+.nfl-fantasy-matchup-card,
+.nfl-team-score-strip div,
+.nfl-roster-stack > div,
+.nfl-advice-list,
+.nfl-team-mini-report,
 .nfl-scenario-read,
 .nfl-scenario-control,
 .nfl-scenario-score,
@@ -9831,6 +9862,307 @@ body {
   color: #8ff0c1;
 }
 
+.nfl-fantasy-team-lab {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.nfl-fantasy-team-head {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nfl-fantasy-team-head > div:first-child {
+  min-width: 0;
+}
+
+.nfl-fantasy-team-head p {
+  max-width: 760px;
+  margin-bottom: 0;
+}
+
+.nfl-fantasy-team-controls {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.nfl-lens-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(104px, 1fr));
+  gap: 6px;
+  min-width: min(100%, 230px);
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 8px;
+}
+
+.nfl-lens-toggle button {
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--nfl-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.nfl-lens-toggle button.active {
+  color: #06100f;
+  background: linear-gradient(100deg, #f7c51d, #2dd4bf);
+}
+
+.nfl-team-lab-selectors {
+  gap: 10px;
+}
+
+.nfl-team-lab-selectors label {
+  flex: 1 1 260px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nfl-team-lab-selectors select {
+  width: 100%;
+  min-height: 42px;
+  color: var(--nfl-ink);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(143, 160, 189, 0.2);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 850;
+  padding: 0 10px;
+}
+
+.nfl-team-lab-grid,
+.nfl-matchup-score-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.nfl-team-lab-grid {
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+}
+
+.nfl-team-report-card,
+.nfl-team-advice-card,
+.nfl-fantasy-matchup-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.nfl-team-report-top {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-team-report-top > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nfl-team-report-top strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.45rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-team-report-top b {
+  display: grid;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: #06100f;
+  background: linear-gradient(135deg, #f7c51d, #2dd4bf);
+  border-radius: 999px;
+  font-size: 1.12rem;
+}
+
+.nfl-team-score-strip {
+  gap: 8px;
+}
+
+.nfl-team-score-strip div {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px;
+}
+
+.nfl-team-score-strip strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.nfl-team-meter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-roster-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-roster-stack > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+}
+
+.nfl-roster-stack > div > strong {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.nfl-team-advice-card > p {
+  margin: 0;
+  color: #fff;
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1.28;
+}
+
+.nfl-advice-list {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.nfl-advice-list p {
+  margin: 0;
+  color: #d9e4f5;
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.nfl-fantasy-matchup-head {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-fantasy-matchup-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nfl-fantasy-matchup-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.15rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-matchup-head b {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.nfl-matchup-score-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr) minmax(0, 1fr);
+}
+
+.nfl-team-mini-report {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.nfl-team-mini-report strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-team-mini-report div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nfl-team-mini-report i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+}
+
+.nfl-team-mini-report b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8fb3d9, #34f5a6);
+}
+
+.nfl-matchup-verdict {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  padding: 15px;
+  text-align: center;
+}
+
+.nfl-matchup-verdict svg {
+  color: #f7c51d;
+}
+
+.nfl-matchup-verdict strong {
+  color: #fff;
+  font-size: 1.18rem;
+}
+
+.nfl-matchup-verdict p {
+  margin: 0;
+  color: var(--nfl-muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.nfl-swing-list {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nfl-swing-list span {
+  padding: 7px 9px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 .nfl-player-compare {
   margin-bottom: 20px;
 }
@@ -9914,15 +10246,23 @@ body {
   .nfl-hero,
   .nfl-grid-section,
   .nfl-scenario-body,
+  .nfl-team-lab-grid,
+  .nfl-matchup-score-grid,
   .nfl-player-duel {
     grid-template-columns: 1fr;
   }
 
   .nfl-fantasy-head,
+  .nfl-fantasy-team-head,
   .nfl-scenario-head,
   .nfl-scouting-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .nfl-fantasy-team-controls {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .nfl-scouting-actions {
@@ -9954,7 +10294,10 @@ body {
   }
 
   .nfl-topbar,
+  .nfl-fantasy-matchup-head,
+  .nfl-fantasy-team-head,
   .nfl-scenario-head,
+  .nfl-team-report-top,
   .nfl-player-compare-head {
     align-items: flex-start;
     flex-direction: column;
@@ -9979,6 +10322,8 @@ body {
   .nfl-projection-strip,
   .nfl-meter-grid,
   .nfl-market-blend,
+  .nfl-team-meter-grid,
+  .nfl-team-score-strip,
   .nfl-scenario-factors,
   .nfl-probability,
   .nfl-player-selectors {
@@ -10006,6 +10351,26 @@ body {
   .nfl-format-toggle {
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .nfl-fantasy-team-controls,
+  .nfl-lens-toggle,
+  .nfl-team-lab-selectors,
+  .nfl-team-lab-selectors label {
+    width: 100%;
+  }
+
+  .nfl-lens-toggle {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-team-lab-selectors {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nfl-team-lab-selectors svg {
+    transform: rotate(90deg);
   }
 
   .nfl-reset-button {
