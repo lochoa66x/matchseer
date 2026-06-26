@@ -21,10 +21,17 @@ type ScoutingPlayer = {
   ceiling: number;
   baselineRank: number;
   seerRank: number;
+  sourceRank?: number;
+  positionRank?: number;
+  roleSecurity?: number;
+  dynastyValue?: number;
+  depthTier?: string;
   traits: string[];
 };
 
 type NflScoutingRequest = {
+  depth?: string;
+  positionLane?: string;
   scoringFormat: ScoringFormat;
   players: ScoutingPlayer[];
 };
@@ -47,7 +54,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const players = body.players.slice(0, 8).filter(isScoutingPlayer);
+  const players = body.players.slice(0, 12).filter(isScoutingPlayer);
 
   if (players.length === 0) {
     return NextResponse.json(
@@ -69,8 +76,10 @@ export async function POST(request: Request) {
   }
 
   const openAiRequest = createOpenAiRequest({
+    depth: cleanLine(body.depth),
     model,
     players,
+    positionLane: cleanLine(body.positionLane),
     scoringFormat: body.scoringFormat,
   });
 
@@ -122,12 +131,16 @@ export async function POST(request: Request) {
 }
 
 function createOpenAiRequest({
+  depth,
   model,
   players,
+  positionLane,
   scoringFormat,
 }: {
+  depth: string;
   model: string;
   players: ScoutingPlayer[];
+  positionLane: string;
   scoringFormat: ScoringFormat;
 }) {
   return {
@@ -151,6 +164,8 @@ function createOpenAiRequest({
             text: JSON.stringify({
               scoringFormat,
               players,
+              depth,
+              positionLane,
               outputRules: {
                 headline: "Short title for the scouting board.",
                 summary:
@@ -199,6 +214,10 @@ function createFallbackAnalysis(
   const top = players[0];
   const riser =
     players.find((player) => player.baselineRank > player.seerRank) ?? top;
+  const roleAnchor =
+    [...players].sort(
+      (left, right) => (right.roleSecurity ?? 0) - (left.roleSecurity ?? 0),
+    )[0] ?? top;
   const label = scoringFormatLabel(scoringFormat);
 
   return {
@@ -206,8 +225,8 @@ function createFallbackAnalysis(
     summary: `${top.name} sits at the front of the Seer board because the projection and range both keep the lantern bright. ${riser.name} gets the biggest nudge when role, matchup, and format all start humming together.`,
     factors: [
       `${label} scoring is baked into every projection.`,
-      `Floor and ceiling decide the lane before the vibes get loud.`,
-      `Rank movement compares the Seer board against the baseline list.`,
+      `Floor, ceiling, and role security decide the lane before the vibes get loud.`,
+      `${roleAnchor.name} has the cleanest role-security read in this slice.`,
     ],
     watchlist: `${riser.name} deserves the next deeper look: the Seer has him ahead of the baseline shape.`,
     disclaimer,

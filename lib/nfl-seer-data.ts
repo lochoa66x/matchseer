@@ -7,6 +7,7 @@ import {
   applyFantasyProjectionRealism,
   fantasyPlayersFromSourceProjections,
   isNflFantasyPlayer,
+  mergeFantasySourceFeeds,
   normalizeFantasyProjectionFeed,
   type FantasyProjectionMatchupContext,
   type FantasySourceProjection,
@@ -140,12 +141,17 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
   const scheduleUrl = process.env.NFL_SEER_DATA_URL ?? espnScoreboardUrl;
   const fantasyUrl = process.env.NFL_FANTASY_DATA_URL;
   const fantasyProjectionUrl = process.env.NFL_FANTASY_PROJECTIONS_URL;
+  const fantasyRankingUrl = process.env.NFL_FANTASY_RANKINGS_URL;
   const fantasyPlayers = fantasyUrl
     ? await fetchFantasyPlayers(fantasyUrl, notes)
     : [];
   const fantasyProjections = fantasyProjectionUrl
     ? await fetchFantasyProjections(fantasyProjectionUrl, notes)
     : [];
+  const fantasyRankings = fantasyRankingUrl
+    ? await fetchFantasyRankings(fantasyRankingUrl, notes)
+    : [];
+  const fantasySignals = mergeFantasySourceFeeds(fantasyProjections, fantasyRankings);
 
   try {
     const response = await fetch(scheduleUrl, {
@@ -164,7 +170,7 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       fetchedAt,
       fantasyPlayers,
       source: process.env.NFL_SEER_DATA_URL ? "configured-feed" : "espn-scoreboard",
-    }), fantasyProjections);
+    }), fantasySignals);
 
     if (dataset.matchups.length === 0) {
       throw new Error("NFL schedule feed returned no usable matchups");
@@ -176,18 +182,18 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       ...marketResult.dataset,
       providerStatus: {
         schedule: "live",
-        fantasy:
-          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+          fantasy:
+          fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? "live"
             : "fallback",
         market: marketResult.status,
         notes:
-          fantasyPlayers.length > 0 || fantasyProjections.length > 0
-            ? [...notes, ...projectionNotes(fantasyProjections), ...marketResult.notes]
+          fantasyPlayers.length > 0 || fantasySignals.length > 0
+            ? [...notes, ...projectionNotes(fantasySignals), ...marketResult.notes]
             : [
                 ...notes,
                 "Fantasy board is still using the seeded preseason rail.",
-                ...projectionNotes(fantasyProjections),
+                ...projectionNotes(fantasySignals),
                 ...marketResult.notes,
               ],
       },
@@ -217,21 +223,21 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
             notes: [],
           },
         },
-        fantasyProjections,
+        fantasySignals,
       ).fantasyPlayers,
       providerStatus: {
         schedule: "fallback",
-        fantasy:
-          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+          fantasy:
+          fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? "live"
             : "fallback",
         market: "fallback",
         notes: [
           message,
-          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+          fantasyPlayers.length > 0 || fantasySignals.length > 0
             ? "Fantasy feed is live."
             : "Fantasy board is still using the seeded preseason rail.",
-          ...projectionNotes(fantasyProjections),
+          ...projectionNotes(fantasySignals),
         ],
       },
     };
@@ -727,6 +733,33 @@ async function fetchFantasyProjections(url: string, notes: string[]) {
   return [];
 }
 
+async function fetchFantasyRankings(url: string, notes: string[]) {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`NFL fantasy rankings feed failed: ${response.status}`);
+    }
+
+    const payload = (await response.json()) as unknown;
+
+    return normalizeFantasyProjectionFeed(payload);
+  } catch (error) {
+    notes.push(
+      error instanceof Error
+        ? error.message
+        : "NFL fantasy rankings feed failed to load.",
+    );
+  }
+
+  return [];
+}
+
 function applyFantasyProjectionLayer(
   dataset: NflSeerDataset,
   sourceProjections: FantasySourceProjection[],
@@ -796,10 +829,19 @@ function projectionNotes(sourceProjections: FantasySourceProjection[]) {
     return [];
   }
 
+  const projectionCount = sourceProjections.filter(
+    (projection) => typeof projection.projection === "number",
+  ).length;
+  const rankingCount = sourceProjections.filter(
+    (projection) =>
+      typeof projection.sourceRank === "number" ||
+      typeof projection.positionRank === "number",
+  ).length;
+
   return [
-    `Fantasy projection realism matched ${sourceProjections.length} source projection${
-      sourceProjections.length === 1 ? "" : "s"
-    } with capped Seer nudges.`,
+    `Fantasy data spine matched ${projectionCount} projection${
+      projectionCount === 1 ? "" : "s"
+    } and ${rankingCount} ranking signal${rankingCount === 1 ? "" : "s"} with capped Seer nudges.`,
   ];
 }
 

@@ -3,7 +3,10 @@ import {
   applyFantasyProjectionRealism,
   buildSleeperFantasyLeague,
   createManualFantasyLeague,
+  createSeededFantasyPlayerPool,
+  fantasyPlayersFromSourceProjections,
   mergeFantasyPlayerPools,
+  mergeFantasySourceFeeds,
   normalizeFantasyProjectionFeed,
   sanitizeImportedFantasyLeague,
   type NflFantasyPlayer,
@@ -173,6 +176,90 @@ describe("NFL fantasy imports", () => {
       "K",
       "DST",
     ]);
+  });
+
+  it("builds a seeded fantasy spine with deep position coverage and receipts", () => {
+    const players = createSeededFantasyPlayerPool();
+    const counts = players.reduce<Record<string, number>>((positionCounts, player) => {
+      positionCounts[player.position] = (positionCounts[player.position] ?? 0) + 1;
+      return positionCounts;
+    }, {});
+
+    expect(players.length).toBeGreaterThanOrEqual(80);
+    expect(counts.QB).toBeGreaterThanOrEqual(10);
+    expect(counts.RB).toBeGreaterThanOrEqual(10);
+    expect(counts.WR).toBeGreaterThanOrEqual(10);
+    expect(counts.TE).toBeGreaterThanOrEqual(10);
+    expect(counts.K).toBeGreaterThanOrEqual(10);
+    expect(counts.DST).toBeGreaterThanOrEqual(10);
+    expect(players.every((player) => typeof player.sourceProjection === "number")).toBe(true);
+    expect(players.every((player) => typeof player.seerProjection === "number")).toBe(true);
+    expect(players.every((player) => typeof player.positionRank === "number")).toBe(true);
+  });
+
+  it("accepts rankings-only feeds and turns them into usable players", () => {
+    const rankings = normalizeFantasyProjectionFeed({
+      rankings: [
+        {
+          playerName: "Brock Bowers",
+          team: "LV",
+          position: "TE",
+          rank: 18,
+          positionRank: 1,
+          dynastyValue: 96,
+          roleSecurity: 91,
+          tier: "anchor",
+          provider: "rank-feed",
+        },
+      ],
+    });
+    const [player] = fantasyPlayersFromSourceProjections(rankings);
+
+    expect(rankings[0]).toMatchObject({
+      name: "Brock Bowers",
+      sourceRank: 18,
+      positionRank: 1,
+      projection: undefined,
+    });
+    expect(player.position).toBe("TE");
+    expect(player.positionRank).toBe(1);
+    expect(player.sourceRank).toBe(18);
+    expect(player.depthTier).toBe("anchor");
+    expect(player.sourceProjection).toBeGreaterThan(0);
+    expect(player.seerProjection).toBeDefined();
+  });
+
+  it("merges projection and ranking feeds into one player signal", () => {
+    const projections = normalizeFantasyProjectionFeed({
+      projections: [
+        {
+          playerName: "Josh Allen",
+          team: "BUF",
+          position: "QB",
+          projectedPoints: 24.6,
+          provider: "projection-feed",
+        },
+      ],
+    });
+    const rankings = normalizeFantasyProjectionFeed({
+      rankings: [
+        {
+          playerName: "Josh Allen",
+          team: "BUF",
+          position: "QB",
+          overallRank: 4,
+          positionRank: 2,
+          provider: "ranking-feed",
+        },
+      ],
+    });
+    const [merged] = mergeFantasySourceFeeds(projections, rankings);
+
+    expect(merged.projection).toBe(24.6);
+    expect(merged.sourceRank).toBe(4);
+    expect(merged.positionRank).toBe(2);
+    expect(merged.source).toContain("projection-feed");
+    expect(merged.source).toContain("ranking-feed");
   });
 
   it("caps Seer projection adjustments so source data still owns the baseline", () => {

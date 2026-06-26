@@ -10,6 +10,13 @@ export type FantasyProjectionAdjustment = {
   delta: number;
 };
 
+export type FantasyDepthTier =
+  | "anchor"
+  | "starter"
+  | "rotation"
+  | "stash"
+  | "streamer";
+
 export type NflFantasyPlayer = {
   id: string;
   name: string;
@@ -37,6 +44,13 @@ export type NflFantasyPlayer = {
   seerRank: number;
   traits: string[];
   read: string;
+  age?: number;
+  experience?: number;
+  sourceRank?: number;
+  positionRank?: number;
+  roleSecurity?: number;
+  dynastyValue?: number;
+  depthTier?: FantasyDepthTier;
   source?: FantasyImportSource;
   sourceProjection?: number;
   seerProjection?: number;
@@ -45,6 +59,7 @@ export type NflFantasyPlayer = {
   seerAdjustments?: string[];
   seerAdjustmentDetails?: FantasyProjectionAdjustment[];
   projectionSource?: string;
+  rankingSource?: string;
 };
 
 export type ImportedFantasyTeam = {
@@ -74,10 +89,18 @@ export type FantasySourceProjection = {
   name: string;
   team: string;
   position: string;
-  projection: number;
+  projection?: number;
   scoring?: "standard" | "halfPpr" | "fullPpr" | "unknown";
   source: string;
   opponent?: string;
+  sourceRank?: number;
+  positionRank?: number;
+  age?: number;
+  experience?: number;
+  roleSecurity?: number;
+  dynastyValue?: number;
+  depthTier?: FantasyDepthTier;
+  rankingSource?: string;
 };
 
 export type FantasyProjectionMatchupContext = {
@@ -103,6 +126,14 @@ type ManualPlayerLine = {
   position: string;
   team: string;
   sourceProjection?: number;
+  sourceRank?: number;
+  positionRank?: number;
+  age?: number;
+  experience?: number;
+  roleSecurity?: number;
+  dynastyValue?: number;
+  depthTier?: FantasyDepthTier;
+  rankingSource?: string;
 };
 
 export type SleeperLeague = {
@@ -197,6 +228,246 @@ const positionTokens = new Set([
   "BN",
   "BENCH",
 ]);
+
+type SeededFantasySpineRow = {
+  name: string;
+  team: string;
+  position: "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+  positionRank: number;
+  age?: number;
+  dynastyValue?: number;
+  roleSecurity?: number;
+};
+
+const seededFantasySpineRows: SeededFantasySpineRow[] = [
+  ...seedPositionRows("QB", [
+    ["Lamar Jackson", "BAL", 29],
+    ["Josh Allen", "BUF", 30],
+    ["Jalen Hurts", "PHI", 28],
+    ["Jayden Daniels", "WAS", 25],
+    ["Joe Burrow", "CIN", 29],
+    ["Patrick Mahomes", "KC", 30],
+    ["C.J. Stroud", "HOU", 24],
+    ["Anthony Richardson", "IND", 24],
+    ["Kyler Murray", "ARI", 29],
+    ["Jordan Love", "GB", 27],
+    ["Dak Prescott", "DAL", 33],
+    ["Brock Purdy", "SF", 26],
+  ]),
+  ...seedPositionRows("RB", [
+    ["Jahmyr Gibbs", "DET", 24],
+    ["Bijan Robinson", "ATL", 24],
+    ["Saquon Barkley", "PHI", 29],
+    ["Christian McCaffrey", "SF", 30],
+    ["De'Von Achane", "MIA", 24],
+    ["Breece Hall", "NYJ", 25],
+    ["Jonathan Taylor", "IND", 27],
+    ["Derrick Henry", "BAL", 32],
+    ["Josh Jacobs", "GB", 28],
+    ["Kyren Williams", "LAR", 26],
+    ["Ashton Jeanty", "LV", 22],
+    ["Chase Brown", "CIN", 26],
+    ["James Cook", "BUF", 26],
+    ["Kenneth Walker III", "SEA", 25],
+    ["David Montgomery", "DET", 29],
+    ["Alvin Kamara", "NO", 31],
+    ["Isiah Pacheco", "KC", 27],
+    ["Brian Robinson Jr.", "WAS", 27],
+  ]),
+  ...seedPositionRows("WR", [
+    ["Ja'Marr Chase", "CIN", 26],
+    ["Justin Jefferson", "MIN", 27],
+    ["CeeDee Lamb", "DAL", 27],
+    ["Amon-Ra St. Brown", "DET", 26],
+    ["Puka Nacua", "LAR", 25],
+    ["Malik Nabers", "NYG", 23],
+    ["Nico Collins", "HOU", 27],
+    ["Brian Thomas Jr.", "JAX", 23],
+    ["A.J. Brown", "PHI", 29],
+    ["Drake London", "ATL", 25],
+    ["Tyreek Hill", "MIA", 32],
+    ["Garrett Wilson", "NYJ", 26],
+    ["Ladd McConkey", "LAC", 24],
+    ["Tee Higgins", "CIN", 27],
+    ["Marvin Harrison Jr.", "ARI", 24],
+    ["DK Metcalf", "PIT", 28],
+    ["Terry McLaurin", "WAS", 31],
+    ["Mike Evans", "TB", 32],
+    ["Chris Olave", "NO", 26],
+    ["Xavier Worthy", "KC", 23],
+    ["Rashee Rice", "KC", 26],
+    ["Courtland Sutton", "DEN", 30],
+    ["DJ Moore", "CHI", 29],
+    ["Rome Odunze", "CHI", 24],
+  ]),
+  ...seedPositionRows("TE", [
+    ["Brock Bowers", "LV", 23],
+    ["Trey McBride", "ARI", 26],
+    ["George Kittle", "SF", 32],
+    ["Travis Kelce", "KC", 36],
+    ["Sam LaPorta", "DET", 25],
+    ["T.J. Hockenson", "MIN", 29],
+    ["Mark Andrews", "BAL", 30],
+    ["Evan Engram", "DEN", 31],
+    ["David Njoku", "CLE", 30],
+    ["Jake Ferguson", "DAL", 27],
+    ["Dalton Kincaid", "BUF", 26],
+    ["Tyler Warren", "IND", 23],
+  ]),
+  ...seedPositionRows("K", [
+    ["Brandon Aubrey", "DAL", 31],
+    ["Harrison Butker", "KC", 31],
+    ["Jake Elliott", "PHI", 31],
+    ["Ka'imi Fairbairn", "HOU", 32],
+    ["Cameron Dicker", "LAC", 26],
+    ["Tyler Bass", "BUF", 29],
+    ["Chase McLaughlin", "TB", 30],
+    ["Younghoe Koo", "ATL", 31],
+    ["Chris Boswell", "PIT", 35],
+    ["Jake Bates", "DET", 27],
+  ]),
+  ...seedPositionRows("DST", [
+    ["Philadelphia Eagles", "PHI"],
+    ["Baltimore Ravens", "BAL"],
+    ["Pittsburgh Steelers", "PIT"],
+    ["Buffalo Bills", "BUF"],
+    ["Kansas City Chiefs", "KC"],
+    ["New York Jets", "NYJ"],
+    ["San Francisco 49ers", "SF"],
+    ["Cleveland Browns", "CLE"],
+    ["Houston Texans", "HOU"],
+    ["Dallas Cowboys", "DAL"],
+    ["Minnesota Vikings", "MIN"],
+    ["Denver Broncos", "DEN"],
+  ]),
+];
+
+export function createSeededFantasyPlayerPool() {
+  return seededFantasySpineRows
+    .map((row) => ({
+      ...row,
+      sourceProjection: seededSourceProjection(row.position, row.positionRank),
+      roleSecurity:
+        row.roleSecurity ?? seededRoleSecurity(row.position, row.positionRank),
+      dynastyValue:
+        row.dynastyValue ??
+        seededDynastyValue(row.position, row.positionRank, row.age),
+      depthTier: seededDepthTier(row.positionRank),
+      rankingSource: "MatchSeer seeded spine",
+    }))
+    .sort(
+      (left, right) =>
+        right.sourceProjection - left.sourceProjection ||
+        left.positionRank - right.positionRank,
+    )
+    .map((row, index) =>
+      createGeneratedFantasyPlayer({
+        line: {
+          name: row.name,
+          position: row.position,
+          team: row.team,
+          sourceProjection: row.sourceProjection,
+          sourceRank: index + 1,
+          positionRank: row.positionRank,
+          age: row.age,
+          experience: row.age ? Math.max(0, row.age - 22) : undefined,
+          roleSecurity: row.roleSecurity,
+          dynastyValue: row.dynastyValue,
+          depthTier: row.depthTier,
+          rankingSource: row.rankingSource,
+        },
+        rank: index + 1,
+        source: "seeded",
+      }),
+    );
+}
+
+function seedPositionRows(
+  position: SeededFantasySpineRow["position"],
+  rows: Array<[name: string, team: string, age?: number]>,
+) {
+  return rows.map(([name, team, age], index) => ({
+    name,
+    team,
+    position,
+    age,
+    positionRank: index + 1,
+  }));
+}
+
+function seededSourceProjection(
+  position: SeededFantasySpineRow["position"],
+  positionRank: number,
+) {
+  const rank = Math.max(1, positionRank);
+  const baseByPosition = {
+    QB: 24.8,
+    RB: 22.6,
+    WR: 22.4,
+    TE: 16.1,
+    K: 9.7,
+    DST: 9.6,
+  };
+  const falloffByPosition = {
+    QB: 0.56,
+    RB: 0.46,
+    WR: 0.38,
+    TE: 0.5,
+    K: 0.18,
+    DST: 0.22,
+  };
+  const floorByPosition = {
+    QB: 14.2,
+    RB: 7.8,
+    WR: 7.4,
+    TE: 5.5,
+    K: 6.8,
+    DST: 5.8,
+  };
+
+  return round1(
+    Math.max(
+      floorByPosition[position],
+      baseByPosition[position] - (rank - 1) * falloffByPosition[position],
+    ),
+  );
+}
+
+function seededRoleSecurity(
+  position: SeededFantasySpineRow["position"],
+  positionRank: number,
+) {
+  const positionBias = position === "QB" || position === "K" || position === "DST" ? 5 : 0;
+
+  return clampMeter(92 - positionRank * 2 + positionBias);
+}
+
+function seededDynastyValue(
+  position: SeededFantasySpineRow["position"],
+  positionRank: number,
+  age: number | undefined,
+) {
+  const ageValue = age ? clampMeter(108 - Math.max(0, age - 22) * 5) : 74;
+  const positionBias = position === "QB" ? 8 : position === "RB" ? -4 : 0;
+
+  return clampMeter(ageValue + 22 - positionRank * 2 + positionBias);
+}
+
+function seededDepthTier(positionRank: number): FantasyDepthTier {
+  if (positionRank <= 3) {
+    return "anchor";
+  }
+
+  if (positionRank <= 10) {
+    return "starter";
+  }
+
+  if (positionRank <= 18) {
+    return "rotation";
+  }
+
+  return "stash";
+}
 
 export function createManualFantasyLeague({
   knownPlayers,
@@ -400,21 +671,68 @@ export function normalizeFantasyProjectionFeed(payload: unknown): FantasySourceP
     .filter((projection): projection is FantasySourceProjection => projection !== null);
 }
 
+export function mergeFantasySourceFeeds(
+  ...feeds: FantasySourceProjection[][]
+): FantasySourceProjection[] {
+  const merged = new Map<string, FantasySourceProjection>();
+
+  feeds.flat().forEach((projection) => {
+    const key = projectionKeys(projection)[0] ?? projection.id;
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, projection);
+      return;
+    }
+
+    merged.set(key, {
+      ...current,
+      ...projection,
+      projection: current.projection ?? projection.projection,
+      scoring: current.scoring ?? projection.scoring,
+      sourceRank: bestRank(current.sourceRank, projection.sourceRank),
+      positionRank: bestRank(current.positionRank, projection.positionRank),
+      source: [current.source, projection.source]
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .join(" + "),
+      rankingSource: projection.rankingSource ?? current.rankingSource,
+    });
+  });
+
+  return [...merged.values()].sort(
+    (left, right) =>
+      (left.sourceRank ?? 9999) - (right.sourceRank ?? 9999) ||
+      (left.positionRank ?? 9999) - (right.positionRank ?? 9999) ||
+      (right.projection ?? 0) - (left.projection ?? 0),
+  );
+}
+
 export function fantasyPlayersFromSourceProjections(
   projections: FantasySourceProjection[],
 ) {
-  return projections.map((projection, index) =>
-    createGeneratedFantasyPlayer({
+  return projections.map((projection, index) => {
+    const rank = projection.sourceRank ?? projection.positionRank ?? index + 18;
+
+    return createGeneratedFantasyPlayer({
       line: {
         name: projection.name,
         position: projection.position,
         team: projection.team,
         sourceProjection: projection.projection,
+        sourceRank: projection.sourceRank,
+        positionRank: projection.positionRank,
+        age: projection.age,
+        experience: projection.experience,
+        roleSecurity: projection.roleSecurity,
+        dynastyValue: projection.dynastyValue,
+        depthTier: projection.depthTier,
+        rankingSource: projection.rankingSource ?? projection.source,
       },
-      rank: index + 18,
+      rank,
       source: "feed",
-    }),
-  );
+    });
+  });
 }
 
 export function applyFantasyProjectionRealism(
@@ -432,6 +750,15 @@ export function applyFantasyProjectionRealism(
     if (typeof sourceProjection !== "number") {
       return {
         ...player,
+        opponent: source?.opponent ?? player.opponent,
+        sourceRank: player.sourceRank ?? source?.sourceRank,
+        positionRank: player.positionRank ?? source?.positionRank,
+        age: player.age ?? source?.age,
+        experience: player.experience ?? source?.experience,
+        roleSecurity: player.roleSecurity ?? source?.roleSecurity,
+        dynastyValue: player.dynastyValue ?? source?.dynastyValue,
+        depthTier: player.depthTier ?? source?.depthTier,
+        rankingSource: source?.rankingSource ?? player.rankingSource,
         seerAdjustments:
           player.seerAdjustments && player.seerAdjustments.length > 0
             ? player.seerAdjustments
@@ -461,6 +788,14 @@ export function applyFantasyProjectionRealism(
       seerAdjustments:
         adjustmentLabels.length > 0 ? adjustmentLabels : ["Source and Seer agree"],
       projectionSource: source?.source ?? player.projectionSource ?? "imported projection",
+      sourceRank: player.sourceRank ?? source?.sourceRank,
+      positionRank: player.positionRank ?? source?.positionRank,
+      age: player.age ?? source?.age,
+      experience: player.experience ?? source?.experience,
+      roleSecurity: player.roleSecurity ?? source?.roleSecurity,
+      dynastyValue: player.dynastyValue ?? source?.dynastyValue,
+      depthTier: player.depthTier ?? source?.depthTier,
+      rankingSource: source?.rankingSource ?? player.rankingSource,
     };
   });
 }
@@ -682,6 +1017,17 @@ function createGeneratedFantasyPlayer({
   const touchdownPulse = clampMeter(42 + ((seed >> 3) % 34));
   const generated = projectionProfile(position, seed);
   const sourceProjection = line.sourceProjection ?? generated.sourceProjection;
+  const ageValue = line.age ?? age;
+  const roleSecurity =
+    line.roleSecurity ?? clampMeter(88 - Math.max(0, rank - 18) * 0.2 - chaos * 0.12);
+  const dynastyValue =
+    line.dynastyValue ??
+    clampMeter(
+      74 +
+        (ageValue ? Math.max(-18, 28 - ageValue) * 2.4 : 0) +
+        (100 - Math.min(100, rank)) * 0.12 -
+        chaos * 0.08,
+    );
 
   const player = {
     id: playerId
@@ -703,9 +1049,17 @@ function createGeneratedFantasyPlayer({
     seerRank: Math.max(1, Math.min(250, rank - Math.round((matchup - chaos) / 18))),
     traits: generated.traits,
     read: generatedRead(line.name, position, source),
+    age: ageValue,
+    experience: line.experience ?? (ageValue ? Math.max(0, ageValue - 22) : undefined),
+    sourceRank: line.sourceRank ?? rank,
+    positionRank: line.positionRank,
+    roleSecurity,
+    dynastyValue,
+    depthTier: line.depthTier ?? seededDepthTier(line.positionRank ?? rank),
     source,
     sourceProjection,
     seerAdjustments: seerAdjustmentLabels({ chaos, health, matchup, position }),
+    rankingSource: line.rankingSource,
   };
 
   return applyFantasyProjectionRealism([player], [], { cap: 2.4 })[0];
@@ -816,7 +1170,11 @@ function generatedRead(name: string, position: string, source: FantasyImportSour
       ? "Sleeper roster import"
       : source === "screenshot"
         ? "screenshot receipt"
-        : "manual roster paste";
+        : source === "feed"
+          ? "external fantasy feed"
+          : source === "seeded"
+            ? "seeded fantasy spine"
+            : "manual roster paste";
 
   return `${name} enters from the ${sourceLabel}. The Seer builds the first read from position role, team tag, health noise, and matchup shape.`;
 }
@@ -901,7 +1259,8 @@ function isImportSource(value: unknown): value is FantasyImportSource {
     value === "seeded" ||
     value === "sleeper" ||
     value === "manual" ||
-    value === "screenshot"
+    value === "screenshot" ||
+    value === "feed"
   );
 }
 
@@ -943,6 +1302,8 @@ function projectionRowsFromPayload(payload: unknown): unknown[] {
   for (const key of [
     "projections",
     "fantasyProjections",
+    "rankings",
+    "fantasyRankings",
     "players",
     "fantasyPlayers",
     "data",
@@ -985,8 +1346,29 @@ function normalizeSourceProjection(
     row.halfPpr,
     row.standard,
   );
+  const sourceRank = firstRankNumber(
+    row.sourceRank,
+    row.rank,
+    row.overallRank,
+    row.ecr,
+    row.adp,
+    row.overall,
+  );
+  const positionRank = firstRankNumber(
+    row.positionRank,
+    row.posRank,
+    row.positionalRank,
+    row.position_rank,
+    row.pos_rank,
+  );
+  const source = cleanLine(row.source) || cleanLine(row.provider) || "projection-feed";
 
-  if (!name || typeof projection !== "number") {
+  if (
+    !name ||
+    (typeof projection !== "number" &&
+      typeof sourceRank !== "number" &&
+      typeof positionRank !== "number")
+  ) {
     return null;
   }
 
@@ -998,14 +1380,27 @@ function normalizeSourceProjection(
     name,
     team,
     position,
-    projection: round1(projection),
+    projection: typeof projection === "number" ? round1(projection) : undefined,
     scoring: scoringFromProjectionRow(row),
-    source: cleanLine(row.source) || cleanLine(row.provider) || "projection-feed",
+    source,
     opponent:
       cleanLine(row.opponent) ||
       cleanLine(row.opp) ||
       cleanLine(row.matchup) ||
       undefined,
+    sourceRank,
+    positionRank,
+    age: firstNumber(row.age),
+    experience: firstNumber(row.experience, row.years, row.seasons),
+    roleSecurity: firstMeterNumber(row.roleSecurity, row.role, row.roleScore),
+    dynastyValue: firstMeterNumber(
+      row.dynastyValue,
+      row.dynasty,
+      row.keeperValue,
+      row.longTermValue,
+    ),
+    depthTier: depthTierFromValue(row.depthTier ?? row.tier ?? row.roleTier),
+    rankingSource: cleanLine(row.rankingSource) || source,
   };
 }
 
@@ -1086,6 +1481,13 @@ function findMatchingPlayer(
 
 function projectionReceiptFields(player: NflFantasyPlayer) {
   return {
+    age: player.age,
+    experience: player.experience,
+    sourceRank: player.sourceRank,
+    positionRank: player.positionRank,
+    roleSecurity: player.roleSecurity,
+    dynastyValue: player.dynastyValue,
+    depthTier: player.depthTier,
     sourceProjection: player.sourceProjection,
     seerProjection: player.seerProjection,
     seerDelta: player.seerDelta,
@@ -1093,6 +1495,7 @@ function projectionReceiptFields(player: NflFantasyPlayer) {
     seerAdjustments: player.seerAdjustments,
     seerAdjustmentDetails: player.seerAdjustmentDetails,
     projectionSource: player.projectionSource,
+    rankingSource: player.rankingSource,
   };
 }
 
@@ -1163,12 +1566,23 @@ function projectionAdjustmentDetails(
 
   details.push({
     label: "role",
-    delta: round1(
-      player.targetShare * (isPassCatcher ? 0.035 : 0.012) +
-        player.carryShare * (position === "RB" ? 0.025 : 0.006) -
-        0.55,
-    ),
+    delta:
+      position === "K" || position === "DST"
+        ? round1(((player.roleSecurity ?? 78) - 78) / 44)
+        : round1(
+            player.targetShare * (isPassCatcher ? 0.035 : 0.012) +
+              player.carryShare * (position === "RB" ? 0.025 : 0.006) -
+              0.55,
+          ),
   });
+
+  if (typeof player.roleSecurity === "number" && position !== "K" && position !== "DST") {
+    details.push({
+      label: "role security",
+      delta: round1((player.roleSecurity - 78) / 48),
+    });
+  }
+
   details.push({ label: "health", delta: round1((player.health - 84) / 24) });
   details.push({ label: "chaos", delta: round1(-(player.chaos - 48) / 34) });
 
@@ -1219,6 +1633,82 @@ function firstNumber(...values: unknown[]) {
     if (Number.isFinite(numberValue) && numberValue >= 0 && numberValue <= 60) {
       return numberValue;
     }
+  }
+
+  return undefined;
+}
+
+function firstRankNumber(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue =
+      typeof value === "number"
+        ? value
+        : typeof value === "string"
+          ? Number(value.replace(/^#+/, ""))
+          : NaN;
+
+    if (Number.isFinite(numberValue) && numberValue >= 1 && numberValue <= 500) {
+      return Math.round(numberValue);
+    }
+  }
+
+  return undefined;
+}
+
+function firstMeterNumber(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue =
+      typeof value === "number"
+        ? value
+        : typeof value === "string"
+          ? Number(value)
+          : NaN;
+
+    if (Number.isFinite(numberValue)) {
+      return clampMeter(numberValue);
+    }
+  }
+
+  return undefined;
+}
+
+function bestRank(left: number | undefined, right: number | undefined) {
+  if (typeof left !== "number") {
+    return right;
+  }
+
+  if (typeof right !== "number") {
+    return left;
+  }
+
+  return Math.min(left, right);
+}
+
+function depthTierFromValue(value: unknown): FantasyDepthTier | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.toLowerCase();
+
+  if (normalized.includes("anchor") || normalized.includes("elite")) {
+    return "anchor";
+  }
+
+  if (normalized.includes("starter") || normalized.includes("start")) {
+    return "starter";
+  }
+
+  if (normalized.includes("rotation") || normalized.includes("bench")) {
+    return "rotation";
+  }
+
+  if (normalized.includes("stream")) {
+    return "streamer";
+  }
+
+  if (normalized.includes("stash") || normalized.includes("taxi")) {
+    return "stash";
   }
 
   return undefined;

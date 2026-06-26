@@ -23,6 +23,7 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  createSeededFantasyPlayerPool,
   createManualFantasyLeague,
   mergeFantasyPlayerPools,
   sanitizeImportedFantasyLeague,
@@ -373,118 +374,7 @@ const seededMatchups: NflMatchup[] = [
   },
 ];
 
-const seededFantasyPlayers: FantasyPlayer[] = [
-  {
-    id: "st-brown",
-    name: "Amon-Ra St. Brown",
-    team: "DET",
-    position: "WR",
-    opponent: "at PHI",
-    color: teams.det.color,
-    baseline: {
-      rushYards: 2,
-      rushTd: 0,
-      receivingYards: 86,
-      receivingTd: 0.55,
-      receptions: 7.6,
-    },
-    targetShare: 31,
-    carryShare: 1,
-    touchdownPulse: 62,
-    matchup: 74,
-    health: 91,
-    chaos: 38,
-    nflRank: 9,
-    seerRank: 5,
-    traits: ["Target gravity", "Slot leverage", "Script proof"],
-    read:
-      "Target gravity is the whole spell. Even if the game gets messy, his route volume keeps the floor warm.",
-  },
-  {
-    id: "gibbs",
-    name: "Jahmyr Gibbs",
-    team: "DET",
-    position: "RB",
-    opponent: "at PHI",
-    color: teams.det.color,
-    baseline: {
-      rushYards: 72,
-      rushTd: 0.62,
-      receivingYards: 34,
-      receivingTd: 0.18,
-      receptions: 4.2,
-    },
-    targetShare: 19,
-    carryShare: 44,
-    touchdownPulse: 69,
-    matchup: 68,
-    health: 86,
-    chaos: 53,
-    nflRank: 15,
-    seerRank: 11,
-    traits: ["Explosive touches", "Receiving boost", "TD swing"],
-    read:
-      "Explosive-touch profile is loud, but touchdown dependency adds wobble. Ceiling monster, slightly thinner floor.",
-  },
-  {
-    id: "allen",
-    name: "Josh Allen",
-    team: "BUF",
-    position: "QB",
-    opponent: "vs BAL",
-    color: teams.buf.color,
-    baseline: {
-      passYards: 252,
-      passTd: 1.9,
-      interceptions: 0.7,
-      rushYards: 42,
-      rushTd: 0.48,
-      receivingYards: 0,
-      receivingTd: 0,
-      receptions: 0,
-    },
-    targetShare: 0,
-    carryShare: 18,
-    touchdownPulse: 78,
-    matchup: 70,
-    health: 88,
-    chaos: 61,
-    nflRank: 4,
-    seerRank: 4,
-    traits: ["Rushing floor", "Weather-proof path", "Red-zone keeper"],
-    read:
-      "Rushing equity keeps him alive in ugly weather. The matchup bites, but fantasy points do not need the game to look pretty.",
-  },
-  {
-    id: "lamar",
-    name: "Lamar Jackson",
-    team: "BAL",
-    position: "QB",
-    opponent: "at BUF",
-    color: teams.bal.color,
-    baseline: {
-      passYards: 236,
-      passTd: 1.7,
-      interceptions: 0.55,
-      rushYards: 58,
-      rushTd: 0.44,
-      receivingYards: 0,
-      receivingTd: 0,
-      receptions: 0,
-    },
-    targetShare: 0,
-    carryShare: 22,
-    touchdownPulse: 76,
-    matchup: 73,
-    health: 87,
-    chaos: 58,
-    nflRank: 5,
-    seerRank: 3,
-    traits: ["Rushing cheat code", "Wind insulation", "Explosive scramble"],
-    read:
-      "The legs are the cheat code. If wind cuts the passing tree, Lamar still has a path through the side door.",
-  },
-];
+const seededFantasyPlayers: FantasyPlayer[] = createSeededFantasyPlayerPool();
 
 const seededPlayerPair = [seededFantasyPlayers[0], seededFantasyPlayers[1]] as const;
 
@@ -767,6 +657,11 @@ export default function NflPage() {
             baselineRank: player.nflRank,
             seerRank: index + 1,
             overallSeerRank: scoutingBoard.findIndex((row) => row.id === player.id) + 1,
+            sourceRank: player.sourceRank,
+            positionRank: player.positionRank,
+            roleSecurity: player.roleSecurity,
+            dynastyValue: player.dynastyValue,
+            depthTier: player.depthTier,
             traits: player.traits,
           })),
         }),
@@ -1102,7 +997,7 @@ export default function NflPage() {
             <ScoringToggle value={scoringFormat} onChange={setScoringFormat} />
           </div>
           <div className="nfl-fantasy-list">
-            {fantasyPlayers.map((player) => (
+            {scoutingBoard.slice(0, 12).map((player) => (
               <FantasyCard
                 key={player.id}
                 player={player}
@@ -1577,9 +1472,9 @@ function FantasyCard({
         <span>Ceiling {fantasy.ceiling.toFixed(1)}</span>
       </div>
       <div className="nfl-fantasy-tags">
-        <span>{player.baseline.receptions.toFixed(1)} rec</span>
-        <span>{player.carryShare}% carry</span>
-        <span>{player.touchdownPulse}% TD pulse</span>
+        {fantasySignalTags(player).map((tag) => (
+          <span key={tag}>{tag}</span>
+        ))}
       </div>
       <ProjectionReceipt player={player} projection={fantasy} />
       <p>{player.read}</p>
@@ -1596,20 +1491,19 @@ function ProjectionReceipt({
   player: FantasyPlayer;
   projection: FantasyProjection;
 }) {
-  if (typeof player.sourceProjection !== "number") {
-    return null;
-  }
-
+  const sourceProjection = player.sourceProjection ?? projection.projection;
+  const sourceLabel =
+    typeof player.sourceProjection === "number" ? "Source" : "Model seed";
   const delta =
     typeof player.seerDelta === "number"
       ? player.seerDelta
-      : projection.projection - player.sourceProjection;
+      : projection.projection - sourceProjection;
   const tags = player.seerAdjustments?.slice(0, compact ? 2 : 4) ?? [];
 
   return (
     <div className={cx("nfl-projection-receipt", compact && "compact")}>
       <small>
-        Source {player.sourceProjection.toFixed(1)} -&gt; Seer{" "}
+        {sourceLabel} {sourceProjection.toFixed(1)} -&gt; Seer{" "}
         {projection.projection.toFixed(1)} {formatFantasyDelta(delta)}
       </small>
       {tags.length > 0 ? (
@@ -1621,6 +1515,39 @@ function ProjectionReceipt({
       ) : null}
     </div>
   );
+}
+
+function fantasySignalTags(player: FantasyPlayer) {
+  const tags = [
+    typeof player.positionRank === "number"
+      ? `${player.position} #${player.positionRank}`
+      : null,
+    typeof player.sourceRank === "number" ? `Board #${player.sourceRank}` : null,
+    typeof player.roleSecurity === "number" ? `Role ${player.roleSecurity}` : null,
+    typeof player.dynastyValue === "number"
+      ? `Dynasty ${player.dynastyValue}`
+      : null,
+    player.depthTier ? formatDepthTier(player.depthTier) : null,
+  ];
+
+  if (player.position === "RB") {
+    tags.push(`${player.carryShare}% carry`);
+  } else if (player.position === "WR" || player.position === "TE") {
+    tags.push(`${player.baseline.receptions.toFixed(1)} rec`);
+  } else if (player.position === "QB") {
+    tags.push(`${player.carryShare}% rush`);
+  } else {
+    tags.push(`${player.touchdownPulse}% swing`);
+  }
+
+  return tags.filter((tag): tag is string => Boolean(tag)).slice(0, 5);
+}
+
+function formatDepthTier(tier: string) {
+  return tier
+    .split("-")
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function FantasyDuelPlayer({
@@ -1806,6 +1733,9 @@ function ScoutingBoard({
                   </div>
                 </div>
                 <div className="nfl-trait-list">
+                  {fantasySignalTags(player).slice(0, 3).map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
                   {player.traits.map((trait) => (
                     <span key={trait}>{trait}</span>
                   ))}
@@ -2023,9 +1953,7 @@ function FantasyTeamLab({
                     <em>
                       {player.position} · {player.opponent}
                     </em>
-                    {typeof player.sourceProjection === "number" ? (
-                      <ProjectionReceipt player={player} projection={player.fantasy} compact />
-                    ) : null}
+                    <ProjectionReceipt player={player} projection={player.fantasy} compact />
                   </div>
                 </div>
                 <strong>{player.fantasy.projection.toFixed(1)}</strong>
@@ -2396,6 +2324,9 @@ function fantasyStrengths(
   );
   const rushingControl = average(roster.map((player) => player.carryShare));
   const health = average(roster.map((player) => player.health));
+  const roleSecurity = average(
+    roster.map((player) => player.roleSecurity ?? player.health),
+  );
 
   return [
     `${top.name} is the lineup anchor at ${top.fantasy.projection.toFixed(1)} projected points.`,
@@ -2404,8 +2335,10 @@ function fantasyStrengths(
       : rushingControl >= 22
         ? "Touch volume gives this roster a sturdy weekly base."
         : "The top-end players carry enough ceiling to make the matchup interesting.",
-    lens === "dynasty" && health >= 84
-      ? "The core is healthy enough to build around instead of panic-selling."
+    lens === "dynasty" && teamDynastyCore(roster) >= 74
+      ? "The dynasty core has enough age-value and role security to build around."
+      : roleSecurity >= 78
+        ? "Role security is steady, which makes lineup decisions easier."
       : "The roster has a clear identity, which makes lineup decisions easier.",
   ];
 }
@@ -2439,6 +2372,10 @@ function fantasyWeaknesses(
 
   if (risk > 58) {
     weakSpots.push("Chaos is a little loud, so floor protection matters.");
+  }
+
+  if (average(roster.map((player) => player.roleSecurity ?? 72)) < 68) {
+    weakSpots.push("Role security is thin, so late news can move the lineup more than usual.");
   }
 
   if (lens === "dynasty" && teamDynastyCore(roster) < 62) {
@@ -2550,7 +2487,9 @@ function fantasyTradeIdeas({
 
   return candidates.map((player) => {
     const reason =
-      player.position === "WR" && scoringFormat !== "standard"
+      lens === "dynasty" && (player.dynastyValue ?? 0) >= 78
+        ? "dynasty value"
+        : player.position === "WR" && scoringFormat !== "standard"
         ? "target volume"
         : player.position === "RB"
           ? "touch stability"
@@ -2633,7 +2572,10 @@ function tradeFitScore(
   }
 
   if (needs.has("core") || lens === "dynasty") {
-    score += player.health * 0.2 + (100 - player.nflRank) * 0.12;
+    score +=
+      (player.dynastyValue ?? player.health) * 0.24 +
+      (player.roleSecurity ?? 72) * 0.12 +
+      (100 - player.nflRank) * 0.06;
   }
 
   if (scoringFormat !== "standard") {
@@ -2652,19 +2594,30 @@ function teamBalance(roster: ScoutingRow[]) {
 }
 
 function teamDepth(roster: ScoutingRow[]) {
-  const playable = roster.filter((player) => player.fantasy.projection >= 12).length;
+  const playable = roster.filter(
+    (player) =>
+      player.fantasy.projection >= 12 || (player.roleSecurity ?? 0) >= 74,
+  ).length;
+  const roleSecurity = average(
+    roster.map((player) => player.roleSecurity ?? player.health),
+  );
 
-  return clampMeter(42 + roster.length * 8 + playable * 8);
+  return clampMeter(34 + Math.min(roster.length, 18) * 4 + playable * 5 + roleSecurity * 0.18);
 }
 
 function teamRisk(roster: ScoutingRow[]) {
   const chaos = average(roster.map((player) => player.chaos));
   const healthDrag = 100 - average(roster.map((player) => player.health));
+  const roleDrag = 100 - average(roster.map((player) => player.roleSecurity ?? 74));
   const touchdownDependence = average(
     roster.map((player) => player.touchdownPulse - player.targetShare / 2),
   );
 
-  return clampMeter(Math.round(chaos * 0.55 + healthDrag * 0.3 + touchdownDependence * 0.15));
+  return clampMeter(
+    Math.round(
+      chaos * 0.46 + healthDrag * 0.24 + roleDrag * 0.18 + touchdownDependence * 0.12,
+    ),
+  );
 }
 
 function teamDynastyCore(roster: ScoutingRow[]) {
@@ -2673,11 +2626,11 @@ function teamDynastyCore(roster: ScoutingRow[]) {
       average(
         roster.map(
           (player) =>
-            player.health * 0.36 +
-            (100 - player.nflRank) * 0.24 +
-            player.targetShare * 0.22 +
-            player.carryShare * 0.12 +
-            (100 - player.chaos) * 0.06,
+            (player.dynastyValue ?? player.health) * 0.5 +
+            (player.roleSecurity ?? player.health) * 0.2 +
+            player.health * 0.12 +
+            (100 - player.nflRank) * 0.1 +
+            (100 - player.chaos) * 0.08,
         ),
       ),
     ),
