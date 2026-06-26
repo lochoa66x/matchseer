@@ -3,6 +3,14 @@ import {
   type MarketPulseTarget,
   type PulseSkipReason,
 } from "./providers/polymarket";
+import {
+  applyFantasyProjectionRealism,
+  fantasyPlayersFromSourceProjections,
+  isNflFantasyPlayer,
+  normalizeFantasyProjectionFeed,
+  type FantasyProjectionMatchupContext,
+  type FantasySourceProjection,
+} from "./nfl-fantasy-import";
 
 export type NflTeamFeed = {
   code: string;
@@ -131,8 +139,12 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
   const notes: string[] = [];
   const scheduleUrl = process.env.NFL_SEER_DATA_URL ?? espnScoreboardUrl;
   const fantasyUrl = process.env.NFL_FANTASY_DATA_URL;
+  const fantasyProjectionUrl = process.env.NFL_FANTASY_PROJECTIONS_URL;
   const fantasyPlayers = fantasyUrl
     ? await fetchFantasyPlayers(fantasyUrl, notes)
+    : [];
+  const fantasyProjections = fantasyProjectionUrl
+    ? await fetchFantasyProjections(fantasyProjectionUrl, notes)
     : [];
 
   try {
@@ -148,11 +160,11 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
     }
 
     const payload = (await response.json()) as unknown;
-    const dataset = toNflSeerDataset(payload, {
+    const dataset = applyFantasyProjectionLayer(toNflSeerDataset(payload, {
       fetchedAt,
       fantasyPlayers,
       source: process.env.NFL_SEER_DATA_URL ? "configured-feed" : "espn-scoreboard",
-    });
+    }), fantasyProjections);
 
     if (dataset.matchups.length === 0) {
       throw new Error("NFL schedule feed returned no usable matchups");
@@ -164,14 +176,18 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       ...marketResult.dataset,
       providerStatus: {
         schedule: "live",
-        fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+        fantasy:
+          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+            ? "live"
+            : "fallback",
         market: marketResult.status,
         notes:
-          fantasyPlayers.length > 0
-            ? [...notes, ...marketResult.notes]
+          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+            ? [...notes, ...projectionNotes(fantasyProjections), ...marketResult.notes]
             : [
                 ...notes,
                 "Fantasy board is still using the seeded preseason rail.",
+                ...projectionNotes(fantasyProjections),
                 ...marketResult.notes,
               ],
       },
@@ -186,16 +202,36 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
       weekLabel: "Seeded lab",
       updatedAt: fetchedAt,
       matchups: [],
-      fantasyPlayers,
+      fantasyPlayers: applyFantasyProjectionLayer(
+        {
+          source: "seeded-fallback",
+          season: new Date().getFullYear().toString(),
+          weekLabel: "Seeded lab",
+          updatedAt: fetchedAt,
+          matchups: [],
+          fantasyPlayers,
+          providerStatus: {
+            schedule: "fallback",
+            fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+            market: "fallback",
+            notes: [],
+          },
+        },
+        fantasyProjections,
+      ).fantasyPlayers,
       providerStatus: {
         schedule: "fallback",
-        fantasy: fantasyPlayers.length > 0 ? "live" : "fallback",
+        fantasy:
+          fantasyPlayers.length > 0 || fantasyProjections.length > 0
+            ? "live"
+            : "fallback",
         market: "fallback",
         notes: [
           message,
-          fantasyPlayers.length > 0
+          fantasyPlayers.length > 0 || fantasyProjections.length > 0
             ? "Fantasy feed is live."
             : "Fantasy board is still using the seeded preseason rail.",
+          ...projectionNotes(fantasyProjections),
         ],
       },
     };
@@ -662,6 +698,109 @@ async function fetchFantasyPlayers(url: string, notes: string[]) {
   }
 
   return [];
+}
+
+async function fetchFantasyProjections(url: string, notes: string[]) {
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`NFL fantasy projections feed failed: ${response.status}`);
+    }
+
+    const payload = (await response.json()) as unknown;
+
+    return normalizeFantasyProjectionFeed(payload);
+  } catch (error) {
+    notes.push(
+      error instanceof Error
+        ? error.message
+        : "NFL fantasy projections feed failed to load.",
+    );
+  }
+
+  return [];
+}
+
+function applyFantasyProjectionLayer(
+  dataset: NflSeerDataset,
+  sourceProjections: FantasySourceProjection[],
+): NflSeerDataset {
+  const existingPlayers = dataset.fantasyPlayers.filter(isNflFantasyPlayer);
+  const projectionPlayers =
+    existingPlayers.length > 0
+      ? existingPlayers
+      : fantasyPlayersFromSourceProjections(sourceProjections);
+
+  if (projectionPlayers.length === 0) {
+    return dataset;
+  }
+
+  return {
+    ...dataset,
+    fantasyPlayers: applyFantasyProjectionRealism(
+      projectionPlayers,
+      sourceProjections,
+      {
+        matchups: fantasyProjectionContexts(dataset.matchups),
+      },
+    ),
+    providerStatus: {
+      ...dataset.providerStatus,
+      fantasy:
+        projectionPlayers.length > 0 || sourceProjections.length > 0
+          ? "live"
+          : dataset.providerStatus.fantasy,
+    },
+  };
+}
+
+function fantasyProjectionContexts(
+  matchups: NflMatchupFeed[],
+): FantasyProjectionMatchupContext[] {
+  return matchups.flatMap((matchup) => [
+    {
+      team: matchup.home.code,
+      opponent: `vs ${matchup.away.code}`,
+      weather: matchup.weather,
+      pace: matchup.pace,
+      teamWin: matchup.homeWin,
+      opponentWin: matchup.awayWin,
+      teamOffense: matchup.home.offense,
+      opponentDefense: matchup.away.defense,
+      teamHealth: matchup.home.injuries,
+      venue: matchup.venue,
+    },
+    {
+      team: matchup.away.code,
+      opponent: `at ${matchup.home.code}`,
+      weather: matchup.weather,
+      pace: matchup.pace,
+      teamWin: matchup.awayWin,
+      opponentWin: matchup.homeWin,
+      teamOffense: matchup.away.offense,
+      opponentDefense: matchup.home.defense,
+      teamHealth: matchup.away.injuries,
+      venue: matchup.venue,
+    },
+  ]);
+}
+
+function projectionNotes(sourceProjections: FantasySourceProjection[]) {
+  if (sourceProjections.length === 0) {
+    return [];
+  }
+
+  return [
+    `Fantasy projection realism matched ${sourceProjections.length} source projection${
+      sourceProjections.length === 1 ? "" : "s"
+    } with capped Seer nudges.`,
+  ];
 }
 
 function isCanonicalNflSeerDataset(

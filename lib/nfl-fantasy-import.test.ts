@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyFantasyProjectionRealism,
   buildSleeperFantasyLeague,
   createManualFantasyLeague,
+  mergeFantasyPlayerPools,
+  normalizeFantasyProjectionFeed,
   sanitizeImportedFantasyLeague,
   type NflFantasyPlayer,
 } from "./nfl-fantasy-import";
@@ -110,5 +113,136 @@ describe("NFL fantasy imports", () => {
     expect(league.teams[0].starterIds).toHaveLength(1);
     expect(league.teams[0].benchIds).toHaveLength(1);
     expect(league.players.map((player) => player.source)).toContain("sleeper");
+  });
+
+  it("normalizes projection feeds and matches players by name team position", () => {
+    const projections = normalizeFantasyProjectionFeed({
+      projections: [
+        {
+          playerName: "Josh Allen",
+          team: "BUF",
+          position: "QB",
+          projectedPoints: 24.6,
+          provider: "test-feed",
+        },
+      ],
+    });
+    const [player] = applyFantasyProjectionRealism([knownPlayer], projections, {
+      matchups: [
+        {
+          team: "BUF",
+          opponent: "vs BAL",
+          weather: "Dome",
+          pace: 72,
+          teamWin: 54,
+          opponentWin: 46,
+          opponentDefense: 74,
+          teamHealth: 88,
+        },
+      ],
+    });
+
+    expect(projections).toHaveLength(1);
+    expect(player.sourceProjection).toBe(24.6);
+    expect(player.projectionSource).toBe("test-feed");
+    expect(player.seerProjection).toBeGreaterThan(24.6);
+    expect(player.seerAdjustments?.some((tag) => tag.includes("clean track"))).toBe(
+      true,
+    );
+  });
+
+  it("keeps kicker and defense projection rows in their own lanes", () => {
+    const projections = normalizeFantasyProjectionFeed({
+      projections: [
+        {
+          playerName: "Jake Elliott",
+          team: "PHI",
+          position: "K",
+          projectedPoints: 8.4,
+        },
+        {
+          playerName: "Eagles",
+          team: "PHI",
+          position: "DEF",
+          projectedPoints: 7.8,
+        },
+      ],
+    });
+
+    expect(projections.map((projection) => projection.position)).toEqual([
+      "K",
+      "DST",
+    ]);
+  });
+
+  it("caps Seer projection adjustments so source data still owns the baseline", () => {
+    const [player] = applyFantasyProjectionRealism(
+      [
+        {
+          ...knownPlayer,
+          position: "RB",
+          targetShare: 45,
+          carryShare: 95,
+          chaos: 5,
+          health: 100,
+          sourceProjection: 12,
+        },
+      ],
+      [],
+      {
+        cap: 1.2,
+        matchups: [
+          {
+            team: "BUF",
+            weather: "Dome",
+            pace: 92,
+            teamWin: 70,
+            opponentWin: 30,
+            opponentDefense: 40,
+            teamHealth: 100,
+          },
+        ],
+      },
+    );
+
+    expect(player.seerDelta).toBe(1.2);
+    expect(player.seerProjection).toBe(13.2);
+  });
+
+  it("keeps fallback players usable when no source projection matches", () => {
+    const [player] = applyFantasyProjectionRealism([knownPlayer], [], {
+      cap: 1.2,
+    });
+
+    expect(player.sourceProjection).toBeUndefined();
+    expect(player.seerProjection).toBeUndefined();
+    expect(player.seerAdjustments).toContain("No source projection yet");
+  });
+
+  it("carries projection receipts from source players into imported rosters", () => {
+    const [sourcePlayer] = applyFantasyProjectionRealism(
+      [knownPlayer],
+      [
+        {
+          id: "ja",
+          name: "Josh Allen",
+          team: "BUF",
+          position: "QB",
+          projection: 23,
+          source: "test-feed",
+        },
+      ],
+    );
+    const merged = mergeFantasyPlayerPools([sourcePlayer], [
+      {
+        ...knownPlayer,
+        id: "sleeper-111-joshallen",
+        source: "sleeper",
+      },
+    ]);
+    const imported = merged.find((player) => player.id === "sleeper-111-joshallen");
+
+    expect(imported?.sourceProjection).toBe(23);
+    expect(imported?.seerProjection).toBeDefined();
   });
 });

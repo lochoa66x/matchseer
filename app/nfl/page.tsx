@@ -33,6 +33,9 @@ import {
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 type FantasyTeamLens = "redraft" | "dynasty";
+type ScoutingPosition = "ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+type ScoutingPlayerPosition = Exclude<ScoutingPosition, "ALL">;
+type ScoutingDepth = "top10" | "top25" | "deep";
 
 type NflTeam = {
   code: string;
@@ -163,6 +166,27 @@ type NflMarketPulse = {
     summary: string;
   };
 };
+
+const scoutingPositionOptions: Array<{ value: ScoutingPosition; label: string }> = [
+  { value: "ALL", label: "All" },
+  { value: "QB", label: "QB" },
+  { value: "RB", label: "RB" },
+  { value: "WR", label: "WR" },
+  { value: "TE", label: "TE" },
+  { value: "K", label: "Kicker" },
+  { value: "DST", label: "Def" },
+];
+
+const scoutingDepthOptions: Array<{
+  value: ScoutingDepth;
+  label: string;
+  limit: number;
+  summary: string;
+}> = [
+  { value: "top10", label: "Top 10", limit: 10, summary: "starter lane" },
+  { value: "top25", label: "Top 25", limit: 25, summary: "full roster" },
+  { value: "deep", label: "Dynasty deep", limit: 80, summary: "ultra-deep shelf" },
+];
 
 type ScenarioLevers = {
   wind: number;
@@ -511,6 +535,9 @@ export default function NflPage() {
   const [screenshotImportMessage, setScreenshotImportMessage] = useState(
     "Upload a roster screenshot; vision extraction runs only when an API key is configured.",
   );
+  const [scoutingPosition, setScoutingPosition] =
+    useState<ScoutingPosition>("ALL");
+  const [scoutingDepth, setScoutingDepth] = useState<ScoutingDepth>("top10");
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
@@ -561,6 +588,10 @@ export default function NflPage() {
   const scoutingBoard = useMemo(
     () => buildScoutingBoard(fantasyPlayers, scoringFormat),
     [fantasyPlayers, scoringFormat],
+  );
+  const visibleScoutingRows = useMemo(
+    () => filterScoutingRows(scoutingBoard, scoutingPosition, scoutingDepth),
+    [scoutingBoard, scoutingDepth, scoutingPosition],
   );
   const fantasyTeams = useMemo(() => {
     if (fantasyImport?.teams.length) {
@@ -697,18 +728,35 @@ export default function NflPage() {
     });
   }
 
+  function updateScoutingPosition(position: ScoutingPosition) {
+    setScoutingPosition(position);
+    setScoutRead(null);
+    setScoutStatus("idle");
+  }
+
+  function updateScoutingDepth(depth: ScoutingDepth) {
+    setScoutingDepth(depth);
+    setScoutRead(null);
+    setScoutStatus("idle");
+  }
+
   async function requestScoutingRead() {
     setScoutStatus("loading");
 
     try {
+      const depthOption = scoutingDepthOptions.find(
+        (option) => option.value === scoutingDepth,
+      );
       const response = await fetch("/api/ai/nfl-scouting", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          depth: depthOption?.label ?? "Top 10",
+          positionLane: scoutingPositionLabel(scoutingPosition),
           scoringFormat,
-          players: scoutingBoard.map((player, index) => ({
+          players: visibleScoutingRows.map((player, index) => ({
             name: player.name,
             team: player.team,
             position: player.position,
@@ -718,6 +766,7 @@ export default function NflPage() {
             ceiling: player.fantasy.ceiling,
             baselineRank: player.nflRank,
             seerRank: index + 1,
+            overallSeerRank: scoutingBoard.findIndex((row) => row.id === player.id) + 1,
             traits: player.traits,
           })),
         }),
@@ -1066,8 +1115,13 @@ export default function NflPage() {
 
       <ScoutingBoard
         analysis={scoutRead}
+        allRows={scoutingBoard}
+        depth={scoutingDepth}
+        onDepthChange={updateScoutingDepth}
+        onPositionChange={updateScoutingPosition}
         onRequest={requestScoutingRead}
-        rows={scoutingBoard}
+        position={scoutingPosition}
+        rows={visibleScoutingRows}
         scoringFormat={scoringFormat}
         status={scoutStatus}
       />
@@ -1527,8 +1581,45 @@ function FantasyCard({
         <span>{player.carryShare}% carry</span>
         <span>{player.touchdownPulse}% TD pulse</span>
       </div>
+      <ProjectionReceipt player={player} projection={fantasy} />
       <p>{player.read}</p>
     </article>
+  );
+}
+
+function ProjectionReceipt({
+  compact = false,
+  player,
+  projection,
+}: {
+  compact?: boolean;
+  player: FantasyPlayer;
+  projection: FantasyProjection;
+}) {
+  if (typeof player.sourceProjection !== "number") {
+    return null;
+  }
+
+  const delta =
+    typeof player.seerDelta === "number"
+      ? player.seerDelta
+      : projection.projection - player.sourceProjection;
+  const tags = player.seerAdjustments?.slice(0, compact ? 2 : 4) ?? [];
+
+  return (
+    <div className={cx("nfl-projection-receipt", compact && "compact")}>
+      <small>
+        Source {player.sourceProjection.toFixed(1)} -&gt; Seer{" "}
+        {projection.projection.toFixed(1)} {formatFantasyDelta(delta)}
+      </small>
+      {tags.length > 0 ? (
+        <div>
+          {tags.map((tag) => (
+            <span key={tag}>{tag}</span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1578,17 +1669,33 @@ function FantasyDuelPlayer({
 
 function ScoutingBoard({
   analysis,
+  allRows,
+  depth,
+  onDepthChange,
+  onPositionChange,
   onRequest,
+  position,
   rows,
   scoringFormat,
   status,
 }: {
   analysis: NflScoutingAnalysis | null;
+  allRows: ScoutingRow[];
+  depth: ScoutingDepth;
+  onDepthChange: (depth: ScoutingDepth) => void;
+  onPositionChange: (position: ScoutingPosition) => void;
   onRequest: () => void;
+  position: ScoutingPosition;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   status: ScoutStatus;
 }) {
+  const counts = countScoutingPositions(allRows);
+  const depthOption =
+    scoutingDepthOptions.find((option) => option.value === depth) ??
+    scoutingDepthOptions[0];
+  const laneTotal = position === "ALL" ? allRows.length : counts[position] ?? 0;
+
   return (
     <section className="nfl-scouting-board" id="scouting-board">
       <div className="nfl-scouting-head">
@@ -1604,6 +1711,9 @@ function ScoutingBoard({
           </p>
         </div>
         <div className="nfl-scouting-actions">
+          <span className="nfl-scouting-summary">
+            Showing {rows.length} of {laneTotal} · {depthOption.summary}
+          </span>
           <strong>{scoringLabels[scoringFormat]}</strong>
           <button
             disabled={status === "loading"}
@@ -1613,6 +1723,41 @@ function ScoutingBoard({
             <Sparkles size={16} />
             {status === "loading" ? "Reading..." : "Ask AI Scout"}
           </button>
+        </div>
+      </div>
+      <div className="nfl-scouting-tools" aria-label="Scouting board controls">
+        <div className="nfl-scouting-filter-bar" aria-label="Position lanes">
+          {scoutingPositionOptions.map((option) => {
+            const count =
+              option.value === "ALL" ? allRows.length : counts[option.value] ?? 0;
+
+            return (
+              <button
+                aria-pressed={position === option.value}
+                className={cx(position === option.value && "active")}
+                key={option.value}
+                onClick={() => onPositionChange(option.value)}
+                type="button"
+              >
+                <span>{option.label}</span>
+                <em>{count}</em>
+              </button>
+            );
+          })}
+        </div>
+        <div className="nfl-scouting-depth" aria-label="Board depth">
+          {scoutingDepthOptions.map((option) => (
+            <button
+              aria-pressed={depth === option.value}
+              className={cx(depth === option.value && "active")}
+              key={option.value}
+              onClick={() => onDepthChange(option.value)}
+              type="button"
+            >
+              <span>{option.label}</span>
+              <em>{option.summary}</em>
+            </button>
+          ))}
         </div>
       </div>
       {analysis || status === "error" ? (
@@ -1642,46 +1787,59 @@ function ScoutingBoard({
           )}
         </article>
       ) : null}
-      <div className="nfl-scouting-list">
-        {rows.map((player, index) => (
-          <article className="nfl-scout-row" key={player.id}>
-            <div className="nfl-rank-stack">
-              <span>#{index + 1}</span>
-              <em>Seer</em>
-            </div>
-            <div className="nfl-scout-player">
-              <div className="nfl-player-id">
-                <span style={{ background: player.color }}>{player.team}</span>
-                <div>
-                  <strong>{player.name}</strong>
-                  <em>
-                    {player.position} · {player.opponent}
-                  </em>
+      {rows.length ? (
+        <div className="nfl-scouting-list">
+          {rows.map((player, index) => (
+            <article className="nfl-scout-row" key={player.id}>
+              <div className="nfl-rank-stack">
+                <span>#{index + 1}</span>
+                <em>{scoutingRankLabel(position)}</em>
+              </div>
+              <div className="nfl-scout-player">
+                <div className="nfl-player-id">
+                  <span style={{ background: player.color }}>{player.team}</span>
+                  <div>
+                    <strong>{player.name}</strong>
+                    <em>
+                      {player.position} · {player.opponent}
+                    </em>
+                  </div>
+                </div>
+                <div className="nfl-trait-list">
+                  {player.traits.map((trait) => (
+                    <span key={trait}>{trait}</span>
+                  ))}
                 </div>
               </div>
-              <div className="nfl-trait-list">
-                {player.traits.map((trait) => (
-                  <span key={trait}>{trait}</span>
-                ))}
+              <div className="nfl-scout-metric">
+                <span>Projection</span>
+                <strong>{player.fantasy.projection.toFixed(1)}</strong>
               </div>
-            </div>
-            <div className="nfl-scout-metric">
-              <span>Projection</span>
-              <strong>{player.fantasy.projection.toFixed(1)}</strong>
-            </div>
-            <div className="nfl-scout-metric">
-              <span>Range</span>
-              <strong>
-                {player.fantasy.floor.toFixed(1)}-{player.fantasy.ceiling.toFixed(1)}
-              </strong>
-            </div>
-            <div className="nfl-rank-delta">
-              <span>Baseline #{player.nflRank}</span>
-              <strong>{formatRankDelta(player.rankDelta)}</strong>
-            </div>
-          </article>
-        ))}
-      </div>
+              <div className="nfl-scout-metric">
+                <span>Range</span>
+                <strong>
+                  {player.fantasy.floor.toFixed(1)}-{player.fantasy.ceiling.toFixed(1)}
+                </strong>
+              </div>
+              <div className="nfl-rank-delta">
+                <span>Baseline #{player.nflRank}</span>
+                <strong>{formatRankDelta(player.rankDelta)}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <article className="nfl-scouting-empty">
+          <Search size={18} />
+          <div>
+            <strong>No {scoutingPositionLabel(position).toLowerCase()} rows loaded yet</strong>
+            <p>
+              Add them through a projection feed, Sleeper import, roster paste, or
+              screenshot upload and this lane will fill itself.
+            </p>
+          </div>
+        </article>
+      )}
     </section>
   );
 }
@@ -1866,13 +2024,7 @@ function FantasyTeamLab({
                       {player.position} · {player.opponent}
                     </em>
                     {typeof player.sourceProjection === "number" ? (
-                      <small>
-                        Source {player.sourceProjection.toFixed(1)} -&gt; Seer{" "}
-                        {player.fantasy.projection.toFixed(1)}{" "}
-                        {formatFantasyDelta(
-                          player.fantasy.projection - player.sourceProjection,
-                        )}
-                      </small>
+                      <ProjectionReceipt player={player} projection={player.fantasy} compact />
                     ) : null}
                   </div>
                 </div>
@@ -2573,6 +2725,78 @@ function compareFantasyPlayers(
   };
 }
 
+function filterScoutingRows(
+  rows: ScoutingRow[],
+  position: ScoutingPosition,
+  depth: ScoutingDepth,
+) {
+  const depthOption =
+    scoutingDepthOptions.find((option) => option.value === depth) ??
+    scoutingDepthOptions[0];
+  const laneRows =
+    position === "ALL"
+      ? rows
+      : rows.filter(
+          (row) => normalizeScoutingPosition(row.position) === position,
+        );
+
+  return laneRows.slice(0, depthOption.limit);
+}
+
+function countScoutingPositions(rows: ScoutingRow[]) {
+  return rows.reduce(
+    (counts, row) => {
+      const position = normalizeScoutingPosition(row.position);
+      counts[position] += 1;
+      return counts;
+    },
+    {
+      QB: 0,
+      RB: 0,
+      WR: 0,
+      TE: 0,
+      K: 0,
+      DST: 0,
+    } satisfies Record<ScoutingPlayerPosition, number>,
+  );
+}
+
+function normalizeScoutingPosition(position: string): ScoutingPlayerPosition {
+  const normalized = position.toUpperCase();
+
+  if (normalized === "DEF" || normalized === "D") {
+    return "DST";
+  }
+
+  if (
+    normalized === "QB" ||
+    normalized === "RB" ||
+    normalized === "WR" ||
+    normalized === "TE" ||
+    normalized === "K" ||
+    normalized === "DST"
+  ) {
+    return normalized;
+  }
+
+  return "WR";
+}
+
+function scoutingPositionLabel(position: ScoutingPosition) {
+  return (
+    scoutingPositionOptions.find((option) => option.value === position)?.label ??
+    position
+  );
+}
+
+function scoutingRankLabel(position: ScoutingPosition) {
+  if (position === "ALL") {
+    return "Seer";
+  }
+
+  return position === "DST" ? "Def" : position;
+}
+
 function buildScoutingBoard(players: FantasyPlayer[], scoringFormat: ScoringFormat) {
   return players
     .map((player) => {
@@ -2604,6 +2828,24 @@ function fantasyProjection(
   player: FantasyPlayer,
   scoringFormat: ScoringFormat,
 ): FantasyProjection {
+  if (typeof player.seerProjection === "number") {
+    const projection = round1(player.seerProjection);
+    const floor =
+      projection * (0.62 + player.health / 360) -
+      player.chaos / 34 -
+      Math.max(0, -projectionDelta(player)) * 0.18;
+    const ceiling =
+      projection * (1.13 + player.touchdownPulse / 320) +
+      player.chaos / 28 +
+      Math.max(0, projectionDelta(player)) * 0.22;
+
+    return {
+      projection,
+      floor: round1(Math.max(0, floor)),
+      ceiling: round1(Math.max(projection, ceiling)),
+    };
+  }
+
   const ppr = receptionPoints[scoringFormat];
   const passing =
     (player.baseline.passYards ?? 0) / 25 +
@@ -2628,6 +2870,18 @@ function fantasyProjection(
     floor: round1(Math.max(0, floor)),
     ceiling: round1(Math.max(projection, ceiling)),
   };
+}
+
+function projectionDelta(player: FantasyPlayer) {
+  if (typeof player.seerDelta === "number") {
+    return player.seerDelta;
+  }
+
+  if (typeof player.sourceProjection === "number" && typeof player.seerProjection === "number") {
+    return player.seerProjection - player.sourceProjection;
+  }
+
+  return 0;
 }
 
 function defaultScenarioLevers(matchup: NflMatchup): ScenarioLevers {

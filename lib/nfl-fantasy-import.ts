@@ -1,4 +1,14 @@
-export type FantasyImportSource = "seeded" | "sleeper" | "manual" | "screenshot";
+export type FantasyImportSource =
+  | "seeded"
+  | "sleeper"
+  | "manual"
+  | "screenshot"
+  | "feed";
+
+export type FantasyProjectionAdjustment = {
+  label: string;
+  delta: number;
+};
 
 export type NflFantasyPlayer = {
   id: string;
@@ -27,9 +37,14 @@ export type NflFantasyPlayer = {
   seerRank: number;
   traits: string[];
   read: string;
-  source?: FantasyImportSource | "feed";
+  source?: FantasyImportSource;
   sourceProjection?: number;
+  seerProjection?: number;
+  seerDelta?: number;
+  seerAdjustmentCap?: number;
   seerAdjustments?: string[];
+  seerAdjustmentDetails?: FantasyProjectionAdjustment[];
+  projectionSource?: string;
 };
 
 export type ImportedFantasyTeam = {
@@ -52,6 +67,35 @@ export type ImportedFantasyLeague = {
   teams: ImportedFantasyTeam[];
   players: NflFantasyPlayer[];
   notes: string[];
+};
+
+export type FantasySourceProjection = {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  projection: number;
+  scoring?: "standard" | "halfPpr" | "fullPpr" | "unknown";
+  source: string;
+  opponent?: string;
+};
+
+export type FantasyProjectionMatchupContext = {
+  team: string;
+  opponent?: string;
+  weather?: string;
+  pace?: number;
+  teamWin?: number;
+  opponentWin?: number;
+  teamOffense?: number;
+  opponentDefense?: number;
+  teamHealth?: number;
+  venue?: string;
+};
+
+export type FantasyProjectionRealismOptions = {
+  cap?: number;
+  matchups?: FantasyProjectionMatchupContext[];
 };
 
 type ManualPlayerLine = {
@@ -332,13 +376,93 @@ export function mergeFantasyPlayerPools(
   const merged = new Map(basePlayers.map((player) => [player.id, player]));
 
   importedPlayers.forEach((player) => {
+    const matchedBase = findMatchingPlayer(basePlayers, player);
+    const receipt: Partial<NflFantasyPlayer> = matchedBase
+      ? projectionReceiptFields(matchedBase)
+      : {};
+
     merged.set(player.id, {
-      ...merged.get(player.id),
       ...player,
+      ...receipt,
+      sourceProjection: player.sourceProjection ?? receipt.sourceProjection,
+      source: player.source,
     });
   });
 
   return [...merged.values()];
+}
+
+export function normalizeFantasyProjectionFeed(payload: unknown): FantasySourceProjection[] {
+  const rows = projectionRowsFromPayload(payload);
+
+  return rows
+    .map((row, index) => normalizeSourceProjection(row, index))
+    .filter((projection): projection is FantasySourceProjection => projection !== null);
+}
+
+export function fantasyPlayersFromSourceProjections(
+  projections: FantasySourceProjection[],
+) {
+  return projections.map((projection, index) =>
+    createGeneratedFantasyPlayer({
+      line: {
+        name: projection.name,
+        position: projection.position,
+        team: projection.team,
+        sourceProjection: projection.projection,
+      },
+      rank: index + 18,
+      source: "feed",
+    }),
+  );
+}
+
+export function applyFantasyProjectionRealism(
+  players: NflFantasyPlayer[],
+  sourceProjections: FantasySourceProjection[],
+  options: FantasyProjectionRealismOptions = {},
+) {
+  const projectionIndex = buildProjectionIndex(sourceProjections);
+  const cap = clampNumber(options.cap ?? 2.4, 0.4, 4);
+
+  return players.map((player) => {
+    const source = matchSourceProjection(player, projectionIndex);
+    const sourceProjection = player.sourceProjection ?? source?.projection;
+
+    if (typeof sourceProjection !== "number") {
+      return {
+        ...player,
+        seerAdjustments:
+          player.seerAdjustments && player.seerAdjustments.length > 0
+            ? player.seerAdjustments
+            : ["No source projection yet", "Seer model fallback"],
+      };
+    }
+
+    const context = matchupContextForPlayer(player, options.matchups ?? []);
+    const adjustmentDetails = projectionAdjustmentDetails(player, context);
+    const rawDelta = sum(adjustmentDetails.map((detail) => detail.delta));
+    const seerDelta = round1(clampNumber(rawDelta, -cap, cap));
+    const seerProjection = round1(Math.max(0, sourceProjection + seerDelta));
+    const adjustmentLabels = adjustmentDetails
+      .filter((detail) => Math.abs(detail.delta) >= 0.15)
+      .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+      .slice(0, 4)
+      .map((detail) => `${detail.label} ${formatSignedDecimal(detail.delta)}`);
+
+    return {
+      ...player,
+      opponent: source?.opponent ?? context?.opponent ?? player.opponent,
+      sourceProjection: round1(sourceProjection),
+      seerProjection,
+      seerDelta,
+      seerAdjustmentCap: cap,
+      seerAdjustmentDetails: adjustmentDetails,
+      seerAdjustments:
+        adjustmentLabels.length > 0 ? adjustmentLabels : ["Source and Seer agree"],
+      projectionSource: source?.source ?? player.projectionSource ?? "imported projection",
+    };
+  });
 }
 
 export function sanitizeImportedFantasyLeague(
@@ -559,7 +683,7 @@ function createGeneratedFantasyPlayer({
   const generated = projectionProfile(position, seed);
   const sourceProjection = line.sourceProjection ?? generated.sourceProjection;
 
-  return {
+  const player = {
     id: playerId
       ? sleeperFantasyId(playerId, { ...line }) ?? `${source}-${slugify(line.name)}`
       : `${source}-${slugify(line.name)}`,
@@ -583,6 +707,8 @@ function createGeneratedFantasyPlayer({
     sourceProjection,
     seerAdjustments: seerAdjustmentLabels({ chaos, health, matchup, position }),
   };
+
+  return applyFantasyProjectionRealism([player], [], { cap: 2.4 })[0];
 }
 
 function projectionProfile(position: string, seed: number) {
@@ -637,6 +763,38 @@ function projectionProfile(position: string, seed: number) {
     };
   }
 
+  if (position === "K") {
+    return {
+      baseline: {
+        rushYards: 0,
+        rushTd: 0,
+        receivingYards: 0,
+        receivingTd: 0,
+        receptions: 0,
+      },
+      targetShare: 0,
+      carryShare: 0,
+      sourceProjection: round1(6 + (seed % 50) / 10),
+      traits: ["Kick volume", "Dome boost", "Game script"],
+    };
+  }
+
+  if (position === "DST") {
+    return {
+      baseline: {
+        rushYards: 0,
+        rushTd: 0,
+        receivingYards: 0,
+        receivingTd: 0,
+        receptions: 0,
+      },
+      targetShare: 0,
+      carryShare: 0,
+      sourceProjection: round1(5 + (seed % 58) / 10),
+      traits: ["Pressure rate", "Turnover lane", "Scoring swing"],
+    };
+  }
+
   return {
     baseline: {
       rushYards: 0,
@@ -681,7 +839,7 @@ function seerAdjustmentLabels({
   ];
 }
 
-function isNflFantasyPlayer(value: unknown): value is NflFantasyPlayer {
+export function isNflFantasyPlayer(value: unknown): value is NflFantasyPlayer {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -771,6 +929,264 @@ function isDefenseId(playerId: string) {
   return teamCodes.has(playerId.toUpperCase());
 }
 
+function projectionRowsFromPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (typeof payload !== "object" || payload === null) {
+    return [];
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  for (const key of [
+    "projections",
+    "fantasyProjections",
+    "players",
+    "fantasyPlayers",
+    "data",
+  ]) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return Object.values(record).filter(
+    (value) => typeof value === "object" && value !== null,
+  );
+}
+
+function normalizeSourceProjection(
+  value: unknown,
+  index: number,
+): FantasySourceProjection | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  const name =
+    cleanLine(row.name) ||
+    cleanLine(row.playerName) ||
+    cleanLine(row.fullName) ||
+    cleanLine(row.player);
+  const team = normalizeTeam(row.team ?? row.teamCode ?? row.nflTeam);
+  const position = normalizePosition(row.position ?? row.pos);
+  const projection = firstNumber(
+    row.projection,
+    row.projected,
+    row.projectedPoints,
+    row.points,
+    row.fantasyPoints,
+    row.ppr,
+    row.halfPpr,
+    row.standard,
+  );
+
+  if (!name || typeof projection !== "number") {
+    return null;
+  }
+
+  return {
+    id:
+      cleanLine(row.id) ||
+      cleanLine(row.playerId) ||
+      `${slugify(name)}-${team}-${position}-${index + 1}`,
+    name,
+    team,
+    position,
+    projection: round1(projection),
+    scoring: scoringFromProjectionRow(row),
+    source: cleanLine(row.source) || cleanLine(row.provider) || "projection-feed",
+    opponent:
+      cleanLine(row.opponent) ||
+      cleanLine(row.opp) ||
+      cleanLine(row.matchup) ||
+      undefined,
+  };
+}
+
+function scoringFromProjectionRow(row: Record<string, unknown>) {
+  const scoring = cleanLine(row.scoring ?? row.scoringFormat ?? row.format).toLowerCase();
+
+  if (scoring.includes("half")) {
+    return "halfPpr" as const;
+  }
+
+  if (scoring.includes("ppr") || "ppr" in row) {
+    return "fullPpr" as const;
+  }
+
+  if (scoring.includes("standard") || "standard" in row) {
+    return "standard" as const;
+  }
+
+  return "unknown" as const;
+}
+
+function buildProjectionIndex(sourceProjections: FantasySourceProjection[]) {
+  const index = new Map<string, FantasySourceProjection>();
+
+  sourceProjections.forEach((projection) => {
+    projectionKeys(projection).forEach((key) => {
+      if (!index.has(key)) {
+        index.set(key, projection);
+      }
+    });
+  });
+
+  return index;
+}
+
+function projectionKeys(player: {
+  name: string;
+  position?: string;
+  team?: string;
+}) {
+  const name = normalizeName(player.name);
+  const team = normalizeTeam(player.team);
+  const position = normalizePosition(player.position);
+
+  return [
+    `${name}|${team}|${position}`,
+    `${name}|${team}`,
+    `${name}|${position}`,
+    name,
+  ];
+}
+
+function matchSourceProjection(
+  player: NflFantasyPlayer,
+  projectionIndex: Map<string, FantasySourceProjection>,
+) {
+  for (const key of projectionKeys(player)) {
+    const projection = projectionIndex.get(key);
+
+    if (projection) {
+      return projection;
+    }
+  }
+
+  return null;
+}
+
+function findMatchingPlayer(
+  players: NflFantasyPlayer[],
+  target: NflFantasyPlayer,
+) {
+  const keys = projectionKeys(target);
+
+  return players.find((player) =>
+    projectionKeys(player).some((key) => keys.includes(key)),
+  );
+}
+
+function projectionReceiptFields(player: NflFantasyPlayer) {
+  return {
+    sourceProjection: player.sourceProjection,
+    seerProjection: player.seerProjection,
+    seerDelta: player.seerDelta,
+    seerAdjustmentCap: player.seerAdjustmentCap,
+    seerAdjustments: player.seerAdjustments,
+    seerAdjustmentDetails: player.seerAdjustmentDetails,
+    projectionSource: player.projectionSource,
+  };
+}
+
+function matchupContextForPlayer(
+  player: NflFantasyPlayer,
+  matchups: FantasyProjectionMatchupContext[],
+) {
+  return matchups.find((matchup) => matchup.team === normalizeTeam(player.team));
+}
+
+function projectionAdjustmentDetails(
+  player: NflFantasyPlayer,
+  context: FantasyProjectionMatchupContext | undefined,
+): FantasyProjectionAdjustment[] {
+  const position = normalizePosition(player.position);
+  const weather = context?.weather?.toLowerCase() ?? "";
+  const isPassCatcher = position === "WR" || position === "TE";
+  const details: FantasyProjectionAdjustment[] = [];
+  const windOrSnow =
+    weather.includes("wind") ||
+    weather.includes("snow") ||
+    weather.includes("storm") ||
+    weather.includes("rain");
+
+  if (windOrSnow) {
+    details.push({
+      label: "weather",
+      delta:
+        position === "QB" || isPassCatcher
+          ? -0.65
+          : position === "RB"
+            ? 0.25
+            : -0.1,
+    });
+  } else if (context?.weather === "Dome") {
+    details.push({
+      label: "clean track",
+      delta: isPassCatcher || position === "QB" ? 0.35 : 0.1,
+    });
+  }
+
+  if (typeof context?.opponentDefense === "number") {
+    details.push({
+      label: "defense",
+      delta: round1((76 - context.opponentDefense) / 18),
+    });
+  }
+
+  if (typeof context?.pace === "number") {
+    details.push({ label: "pace", delta: round1((context.pace - 66) / 24) });
+  }
+
+  if (
+    typeof context?.teamWin === "number" &&
+    typeof context.opponentWin === "number"
+  ) {
+    const script = context.teamWin - context.opponentWin;
+    details.push({
+      label: "script",
+      delta:
+        position === "RB"
+          ? round1(script / 55)
+          : position === "QB" || isPassCatcher
+            ? round1(-script / 80)
+            : 0,
+    });
+  }
+
+  details.push({
+    label: "role",
+    delta: round1(
+      player.targetShare * (isPassCatcher ? 0.035 : 0.012) +
+        player.carryShare * (position === "RB" ? 0.025 : 0.006) -
+        0.55,
+    ),
+  });
+  details.push({ label: "health", delta: round1((player.health - 84) / 24) });
+  details.push({ label: "chaos", delta: round1(-(player.chaos - 48) / 34) });
+
+  if (typeof context?.teamHealth === "number") {
+    details.push({
+      label: "team health",
+      delta: round1((context.teamHealth - 78) / 36),
+    });
+  }
+
+  return details
+    .map((detail) => ({
+      ...detail,
+      delta: round1(clampNumber(detail.delta, -1.2, 1.2)),
+    }))
+    .filter((detail) => detail.delta !== 0);
+}
+
 function normalizePosition(value: unknown) {
   const position = typeof value === "string" ? value.toUpperCase() : "";
 
@@ -789,6 +1205,23 @@ function normalizeTeam(value: unknown) {
   const team = typeof value === "string" ? value.toUpperCase() : "";
 
   return teamCodes.has(team) ? team : "FA";
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const numberValue =
+      typeof value === "number"
+        ? value
+        : typeof value === "string"
+          ? Number(value)
+          : NaN;
+
+    if (Number.isFinite(numberValue) && numberValue >= 0 && numberValue <= 60) {
+      return numberValue;
+    }
+  }
+
+  return undefined;
 }
 
 function injuryDrag(value: string | undefined) {
@@ -845,10 +1278,28 @@ function hashText(value: string) {
   return hashNumber(value).toString(36);
 }
 
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
 function clampMeter(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function round1(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function formatSignedDecimal(value: number) {
+  const rounded = round1(value);
+
+  if (rounded > 0) {
+    return `+${rounded.toFixed(1)}`;
+  }
+
+  return rounded.toFixed(1);
 }
