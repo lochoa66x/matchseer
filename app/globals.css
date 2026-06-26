@@ -6906,6 +6906,17 @@ body {
   justify-content: space-between;
 }
 
+.calibration-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.calibration-gate-actions .admin-command {
+  min-height: 40px;
+}
+
 .calibration-tuning-card em {
   flex: 0 0 auto;
   padding: 3px 7px;

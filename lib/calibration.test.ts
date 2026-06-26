@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeCalibration, type CalibrationSample } from "./calibration";
+import {
+  activateCalibrationTuning,
+  computeCalibration,
+  type CalibrationSample,
+} from "./calibration";
 
 function recommendation(report: ReturnType<typeof computeCalibration>, id: string) {
   const match = report.tuning.recommendations.find((item) => item.id === id);
@@ -388,5 +392,41 @@ describe("computeCalibration", () => {
         marketNudgeMaxWeight: 0.24,
       },
     });
+  });
+
+  it("turns staged recommendations into approved live knobs only when activated", () => {
+    const report = computeCalibration([
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+      },
+      {
+        probabilities: { home: 0.6, draw: 0.2, away: 0.2 },
+        actual: "away",
+        confidence: 80,
+      },
+    ]);
+    const activated = activateCalibrationTuning(report.tuning.application);
+
+    expect(report.tuning.application.applied).toBe(false);
+    expect(activated.applied).toBe(true);
+    expect(activated.knobs).toEqual(report.tuning.application.recommendedKnobs);
+    expect(activated.reason).toContain("Admin approved");
   });
 });

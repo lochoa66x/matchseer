@@ -41,9 +41,11 @@ import {
 import {
   CALIBRATION_TUNING_VERSION,
   DEFAULT_CALIBRATION_TUNING_KNOBS,
+  activateCalibrationTuning,
   computeCalibration,
   type AppliedCalibrationTuning,
   type CalibrationSample,
+  type CalibrationTuningKnobs,
   type ForecastOutcome,
 } from "./calibration";
 import { isKnockoutPhase, normalizeMatchPhase } from "./match-stage";
@@ -509,6 +511,17 @@ type CalibrationForecastRow = {
   source_payload: Record<string, unknown> | string | null;
 };
 
+type CalibrationTuningGateRow = {
+  active: boolean | null;
+  version: string | null;
+  readiness: string | null;
+  sample_size: string | number | null;
+  reason: string | null;
+  knobs: Record<string, unknown> | string | null;
+  recommended_knobs: Record<string, unknown> | string | null;
+  updated_at: Date | string | null;
+};
+
 type ForecastContextRow = {
   external_id: string | null;
   starts_at: Date | string | null;
@@ -951,6 +964,7 @@ let trafficSchemaPromise: Promise<void> | null = null;
 let playerModelSchemaPromise: Promise<void> | null = null;
 let forecastLedgerSchemaPromise: Promise<void> | null = null;
 let cupSeerSnapshotSchemaPromise: Promise<void> | null = null;
+let calibrationTuningGateSchemaPromise: Promise<void> | null = null;
 
 export async function recordTrafficEvent(
   input: TrafficEventInput,
@@ -1322,6 +1336,31 @@ async function ensureForecastLedgerSchema(sql: NeonQuery) {
   }
 
   return forecastLedgerSchemaPromise;
+}
+
+async function ensureCalibrationTuningGateSchema(sql: NeonQuery) {
+  if (!calibrationTuningGateSchemaPromise) {
+    calibrationTuningGateSchemaPromise = (async () => {
+      await sql`
+        create table if not exists calibration_tuning_gate (
+          id text primary key,
+          active boolean not null default false,
+          version text not null,
+          readiness text not null,
+          sample_size integer not null default 0,
+          reason text not null,
+          knobs jsonb not null,
+          recommended_knobs jsonb not null,
+          updated_at timestamptz not null default now()
+        );
+      `;
+    })().catch((error) => {
+      calibrationTuningGateSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  return calibrationTuningGateSchemaPromise;
 }
 
 async function ensureCupSeerSnapshotSchema(sql: NeonQuery) {
@@ -5811,35 +5850,220 @@ async function readAppliedCalibrationTuning(
   sql: NeonQuery,
 ): Promise<AppliedCalibrationTuning> {
   try {
-    const rows = (await sql`
-      select distinct on (forecasts.match_id)
-        matches.home_score,
-        matches.away_score,
-        forecasts.home_win_probability,
-        forecasts.draw_probability,
-        forecasts.away_win_probability,
-        forecasts.confidence,
-        forecasts.chaos,
-        forecasts.source_payload
-      from forecasts
-      join matches on matches.id = forecasts.match_id
-      where lower(matches.status) = 'final'
-        and matches.home_score is not null
-        and matches.away_score is not null
-      order by forecasts.match_id, forecasts.version desc, forecasts.created_at desc;
-    `) as unknown as CalibrationForecastRow[];
-    const samples = rows.flatMap((row) => {
-      const sample = calibrationSampleFromForecastRow(row);
+    await ensureCalibrationTuningGateSchema(sql);
 
-      return sample ? [sample] : [];
-    });
-
-    return computeCalibration(samples).tuning.application;
+    return readCalibrationTuningGate(sql);
   } catch (error) {
     console.error("MatchSeer calibration tuning read failed", error);
 
     return baselineAppliedCalibrationTuning("Calibration read failed; baseline knobs kept.");
   }
+}
+
+async function readCalibrationTuningGate(
+  sql: NeonQuery,
+): Promise<AppliedCalibrationTuning> {
+  const rows = (await sql`
+    select
+      active,
+      version,
+      readiness,
+      sample_size,
+      reason,
+      knobs,
+      recommended_knobs,
+      updated_at
+    from calibration_tuning_gate
+    where id = 'active'
+    limit 1;
+  `) as unknown as CalibrationTuningGateRow[];
+  const row = rows[0];
+
+  if (!row?.active) {
+    return baselineAppliedCalibrationTuning(
+      row?.reason ?? "No approved receipt tuning yet; baseline knobs kept.",
+    );
+  }
+
+  return {
+    version: row.version ?? CALIBRATION_TUNING_VERSION,
+    readiness: parseCalibrationReadiness(row.readiness),
+    sampleSize: Math.max(0, Math.round(toNumber(row.sample_size))),
+    applied: true,
+    reason: row.reason ?? "Admin approved receipt tuning.",
+    knobs: parseCalibrationKnobs(row.knobs),
+    recommendedKnobs: parseCalibrationKnobs(
+      row.recommended_knobs,
+      parseCalibrationKnobs(row.knobs),
+    ),
+  };
+}
+
+export async function getApprovedCalibrationTuning(): Promise<AppliedCalibrationTuning> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    return baselineAppliedCalibrationTuning("Calibration gate unavailable; baseline knobs kept.");
+  }
+
+  const sql = connection.sql;
+
+  try {
+    await ensureCalibrationTuningGateSchema(sql);
+
+    return readCalibrationTuningGate(sql);
+  } catch (error) {
+    console.error("MatchSeer calibration gate read failed", error);
+
+    return baselineAppliedCalibrationTuning("Calibration gate read failed; baseline knobs kept.");
+  }
+}
+
+export async function approveCalibrationTuningForForecasts(
+  application: AppliedCalibrationTuning,
+): Promise<AppliedCalibrationTuning> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required to approve calibration tuning.");
+  }
+
+  const sql = connection.sql;
+  const approved = activateCalibrationTuning(application);
+
+  await ensureCalibrationTuningGateSchema(sql);
+  await sql`
+    insert into calibration_tuning_gate (
+      id,
+      active,
+      version,
+      readiness,
+      sample_size,
+      reason,
+      knobs,
+      recommended_knobs,
+      updated_at
+    )
+    values (
+      'active',
+      true,
+      ${approved.version},
+      ${approved.readiness},
+      ${approved.sampleSize},
+      ${approved.reason},
+      ${JSON.stringify(approved.knobs)}::jsonb,
+      ${JSON.stringify(approved.recommendedKnobs)}::jsonb,
+      now()
+    )
+    on conflict (id) do update set
+      active = excluded.active,
+      version = excluded.version,
+      readiness = excluded.readiness,
+      sample_size = excluded.sample_size,
+      reason = excluded.reason,
+      knobs = excluded.knobs,
+      recommended_knobs = excluded.recommended_knobs,
+      updated_at = now();
+  `;
+
+  return readCalibrationTuningGate(sql);
+}
+
+export async function revertCalibrationTuningApproval(): Promise<AppliedCalibrationTuning> {
+  const connection = await getSql();
+
+  if (!connection?.sql) {
+    throw new Error("DATABASE_URL is required to revert calibration tuning.");
+  }
+
+  const sql = connection.sql;
+  const baseline = baselineAppliedCalibrationTuning(
+    "Admin reverted receipt tuning; baseline knobs are live.",
+  );
+
+  await ensureCalibrationTuningGateSchema(sql);
+  await sql`
+    insert into calibration_tuning_gate (
+      id,
+      active,
+      version,
+      readiness,
+      sample_size,
+      reason,
+      knobs,
+      recommended_knobs,
+      updated_at
+    )
+    values (
+      'active',
+      false,
+      ${baseline.version},
+      ${baseline.readiness},
+      ${baseline.sampleSize},
+      ${baseline.reason},
+      ${JSON.stringify(baseline.knobs)}::jsonb,
+      ${JSON.stringify(baseline.recommendedKnobs)}::jsonb,
+      now()
+    )
+    on conflict (id) do update set
+      active = excluded.active,
+      version = excluded.version,
+      readiness = excluded.readiness,
+      sample_size = excluded.sample_size,
+      reason = excluded.reason,
+      knobs = excluded.knobs,
+      recommended_knobs = excluded.recommended_knobs,
+      updated_at = now();
+  `;
+
+  return readCalibrationTuningGate(sql);
+}
+
+function parseCalibrationReadiness(value: string | null | undefined) {
+  if (value === "early" || value === "actionable") {
+    return value;
+  }
+
+  return "collecting";
+}
+
+function parseCalibrationKnobs(
+  value: Record<string, unknown> | string | null,
+  fallback: CalibrationTuningKnobs = DEFAULT_CALIBRATION_TUNING_KNOBS,
+): CalibrationTuningKnobs {
+  const record = parseJsonPayload(value);
+
+  if (!record) {
+    return fallback;
+  }
+
+  return {
+    favoriteScale: clampNumber(
+      readPayloadNumber(record.favoriteScale) ?? fallback.favoriteScale,
+      0.88,
+      1.12,
+    ),
+    drawLaneMultiplier: clampNumber(
+      readPayloadNumber(record.drawLaneMultiplier) ?? fallback.drawLaneMultiplier,
+      0.9,
+      1.16,
+    ),
+    confidenceBias: clampNumber(
+      readPayloadNumber(record.confidenceBias) ?? fallback.confidenceBias,
+      -5,
+      5,
+    ),
+    chaosSensitivity: clampNumber(
+      readPayloadNumber(record.chaosSensitivity) ?? fallback.chaosSensitivity,
+      0.92,
+      1.08,
+    ),
+    marketNudgeMaxWeight: clampNumber(
+      readPayloadNumber(record.marketNudgeMaxWeight) ?? fallback.marketNudgeMaxWeight,
+      0.12,
+      0.24,
+    ),
+  };
 }
 
 function calibrationSampleFromForecastRow(

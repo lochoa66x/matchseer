@@ -1090,3 +1090,15 @@ export function computeCalibration(samples: CalibrationSample[]): CalibrationRep
     }),
   };
 }
+
+export function activateCalibrationTuning(
+  application: AppliedCalibrationTuning,
+): AppliedCalibrationTuning {
+  return {
+    ...application,
+    applied: true,
+    reason:
+      "Admin approved these receipt knobs; new forecasts can use the staged v4.1 tuning.",
+    knobs: application.recommendedKnobs,
+  };
+}

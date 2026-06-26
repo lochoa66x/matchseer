@@ -824,6 +824,51 @@ export default function AdminPage() {
     }
   }
 
+  async function updateCalibrationGate(action: "apply" | "revert") {
+    if (!secret) {
+      setMessage("Add the admin secret first.");
+      setActionStatus("error");
+      setMessageStatus("error");
+      return;
+    }
+
+    setActionStatus("loading");
+    setMessageStatus("loading");
+
+    try {
+      const response = await fetch("/api/admin/calibration", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Calibration tuning update failed.");
+      }
+
+      setActionStatus("success");
+      setMessageStatus("success");
+      setMessage(
+        action === "apply"
+          ? "Applied staged calibration tuning. Run football sync to mint fresh forecast versions."
+          : "Reverted calibration tuning to baseline. Run football sync when you want fresh baseline versions.",
+      );
+      await refreshDashboard();
+    } catch (error) {
+      setActionStatus("error");
+      setMessageStatus("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Calibration tuning update failed.",
+      );
+    }
+  }
+
   async function saveCupSeerSnapshot() {
     if (!secret) {
       setMessage("Add the admin secret first.");
@@ -1048,7 +1093,13 @@ export default function AdminPage() {
 
       <TrafficPanel traffic={trafficData} hasSecret={Boolean(secret)} />
 
-      <CalibrationPanel calibration={calibrationData} hasSecret={Boolean(secret)} />
+      <CalibrationPanel
+        calibration={calibrationData}
+        hasSecret={Boolean(secret)}
+        onApply={() => void updateCalibrationGate("apply")}
+        onRevert={() => void updateCalibrationGate("revert")}
+        actionStatus={actionStatus}
+      />
 
       <ModelControlPanel
         data={modelControlData}
@@ -2439,6 +2490,7 @@ type CalibrationDashboard = {
   seerSays: string[];
   diagnostics: CalibrationDiagnostics;
   tuning?: CalibrationTuningReport;
+  activeTuning?: AppliedCalibrationTuning;
   completedMatchesConsidered?: number;
   generatedAt?: string;
   error?: string;
@@ -2476,13 +2528,21 @@ function emptyCalibrationDiagnostics(): CalibrationDiagnostics {
 function CalibrationPanel({
   calibration,
   hasSecret,
+  onApply,
+  onRevert,
+  actionStatus,
 }: {
   calibration: CalibrationDashboard | null;
   hasSecret: boolean;
+  onApply: () => void;
+  onRevert: () => void;
+  actionStatus: ActionStatus;
 }) {
   const ready =
     hasSecret && calibration && !calibration.error && calibration.sampleSize > 0;
   const seerSays = calibration?.seerSays ?? [];
+  const activeTuning =
+    calibration?.activeTuning ?? calibration?.tuning?.application ?? null;
 
   const thStyle: React.CSSProperties = {
     textAlign: "left",
@@ -2606,6 +2666,35 @@ function CalibrationPanel({
 
   function formatKnobs(knobs: CalibrationTuningKnobs) {
     return `fav ${knobs.favoriteScale.toFixed(3)}x · draw ${knobs.drawLaneMultiplier.toFixed(3)}x · conf ${knobs.confidenceBias > 0 ? "+" : ""}${knobs.confidenceBias.toFixed(1)} · chaos ${knobs.chaosSensitivity.toFixed(3)}x · crowd ${knobs.marketNudgeMaxWeight.toFixed(3)}`;
+  }
+
+  function tuningImpactCopy(item: CalibrationTuningRecommendation) {
+    const move =
+      item.direction === "increase"
+        ? "more room"
+        : item.direction === "decrease"
+          ? "less room"
+          : item.direction === "collect"
+            ? "more receipts first"
+            : "no move";
+
+    if (item.id === "favorite-scale") {
+      return `Favorite pull gets ${move}; strong teams only speak louder when receipts earn it.`;
+    }
+
+    if (item.id === "draw-lane") {
+      return `Close-game deadlock gets ${move}; the Seer keeps draws honest before knockout math takes over.`;
+    }
+
+    if (item.id === "confidence-bias") {
+      return `The confidence badge gets ${move}; the public read should match how often receipts survive.`;
+    }
+
+    if (item.id === "chaos-sensitivity") {
+      return `Chaos gets ${move}; misses should glow earlier when the room is truly unstable.`;
+    }
+
+    return `The crowd breeze gets ${move}; the market can nudge, but it still cannot steer the Seer.`;
   }
 
   function renderChaosTable(rows: ChaosMissBucketRow[]) {
@@ -2740,7 +2829,7 @@ function CalibrationPanel({
                   <span>Tuning plan</span>
                   <strong>
                     {calibration.tuning.readiness} ·{" "}
-                    {calibration.tuning.application.applied ? "active" : "staged"}
+                    {activeTuning?.applied ? "active" : "staged"}
                   </strong>
                 </div>
                 <p>{calibration.tuning.summary}</p>
@@ -2748,15 +2837,51 @@ function CalibrationPanel({
               <div className="calibration-market-read">
                 <span>Forecast knobs</span>
                 <strong>
-                  {calibration.tuning.application.applied
-                    ? "Applied to new forecasts"
+                  {activeTuning?.applied
+                    ? "Approved tuning live"
                     : "Baseline live; recommendations staged"}
                 </strong>
-                <small>Live: {formatKnobs(calibration.tuning.application.knobs)}</small>
+                <small>
+                  Live:{" "}
+                  {formatKnobs(
+                    activeTuning?.knobs ?? calibration.tuning.application.knobs,
+                  )}
+                </small>
                 <small>
                   Suggested: {formatKnobs(calibration.tuning.application.recommendedKnobs)}
                 </small>
                 <p>{calibration.tuning.application.reason}</p>
+                <div className="calibration-gate-actions">
+                  <button
+                    className="admin-command primary"
+                    type="button"
+                    onClick={onApply}
+                    disabled={
+                      actionStatus === "loading" ||
+                      calibration.tuning.readiness === "collecting"
+                    }
+                  >
+                    {actionStatus === "loading" ? (
+                      <LoaderCircle size={18} className="spin" />
+                    ) : (
+                      <ShieldCheck size={18} />
+                    )}
+                    Apply staged tuning
+                  </button>
+                  <button
+                    className="admin-command"
+                    type="button"
+                    onClick={onRevert}
+                    disabled={actionStatus === "loading" || !activeTuning?.applied}
+                  >
+                    <RefreshCcw size={18} />
+                    Revert to baseline
+                  </button>
+                </div>
+                <p>
+                  The Seer can advise, but this gate decides when receipts move
+                  the live forecast dials.
+                </p>
               </div>
               <div className="calibration-market-read">
                 <span>Crowd backtest</span>
@@ -2789,6 +2914,7 @@ function CalibrationPanel({
                     <small>
                       {item.sampleSize} receipts · {item.confidence}
                     </small>
+                    <p>{tuningImpactCopy(item)}</p>
                     <p>{item.evidence}</p>
                     <p>{item.rationale}</p>
                   </article>
