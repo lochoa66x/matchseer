@@ -3,6 +3,7 @@ import type {
   ForecastInterpretation,
   Language,
   MarketPulse,
+  MatchForecast,
   MatchStatus,
   MatchSummary,
   TrailSignal,
@@ -34,6 +35,7 @@ import {
   toCupSnapshotCandidates,
   type CupSnapshotCandidate,
 } from "./cup-seer";
+import { normalizeMatchPhase } from "./match-stage";
 
 const ENABLE_PLAYER_SPARKS = false;
 
@@ -62,6 +64,7 @@ export type RealDataSyncResult = {
   season: string;
   teams: number;
   matches: number;
+  placeholderMatches: number;
   venuesMapped: number;
   forecasts: number;
   fetchedAt: string;
@@ -394,6 +397,7 @@ type DatabaseMatchRow = {
   id: string;
   status: string;
   starts_at: Date | string | null;
+  stage: string | null;
   group_name: string | null;
   home_score: number | null;
   away_score: number | null;
@@ -508,6 +512,7 @@ type VenueMappingCandidateRow = {
   match_id: string;
   home_name: string;
   away_name: string;
+  stage: string | null;
   group_name: string | null;
   status: string;
   starts_at: Date | string | null;
@@ -537,6 +542,7 @@ type ModelControlPlayerRow = {
 
 type ModelControlForecastRow = {
   match_id: string;
+  stage: string | null;
   group_name: string | null;
   status: string;
   starts_at: Date | string | null;
@@ -1407,7 +1413,7 @@ function toModelControlForecastVersion(
 
   return {
     matchId: row.match_id,
-    group: normalizeGroupName(row.group_name),
+    group: normalizeMatchPhase(row.stage, row.group_name),
     status: row.status,
     startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
     home: row.home_name,
@@ -1867,6 +1873,7 @@ export async function syncFootballDataSnapshot(
   for (const team of snapshot.teams) {
     const ratings = teamRatings(team);
     ratingsByProviderId.set(team.id, ratings);
+    const record = team.isPlaceholder ? "Knockout slot pending" : "Provider synced";
 
     await sql`
       insert into teams (
@@ -1890,7 +1897,7 @@ export async function syncFootballDataSnapshot(
         ${team.code},
         ${team.color},
         ${team.country},
-        'Provider synced',
+        ${record},
         array[]::text[],
         ${ratings.attack},
         ${ratings.control},
@@ -1917,6 +1924,7 @@ export async function syncFootballDataSnapshot(
   );
   let forecasts = 0;
   let venuesMapped = 0;
+  let placeholderMatches = 0;
 
   for (const match of snapshot.matches) {
     const homeSlug = teamSlugByProviderId.get(match.homeTeamProviderId);
@@ -1932,6 +1940,13 @@ export async function syncFootballDataSnapshot(
 
     if (match.venueSlug) {
       venuesMapped += 1;
+    }
+
+    const matchHasPlaceholderTeam =
+      match.homeTeamIsPlaceholder || match.awayTeamIsPlaceholder;
+
+    if (matchHasPlaceholderTeam) {
+      placeholderMatches += 1;
     }
 
     await sql`
@@ -1965,12 +1980,20 @@ export async function syncFootballDataSnapshot(
       )
       on conflict (external_id) do update set
         competition_id = excluded.competition_id,
-        home_team_id = excluded.home_team_id,
-        away_team_id = excluded.away_team_id,
         venue_id = case
           when ${match.venueSlug === null}
             then coalesce(matches.venue_id, excluded.venue_id)
           else excluded.venue_id
+        end,
+        home_team_id = case
+          when ${match.homeTeamIsPlaceholder}
+            then coalesce(matches.home_team_id, excluded.home_team_id)
+          else excluded.home_team_id
+        end,
+        away_team_id = case
+          when ${match.awayTeamIsPlaceholder}
+            then coalesce(matches.away_team_id, excluded.away_team_id)
+          else excluded.away_team_id
         end,
         stage = excluded.stage,
         group_name = excluded.group_name,
@@ -2013,6 +2036,10 @@ export async function syncFootballDataSnapshot(
         end,
         updated_at = now();
     `;
+
+    if (matchHasPlaceholderTeam) {
+      continue;
+    }
 
     const existingForecastRows = (await sql`
       select
@@ -2425,6 +2452,7 @@ export async function syncFootballDataSnapshot(
     season: snapshot.competition.season,
     teams: snapshot.teams.length,
     matches: snapshot.matches.length,
+    placeholderMatches,
     venuesMapped,
     forecasts,
     fetchedAt: snapshot.fetchedAt,
@@ -2538,6 +2566,7 @@ export async function getModelControlDashboard(): Promise<ModelControlDashboard>
     const forecastRows = (await sql`
       select
         matches.external_id as match_id,
+        matches.stage,
         matches.group_name,
         matches.status,
         matches.starts_at,
@@ -2777,6 +2806,7 @@ export async function listVenueMappingCandidates({
       matches.external_id as match_id,
       home_team.name as home_name,
       away_team.name as away_name,
+      matches.stage,
       matches.group_name,
       matches.status,
       matches.starts_at,
@@ -2808,7 +2838,7 @@ export async function listVenueMappingCandidates({
     matchId: row.match_id,
     home: row.home_name,
     away: row.away_name,
-    group: normalizeGroupName(row.group_name),
+    group: normalizeMatchPhase(row.stage, row.group_name),
     status: row.status,
     startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
     currentVenue: {
@@ -3049,6 +3079,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       matches.external_id as id,
       matches.status,
       matches.starts_at,
+      matches.stage,
       matches.group_name,
       matches.home_score,
       matches.away_score,
@@ -3263,12 +3294,18 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
     homeName: row.home_name,
     awayName: row.away_name,
   });
+  const homeIsPlaceholder = isPlaceholderTeamRow(row.home_record, row.home_code);
+  const awayIsPlaceholder = isPlaceholderTeamRow(row.away_record, row.away_code);
+  const forecastIsPending =
+    homeIsPlaceholder || awayIsPlaceholder || row.forecast_version === null;
+  const phase = normalizeMatchPhase(row.stage, row.group_name);
 
   return {
     id: row.id,
     status,
     startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
-    group: normalizeGroupName(row.group_name),
+    stage: row.stage,
+    group: phase,
     time: toMatchTime(status, row.starts_at),
     venue: row.venue_name,
     city: row.venue_city,
@@ -3286,6 +3323,7 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       control: toNumber(row.home_control),
       defense: toNumber(row.home_defense),
       setPieces: toNumber(row.home_set_pieces),
+      isPlaceholder: homeIsPlaceholder,
     },
     away: {
       name: row.away_name,
@@ -3297,31 +3335,34 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
       control: toNumber(row.away_control),
       defense: toNumber(row.away_defense),
       setPieces: toNumber(row.away_set_pieces),
+      isPlaceholder: awayIsPlaceholder,
     },
-    forecast: {
-      home: homeForecast,
-      draw: drawForecast,
-      away: awayForecast,
-      version: toNumber(row.forecast_version),
-      generatedAt: row.forecast_created_at
-        ? new Date(row.forecast_created_at).toISOString()
-        : null,
-      confidence,
-      chaos,
-      projected: projectedScore,
-      marketPulse,
-      trail: buildPublicSeerTrail({
-        awayName: row.away_name,
-        homeName: row.home_name,
-        marketPulse,
-        sourcePayload,
-      }),
-      tone: {
-        ...toLanguageRecord("Forecast copy pending."),
-        ...(row.tone ?? {}),
-      },
-      reasons,
-    },
+    forecast: forecastIsPending
+      ? pendingForecast(row.home_name, row.away_name, phase)
+      : {
+          home: homeForecast,
+          draw: drawForecast,
+          away: awayForecast,
+          version: toNumber(row.forecast_version),
+          generatedAt: row.forecast_created_at
+            ? new Date(row.forecast_created_at).toISOString()
+            : null,
+          confidence,
+          chaos,
+          projected: projectedScore,
+          marketPulse,
+          trail: buildPublicSeerTrail({
+            awayName: row.away_name,
+            homeName: row.home_name,
+            marketPulse,
+            sourcePayload,
+          }),
+          tone: {
+            ...toLanguageRecord("Forecast copy pending."),
+            ...(row.tone ?? {}),
+          },
+          reasons,
+        },
     weather: {
       temp:
         row.temperature_c === null
@@ -3977,21 +4018,6 @@ function readPayloadArray(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
-
-function normalizeGroupName(groupName: string | null) {
-  if (!groupName) {
-    return "Group";
-  }
-
-  const normalized = groupName
-    .replace(/^GROUP[_\s-]+/i, "Group ")
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return normalized.replace(/\b([a-z])/g, (letter) => letter.toUpperCase());
-}
-
 function toMatchStatus(status: string): MatchStatus {
   if (status === "live") {
     return "Live";
@@ -4056,6 +4082,37 @@ function toReasons(factors: string[] | null) {
     es: values,
     fr: values,
   };
+}
+
+function pendingForecast(
+  homeName: string,
+  awayName: string,
+  phase: string,
+): MatchForecast {
+  return {
+    home: 0,
+    draw: 0,
+    away: 0,
+    confidence: 0,
+    chaos: 0,
+    projected: "TBD",
+    isPending: true,
+    tone: {
+      en: `${phase} is on the board. The Seer will wait for confirmed teams before reading ${homeName} vs ${awayName}.`,
+      es: `${phase} ya está en el tablero. El Vidente esperará equipos confirmados antes de leer ${homeName} vs ${awayName}.`,
+      fr: `${phase} est au tableau. Le voyant attendra les équipes confirmées avant de lire ${homeName} vs ${awayName}.`,
+    },
+    reasons: {
+      en: ["This next-round slot is synced, but the matchup is not confirmed yet."],
+      es: ["Esta plaza de la siguiente ronda ya está sincronizada, pero el cruce aún no está confirmado."],
+      fr: ["Cette place du prochain tour est synchronisée, mais l'affiche n'est pas encore confirmée."],
+    },
+    trail: [],
+  };
+}
+
+function isPlaceholderTeamRow(record: string | null, code: string | null) {
+  return record === "Knockout slot pending" || code === "TBD";
 }
 
 function toLanguageRecord(value: string): Record<Language, string> {
@@ -4392,6 +4449,15 @@ function sortJsonValue(value: unknown): unknown {
 
 
 function teamRatings(team: FootballDataTeam): TeamRatings {
+  if (team.isPlaceholder) {
+    return {
+      attack: 50,
+      control: 50,
+      defense: 50,
+      setPieces: 50,
+    };
+  }
+
   const profile = teamRatingProfiles[team.code.toUpperCase()];
 
   if (profile) {

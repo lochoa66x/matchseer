@@ -70,6 +70,32 @@ export async function POST(request: Request) {
 
   const language = body.language;
   const model = process.env.OPENAI_MODEL ?? "gpt-5.5";
+
+  if (isPendingMatchRead(match)) {
+    const interpretation = createPendingMatchInterpretation(match, language);
+
+    await recordAiRequestAudit({
+      matchId: match.id,
+      model,
+      requestPayload: {
+        matchId: match.id,
+        language,
+        reason: "pending-teams",
+      },
+      responsePayload: null,
+      status: "blocked-pending-teams",
+    });
+
+    return NextResponse.json(
+      {
+        error: "Teams are not confirmed yet.",
+        reason: "pending-teams",
+        interpretation,
+      },
+      { status: 409 },
+    );
+  }
+
   const officialModelCall = createOfficialModelCall(match);
   const fallback = createFallbackInterpretation(
     match,
@@ -239,6 +265,85 @@ export async function POST(request: Request) {
       interpretation: fallback,
     });
   }
+}
+
+function isPendingMatchRead(match: MatchSummary) {
+  return (
+    Boolean(match.forecast.isPending) ||
+    Boolean(match.home.isPlaceholder) ||
+    Boolean(match.away.isPlaceholder)
+  );
+}
+
+function createPendingMatchInterpretation(
+  match: MatchSummary,
+  language: Language,
+): ForecastInterpretation {
+  const copy = {
+    en: {
+      headline: `${match.home.name} vs ${match.away.name}`,
+      summary:
+        "The next-round slot is on the board, but the Seer waits for confirmed teams before opening the lens.",
+      toneLine: "No forecast is minted until the matchup is real.",
+      forecastLabel: "Round slot",
+      forecastFactor: `${match.group} is synced, with teams still pending.`,
+      shapeLabel: "Teams pending",
+      shapeFactor: "MatchSeer will generate the read once both sides are confirmed.",
+      contextLabel: "Signal status",
+      contextFactor: "Fixture timing and venue can appear before the matchup is known.",
+      missingDataNote: "Teams are not confirmed yet.",
+    },
+    es: {
+      headline: `${match.home.name} vs ${match.away.name}`,
+      summary:
+        "La plaza de la siguiente ronda ya está en el tablero, pero el Vidente espera equipos confirmados antes de abrir la lente.",
+      toneLine: "No se crea pronóstico hasta que el cruce sea real.",
+      forecastLabel: "Plaza de ronda",
+      forecastFactor: `${match.group} está sincronizada, con equipos pendientes.`,
+      shapeLabel: "Equipos pendientes",
+      shapeFactor: "MatchSeer generará la lectura cuando ambos lados estén confirmados.",
+      contextLabel: "Estado de señal",
+      contextFactor: "Horario y sede pueden aparecer antes de conocer el cruce.",
+      missingDataNote: "Los equipos aún no están confirmados.",
+    },
+    fr: {
+      headline: `${match.home.name} vs ${match.away.name}`,
+      summary:
+        "La place du prochain tour est au tableau, mais le voyant attend les équipes confirmées avant d'ouvrir la lentille.",
+      toneLine: "Aucune prévision n'est créée tant que l'affiche n'est pas réelle.",
+      forecastLabel: "Place de tour",
+      forecastFactor: `${match.group} est synchronisé, avec les équipes encore en attente.`,
+      shapeLabel: "Équipes en attente",
+      shapeFactor: "MatchSeer générera la lecture quand les deux côtés seront confirmés.",
+      contextLabel: "État du signal",
+      contextFactor: "L'horaire et le stade peuvent apparaître avant que l'affiche soit connue.",
+      missingDataNote: "Les équipes ne sont pas encore confirmées.",
+    },
+  } satisfies Record<Language, Record<string, string>>;
+  const text = copy[language];
+
+  return {
+    language,
+    headline: text.headline,
+    summary: text.summary,
+    toneLine: text.toneLine,
+    keyFactors: [
+      {
+        label: text.forecastLabel,
+        explanation: text.forecastFactor,
+      },
+      {
+        label: text.shapeLabel,
+        explanation: text.shapeFactor,
+      },
+      {
+        label: text.contextLabel,
+        explanation: text.contextFactor,
+      },
+    ],
+    missingDataNotes: [text.missingDataNote],
+    disclaimer,
+  };
 }
 
 async function requestRepairedInterpretation({

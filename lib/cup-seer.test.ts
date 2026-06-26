@@ -92,4 +92,37 @@ describe("Cup Seer final 8 lane", () => {
     expect(winner.expectedPoints).toBe(3);
     expect(loser.expectedPoints).toBe(0);
   });
+
+  it("ignores pending next-round slots until teams are confirmed", () => {
+    const pendingHome = {
+      ...team("Round of 32 home slot", "TBD", 50),
+      isPlaceholder: true,
+    };
+    const pendingAway = {
+      ...team("Round of 32 away slot", "TBD", 50),
+      isPlaceholder: true,
+    };
+    const france = team("France", "FRA", 94);
+    const canada = team("Canada", "CAN", 66);
+
+    const candidates = buildCupCandidates(
+      [
+        {
+          ...match(pendingHome, pendingAway),
+          stage: "LAST_32",
+          group: "Round of 32",
+          forecast: {
+            ...match(pendingHome, pendingAway).forecast,
+            isPending: true,
+            projected: "TBD",
+          },
+        },
+        match(france, canada),
+      ],
+      "en",
+    );
+
+    expect(candidates.map((candidate) => candidate.team.code)).not.toContain("TBD");
+    expect(candidates).toHaveLength(2);
+  });
 });

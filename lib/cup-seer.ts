@@ -46,6 +46,14 @@ export function buildCupCandidates(
   >();
 
   for (const match of matches) {
+    if (
+      match.forecast.isPending ||
+      match.home.isPlaceholder ||
+      match.away.isPlaceholder
+    ) {
+      continue;
+    }
+
     const projection = projectFixturePath(match);
 
     addCupTeam(teamMap, {

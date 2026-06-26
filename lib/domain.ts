@@ -12,6 +12,7 @@ export type TeamRating = {
   control: number;
   defense: number;
   setPieces: number;
+  isPlaceholder?: boolean;
 };
 
 export type PlayerSpark = {
@@ -45,6 +46,7 @@ export type MatchForecast = ForecastCopy & {
   confidence: number;
   chaos: number;
   projected: string;
+  isPending?: boolean;
   marketPulse?: MarketPulse | null;
   trail?: TrailSignal[];
 };
@@ -70,6 +72,7 @@ export type MatchSummary = {
   status: MatchStatus;
   minute?: string;
   startsAt?: string | null;
+  stage?: string | null;
   group: string;
   time: string;
   venue: string;

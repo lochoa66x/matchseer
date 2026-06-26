@@ -82,7 +82,7 @@ const copy = {
     subtitle: "Real stats, playful readouts, zero betting energy.",
     mission: "Pick a match, ask the Seer, then explore the teams, players, venue, and weather behind the read.",
     heroExplorerTitle: "Find the match signal",
-    heroExplorerCopy: "Filter by timing or group, pick a fixture, and send it to the Seer for the full read.",
+    heroExplorerCopy: "Filter by timing, group, or round, pick a fixture, and send it to the Seer for the full read.",
     noBetting: "No betting energy",
     realStats: "Real stats",
     seerHub: "Seer command center",
@@ -94,8 +94,8 @@ const copy = {
     upcoming: "Upcoming",
     completed: "Completed",
     final: "Final",
-    groups: "Groups",
-    allGroups: "All groups",
+    groups: "Groups and rounds",
+    allGroups: "All groups / rounds",
     matches: "matches",
     noMatches: "No matches in this filter.",
     filterEmptyCopy: "Try Upcoming, Completed, or All while the Seer checks the room.",
@@ -185,6 +185,7 @@ const copy = {
     matchContext: "Match context",
     oracleError: "The Seer blinked. Try again.",
     pendingMode: "Waiting for sync",
+    teamsPending: "Teams pending",
     fallbackMode: "Live data pending",
     noDemoFixtures: "Signal source pending",
     noPlayerData: "Verified player data is not connected yet.",
@@ -231,7 +232,7 @@ const copy = {
     subtitle: "Estadísticas reales, lecturas divertidas, cero energía de apuestas.",
     mission: "Elige un partido, pregunta al Vidente y explora equipos, jugadores, estadio y clima detrás de la lectura.",
     heroExplorerTitle: "Encuentra la señal del partido",
-    heroExplorerCopy: "Filtra por horario o grupo, elige un partido y mándalo al Vidente para la lectura completa.",
+    heroExplorerCopy: "Filtra por horario, grupo o ronda, elige un partido y mándalo al Vidente para la lectura completa.",
     noBetting: "Cero energía de apuestas",
     realStats: "Datos reales",
     seerHub: "Centro del Vidente",
@@ -243,8 +244,8 @@ const copy = {
     upcoming: "Próximo",
     completed: "Completados",
     final: "Final",
-    groups: "Grupos",
-    allGroups: "Todos los grupos",
+    groups: "Grupos y rondas",
+    allGroups: "Todos los grupos / rondas",
     matches: "partidos",
     noMatches: "No hay partidos en este filtro.",
     filterEmptyCopy: "Prueba Próximos, Terminados o Todos mientras el Vidente revisa la sala.",
@@ -334,6 +335,7 @@ const copy = {
     matchContext: "Contexto del partido",
     oracleError: "El Vidente parpadeó. Intenta otra vez.",
     pendingMode: "Esperando sincronización",
+    teamsPending: "Equipos pendientes",
     fallbackMode: "Datos reales pendientes",
     noDemoFixtures: "Fuente de señal pendiente",
     noPlayerData: "Todavía no conectamos datos verificados de jugadores.",
@@ -380,7 +382,7 @@ const copy = {
     subtitle: "Vraies stats, lectures ludiques, zéro énergie pari.",
     mission: "Choisis un match, demande au voyant, puis explore les équipes, joueurs, stade et météo derrière la lecture.",
     heroExplorerTitle: "Trouve le signal du match",
-    heroExplorerCopy: "Filtre par moment ou groupe, choisis une affiche et envoie-la au voyant pour la lecture complète.",
+    heroExplorerCopy: "Filtre par moment, groupe ou tour, choisis une affiche et envoie-la au voyant pour la lecture complète.",
     noBetting: "Zéro énergie pari",
     realStats: "Vraies stats",
     seerHub: "Centre du voyant",
@@ -392,8 +394,8 @@ const copy = {
     upcoming: "À venir",
     completed: "Terminés",
     final: "Terminé",
-    groups: "Groupes",
-    allGroups: "Tous les groupes",
+    groups: "Groupes et tours",
+    allGroups: "Tous les groupes / tours",
     matches: "matchs",
     noMatches: "Aucun match dans ce filtre.",
     filterEmptyCopy: "Essaie À venir, Terminés ou Tous pendant que le voyant lit la salle.",
@@ -483,6 +485,7 @@ const copy = {
     matchContext: "Contexte du match",
     oracleError: "Le voyant a cligné. Réessaie.",
     pendingMode: "En attente de synchro",
+    teamsPending: "Équipes en attente",
     fallbackMode: "Données réelles en attente",
     noDemoFixtures: "Source du signal en attente",
     noPlayerData: "Les données joueurs vérifiées ne sont pas encore connectées.",
@@ -1146,6 +1149,11 @@ export default function MatchSeerHome({
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const match = matches.find((item) => item.id === matchId);
+
+    if (match && isPendingMatchRead(match)) {
+      return;
+    }
+
     const key = match
       ? oracleReadKey(match, selectedLanguage)
       : `${matchId}:${selectedLanguage}`;
@@ -1326,6 +1334,7 @@ export default function MatchSeerHome({
 
   const activeAccents = matchAccentColors(activeMatch);
   const activeMatchIsFinal = activeMatch.status === "Final";
+  const activeMatchCanAsk = !activeMatchIsFinal && !isPendingMatchRead(activeMatch);
 
   return (
     <main className="app-shell">
@@ -1432,6 +1441,7 @@ export default function MatchSeerHome({
               const lean = getMatchLean(match, accents);
               const cardReason = getMatchCardReason(match, language);
               const receipt = buildForecastReceipt(match, language, t);
+              const readIsPending = isPendingMatchRead(match);
 
               return (
                 <button
@@ -1465,21 +1475,23 @@ export default function MatchSeerHome({
                   <div className="hero-card-signal">
                     <span>{t.seerLean}</span>
                     <strong style={{ color: lean.color }}>
-                      {lean.label} {lean.value}%
+                      {readIsPending ? t.teamsPending : `${lean.label} ${lean.value}%`}
                     </strong>
                   </div>
-                  <div className="hero-card-probabilities" aria-hidden="true">
-                    <span style={{ width: `${match.forecast.home}%`, background: accents.home }} />
-                    <span style={{ width: `${match.forecast.draw}%`, background: "#8fa2c4" }} />
-                    <span style={{ width: `${match.forecast.away}%`, background: accents.away }} />
-                  </div>
+                  {!readIsPending && (
+                    <div className="hero-card-probabilities" aria-hidden="true">
+                      <span style={{ width: `${match.forecast.home}%`, background: accents.home }} />
+                      <span style={{ width: `${match.forecast.draw}%`, background: "#8fa2c4" }} />
+                      <span style={{ width: `${match.forecast.away}%`, background: accents.away }} />
+                    </div>
+                  )}
                   <p className="hero-card-reason">{cardReason}</p>
                   <div className="hero-card-footer">
                     <span>{match.group}</span>
                     <span>{match.venue}</span>
-                    <span>{t.confidence}: {displayConfidence(match)}%</span>
-                    <span>{t.chaos}: {displayChaos(match)}%</span>
-                    <span>{t.projected}: {match.forecast.projected}</span>
+                    <span>{t.confidence}: {readIsPending ? t.pending : `${displayConfidence(match)}%`}</span>
+                    <span>{t.chaos}: {readIsPending ? t.pending : `${displayChaos(match)}%`}</span>
+                    <span>{t.projected}: {readIsPending ? t.pending : match.forecast.projected}</span>
                   </div>
                 </button>
               );
@@ -1532,7 +1544,7 @@ export default function MatchSeerHome({
             <div className="match-score-card seer-score-card">
               <span>{t[activeMatch.status.toLowerCase() as "live" | "upcoming" | "final"]}</span>
               <strong>{activeMatch.score ?? activeMatch.time}</strong>
-              <small>{t.projected}: {activeMatch.forecast.projected}</small>
+              <small>{t.projected}: {isPendingMatchRead(activeMatch) ? t.pending : activeMatch.forecast.projected}</small>
             </div>
           </div>
 
@@ -1545,7 +1557,7 @@ export default function MatchSeerHome({
             onAskSeer={() => {
               void requestOracleRead(activeMatch.id, language);
             }}
-            showAsk={!activeMatchIsFinal}
+            showAsk={activeMatchCanAsk}
             compact
           />
 
@@ -2173,6 +2185,14 @@ function usableMarketPulse(marketPulse: Match["forecast"]["marketPulse"]) {
   return marketPulse;
 }
 
+function isPendingMatchRead(match: Match) {
+  return (
+    Boolean(match.forecast.isPending) ||
+    Boolean(match.home.isPlaceholder) ||
+    Boolean(match.away.isPlaceholder)
+  );
+}
+
 function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors>) {
   return [
     {
@@ -2194,6 +2214,10 @@ function getMatchLean(match: Match, accents: ReturnType<typeof matchAccentColors
 }
 
 function getMatchCardMood(match: Match, t: Record<string, string>) {
+  if (isPendingMatchRead(match)) {
+    return t.pendingMode;
+  }
+
   if (match.status === "Live") {
     return t.liveSwing;
   }
@@ -3271,12 +3295,15 @@ function ForecastView({
   const marketPulse = usableMarketPulse(match.forecast.marketPulse);
   const trail = match.forecast.trail ?? [];
   const isFinal = match.status === "Final";
+  const readIsPending = isPendingMatchRead(match);
   const receipt = isFinal ? buildForecastReceipt(match, language, t) : null;
   const readLabel = isFinal
     ? t.savedRead
-    : oracleRead?.source === "openai"
-      ? t.freshRead
-      : t.seededRead;
+    : readIsPending
+      ? t.pendingMode
+      : oracleRead?.source === "openai"
+        ? t.freshRead
+        : t.seededRead;
 
   return (
     <div className={cx("forecast-layout", compact && "compact")}>
@@ -3297,11 +3324,12 @@ function ForecastView({
                 "oracle-source",
                 oracleRead?.source === "openai" && "fresh",
                 isFinal && "locked",
+                readIsPending && "locked",
               )}
             >
               {readLabel}
             </span>
-            {showAsk && !isFinal && (
+            {showAsk && !isFinal && !readIsPending && (
               <button
                 className="oracle-button"
                 disabled={oracleStatus === "loading"}
@@ -3320,6 +3348,22 @@ function ForecastView({
         </div>
         {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}
         <p className="seer-line">{signalCopy}</p>
+        {readIsPending && (
+          <div className="final-receipt-panel" role="status">
+            <div className="final-receipt-grid">
+              <span>
+                <small>{t.matchContext}</small>
+                <strong>{match.group}</strong>
+              </span>
+              <span>
+                <small>{t.selectedMatch}</small>
+                <strong>{t.teamsPending}</strong>
+              </span>
+              <em className="receipt-chip pending">{t.pending}</em>
+            </div>
+            <p>{match.forecast.reasons[language]?.[0] ?? match.forecast.tone[language]}</p>
+          </div>
+        )}
         {receipt && (
           <div className="final-receipt-panel" role="status">
             <div className="final-receipt-grid">
@@ -3338,23 +3382,27 @@ function ForecastView({
           </div>
         )}
         {oracleStatus === "error" && <p className="oracle-error">{t.oracleError}</p>}
-        <div className="metric-row">
-          <Meter label={t.confidence} value={displayConfidence(match)} />
-          <Meter label={t.chaos} value={displayChaos(match)} hot />
-        </div>
-        <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
-          <span>
-            <Activity size={15} />
-            {t.crowdSignal}
-          </span>
-          {!marketPulse && <strong>{t.pendingMode}</strong>}
-          <p>
-            {marketPulse
-              ? marketPulse.summary[language] ?? marketPulse.summary.en
-              : t.marketPending}
-          </p>
-        </div>
-        {trail.length > 0 && (
+        {!readIsPending && (
+          <>
+            <div className="metric-row">
+              <Meter label={t.confidence} value={displayConfidence(match)} />
+              <Meter label={t.chaos} value={displayChaos(match)} hot />
+            </div>
+            <div className={cx("market-pulse-note", marketPulse?.alignment ?? "pending")}>
+              <span>
+                <Activity size={15} />
+                {t.crowdSignal}
+              </span>
+              {!marketPulse && <strong>{t.pendingMode}</strong>}
+              <p>
+                {marketPulse
+                  ? marketPulse.summary[language] ?? marketPulse.summary.en
+                  : t.marketPending}
+              </p>
+            </div>
+          </>
+        )}
+        {!readIsPending && trail.length > 0 && (
           <SeerTrail
             expanded={showTrailDetails}
             language={language}
@@ -3506,6 +3554,18 @@ function TeamsView({ match, t }: { match: Match; t: Record<string, string> }) {
     ["Defense", match.home.defense, match.away.defense],
     ["Set pieces", match.home.setPieces, match.away.setPieces],
   ] as const;
+
+  if (match.home.isPlaceholder || match.away.isPlaceholder) {
+    return (
+      <div className="comparison-card">
+        <div className="section-heading">
+          <UsersRound size={18} />
+          <span>{t.compareTeams}</span>
+        </div>
+        <div className="empty-match-state">{t.teamsPending}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="comparison-card">

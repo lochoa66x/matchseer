@@ -2,6 +2,10 @@ import {
   findScheduledWorldCupVenueForMatch,
   findWorldCupVenue,
 } from "./world-cup-venues";
+import {
+  isKnownPlaceholderTeamName,
+  normalizeStageLabel,
+} from "../match-stage";
 
 export type FootballDataTeam = {
   id: number;
@@ -10,6 +14,7 @@ export type FootballDataTeam = {
   code: string;
   color: string;
   country: string | null;
+  isPlaceholder?: boolean;
 };
 
 export type FootballDataMatch = {
@@ -23,6 +28,8 @@ export type FootballDataMatch = {
   awayScore: number | null;
   homeTeamProviderId: number;
   awayTeamProviderId: number;
+  homeTeamIsPlaceholder: boolean;
+  awayTeamIsPlaceholder: boolean;
   venueSlug: string | null;
   venueName: string | null;
 };
@@ -182,21 +189,14 @@ function buildTeamList(
   }
 
   for (const match of matches) {
-    for (const team of [match.homeTeam, match.awayTeam]) {
-      if (!team?.id || byProviderId.has(team.id)) {
+    for (const side of ["home", "away"] as const) {
+      const team = toSnapshotTeamFromMatch(match, side);
+
+      if (byProviderId.has(team.id)) {
         continue;
       }
 
-      const name = team.shortName ?? team.name ?? `Team ${team.id}`;
-
-      byProviderId.set(team.id, {
-        id: team.id,
-        slug: teamSlug(team.tla, name),
-        name,
-        code: normalizeCode(team.tla, name),
-        color: colorFromText(name),
-        country: null,
-      });
+      byProviderId.set(team.id, team);
     }
   }
 
@@ -208,8 +208,8 @@ function buildTeamList(
 function toFootballDataMatch(
   match: NonNullable<FootballDataMatchesResponse["matches"]>[number],
 ) {
-  const homeTeamProviderId = match.homeTeam?.id;
-  const awayTeamProviderId = match.awayTeam?.id;
+  const homeTeam = toSnapshotTeamFromMatch(match, "home");
+  const awayTeam = toSnapshotTeamFromMatch(match, "away");
   const venueName = readVenueName(match);
   const venue =
     findWorldCupVenue(venueName) ??
@@ -217,10 +217,6 @@ function toFootballDataMatch(
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
     });
-
-  if (!homeTeamProviderId || !awayTeamProviderId) {
-    return null;
-  }
 
   const score = readMatchScore(match);
 
@@ -233,11 +229,66 @@ function toFootballDataMatch(
     startsAt: match.utcDate ?? null,
     homeScore: score.home,
     awayScore: score.away,
-    homeTeamProviderId,
-    awayTeamProviderId,
+    homeTeamProviderId: homeTeam.id,
+    awayTeamProviderId: awayTeam.id,
+    homeTeamIsPlaceholder: Boolean(homeTeam.isPlaceholder),
+    awayTeamIsPlaceholder: Boolean(awayTeam.isPlaceholder),
     venueSlug: venue?.slug ?? null,
     venueName: venueName ?? venue?.name ?? null,
   };
+}
+
+function toSnapshotTeamFromMatch(
+  match: NonNullable<FootballDataMatchesResponse["matches"]>[number],
+  side: "home" | "away",
+): FootballDataTeam {
+  const team = side === "home" ? match.homeTeam : match.awayTeam;
+  const name = team?.shortName ?? team?.name ?? null;
+
+  if (team?.id && (!name || !isKnownPlaceholderTeamName(name))) {
+    const displayName = name ?? `Team ${team.id}`;
+
+    return {
+      id: team.id,
+      slug: teamSlug(team.tla, displayName),
+      name: displayName,
+      code: normalizeCode(team.tla, displayName),
+      color: colorFromText(displayName),
+      country: null,
+    };
+  }
+
+  const placeholderName = placeholderTeamName(name, match.stage, side);
+  const slug = `slot-${match.id}-${side}`;
+
+  return {
+    id: placeholderTeamId(match.id, side),
+    slug,
+    name: placeholderName,
+    code: "TBD",
+    color: "#8fa2c4",
+    country: null,
+    isPlaceholder: true,
+  };
+}
+
+function placeholderTeamName(
+  name: string | null,
+  stage: string | null | undefined,
+  side: "home" | "away",
+) {
+  if (name && !isKnownPlaceholderTeamName(name)) {
+    return name;
+  }
+
+  const phase = normalizeStageLabel(stage) ?? "Next round";
+  const slot = side === "home" ? "home slot" : "away slot";
+
+  return `${phase} ${slot}`;
+}
+
+function placeholderTeamId(matchId: number, side: "home" | "away") {
+  return -Math.abs(matchId * 2 + (side === "home" ? 1 : 2));
 }
 
 function readMatchScore(
