@@ -10710,6 +10710,23 @@ body {
   color: #fff;
 }
 
+.nfl-sleeper-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.nfl-sleeper-settings span {
+  padding: 4px 6px;
+  color: #d9e4f5;
+  background: rgba(143, 160, 189, 0.12);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
 .nfl-lens-toggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(104px, 1fr));

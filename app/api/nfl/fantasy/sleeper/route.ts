@@ -32,6 +32,9 @@ type SleeperLeagueLookup = {
   status?: string | null;
   season?: string | number | null;
   total_rosters?: string | number | null;
+  roster_positions?: string[] | null;
+  scoring_settings?: Record<string, string | number | null> | null;
+  settings?: Record<string, string | number | null> | null;
 };
 
 export async function GET(request: Request) {

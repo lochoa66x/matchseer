@@ -159,8 +159,30 @@ export type ImportedFantasyTeam = {
   rosterIds: string[];
   starterIds?: string[];
   benchIds?: string[];
+  lineupSlots?: ImportedFantasyLineupSlot[];
   identity: string;
   source: FantasyImportSource;
+};
+
+export type ImportedFantasyLineupSlot = {
+  id: string;
+  label: string;
+  positions: FantasySourcePosition[];
+  source: string;
+};
+
+export type ImportedFantasyLeagueSettings = {
+  scoringFormat: "standard" | "halfPpr" | "fullPpr";
+  formatLabel: string;
+  receptionPoints: number;
+  rosterPositions: string[];
+  lineupSlotCount: number;
+  benchSlots: number;
+  taxiSlots: number;
+  reserveSlots: number;
+  flexSlots: number;
+  superflexSlots: number;
+  summary: string;
 };
 
 export type ImportedFantasyLeague = {
@@ -172,7 +194,9 @@ export type ImportedFantasyLeague = {
   teams: ImportedFantasyTeam[];
   players: NflFantasyPlayer[];
   notes: string[];
+  settings?: ImportedFantasyLeagueSettings;
   sleeper?: SleeperImportReceipt;
+  suggestedScoringFormat?: "standard" | "halfPpr" | "fullPpr";
   suggestedTeamId?: string;
   suggestedOpponentTeamId?: string;
 };
@@ -266,6 +290,9 @@ export type SleeperLeague = {
   season?: string | number | null;
   status?: string | null;
   total_rosters?: string | number | null;
+  roster_positions?: string[] | null;
+  scoring_settings?: Record<string, string | number | null> | null;
+  settings?: Record<string, string | number | null> | null;
 };
 
 export type SleeperRoster = {
@@ -315,6 +342,7 @@ export type SleeperImportReceipt = {
   selectedTeamId?: string;
   opponentTeamId?: string;
   userId?: string;
+  settings?: ImportedFantasyLeagueSettings;
   status: "matched" | "no-matchup" | "no-user-match";
 };
 
@@ -727,6 +755,8 @@ export function buildSleeperFantasyLeague({
   users: SleeperUser[];
   week?: number;
 }): ImportedFantasyLeague {
+  const settings = sleeperLeagueSettings(league);
+  const lineupSlots = sleeperLineupSlotsFromPositions(settings.rosterPositions);
   const userById = new Map(
     users
       .map((user) => [stringId(user.user_id), user] as const)
@@ -825,6 +855,7 @@ export function buildSleeperFantasyLeague({
         rosterIds: fantasyIds,
         starterIds: starterIds.length > 0 ? starterIds : fantasyIds.slice(0, 9),
         benchIds,
+        lineupSlots,
         identity: `Sleeper roster ${rosterId}${matchupByRosterId.get(rosterId) ? `, matchup ${matchupByRosterId.get(rosterId)}` : ""}.`,
         source: "sleeper" as const,
       };
@@ -846,6 +877,7 @@ export function buildSleeperFantasyLeague({
     season: stringId(league.season) || undefined,
     selectedRosterId: preferredSleeperRosterId || undefined,
     selectedTeamId,
+    settings,
     status: preferredSleeperRosterId
       ? preferredMatchupId && opponentSleeperRosterId
         ? "matched"
@@ -863,11 +895,14 @@ export function buildSleeperFantasyLeague({
     week,
     teams,
     players: [...importedPlayers.values()],
+    settings,
     sleeper: receipt,
+    suggestedScoringFormat: settings.scoringFormat,
     suggestedOpponentTeamId: opponentTeamId,
     suggestedTeamId: selectedTeamId,
     notes: [
       "Sleeper import loaded rosters, starters, benches, and player names.",
+      settings.summary,
       receipt.status === "matched"
         ? `Matched roster ${receipt.selectedRosterId} to matchup ${receipt.matchupId}.`
         : receipt.status === "no-matchup"
@@ -904,6 +939,171 @@ export function parseSleeperImportQuery(value: string): SleeperImportQuery {
   }
 
   return { kind: "user", token: trimmed };
+}
+
+function sleeperLeagueSettings(league: SleeperLeague): ImportedFantasyLeagueSettings {
+  const rosterPositions = normalizeSleeperRosterPositions(league.roster_positions);
+  const receptionPoints = looseDecimal(league.scoring_settings?.rec) ?? 0;
+  const scoringFormat = sleeperScoringFormat(receptionPoints);
+  const lineupSlots = sleeperLineupSlotsFromPositions(rosterPositions);
+  const benchSlots = sleeperRosterPositionCount(rosterPositions, ["BN", "BE", "BENCH"]);
+  const taxiSlots =
+    numberFromLooseValue(league.settings?.taxi_slots) ??
+    sleeperRosterPositionCount(rosterPositions, ["TAXI"]);
+  const reserveSlots =
+    numberFromLooseValue(league.settings?.reserve_slots) ??
+    sleeperRosterPositionCount(rosterPositions, ["IR", "RESERVE"]);
+  const flexSlots = lineupSlots.filter((slot) => slot.id.includes("FLEX")).length;
+  const superflexSlots = lineupSlots.filter((slot) => slot.id.includes("SUPER_FLEX")).length;
+  const formatLabel = sleeperScoringLabel(receptionPoints, scoringFormat);
+
+  return {
+    benchSlots,
+    flexSlots,
+    formatLabel,
+    lineupSlotCount: lineupSlots.length,
+    receptionPoints,
+    reserveSlots,
+    rosterPositions,
+    scoringFormat,
+    summary: `${formatLabel}, ${lineupSlots.length} starters${benchSlots ? `, ${benchSlots} bench` : ""}${taxiSlots ? `, ${taxiSlots} taxi` : ""}${reserveSlots ? `, ${reserveSlots} IR` : ""}.`,
+    superflexSlots,
+    taxiSlots,
+  };
+}
+
+function normalizeSleeperRosterPositions(values: unknown) {
+  return Array.isArray(values)
+    ? values.map((value) => cleanLine(value).toUpperCase()).filter(Boolean)
+    : [];
+}
+
+function sleeperScoringFormat(receptionPoints: number): ImportedFantasyLeagueSettings["scoringFormat"] {
+  if (receptionPoints >= 0.75) {
+    return "fullPpr";
+  }
+
+  if (receptionPoints >= 0.25) {
+    return "halfPpr";
+  }
+
+  return "standard";
+}
+
+function sleeperScoringLabel(
+  receptionPoints: number,
+  scoringFormat: ImportedFantasyLeagueSettings["scoringFormat"],
+) {
+  if (receptionPoints === 1) {
+    return "Full PPR";
+  }
+
+  if (receptionPoints === 0.5) {
+    return "Half PPR";
+  }
+
+  if (receptionPoints === 0) {
+    return "Standard";
+  }
+
+  return `${round2(receptionPoints)} PPR`;
+}
+
+function sleeperRosterPositionCount(rosterPositions: string[], tokens: string[]) {
+  const tokenSet = new Set(tokens);
+
+  return rosterPositions.filter((position) => tokenSet.has(position)).length;
+}
+
+function sleeperLineupSlotsFromPositions(
+  rosterPositions: string[],
+): ImportedFantasyLineupSlot[] {
+  const counts = new Map<string, number>();
+
+  return rosterPositions.flatMap((position) => {
+    const slot = sleeperLineupSlot(position);
+
+    if (!slot) {
+      return [];
+    }
+
+    const count = (counts.get(slot.id) ?? 0) + 1;
+    counts.set(slot.id, count);
+
+    return [
+      {
+        ...slot,
+        id: count > 1 ? `${slot.id}${count}` : slot.id,
+        label: count > 1 ? `${slot.label}${count}` : slot.label,
+      },
+    ];
+  });
+}
+
+function sleeperLineupSlot(position: string): ImportedFantasyLineupSlot | null {
+  const normalized = position.toUpperCase();
+
+  if (["BN", "BE", "BENCH", "IR", "RESERVE", "TAXI"].includes(normalized)) {
+    return null;
+  }
+
+  if (normalized === "DEF" || normalized === "D" || normalized === "DST") {
+    return {
+      id: "DEF",
+      label: "DEF",
+      positions: ["DST"],
+      source: "sleeper",
+    };
+  }
+
+  if (["QB", "RB", "WR", "TE", "K", "DST"].includes(normalized)) {
+    const positionLabel = normalized as FantasySourcePosition;
+
+    return {
+      id: positionLabel,
+      label: positionLabel,
+      positions: [positionLabel],
+      source: "sleeper",
+    };
+  }
+
+  if (normalized === "SUPER_FLEX" || normalized === "OP") {
+    return {
+      id: "SUPER_FLEX",
+      label: "SUPER FLEX",
+      positions: ["QB", "RB", "WR", "TE"],
+      source: "sleeper",
+    };
+  }
+
+  if (normalized === "WRRB_FLEX") {
+    return {
+      id: "WRRB_FLEX",
+      label: "WR/RB",
+      positions: ["WR", "RB"],
+      source: "sleeper",
+    };
+  }
+
+  if (normalized === "WRTE_FLEX" || normalized === "REC_FLEX") {
+    return {
+      id: "WRTE_FLEX",
+      label: "WR/TE",
+      positions: ["WR", "TE"],
+      source: "sleeper",
+    };
+  }
+
+  if (normalized === "FLEX" || normalized === "WRT") {
+    return {
+      id: "FLEX",
+      label: "FLEX",
+      positions: ["RB", "WR", "TE"],
+      source: "sleeper",
+    };
+  }
+
+  return null;
 }
 
 export function sleeperLeagueOptionsFromLeagues({
@@ -1606,6 +1806,9 @@ export function sanitizeImportedFantasyLeague(
           rosterIds: team.rosterIds.filter((id) => playerIds.has(id)),
           starterIds: team.starterIds?.filter((id) => playerIds.has(id)),
           benchIds: team.benchIds?.filter((id) => playerIds.has(id)),
+          lineupSlots: team.lineupSlots
+            ?.map((slot) => sanitizeImportedFantasyLineupSlot(slot))
+            .filter((slot): slot is ImportedFantasyLineupSlot => slot !== null),
         }))
         .filter((team) => team.rosterIds.length > 0)
     : [];
@@ -1625,7 +1828,11 @@ export function sanitizeImportedFantasyLeague(
     notes: Array.isArray(league.notes)
       ? league.notes.filter((note) => typeof note === "string")
       : [],
+    settings: sanitizeImportedFantasyLeagueSettings(league.settings),
     sleeper: sanitizeSleeperImportReceipt(league.sleeper),
+    suggestedScoringFormat: isImportedScoringFormat(league.suggestedScoringFormat)
+      ? league.suggestedScoringFormat
+      : undefined,
     suggestedOpponentTeamId:
       typeof league.suggestedOpponentTeamId === "string" &&
       teams.some((team) => team.id === league.suggestedOpponentTeamId)
@@ -1636,6 +1843,69 @@ export function sanitizeImportedFantasyLeague(
       teams.some((team) => team.id === league.suggestedTeamId)
         ? league.suggestedTeamId
         : undefined,
+  };
+}
+
+function sanitizeImportedFantasyLineupSlot(
+  value: unknown,
+): ImportedFantasyLineupSlot | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const slot = value as Partial<ImportedFantasyLineupSlot>;
+  const positions = Array.isArray(slot.positions)
+    ? slot.positions
+        .map((position) => normalizePosition(position) as FantasySourcePosition)
+        .filter((position, index, values) => values.indexOf(position) === index)
+    : [];
+
+  if (
+    typeof slot.id !== "string" ||
+    typeof slot.label !== "string" ||
+    positions.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    id: slot.id,
+    label: slot.label,
+    positions,
+    source: typeof slot.source === "string" ? slot.source : "import",
+  };
+}
+
+function sanitizeImportedFantasyLeagueSettings(
+  value: unknown,
+): ImportedFantasyLeagueSettings | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const settings = value as Partial<ImportedFantasyLeagueSettings>;
+
+  if (
+    !isImportedScoringFormat(settings.scoringFormat) ||
+    typeof settings.formatLabel !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    benchSlots: numberFromLooseValue(settings.benchSlots) ?? 0,
+    flexSlots: numberFromLooseValue(settings.flexSlots) ?? 0,
+    formatLabel: settings.formatLabel,
+    lineupSlotCount: numberFromLooseValue(settings.lineupSlotCount) ?? 0,
+    receptionPoints: looseDecimal(settings.receptionPoints) ?? 0,
+    reserveSlots: numberFromLooseValue(settings.reserveSlots) ?? 0,
+    rosterPositions: Array.isArray(settings.rosterPositions)
+      ? settings.rosterPositions.map((position) => cleanLine(position)).filter(Boolean)
+      : [],
+    scoringFormat: settings.scoringFormat,
+    summary: typeof settings.summary === "string" ? settings.summary : settings.formatLabel,
+    superflexSlots: numberFromLooseValue(settings.superflexSlots) ?? 0,
+    taxiSlots: numberFromLooseValue(settings.taxiSlots) ?? 0,
   };
 }
 
@@ -1674,6 +1944,7 @@ function sanitizeSleeperImportReceipt(value: unknown): SleeperImportReceipt | un
         : undefined,
     selectedTeamId:
       typeof receipt.selectedTeamId === "string" ? receipt.selectedTeamId : undefined,
+    settings: sanitizeImportedFantasyLeagueSettings(receipt.settings),
     status: receipt.status,
     userId: typeof receipt.userId === "string" ? receipt.userId : undefined,
     week: typeof receipt.week === "number" ? receipt.week : undefined,
@@ -2105,7 +2376,8 @@ function isImportedFantasyTeam(value: unknown): value is ImportedFantasyTeam {
     (team.starterIds === undefined ||
       team.starterIds.every((id) => typeof id === "string")) &&
     (team.benchIds === undefined ||
-      team.benchIds.every((id) => typeof id === "string"))
+      team.benchIds.every((id) => typeof id === "string")) &&
+    (team.lineupSlots === undefined || Array.isArray(team.lineupSlots))
   );
 }
 
@@ -2117,6 +2389,12 @@ function isImportSource(value: unknown): value is FantasyImportSource {
     value === "screenshot" ||
     value === "feed"
   );
+}
+
+function isImportedScoringFormat(
+  value: unknown,
+): value is ImportedFantasyLeagueSettings["scoringFormat"] {
+  return value === "standard" || value === "halfPpr" || value === "fullPpr";
 }
 
 function isSleeperImportReceiptStatus(
@@ -2153,6 +2431,15 @@ function numberFromLooseValue(value: unknown) {
 
   return Number.isFinite(numberValue) && numberValue >= 0
     ? Math.round(numberValue)
+    : undefined;
+}
+
+function looseDecimal(value: unknown) {
+  const numberValue =
+    typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
+
+  return Number.isFinite(numberValue) && numberValue >= 0
+    ? round2(numberValue)
     : undefined;
 }
 

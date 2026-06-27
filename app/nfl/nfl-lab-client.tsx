@@ -36,6 +36,7 @@ import {
   type FantasyProviderBridgeImport,
   type FantasyProjectionMatchupContext,
   type FantasySourceProjection,
+  type ImportedFantasyLineupSlot,
   type ImportedFantasyLeague,
   type ImportedFantasyTeam,
   type NflFantasyPlayer,
@@ -54,16 +55,7 @@ type FantasySourceLaneKind = "roster" | "projection" | "ranking" | "context" | "
 type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
 type NflLabMode = "nfl" | "fantasy";
-type FantasyLineupSlotId =
-  | "QB"
-  | "RB1"
-  | "RB2"
-  | "WR1"
-  | "WR2"
-  | "TE"
-  | "FLEX"
-  | "K"
-  | "DEF";
+type FantasyLineupSlotId = string;
 
 type NflTeam = {
   code: string;
@@ -1194,6 +1186,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
   function applySleeperImportedLeague(importedLeague: ImportedFantasyLeague) {
     applyImportedFantasyLeague(importedLeague, sleeperImportSuccessMessage(importedLeague));
+    if (importedLeague.suggestedScoringFormat) {
+      setScoringFormat(importedLeague.suggestedScoringFormat);
+    }
+    if ((importedLeague.settings?.taxiSlots ?? 0) > 0) {
+      setTeamLens("dynasty");
+    }
     setSleeperLeagueOptions([]);
     setSleeperSelectedLeagueId(importedLeague.sleeper?.leagueId ?? "");
     setSleeperImportStatus(
@@ -3399,6 +3397,22 @@ function FantasyImportPanel({
                 {fantasyImport.sleeper.rosterCount} rosters ·{" "}
                 {fantasyImport.sleeper.status.replace(/-/g, " ")}
               </em>
+              {fantasyImport.settings ? (
+                <div className="nfl-sleeper-settings">
+                  <span>{fantasyImport.settings.formatLabel}</span>
+                  <span>{fantasyImport.settings.lineupSlotCount} starters</span>
+                  <span>{fantasyImport.settings.benchSlots} bench</span>
+                  {fantasyImport.settings.taxiSlots > 0 ? (
+                    <span>{fantasyImport.settings.taxiSlots} taxi</span>
+                  ) : null}
+                  {fantasyImport.settings.reserveSlots > 0 ? (
+                    <span>{fantasyImport.settings.reserveSlots} IR</span>
+                  ) : null}
+                  {fantasyImport.settings.superflexSlots > 0 ? (
+                    <span>{fantasyImport.settings.superflexSlots} superflex</span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </article>
@@ -3535,6 +3549,36 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
   ];
 }
 
+function fantasyLineupSlotsForTeam(team: FantasyTeam): FantasyLineupSlotDefinition[] {
+  const importedSlots =
+    team.lineupSlots
+      ?.map((slot) => fantasyImportedLineupSlot(slot))
+      .filter((slot): slot is FantasyLineupSlotDefinition => slot !== null) ?? [];
+
+  return importedSlots.length > 0 ? importedSlots : fantasyLineupSlots;
+}
+
+function fantasyImportedLineupSlot(
+  slot: ImportedFantasyLineupSlot,
+): FantasyLineupSlotDefinition | null {
+  const positions = slot.positions
+    .map((position) => normalizeScoutingPosition(position))
+    .filter(
+      (position, index, values) =>
+        fantasyCoveragePositions.includes(position) && values.indexOf(position) === index,
+    );
+
+  if (!slot.id || !slot.label || positions.length === 0) {
+    return null;
+  }
+
+  return {
+    id: slot.id,
+    label: slot.label,
+    positions,
+  };
+}
+
 function analyzeFantasyTeam({
   allPlayers,
   contextByTeam,
@@ -3555,6 +3599,7 @@ function analyzeFantasyTeam({
     fullRoster.length > 0 ? fullRoster : board.slice(0, Math.min(12, board.length));
   const decision = buildFantasyLineupDecision({
     lens,
+    lineupSlots: fantasyLineupSlotsForTeam(team),
     roster: rosterPool,
     scoringFormat,
   });
@@ -3623,15 +3668,17 @@ function analyzeFantasyTeam({
 
 function buildFantasyLineupDecision({
   lens,
+  lineupSlots,
   roster,
   scoringFormat,
 }: {
   lens: FantasyTeamLens;
+  lineupSlots: FantasyLineupSlotDefinition[];
   roster: ScoutingRow[];
   scoringFormat: ScoringFormat;
 }) {
   const usedIds = new Set<string>();
-  const lineup = fantasyLineupSlots.map((slot) => {
+  const lineup = lineupSlots.map((slot) => {
     const player =
       roster
         .filter(
@@ -3661,10 +3708,17 @@ function buildFantasyLineupDecision({
   const benchAlternatives = fantasyBenchAlternatives(
     lineup,
     benchPlayers,
+    lineupSlots,
     scoringFormat,
     lens,
   );
-  const closeCalls = fantasyCloseCalls(lineup, benchPlayers, scoringFormat, lens);
+  const closeCalls = fantasyCloseCalls(
+    lineup,
+    benchPlayers,
+    lineupSlots,
+    scoringFormat,
+    lens,
+  );
   const startSitReceipts = fantasyDecisionReceipts(
     lineup,
     benchAlternatives,
@@ -3773,6 +3827,7 @@ function fantasyLineupFitScore(
 function fantasyBenchAlternatives(
   lineup: FantasyLineupSlotPick[],
   benchPlayers: ScoutingRow[],
+  lineupSlots: FantasyLineupSlotDefinition[],
   scoringFormat: ScoringFormat,
   lens: FantasyTeamLens,
 ): FantasyBenchAlternative[] {
@@ -3782,7 +3837,7 @@ function fantasyBenchAlternatives(
         .filter(
           (slot) =>
             slot.player &&
-            fantasyLineupSlots
+            lineupSlots
               .find((definition) => definition.id === slot.id)
               ?.positions.includes(normalizeScoutingPosition(benchPlayer.position)),
         )
@@ -3790,8 +3845,18 @@ function fantasyBenchAlternatives(
           (left, right) =>
             (left.player?.contextProjection.projection ?? 0) -
               (right.player?.contextProjection.projection ?? 0) ||
-            fantasyLineupFitScore(benchPlayer, slotDefinition(left.id), scoringFormat, lens) -
-              fantasyLineupFitScore(benchPlayer, slotDefinition(right.id), scoringFormat, lens),
+            fantasyLineupFitScore(
+              benchPlayer,
+              slotDefinition(left.id, lineupSlots),
+              scoringFormat,
+              lens,
+            ) -
+              fantasyLineupFitScore(
+                benchPlayer,
+                slotDefinition(right.id, lineupSlots),
+                scoringFormat,
+                lens,
+              ),
         );
       const targetSlot = eligibleSlots[0];
 
@@ -3828,10 +3893,11 @@ function fantasyBenchAlternatives(
 function fantasyCloseCalls(
   lineup: FantasyLineupSlotPick[],
   benchPlayers: ScoutingRow[],
+  lineupSlots: FantasyLineupSlotDefinition[],
   scoringFormat: ScoringFormat,
   lens: FantasyTeamLens,
 ): FantasyCloseCall[] {
-  return fantasyBenchAlternatives(lineup, benchPlayers, scoringFormat, lens)
+  return fantasyBenchAlternatives(lineup, benchPlayers, lineupSlots, scoringFormat, lens)
     .filter((alternative) => Math.abs(alternative.lift) <= 2.2 || alternative.lift > 0)
     .flatMap((alternative) => {
       const targetSlot = lineup.find((slot) => slot.label === alternative.slotLabel);
@@ -3976,9 +4042,13 @@ function fantasySourceProjection(player: ScoutingRow) {
   return round1(player.fantasy.projection - projectionDelta(player));
 }
 
-function slotDefinition(slotId: FantasyLineupSlotId) {
+function slotDefinition(
+  slotId: FantasyLineupSlotId,
+  lineupSlots: FantasyLineupSlotDefinition[] = fantasyLineupSlots,
+) {
   return (
-    fantasyLineupSlots.find((definition) => definition.id === slotId) ??
+    lineupSlots.find((definition) => definition.id === slotId) ??
+    lineupSlots[0] ??
     fantasyLineupSlots[0]
   );
 }
@@ -5915,8 +5985,11 @@ function sleeperImportSuccessMessage(importedLeague: ImportedFantasyLeague) {
       : receipt.status === "no-matchup"
         ? "no matchup found"
         : "no user roster matched";
+  const settingsCopy = importedLeague.settings
+    ? ` · ${importedLeague.settings.formatLabel}, ${importedLeague.settings.lineupSlotCount} starters`
+    : "";
 
-  return `${receipt.leagueName} loaded · season ${receipt.season ?? importedLeague.season ?? "?"} · week ${receipt.week ?? importedLeague.week ?? "?"} · ${importedLeague.teams.length} teams · ${matchupCopy} · ${receipt.rosterCount} rosters.`;
+  return `${receipt.leagueName} loaded · season ${receipt.season ?? importedLeague.season ?? "?"} · week ${receipt.week ?? importedLeague.week ?? "?"} · ${importedLeague.teams.length} teams · ${matchupCopy} · ${receipt.rosterCount} rosters${settingsCopy}.`;
 }
 
 function weekFromDatasetLabel(weekLabel: string) {

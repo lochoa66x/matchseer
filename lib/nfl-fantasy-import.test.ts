@@ -280,6 +280,80 @@ describe("NFL fantasy imports", () => {
     expect(league.teams[0].starterIds).toContain(defense?.id);
   });
 
+  it("reads Sleeper scoring and roster settings into lineup slots", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Custom League",
+        roster_positions: [
+          "QB",
+          "RB",
+          "WR",
+          "TE",
+          "FLEX",
+          "SUPER_FLEX",
+          "DEF",
+          "BN",
+          "BN",
+          "IR",
+        ],
+        scoring_settings: { rec: 0.5 },
+        season: "2026",
+        settings: { reserve_slots: 2, taxi_slots: 3 },
+      },
+      players: {
+        "111": {
+          full_name: "Josh Allen",
+          position: "QB",
+          team: "BUF",
+          search_rank: 4,
+        },
+        "222": {
+          full_name: "Amon-Ra St. Brown",
+          position: "WR",
+          team: "DET",
+          search_rank: 9,
+        },
+      },
+      rosters: [
+        {
+          owner_id: "u1",
+          players: ["111", "222", "BUF"],
+          roster_id: 1,
+          starters: ["111", "222", "BUF"],
+        },
+      ],
+      users: [{ user_id: "u1", display_name: "Luis" }],
+      week: 1,
+    });
+    const sanitized = sanitizeImportedFantasyLeague(league);
+
+    expect(league.suggestedScoringFormat).toBe("halfPpr");
+    expect(league.settings).toMatchObject({
+      benchSlots: 2,
+      formatLabel: "Half PPR",
+      lineupSlotCount: 7,
+      reserveSlots: 2,
+      superflexSlots: 1,
+      taxiSlots: 3,
+    });
+    expect(league.teams[0].lineupSlots?.map((slot) => slot.label)).toEqual([
+      "QB",
+      "RB",
+      "WR",
+      "TE",
+      "FLEX",
+      "SUPER FLEX",
+      "DEF",
+    ]);
+    expect(sanitized?.settings?.formatLabel).toBe("Half PPR");
+    expect(sanitized?.teams[0].lineupSlots?.[5]).toMatchObject({
+      label: "SUPER FLEX",
+      positions: ["QB", "RB", "WR", "TE"],
+    });
+    expect(sanitized?.sleeper?.settings?.taxiSlots).toBe(3);
+  });
+
   it("parses Sleeper league and user URLs cleanly", () => {
     expect(
       parseSleeperImportQuery("https://sleeper.com/leagues/123456789012345678"),
