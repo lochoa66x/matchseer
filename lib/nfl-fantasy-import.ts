@@ -1805,6 +1805,19 @@ function sleeperPlayerToFantasyPlayer({
   playerId: string;
   rank: number;
 }) {
+  if (isDefenseId(playerId)) {
+    return createGeneratedFantasyPlayer({
+      line: {
+        name: sleeperDefenseName(playerId),
+        position: "DST",
+        team: playerId,
+      },
+      playerId,
+      rank,
+      source: "sleeper",
+    });
+  }
+
   if (!player) {
     return null;
   }
@@ -1814,7 +1827,7 @@ function sleeperPlayerToFantasyPlayer({
     cleanLine(`${player.first_name ?? ""} ${player.last_name ?? ""}`) ||
     cleanLine(player.search_full_name);
 
-  if (!name || isDefenseId(playerId)) {
+  if (!name) {
     return null;
   }
 
@@ -2149,7 +2162,7 @@ function normalizeSleeperIds(values: string[] | null | undefined) {
 
 function sleeperFantasyId(playerId: string, player?: Partial<SleeperPlayer | ManualPlayerLine>) {
   if (isDefenseId(playerId)) {
-    return null;
+    return `sleeper-${playerId}-${slugify(sleeperDefenseName(playerId))}`;
   }
 
   const name =
@@ -2165,6 +2178,10 @@ function sleeperFantasyId(playerId: string, player?: Partial<SleeperPlayer | Man
 
 function isDefenseId(playerId: string) {
   return teamCodes.has(playerId.toUpperCase());
+}
+
+function sleeperDefenseName(playerId: string) {
+  return `${playerId.toUpperCase()} D/ST`;
 }
 
 function projectionRowsFromPayload(payload: unknown): unknown[] {
@@ -2761,7 +2778,7 @@ function projectionAdjustmentDetails(
 function normalizePosition(value: unknown) {
   const position = typeof value === "string" ? value.toUpperCase() : "";
 
-  if (position === "DEF" || position === "D") {
+  if (position === "DEF" || position === "D" || position === "D/ST") {
     return "DST";
   }
 

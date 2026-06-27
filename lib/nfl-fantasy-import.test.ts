@@ -249,6 +249,37 @@ describe("NFL fantasy imports", () => {
     expect(league.players.map((player) => player.source)).toContain("sleeper");
   });
 
+  it("keeps Sleeper team defenses as DST roster players", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Fun League",
+        season: "2026",
+      },
+      players: {},
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["BUF"], starters: ["BUF"] },
+        { roster_id: 2, owner_id: "u2", players: ["PHI"], starters: ["PHI"] },
+      ],
+      users: [
+        { user_id: "u1", display_name: "Luis" },
+        { user_id: "u2", display_name: "Rival" },
+      ],
+      week: 1,
+    });
+    const defense = league.players.find(
+      (player) => player.position === "DST" && player.team === "BUF",
+    );
+
+    expect(defense).toMatchObject({
+      name: "BUF D/ST",
+      position: "DST",
+      source: "sleeper",
+      team: "BUF",
+    });
+    expect(league.teams[0].starterIds).toContain(defense?.id);
+  });
+
   it("parses Sleeper league and user URLs cleanly", () => {
     expect(
       parseSleeperImportQuery("https://sleeper.com/leagues/123456789012345678"),
