@@ -9,6 +9,7 @@ import {
   LineChart,
   LoaderCircle,
   RefreshCcw,
+  Save,
   ShieldCheck,
   Trophy,
   UsersRound,
@@ -20,53 +21,129 @@ import type {
   NflFantasyProviderStatus,
   NflSeerDataset,
 } from "../../../lib/nfl-seer-data";
+import type {
+  NflAdminSettings,
+  NflAdminSettingsDashboard,
+} from "../../../lib/nfl-admin-settings";
 
 type ActionStatus = "idle" | "loading" | "success" | "error";
+type NflAdminAction =
+  | "all"
+  | "players"
+  | "polymarket"
+  | "projections"
+  | "rankings"
+  | "schedule"
+  | "sleeper";
+
+type NflActionResponse = {
+  action: NflAdminAction;
+  dataset: NflSeerDataset;
+  fetchedAt: string;
+  receipt: string;
+};
 
 const fantasyPositions: FantasyPosition[] = ["QB", "RB", "WR", "TE", "K", "DST"];
 
-const setupLanes = [
+const emptySettings: NflAdminSettings = {
+  fantasyDataUrl: "",
+  fantasyProjectionsUrl: "",
+  fantasyRankingsUrl: "",
+  nflSeerDataUrl: "",
+  polymarketEnabled: "auto",
+  polymarketMaxGames: "",
+  polymarketMaxShift: "",
+  polymarketMaxWeight: "",
+  sleeperLeagueId: "",
+  sleeperWeek: "",
+};
+
+const settingFields: Array<{
+  detail: string;
+  key: Exclude<keyof NflAdminSettings, "polymarketEnabled">;
+  label: string;
+  placeholder: string;
+}> = [
   {
+    key: "nflSeerDataUrl",
     label: "Schedule feed",
-    value: "NFL_SEER_DATA_URL",
     detail: "Optional override for the ESPN scoreboard rail.",
+    placeholder: "https://...",
   },
   {
+    key: "sleeperLeagueId",
     label: "Sleeper rosters",
-    value: "NFL_SLEEPER_LEAGUE_ID",
     detail: "Public league id for a shared fantasy roster spine.",
+    placeholder: "league id",
   },
   {
+    key: "sleeperWeek",
     label: "Sleeper week",
-    value: "NFL_SLEEPER_WEEK",
     detail: "Optional manual week override; otherwise Sleeper current week is used.",
+    placeholder: "auto",
   },
   {
+    key: "fantasyDataUrl",
     label: "Player feed",
-    value: "NFL_FANTASY_DATA_URL",
     detail: "Canonical player pool when we are not relying on seeded preseason players.",
+    placeholder: "https://...",
   },
   {
+    key: "fantasyProjectionsUrl",
     label: "Projection feed",
-    value: "NFL_FANTASY_PROJECTIONS_URL",
     detail: "Source projection rows before the Seer context nudges them.",
+    placeholder: "https://...",
   },
   {
+    key: "fantasyRankingsUrl",
     label: "Rankings feed",
-    value: "NFL_FANTASY_RANKINGS_URL",
     detail: "ECR, ADP, or ranking rows for baseline rank comparisons.",
+    placeholder: "https://...",
   },
   {
-    label: "Crowd signal",
-    value: "NFL_POLYMARKET_ENABLED",
-    detail: "Controls the light Polymarket nudge lane.",
+    key: "polymarketMaxGames",
+    label: "Crowd games",
+    detail: "How many slate games the crowd lane scans.",
+    placeholder: "6",
   },
+  {
+    key: "polymarketMaxShift",
+    label: "Crowd cap",
+    detail: "Max probability points the crowd can move a matchup.",
+    placeholder: "4",
+  },
+  {
+    key: "polymarketMaxWeight",
+    label: "Crowd weight",
+    detail: "Max blend weight for Polymarket before caps.",
+    placeholder: "0.16",
+  },
+];
+
+const actionButtons: Array<{
+  action: NflAdminAction;
+  icon: ReactNode;
+  label: string;
+}> = [
+  { action: "schedule", icon: <DatabaseZap size={18} />, label: "Refresh schedule" },
+  { action: "sleeper", icon: <UsersRound size={18} />, label: "Sync Sleeper" },
+  { action: "players", icon: <BrainCircuit size={18} />, label: "Check players" },
+  { action: "projections", icon: <LineChart size={18} />, label: "Sync projections" },
+  { action: "rankings", icon: <Gauge size={18} />, label: "Sync rankings" },
+  { action: "polymarket", icon: <Activity size={18} />, label: "Sync crowd" },
+  { action: "all", icon: <RefreshCcw size={18} />, label: "Run all lanes" },
 ];
 
 export default function NflAdminPage() {
   const [secret, setSecret] = useState("");
   const [dataset, setDataset] = useState<NflSeerDataset | null>(null);
+  const [settingsDashboard, setSettingsDashboard] =
+    useState<NflAdminSettingsDashboard | null>(null);
+  const [settingsDraft, setSettingsDraft] =
+    useState<NflAdminSettings>(emptySettings);
   const [loadStatus, setLoadStatus] = useState<ActionStatus>("idle");
+  const [settingsStatus, setSettingsStatus] = useState<ActionStatus>("idle");
+  const [activeAction, setActiveAction] = useState<NflAdminAction | null>(null);
   const [messageStatus, setMessageStatus] = useState<ActionStatus>("idle");
   const [message, setMessage] = useState("NFL data console is ready.");
 
@@ -75,6 +152,7 @@ export default function NflAdminPage() {
 
     if (storedSecret) {
       setSecret(storedSecret);
+      void refreshSettings(storedSecret);
     }
 
     void refreshDashboard();
@@ -103,6 +181,7 @@ export default function NflAdminPage() {
     [dataset],
   );
   const marketLiveCount = matchupRows.filter((matchup) => matchup.marketPulse).length;
+  const effectiveSettings = settingsDashboard?.effective;
 
   async function refreshDashboard() {
     setLoadStatus("loading");
@@ -123,6 +202,115 @@ export default function NflAdminPage() {
       setMessageStatus("error");
       setMessage(error instanceof Error ? error.message : "NFL dashboard refresh failed.");
     }
+  }
+
+  async function refreshSettings(adminSecret = secret) {
+    if (!adminSecret) {
+      setSettingsDashboard(null);
+      setSettingsDraft(emptySettings);
+      return;
+    }
+
+    setSettingsStatus("loading");
+
+    try {
+      const dashboard = await fetchJson<NflAdminSettingsDashboard>(
+        "/api/admin/nfl-settings",
+        {
+          headers: {
+            Authorization: `Bearer ${adminSecret}`,
+          },
+        },
+      );
+
+      setSettingsDashboard(dashboard);
+      setSettingsDraft(dashboard.settings);
+      setSettingsStatus("success");
+    } catch (error) {
+      setSettingsStatus("error");
+      setMessageStatus("error");
+      setMessage(error instanceof Error ? error.message : "NFL settings failed.");
+    }
+  }
+
+  async function saveSettings() {
+    if (!secret) {
+      setMessageStatus("error");
+      setMessage("Add the admin secret before saving NFL settings.");
+      return;
+    }
+
+    setSettingsStatus("loading");
+    setMessageStatus("loading");
+    setMessage("Saving NFL runtime settings...");
+
+    try {
+      const dashboard = await fetchJson<NflAdminSettingsDashboard>(
+        "/api/admin/nfl-settings",
+        {
+          body: JSON.stringify(settingsDraft),
+          headers: {
+            Authorization: `Bearer ${secret}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+        },
+      );
+
+      setSettingsDashboard(dashboard);
+      setSettingsDraft(dashboard.settings);
+      setSettingsStatus("success");
+      setMessageStatus("success");
+      setMessage("NFL runtime settings saved. Run a lane to refresh receipts.");
+      await refreshDashboard();
+    } catch (error) {
+      setSettingsStatus("error");
+      setMessageStatus("error");
+      setMessage(error instanceof Error ? error.message : "NFL settings save failed.");
+    }
+  }
+
+  async function runNflAction(action: NflAdminAction) {
+    if (!secret) {
+      setMessageStatus("error");
+      setMessage("Add the admin secret before running NFL admin actions.");
+      return;
+    }
+
+    setActiveAction(action);
+    setMessageStatus("loading");
+    setMessage(`Running ${actionLabel(action)}...`);
+
+    try {
+      const payload = await fetchJson<NflActionResponse>("/api/admin/nfl-actions", {
+        body: JSON.stringify({ action }),
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      setDataset(payload.dataset);
+      setMessageStatus("success");
+      setMessage(payload.receipt);
+      await refreshSettings(secret);
+    } catch (error) {
+      setMessageStatus("error");
+      setMessage(error instanceof Error ? error.message : "NFL action failed.");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  function updateSetting<Key extends keyof NflAdminSettings>(
+    key: Key,
+    value: NflAdminSettings[Key],
+  ) {
+    setSettingsDraft((current) => ({
+      ...current,
+      [key]: value,
+    }));
   }
 
   return (
@@ -166,9 +354,18 @@ export default function NflAdminPage() {
             value={secret}
           />
           <p className="admin-muted">
-            Kept in this browser session. NFL controls can reuse the same admin key
-            as the World Cup console when protected actions are added.
+            Kept in this browser session. NFL lane actions use this as the bearer
+            token.
           </p>
+          <button
+            className="admin-command nfl-admin-load-settings"
+            disabled={!secret || settingsStatus === "loading"}
+            onClick={() => void refreshSettings()}
+            type="button"
+          >
+            <RefreshCcw size={16} />
+            {settingsStatus === "loading" ? "Loading settings" : "Load settings"}
+          </button>
         </div>
 
         <AdminMetric
@@ -195,6 +392,25 @@ export default function NflAdminPage() {
           note={`${providers.length} configured lanes`}
           value={`${liveProviderCount}/${providers.length || 4} live`}
         />
+      </section>
+
+      <section className="admin-actions nfl-admin-actions">
+        {actionButtons.map((button) => (
+          <button
+            className={button.action === "all" ? "admin-command primary" : "admin-command"}
+            disabled={!secret || activeAction !== null}
+            key={button.action}
+            onClick={() => void runNflAction(button.action)}
+            type="button"
+          >
+            {activeAction === button.action ? (
+              <LoaderCircle className="spin" size={18} />
+            ) : (
+              button.icon
+            )}
+            {button.label}
+          </button>
+        ))}
       </section>
 
       <p className={`admin-message ${messageStatus}`}>{message}</p>
@@ -264,18 +480,71 @@ export default function NflAdminPage() {
           <div className="admin-table-header">
             <div>
               <p className="eyebrow">Data knobs</p>
-              <h2>Source setup</h2>
+              <h2>Runtime settings</h2>
             </div>
-            <strong>env driven</strong>
+            <strong>{settingsDashboard?.storage.source ?? "locked"}</strong>
           </div>
-          <div className="nfl-admin-setup-list">
-            {setupLanes.map((lane) => (
-              <article key={lane.value}>
-                <span>{lane.label}</span>
-                <strong>{lane.value}</strong>
-                <p>{lane.detail}</p>
-              </article>
+          <div className="nfl-admin-settings-grid">
+            {settingFields.map((field) => (
+              <label key={field.key}>
+                <span>{field.label}</span>
+                <input
+                  className="admin-input"
+                  onChange={(event) => updateSetting(field.key, event.target.value)}
+                  placeholder={field.placeholder}
+                  value={settingsDraft[field.key]}
+                />
+                <em>{field.detail}</em>
+                <small>
+                  {effectiveSettings?.sources[field.key] ?? "default"} ·{" "}
+                  {effectiveSettingValue(field.key, effectiveSettings)}
+                </small>
+              </label>
             ))}
+            <label>
+              <span>Crowd signal</span>
+              <select
+                className="admin-select"
+                onChange={(event) =>
+                  updateSetting(
+                    "polymarketEnabled",
+                    event.target.value as NflAdminSettings["polymarketEnabled"],
+                  )
+                }
+                value={settingsDraft.polymarketEnabled}
+              >
+                <option value="auto">Auto from env</option>
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+              <em>Controls the light Polymarket nudge lane.</em>
+              <small>
+                {effectiveSettings?.sources.polymarketEnabled ?? "default"} ·{" "}
+                {effectiveSettings?.polymarketEnabled ? "enabled" : "disabled"}
+              </small>
+            </label>
+          </div>
+          <div className="nfl-admin-settings-actions">
+            <button
+              className="admin-command primary"
+              disabled={!secret || settingsStatus === "loading"}
+              onClick={() => void saveSettings()}
+              type="button"
+            >
+              {settingsStatus === "loading" ? (
+                <LoaderCircle className="spin" size={18} />
+              ) : (
+                <Save size={18} />
+              )}
+              Save NFL settings
+            </button>
+            <button
+              className="admin-command"
+              onClick={() => setSettingsDraft(settingsDashboard?.settings ?? emptySettings)}
+              type="button"
+            >
+              Reset draft
+            </button>
           </div>
         </section>
       </section>
@@ -416,8 +685,8 @@ function AdminMetric({
   );
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { cache: "no-store" });
+async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, cache: "no-store" });
   const payload = (await response.json()) as unknown;
 
   if (!response.ok) {
@@ -433,6 +702,39 @@ async function fetchJson<T>(path: string): Promise<T> {
   }
 
   return payload as T;
+}
+
+function actionLabel(action: NflAdminAction) {
+  if (action === "all") {
+    return "all NFL lanes";
+  }
+
+  if (action === "polymarket") {
+    return "crowd signal";
+  }
+
+  return action;
+}
+
+function effectiveSettingValue(
+  key: keyof NflAdminSettings,
+  settings: NflAdminSettingsDashboard["effective"] | undefined,
+) {
+  if (!settings) {
+    return "not loaded";
+  }
+
+  if (key === "polymarketEnabled") {
+    return settings.polymarketEnabled ? "enabled" : "disabled";
+  }
+
+  const value = settings[key];
+
+  if (value === null || value === "") {
+    return "empty";
+  }
+
+  return String(value);
 }
 
 function providerIcon(kind: NflFantasyProviderStatus["kind"]) {

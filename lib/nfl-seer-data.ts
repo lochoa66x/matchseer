@@ -20,6 +20,10 @@ import {
   type SleeperRoster,
   type SleeperUser,
 } from "./nfl-fantasy-import";
+import {
+  readNflRuntimeSettings,
+  type NflRuntimeSettings,
+} from "./nfl-admin-settings";
 
 export type NflTeamFeed = {
   code: string;
@@ -179,10 +183,6 @@ type EspnCompetitor = {
 
 const espnScoreboardUrl =
   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?limit=16";
-const nflPolymarketEnabled = process.env.NFL_POLYMARKET_ENABLED !== "0";
-const nflPolymarketMaxGames = Number(process.env.NFL_POLYMARKET_MAX_GAMES ?? "6");
-const nflPolymarketMaxShift = Number(process.env.NFL_POLYMARKET_MAX_SHIFT ?? "4");
-const nflPolymarketMaxWeight = Number(process.env.NFL_POLYMARKET_MAX_WEIGHT ?? "0.16");
 const sleeperApiBase = "https://api.sleeper.app/v1";
 const fantasyFreshHours = Number(process.env.NFL_FANTASY_FRESH_HOURS ?? "24");
 const fantasyStaleHours = Number(process.env.NFL_FANTASY_STALE_HOURS ?? "72");
@@ -191,8 +191,13 @@ const fantasyPositions = ["QB", "RB", "WR", "TE", "K", "DST"] as const;
 export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
   const fetchedAt = new Date().toISOString();
   const notes: string[] = [];
-  const scheduleUrl = process.env.NFL_SEER_DATA_URL ?? espnScoreboardUrl;
-  const fantasyAdapters = await loadFantasyProviderAdapters(fetchedAt, notes);
+  const runtimeSettings = await readNflRuntimeSettings();
+  const scheduleUrl = runtimeSettings.nflSeerDataUrl || espnScoreboardUrl;
+  const fantasyAdapters = await loadFantasyProviderAdapters(
+    fetchedAt,
+    notes,
+    runtimeSettings,
+  );
   const fantasyPlayers = fantasyAdapters.players;
   const fantasySignals = fantasyAdapters.signals;
 
@@ -209,17 +214,22 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
     }
 
     const payload = (await response.json()) as unknown;
-    const dataset = applyFantasyProjectionLayer(toNflSeerDataset(payload, {
-      fetchedAt,
-      fantasyPlayers,
-      source: process.env.NFL_SEER_DATA_URL ? "configured-feed" : "espn-scoreboard",
-    }), fantasySignals);
+    const dataset = applyFantasyProjectionLayer(
+      toNflSeerDataset(payload, {
+        fetchedAt,
+        fantasyPlayers,
+        source: runtimeSettings.nflSeerDataUrl
+          ? "configured-feed"
+          : "espn-scoreboard",
+      }),
+      fantasySignals,
+    );
 
     if (dataset.matchups.length === 0) {
       throw new Error("NFL schedule feed returned no usable matchups");
     }
 
-    const marketResult = await applyNflMarketPulses(dataset);
+    const marketResult = await applyNflMarketPulses(dataset, runtimeSettings);
 
     return {
       ...marketResult.dataset,
@@ -428,12 +438,15 @@ function espnEventToMatchup(
   };
 }
 
-async function applyNflMarketPulses(dataset: NflSeerDataset): Promise<{
+async function applyNflMarketPulses(
+  dataset: NflSeerDataset,
+  settings: NflRuntimeSettings,
+): Promise<{
   dataset: NflSeerDataset;
   status: "live" | "fallback";
   notes: string[];
 }> {
-  if (!nflPolymarketEnabled) {
+  if (!settings.polymarketEnabled) {
     return {
       dataset,
       status: "fallback",
@@ -441,9 +454,7 @@ async function applyNflMarketPulses(dataset: NflSeerDataset): Promise<{
     };
   }
 
-  const maxGames = Number.isFinite(nflPolymarketMaxGames)
-    ? Math.max(0, Math.min(10, Math.floor(nflPolymarketMaxGames)))
-    : 6;
+  const maxGames = marketMaxGames(settings);
   const targets = dataset.matchups.slice(0, maxGames);
 
   if (targets.length === 0) {
@@ -497,14 +508,14 @@ async function applyNflMarketPulses(dataset: NflSeerDataset): Promise<{
       matchups: dataset.matchups.map((matchup) => {
         const update = updates.get(matchup.id);
 
-        return update ? applyNflMarketPulse(matchup, update) : matchup;
+        return update ? applyNflMarketPulse(matchup, update, settings) : matchup;
       }),
     },
     status: "live",
     notes: [
       `Polymarket crowd signal nudged ${updates.size} game${
         updates.size === 1 ? "" : "s"
-      }; each move is capped at ${marketMaxShift()} points.`,
+      }; each move is capped at ${marketMaxShift(settings)} points.`,
     ],
   };
 }
@@ -538,6 +549,7 @@ function applyNflMarketPulse(
   update: NonNullable<
     Awaited<ReturnType<typeof fetchPolymarketPulseForTarget>>["update"]
   >,
+  settings: NflRuntimeSettings,
 ): NflMatchupFeed {
   const sourceHomeWin = matchup.sourceHomeWin ?? matchup.homeWin;
   const sourceAwayWin = matchup.sourceAwayWin ?? matchup.awayWin;
@@ -552,10 +564,10 @@ function applyNflMarketPulse(
   const weight = clampNumber(
     liquidityScore * (0.07 + disagreement * 0.16 + conviction * 0.05),
     0,
-    marketMaxWeight(),
+    marketMaxWeight(settings),
   );
   const rawDelta = (market.home - sourceHomeWin) * weight;
-  const homeDelta = clampRoundedDelta(rawDelta, marketMaxShift());
+  const homeDelta = clampRoundedDelta(rawDelta, marketMaxShift(settings));
   const nudgedHomeWin = clampProbability(sourceHomeWin + homeDelta);
   const nudgedAwayWin = 100 - nudgedHomeWin;
   const sourceLeader = sourceHomeWin >= sourceAwayWin ? "home" : "away";
@@ -598,7 +610,7 @@ function applyNflMarketPulse(
         applied,
         homeDelta,
         awayDelta: -homeDelta,
-        cap: marketMaxShift(),
+        cap: marketMaxShift(settings),
         summary: applied
           ? `Crowd signal moved the Seer ${formatSigned(homeDelta)} toward ${homeDelta > 0 ? matchup.home.code : matchup.away.code}, capped so the model still owns the read.`
           : "Crowd signal was close to the source model, so the Seer kept the read untouched.",
@@ -724,14 +736,15 @@ function matchupEdges({
 async function loadFantasyProviderAdapters(
   fetchedAt: string,
   notes: string[],
+  settings: NflRuntimeSettings,
 ) {
   const [sleeper, players, projections, rankings] = await Promise.all([
-    loadSleeperRosterAdapter(fetchedAt, notes),
+    loadSleeperRosterAdapter(fetchedAt, notes, settings),
     loadFantasyPlayersAdapter({
       fetchedAt,
       label: "Player feed",
       notes,
-      source: process.env.NFL_FANTASY_DATA_URL ?? "",
+      source: settings.fantasyDataUrl,
     }),
     loadFantasySignalAdapter({
       fetchedAt,
@@ -740,7 +753,7 @@ async function loadFantasyProviderAdapters(
       label: "Projection feed",
       missingMessage: "Set NFL_FANTASY_PROJECTIONS_URL for source point receipts.",
       notes,
-      source: process.env.NFL_FANTASY_PROJECTIONS_URL ?? "",
+      source: settings.fantasyProjectionsUrl,
     }),
     loadFantasySignalAdapter({
       fetchedAt,
@@ -749,7 +762,7 @@ async function loadFantasyProviderAdapters(
       label: "Rankings / ECR / ADP",
       missingMessage: "Set NFL_FANTASY_RANKINGS_URL for rankings, ECR, or ADP.",
       notes,
-      source: process.env.NFL_FANTASY_RANKINGS_URL ?? "",
+      source: settings.fantasyRankingsUrl,
     }),
   ]);
   const providerPlayers = mergeFantasyPlayerPools(
@@ -918,11 +931,12 @@ async function loadFantasySignalAdapter({
 async function loadSleeperRosterAdapter(
   fetchedAt: string,
   notes: string[],
+  settings: NflRuntimeSettings,
 ): Promise<{
   players: NflFantasyPlayer[];
   provider: NflFantasyProviderStatus;
 }> {
-  const leagueId = (process.env.NFL_SLEEPER_LEAGUE_ID ?? "").trim();
+  const leagueId = settings.sleeperLeagueId.trim();
 
   if (!leagueId) {
     return {
@@ -937,7 +951,7 @@ async function loadSleeperRosterAdapter(
   }
 
   try {
-    const week = await sleeperWeek();
+    const week = await sleeperWeek(settings);
     const [league, rosters, users, players, matchups] = await Promise.all([
       sleeperJson<SleeperLeague>(`/league/${encodeURIComponent(leagueId)}`, {
         cache: "no-store",
@@ -1028,11 +1042,9 @@ async function fetchJsonPayload(source: string, fetchedAt: string) {
   };
 }
 
-async function sleeperWeek() {
-  const explicitWeek = Number(process.env.NFL_SLEEPER_WEEK);
-
-  if (Number.isFinite(explicitWeek) && explicitWeek > 0) {
-    return Math.floor(explicitWeek);
+async function sleeperWeek(settings: NflRuntimeSettings) {
+  if (settings.sleeperWeek !== null) {
+    return settings.sleeperWeek;
   }
 
   const state = await sleeperJson<{
@@ -1497,15 +1509,21 @@ function skipSummary(skipped: Partial<Record<PulseSkipReason, number>>) {
   return parts.length > 0 ? ` (${parts.join(", ")})` : "";
 }
 
-function marketMaxShift() {
-  return Number.isFinite(nflPolymarketMaxShift)
-    ? Math.max(0, Math.min(8, Math.round(nflPolymarketMaxShift)))
+function marketMaxGames(settings: NflRuntimeSettings) {
+  return Number.isFinite(settings.polymarketMaxGames)
+    ? Math.max(0, Math.min(10, Math.floor(settings.polymarketMaxGames)))
+    : 6;
+}
+
+function marketMaxShift(settings: NflRuntimeSettings) {
+  return Number.isFinite(settings.polymarketMaxShift)
+    ? Math.max(0, Math.min(8, Math.round(settings.polymarketMaxShift)))
     : 4;
 }
 
-function marketMaxWeight() {
-  return Number.isFinite(nflPolymarketMaxWeight)
-    ? clampNumber(nflPolymarketMaxWeight, 0.02, 0.3)
+function marketMaxWeight(settings: NflRuntimeSettings) {
+  return Number.isFinite(settings.polymarketMaxWeight)
+    ? clampNumber(settings.polymarketMaxWeight, 0.02, 0.3)
     : 0.16;
 }
 

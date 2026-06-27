@@ -6628,6 +6628,15 @@ body {
   grid-template-columns: minmax(280px, 1.5fr) repeat(4, minmax(150px, 1fr));
 }
 
+.nfl-admin-actions {
+  margin-bottom: 12px;
+}
+
+.nfl-admin-load-settings {
+  width: 100%;
+  margin-top: 10px;
+}
+
 .nfl-admin-status-panel,
 .nfl-admin-matchups-panel {
   margin-bottom: 12px;
@@ -6819,6 +6828,53 @@ body {
   font-size: 0.82rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nfl-admin-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 0 16px 12px;
+}
+
+.nfl-admin-settings-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.nfl-admin-settings-grid label > span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nfl-admin-settings-grid em,
+.nfl-admin-settings-grid small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.nfl-admin-settings-grid small {
+  overflow: hidden;
+  color: var(--green);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-admin-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 16px;
 }
 
 .nfl-admin-empty {
@@ -9481,6 +9537,47 @@ body {
   gap: 9px;
 }
 
+.nfl-slate-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  margin: 0 0 14px;
+  padding: 7px 10px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.nfl-loading-list {
+  display: grid;
+  gap: 10px;
+}
+
+.nfl-loading-list span,
+.nfl-loading-faceoff span,
+.nfl-loading-strip span {
+  display: block;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(143, 160, 189, 0.1),
+      rgba(200, 247, 220, 0.18),
+      rgba(143, 160, 189, 0.1)
+    );
+  background-size: 180% 100%;
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 8px;
+  animation: nfl-loading-sheen 1.7s ease-in-out infinite;
+}
+
+.nfl-loading-list span {
+  height: 74px;
+}
+
 .nfl-matchup-button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -9571,6 +9668,13 @@ body {
     var(--nfl-panel-strong);
 }
 
+.nfl-seer-loading-card {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 520px;
+}
+
 .nfl-card-topline {
   justify-content: space-between;
   gap: 12px;
@@ -9579,6 +9683,142 @@ body {
 
 .nfl-card-topline strong {
   font-size: 0.88rem;
+}
+
+.nfl-hero-faceoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.nfl-hero-team {
+  display: flex;
+  min-height: 188px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 58%),
+    rgba(6, 16, 15, 0.44);
+  border: 1px solid rgba(143, 160, 189, 0.2);
+  border-radius: 8px;
+}
+
+.nfl-hero-team-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nfl-hero-team-top > span {
+  display: grid;
+  min-width: 58px;
+  height: 42px;
+  place-items: center;
+  color: #06100f;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.nfl-hero-team-top em {
+  color: var(--nfl-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.nfl-hero-team strong {
+  display: block;
+  color: #fff;
+  font-size: clamp(2.25rem, 5.4vw, 5.2rem);
+  line-height: 0.86;
+}
+
+.nfl-hero-team small {
+  display: block;
+  margin-top: 7px;
+  color: var(--nfl-muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.nfl-hero-team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nfl-hero-team-chips span {
+  min-height: 28px;
+  padding: 6px 9px;
+  color: #dce8f7;
+  background: rgba(143, 160, 189, 0.12);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.nfl-hero-vs {
+  display: grid;
+  min-width: 96px;
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.nfl-hero-vs span,
+.nfl-hero-vs em {
+  color: var(--nfl-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-hero-vs strong {
+  min-width: 76px;
+  padding: 9px 10px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-loading-faceoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 188px;
+}
+
+.nfl-loading-faceoff span {
+  height: 188px;
+}
+
+.nfl-loading-faceoff i {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  color: var(--nfl-muted);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--nfl-line);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 950;
 }
 
 .nfl-teams {
@@ -9687,6 +9927,16 @@ body {
   font-size: 1.25rem;
 }
 
+.nfl-loading-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.nfl-loading-strip span {
+  height: 86px;
+}
+
 .nfl-seer-read {
   max-width: 900px;
   margin: 0 0 16px;
@@ -9694,6 +9944,82 @@ body {
   font-size: clamp(1.25rem, 2.7vw, 2.25rem);
   font-weight: 950;
   line-height: 1.08;
+}
+
+.nfl-loading-read {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: #fff;
+  font-size: clamp(1.5rem, 3vw, 3rem);
+  font-weight: 950;
+  line-height: 1.04;
+}
+
+.nfl-ask-seer {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(6, 16, 15, 0.42);
+  border: 1px solid rgba(45, 212, 191, 0.24);
+  border-radius: 8px;
+}
+
+.nfl-ask-seer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nfl-ask-seer-head > span,
+.nfl-ask-seer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nfl-ask-seer-head > span {
+  color: #fff;
+  font-size: 0.94rem;
+  font-weight: 950;
+}
+
+.nfl-ask-seer textarea {
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 11px;
+  resize: vertical;
+  color: #fff;
+  background: rgba(3, 8, 12, 0.52);
+  border: 1px solid rgba(143, 160, 189, 0.22);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nfl-ask-seer textarea::placeholder {
+  color: rgba(220, 232, 247, 0.58);
+}
+
+.nfl-ask-seer button {
+  min-height: 38px;
+  padding: 8px 12px;
+  color: #06100f;
+  background: #c8f7dc;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 950;
+}
+
+.nfl-seer-oracle-answer {
+  margin: 0;
+  color: #eaf6ff;
+  font-size: 0.98rem;
+  font-weight: 840;
+  line-height: 1.45;
 }
 
 .nfl-probability {
@@ -11754,6 +12080,16 @@ body {
   line-height: 1.4;
 }
 
+@keyframes nfl-loading-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
+}
+
 @media (max-width: 1180px) {
   .nfl-admin-grid,
   .nfl-admin-provider-grid {
@@ -11852,6 +12188,7 @@ body {
   .nfl-admin-grid,
   .nfl-admin-provider-grid,
   .nfl-admin-position-grid,
+  .nfl-admin-settings-grid,
   .nfl-admin-setup-list {
     grid-template-columns: 1fr;
     width: 100%;
@@ -11897,12 +12234,24 @@ body {
 
   .nfl-provider-grid,
   .nfl-context-receipt,
+  .nfl-hero-faceoff,
   .nfl-source-coverage,
   .nfl-source-coverage-lanes {
     grid-template-columns: 1fr;
   }
 
+  .nfl-hero-vs {
+    min-height: 54px;
+  }
+
+  .nfl-ask-seer-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .nfl-teams,
+  .nfl-loading-faceoff,
+  .nfl-loading-strip,
   .nfl-projection-strip,
   .nfl-meter-grid,
   .nfl-market-blend,
@@ -11917,6 +12266,18 @@ body {
   .nfl-teams > span {
     width: 100%;
     height: 28px;
+  }
+
+  .nfl-loading-faceoff {
+    min-height: 0;
+  }
+
+  .nfl-loading-faceoff span {
+    height: 124px;
+  }
+
+  .nfl-loading-faceoff i {
+    justify-self: center;
   }
 
   .nfl-team-pill.right {

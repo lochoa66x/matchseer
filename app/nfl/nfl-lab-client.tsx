@@ -668,6 +668,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
   const [nflDataStatus, setNflDataStatus] = useState<NflDataStatus>("loading");
   const [activeMatchupId, setActiveMatchupId] = useState(seededMatchups[0].id);
+  const [seerQuestion, setSeerQuestion] = useState("");
+  const [seerQuestionAsked, setSeerQuestionAsked] = useState(false);
   const [leftPlayerId, setLeftPlayerId] = useState(seededPlayerPair[0].id);
   const [rightPlayerId, setRightPlayerId] = useState(seededPlayerPair[1].id);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
@@ -727,6 +729,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     Record<string, ScenarioLevers>
   >({});
   const isFantasyMode = mode === "fantasy";
+  const isNflSlateBooting =
+    !isFantasyMode &&
+    nflDataStatus === "loading" &&
+    nflDataset.source === "seeded-fallback";
+  const isSeededLabMode =
+    !isFantasyMode &&
+    nflDataStatus === "fallback" &&
+    nflDataset.source === "seeded-fallback";
   const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
   const baseFantasyPlayers =
     nflDataset.fantasyPlayers.length > 0
@@ -804,6 +814,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     () => buildScenarioImpact(activeMatchup, activeScenarioLevers),
     [activeMatchup, activeScenarioLevers],
   );
+  const seerOracleRead = useMemo(
+    () =>
+      buildNflSeerOracleRead({
+        matchup: activeMatchup,
+        question: seerQuestion,
+        scenario: activeScenario,
+      }),
+    [activeMatchup, activeScenario, seerQuestion],
+  );
   const leftPlayer =
     fantasyPlayers.find((player) => player.id === leftPlayerId) ??
     defaultPlayerPair[0];
@@ -878,6 +897,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       teamLens,
     ],
   );
+
+  useEffect(() => {
+    setSeerQuestionAsked(false);
+  }, [activeMatchup.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1588,6 +1611,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           ) : (
             <>
               <a href="#team-seer">Team Seer</a>
+              <a href="#ask-seer">Ask the Seer</a>
               <a href="#scenario-lab">What-if Lab</a>
               <a href="#matchup-tissue">Matchup tissue</a>
             </>
@@ -1596,6 +1620,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       </header>
 
       {!isFantasyMode ? (
+        isNflSlateBooting ? (
+          <NflSeerLoading />
+        ) : (
         <>
           <section className="nfl-hero" id="team-seer">
             <div className="nfl-matchup-rail" aria-label="NFL matchup list">
@@ -1608,6 +1635,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 Same Seer brain, new field: team pulse, game script, live pressure,
                 and chaos without pretending the future is a spreadsheet.
               </p>
+              {isSeededLabMode ? (
+                <div className="nfl-slate-chip">
+                  <Sparkles size={15} />
+                  Lab slate
+                </div>
+              ) : null}
               <div className="nfl-matchup-list">
                 {matchups.map((matchup) => (
                   <button
@@ -1634,10 +1667,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <span>{activeMatchup.slot}</span>
                 <strong>{activeMatchup.venue}</strong>
               </div>
-              <div className="nfl-teams">
-                <TeamPill team={activeMatchup.away} />
-                <span>at</span>
-                <TeamPill team={activeMatchup.home} align="right" />
+              <div className="nfl-hero-faceoff" aria-label="NFL hero matchup">
+                <HeroTeamCard role="Road aura" team={activeMatchup.away} />
+                <div className="nfl-hero-vs">
+                  <span>{activeMatchup.week}</span>
+                  <strong>QB duel</strong>
+                  <em>{activeMatchup.weather}</em>
+                </div>
+                <HeroTeamCard role="Home spell" team={activeMatchup.home} />
               </div>
               <div className="nfl-projection-strip">
                 <div>
@@ -1656,6 +1693,32 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 </div>
               </div>
               <p className="nfl-seer-read">{activeScenario.read}</p>
+              <div className="nfl-ask-seer" id="ask-seer">
+                <div className="nfl-ask-seer-head">
+                  <span>
+                    <Sparkles size={17} />
+                    Ask the Seer
+                  </span>
+                  <button
+                    onClick={() => setSeerQuestionAsked(true)}
+                    type="button"
+                  >
+                    <Sparkles size={16} />
+                    Ask the Seer
+                  </button>
+                </div>
+                <textarea
+                  aria-label="Ask the Seer"
+                  maxLength={150}
+                  onChange={(event) => setSeerQuestion(event.target.value)}
+                  placeholder="Can the underdog steal it?"
+                  rows={2}
+                  value={seerQuestion}
+                />
+                {seerQuestionAsked ? (
+                  <p className="nfl-seer-oracle-answer">{seerOracleRead}</p>
+                ) : null}
+              </div>
               <ProbabilityBar
                 leftColor={activeMatchup.away.color}
                 leftLabel={activeMatchup.away.code}
@@ -1664,7 +1727,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 rightLabel={activeMatchup.home.code}
                 rightValue={activeScenario.homeWin}
               />
-              <MarketBlendStrip matchup={activeMatchup} />
               <div className="nfl-meter-grid">
                 <MiniMeter
                   icon={<Gauge size={16} />}
@@ -1709,6 +1771,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             </div>
           </section>
         </>
+        )
       ) : (
         <>
           <section className="nfl-grid-section fantasy-only">
@@ -2143,6 +2206,82 @@ function ScoringToggle({
           {scoringLabels[format]}
         </button>
       ))}
+    </div>
+  );
+}
+
+function NflSeerLoading() {
+  return (
+    <section className="nfl-hero nfl-hero-loading" id="team-seer">
+      <div className="nfl-matchup-rail" aria-label="NFL slate loading">
+        <div className="nfl-section-kicker">
+          <Trophy size={17} />
+          Team vs team
+        </div>
+        <h1>Gridiron Seer</h1>
+        <p>
+          The Seer is finding the actual slate before it speaks. No demo slate
+          on the board.
+        </p>
+        <div className="nfl-loading-list" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+
+      <article className="nfl-seer-card nfl-seer-loading-card" id="ask-seer">
+        <div className="nfl-card-topline">
+          <span>Warming the slate</span>
+          <strong>MatchSeer</strong>
+        </div>
+        <div className="nfl-loading-faceoff" aria-hidden="true">
+          <span />
+          <i>AT</i>
+          <span />
+        </div>
+        <div className="nfl-loading-strip" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <p className="nfl-loading-read">
+          Pulling the matchup into focus before the first read lands.
+        </p>
+      </article>
+    </section>
+  );
+}
+
+function HeroTeamCard({ role, team }: { role: string; team: NflTeam }) {
+  const qbTone =
+    team.qb >= 90 ? "Superstar QB" : team.qb >= 85 ? "Star QB" : "QB path";
+  const trenchTone =
+    team.trenches >= 88
+      ? "Pocket armor"
+      : team.trenches >= 83
+        ? "Line holds"
+        : "Pressure test";
+
+  return (
+    <div className="nfl-hero-team" style={{ borderColor: team.color }}>
+      <div className="nfl-hero-team-top">
+        <span style={{ background: team.color }}>{team.code}</span>
+        <em>{role}</em>
+      </div>
+      <div>
+        <strong>{team.name}</strong>
+        <small>{team.city}</small>
+      </div>
+      <div className="nfl-hero-team-chips">
+        <span>
+          {qbTone} {team.qb}
+        </span>
+        <span>
+          {trenchTone} {team.trenches}
+        </span>
+      </div>
     </div>
   );
 }
@@ -2677,7 +2816,7 @@ function ScoutingBoard({
             type="button"
           >
             <Sparkles size={16} />
-            {status === "loading" ? "Reading..." : "Ask AI Scout"}
+            {status === "loading" ? "Reading..." : "Ask the Seer"}
           </button>
         </div>
       </div>
@@ -5830,6 +5969,48 @@ function scenarioRead({
   }
 
   return `${leader.code} owns the ${leanProbability}% lane after ${driver.copy}. ${projected} is the scratchpad score.`;
+}
+
+function buildNflSeerOracleRead({
+  matchup,
+  question,
+  scenario,
+}: {
+  matchup: NflMatchup;
+  question: string;
+  scenario: ScenarioImpact;
+}) {
+  const cleanQuestion = question.trim().replace(/\s+/g, " ");
+  const favorite = scenario.homeWin >= scenario.awayWin ? matchup.home : matchup.away;
+  const underdog = favorite.code === matchup.home.code ? matchup.away : matchup.home;
+  const gap = Math.abs(scenario.homeWin - scenario.awayWin);
+  const qbGap = Math.abs(matchup.home.qb - matchup.away.qb);
+  const trenchGap = Math.abs(matchup.home.trenches - matchup.away.trenches);
+  const weatherTeam =
+    matchup.away.trenches + matchup.away.qb >= matchup.home.trenches + matchup.home.qb
+      ? matchup.away
+      : matchup.home;
+  const promptLead = cleanQuestion
+    ? `${cleanQuestion} The Seer says:`
+    : "The Seer says:";
+
+  if (gap <= 6) {
+    return `${promptLead} ${matchup.away.code} and ${matchup.home.code} are close enough that one third-down escape can tilt the room. The lean is ${favorite.code} ${scenario.leanProbability}%, but ${underdog.code} is very much alive if the QB duel gets weird late.`;
+  }
+
+  if (scenario.weatherDrag >= 62) {
+    return `${promptLead} ${favorite.code} has the ${scenario.leanProbability}% path, with ${weatherTeam.code} carrying the better bad-air profile. If ${underdog.code} wants the upset, it needs short fields and a red-zone steal.`;
+  }
+
+  if (qbGap >= trenchGap && qbGap >= 5) {
+    return `${promptLead} ${favorite.code} gets the nod because the quarterback lane is cleaner. ${underdog.code} can still flip it by turning this into a pressure game instead of a highlight trade.`;
+  }
+
+  if (trenchGap >= 5) {
+    return `${promptLead} ${favorite.code} owns the sturdier trench script. ${underdog.code} needs the first punch, then enough chaos to keep the favorite from settling in.`;
+  }
+
+  return `${promptLead} ${favorite.code} is the cleaner side, but the Seer is not pounding the table. The score path says ${scenario.projected}, and the upset door opens if ${underdog.code} wins the hidden possessions.`;
 }
 
 function scenarioFactors(
