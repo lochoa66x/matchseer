@@ -379,6 +379,16 @@ type SleeperLeagueOptionsResponse = {
   message?: string;
 };
 
+type SleeperSavedConnection = {
+  importedLeague: ImportedFantasyLeague;
+  leagueId: string;
+  query: string;
+  refreshedAt: string;
+  useAutoWeek: boolean;
+  userId: string;
+  week: string;
+};
+
 type NflSeerDataset = {
   source: "espn-scoreboard" | "configured-feed" | "seeded-fallback";
   season: string;
@@ -652,6 +662,8 @@ const seededNflDataset: NflSeerDataset = {
   },
 };
 
+const sleeperStorageKey = "matchseer:nfl-fantasy:sleeper-connection:v1";
+
 export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
   const [nflDataStatus, setNflDataStatus] = useState<NflDataStatus>("loading");
@@ -686,6 +698,11 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [sleeperWeek, setSleeperWeek] = useState(
     weekFromDatasetLabel(seededNflDataset.weekLabel) ?? "1",
   );
+  const [sleeperUseAutoWeek, setSleeperUseAutoWeek] = useState(true);
+  const [sleeperLastRefreshedAt, setSleeperLastRefreshedAt] = useState("");
+  const [sleeperRestoreComplete, setSleeperRestoreComplete] = useState(false);
+  const [sleeperPendingRestoreRefresh, setSleeperPendingRestoreRefresh] =
+    useState(false);
   const [manualRosterText, setManualRosterText] = useState(
     "My Team:\nJosh Allen BUF QB\nAmon-Ra St. Brown DET WR\n\nOpponent:\nLamar Jackson BAL QB\nJahmyr Gibbs DET RB",
   );
@@ -899,6 +916,93 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   }, []);
 
   useEffect(() => {
+    const savedConnection = readSleeperSavedConnection();
+
+    if (savedConnection) {
+      setFantasyImport(savedConnection.importedLeague);
+      setSleeperQuery(savedConnection.query);
+      setSleeperLookupUserId(savedConnection.userId);
+      setSleeperSelectedLeagueId(savedConnection.leagueId);
+      setSleeperUseAutoWeek(savedConnection.useAutoWeek);
+      setSleeperWeek(
+        savedConnection.week ||
+          String(savedConnection.importedLeague.sleeper?.week ?? "") ||
+          weekFromDatasetLabel(seededNflDataset.weekLabel) ||
+          "",
+      );
+      setSleeperLastRefreshedAt(savedConnection.refreshedAt);
+      setSleeperImportStatus(
+        savedConnection.importedLeague.sleeper?.status === "no-matchup"
+          ? "no-matchup"
+          : "imported",
+      );
+      setSleeperImportMessage(
+        `${sleeperImportSuccessMessage(savedConnection.importedLeague)} Last refreshed ${formatDataUpdated(savedConnection.refreshedAt)}.`,
+      );
+
+      if (savedConnection.importedLeague.suggestedScoringFormat) {
+        setScoringFormat(savedConnection.importedLeague.suggestedScoringFormat);
+      }
+
+      if ((savedConnection.importedLeague.settings?.taxiSlots ?? 0) > 0) {
+        setTeamLens("dynasty");
+      }
+
+      setSleeperPendingRestoreRefresh(true);
+    }
+
+    setSleeperRestoreComplete(true);
+  }, []);
+
+  useEffect(() => {
+    if (
+      !sleeperPendingRestoreRefresh ||
+      !sleeperRestoreComplete ||
+      isSleeperImportLoading(sleeperImportStatus)
+    ) {
+      return;
+    }
+
+    setSleeperPendingRestoreRefresh(false);
+    void requestSleeperRefresh();
+  }, [sleeperImportStatus, sleeperPendingRestoreRefresh, sleeperRestoreComplete]);
+
+  useEffect(() => {
+    const connectedLeagueId = fantasyImport?.sleeper?.leagueId || sleeperSelectedLeagueId;
+
+    if (
+      !sleeperRestoreComplete ||
+      !connectedLeagueId ||
+      sleeperUseAutoWeek ||
+      isSleeperImportLoading(sleeperImportStatus)
+    ) {
+      return;
+    }
+
+    const importedWeek = fantasyImport?.sleeper?.week
+      ? String(fantasyImport.sleeper.week)
+      : "";
+
+    if (!sleeperWeek || sleeperWeek === importedWeek) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void requestSleeperRefresh({ useAutoWeek: false, week: sleeperWeek });
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    fantasyImport?.sleeper?.leagueId,
+    fantasyImport?.sleeper?.week,
+    sleeperImportStatus,
+    sleeperRestoreComplete,
+    sleeperSelectedLeagueId,
+    sleeperUseAutoWeek,
+    sleeperWeek,
+  ]);
+
+  useEffect(() => {
     if (!matchups.some((matchup) => matchup.id === activeMatchupId)) {
       setActiveMatchupId(matchups[0]?.id ?? seededMatchups[0].id);
     }
@@ -1103,6 +1207,25 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     reader.readAsText(file);
   }
 
+  function updateSleeperWeek(value: string) {
+    const week = value.replace(/[^\d]/g, "").slice(0, 2);
+
+    setSleeperWeek(week);
+    setSleeperUseAutoWeek(week.length === 0);
+
+    if (!week && (fantasyImport?.sleeper?.leagueId || sleeperSelectedLeagueId)) {
+      void requestSleeperRefresh({ useAutoWeek: true, week: "" });
+    }
+  }
+
+  function updateSleeperAutoWeek(useAutoWeek: boolean) {
+    setSleeperUseAutoWeek(useAutoWeek);
+
+    if (useAutoWeek && (fantasyImport?.sleeper?.leagueId || sleeperSelectedLeagueId)) {
+      void requestSleeperRefresh({ useAutoWeek: true, week: "" });
+    }
+  }
+
   async function requestSleeperImport() {
     const query = sleeperQuery.trim();
 
@@ -1118,9 +1241,13 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     setSleeperSelectedLeagueId("");
 
     try {
-      const response = await fetch(sleeperImportUrl({ query, week: sleeperWeek }), {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        sleeperImportUrl({
+          query,
+          week: sleeperUseAutoWeek ? undefined : sleeperWeek,
+        }),
+        { cache: "no-store" },
+      );
       const payload = (await response.json()) as { error?: string };
       const leagueOptions = sanitizeSleeperLeagueOptionsResponse(payload);
 
@@ -1128,6 +1255,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         setSleeperImportStatus("leagues-found");
         setSleeperLeagueOptions(leagueOptions.leagues);
         setSleeperLookupUserId(leagueOptions.userId);
+        if (sleeperUseAutoWeek && typeof leagueOptions.week === "number") {
+          setSleeperWeek(String(leagueOptions.week));
+        }
         setSleeperImportMessage(
           leagueOptions.message ??
             `${leagueOptions.leagues.length} Sleeper leagues found. Pick the matchup to load.`,
@@ -1141,7 +1271,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         throw new Error(payload.error ?? "Sleeper import did not return usable teams.");
       }
 
-      applySleeperImportedLeague(importedLeague);
+      applySleeperImportedLeague(importedLeague, {
+        leagueId: importedLeague.sleeper?.leagueId ?? "",
+        persist: true,
+        query,
+        refreshedAt: new Date().toISOString(),
+        useAutoWeek: sleeperUseAutoWeek,
+        userId: importedLeague.sleeper?.userId ?? sleeperLookupUserId,
+        week: sleeperUseAutoWeek ? "" : sleeperWeek,
+      });
     } catch (error) {
       setSleeperImportStatus("error");
       setSleeperImportMessage(
@@ -1153,16 +1291,68 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   }
 
   async function requestSleeperLeagueImport(league: SleeperLeagueOption) {
-    setSleeperSelectedLeagueId(league.leagueId);
+    await loadSleeperLeague({
+      leagueId: league.leagueId,
+      leagueName: league.name,
+      query: sleeperQuery.trim(),
+      useAutoWeek: sleeperUseAutoWeek,
+      userId: league.userId ?? sleeperLookupUserId,
+      week: sleeperWeek,
+    });
+  }
+
+  async function requestSleeperRefresh({
+    useAutoWeek = sleeperUseAutoWeek,
+    week = sleeperWeek,
+  }: {
+    useAutoWeek?: boolean;
+    week?: string;
+  } = {}) {
+    const leagueId = fantasyImport?.sleeper?.leagueId || sleeperSelectedLeagueId;
+    const userId = fantasyImport?.sleeper?.userId || sleeperLookupUserId;
+
+    if (!leagueId) {
+      await requestSleeperImport();
+      return;
+    }
+
+    await loadSleeperLeague({
+      leagueId,
+      leagueName: fantasyImport?.sleeper?.leagueName || "Sleeper league",
+      query: sleeperQuery.trim(),
+      useAutoWeek,
+      userId,
+      week,
+    });
+  }
+
+  async function loadSleeperLeague({
+    leagueId,
+    leagueName,
+    query,
+    useAutoWeek,
+    userId,
+    week,
+  }: {
+    leagueId: string;
+    leagueName: string;
+    query: string;
+    useAutoWeek: boolean;
+    userId?: string;
+    week: string;
+  }) {
+    setSleeperSelectedLeagueId(leagueId);
     setSleeperImportStatus("loading-league");
-    setSleeperImportMessage(`Loading ${league.name} for Week ${sleeperWeek || "auto"}...`);
+    setSleeperImportMessage(
+      `Loading ${leagueName} for ${useAutoWeek ? "current Sleeper week" : `Week ${week || "auto"}`}...`,
+    );
 
     try {
       const response = await fetch(
         sleeperImportUrl({
-          leagueId: league.leagueId,
-          userId: league.userId ?? sleeperLookupUserId,
-          week: sleeperWeek,
+          leagueId,
+          userId,
+          week: useAutoWeek ? undefined : week,
         }),
         { cache: "no-store" },
       );
@@ -1173,7 +1363,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         throw new Error(payload.error ?? "Sleeper league did not return usable teams.");
       }
 
-      applySleeperImportedLeague(importedLeague);
+      applySleeperImportedLeague(importedLeague, {
+        leagueId,
+        persist: true,
+        query,
+        refreshedAt: new Date().toISOString(),
+        useAutoWeek,
+        userId,
+        week: useAutoWeek ? "" : week,
+      });
     } catch (error) {
       setSleeperImportStatus("error");
       setSleeperImportMessage(
@@ -1184,8 +1382,24 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     }
   }
 
-  function applySleeperImportedLeague(importedLeague: ImportedFantasyLeague) {
-    applyImportedFantasyLeague(importedLeague, sleeperImportSuccessMessage(importedLeague));
+  function applySleeperImportedLeague(
+    importedLeague: ImportedFantasyLeague,
+    options: {
+      leagueId?: string;
+      persist?: boolean;
+      query?: string;
+      refreshedAt?: string;
+      useAutoWeek?: boolean;
+      userId?: string;
+      week?: string;
+    } = {},
+  ) {
+    const refreshedAt = options.refreshedAt ?? new Date().toISOString();
+
+    applyImportedFantasyLeague(
+      importedLeague,
+      `${sleeperImportSuccessMessage(importedLeague)} Last refreshed ${formatDataUpdated(refreshedAt)}.`,
+    );
     if (importedLeague.suggestedScoringFormat) {
       setScoringFormat(importedLeague.suggestedScoringFormat);
     }
@@ -1194,9 +1408,28 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     }
     setSleeperLeagueOptions([]);
     setSleeperSelectedLeagueId(importedLeague.sleeper?.leagueId ?? "");
+    setSleeperLastRefreshedAt(refreshedAt);
+    if (importedLeague.sleeper?.week) {
+      setSleeperWeek(String(importedLeague.sleeper.week));
+    }
     setSleeperImportStatus(
       importedLeague.sleeper?.status === "no-matchup" ? "no-matchup" : "imported",
     );
+    if (options.persist) {
+      writeSleeperSavedConnection({
+        importedLeague,
+        leagueId: options.leagueId || importedLeague.sleeper?.leagueId || "",
+        query: options.query ?? sleeperQuery.trim(),
+        refreshedAt,
+        useAutoWeek: options.useAutoWeek ?? sleeperUseAutoWeek,
+        userId: options.userId ?? importedLeague.sleeper?.userId ?? sleeperLookupUserId,
+        week:
+          options.week ??
+          ((options.useAutoWeek ?? sleeperUseAutoWeek)
+            ? ""
+            : String(importedLeague.sleeper?.week ?? sleeperWeek)),
+      });
+    }
   }
 
   function applyManualRosterImport(source: "manual" | "screenshot" = "manual") {
@@ -1361,17 +1594,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           )}
         </nav>
       </header>
-
-      <div className="nfl-disclaimer" role="note">
-        <ShieldCheck size={17} />
-        <span>{nflIndependenceDisclaimer}</span>
-      </div>
-
-      <NflDataRibbon
-        contextStatus={fantasyContextLayer.status}
-        dataset={fantasyDataset}
-        status={nflDataStatus}
-      />
 
       {!isFantasyMode ? (
         <>
@@ -1553,6 +1775,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onScreenshotImport={requestScreenshotRosterImport}
             onSleeperImport={requestSleeperImport}
             onSleeperQueryChange={setSleeperQuery}
+            onSleeperRefresh={() => requestSleeperRefresh()}
             onTeamChange={setActiveFantasyTeamId}
             onManualRosterTextChange={setManualRosterText}
             opponentTeamId={opponentFantasyTeam.id}
@@ -1562,14 +1785,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             screenshotImportStatus={screenshotImportStatus}
             sleeperImportMessage={sleeperImportMessage}
             sleeperImportStatus={sleeperImportStatus}
+            sleeperLastRefreshedAt={sleeperLastRefreshedAt}
             sleeperLeagueOptions={sleeperLeagueOptions}
             sleeperSelectedLeagueId={sleeperSelectedLeagueId}
             sleeperQuery={sleeperQuery}
+            sleeperUseAutoWeek={sleeperUseAutoWeek}
             sleeperWeek={sleeperWeek}
             onSleeperLeagueImport={requestSleeperLeagueImport}
             teamLens={teamLens}
             teams={fantasyTeams}
-            onSleeperWeekChange={setSleeperWeek}
+            onSleeperUseAutoWeekChange={updateSleeperAutoWeek}
+            onSleeperWeekChange={updateSleeperWeek}
           />
 
           <section className="nfl-player-compare" id="player-compare">
@@ -2609,6 +2835,8 @@ function FantasyTeamLab({
   onSleeperImport,
   onSleeperLeagueImport,
   onSleeperQueryChange,
+  onSleeperRefresh,
+  onSleeperUseAutoWeekChange,
   onSleeperWeekChange,
   onTeamChange,
   opponentTeamId,
@@ -2618,9 +2846,11 @@ function FantasyTeamLab({
   screenshotImportStatus,
   sleeperImportMessage,
   sleeperImportStatus,
+  sleeperLastRefreshedAt,
   sleeperLeagueOptions,
   sleeperSelectedLeagueId,
   sleeperQuery,
+  sleeperUseAutoWeek,
   sleeperWeek,
   sourceLanes,
   teamLens,
@@ -2651,6 +2881,8 @@ function FantasyTeamLab({
   onSleeperImport: () => void;
   onSleeperLeagueImport: (league: SleeperLeagueOption) => void;
   onSleeperQueryChange: (value: string) => void;
+  onSleeperRefresh: () => void;
+  onSleeperUseAutoWeekChange: (useAutoWeek: boolean) => void;
   onSleeperWeekChange: (week: string) => void;
   onTeamChange: (teamId: string) => void;
   opponentTeamId: string;
@@ -2660,9 +2892,11 @@ function FantasyTeamLab({
   screenshotImportStatus: FantasyImportStatus;
   sleeperImportMessage: string;
   sleeperImportStatus: SleeperImportStatus;
+  sleeperLastRefreshedAt: string;
   sleeperLeagueOptions: SleeperLeagueOption[];
   sleeperSelectedLeagueId: string;
   sleeperQuery: string;
+  sleeperUseAutoWeek: boolean;
   sleeperWeek: string;
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
@@ -2699,8 +2933,6 @@ function FantasyTeamLab({
         </div>
       </div>
 
-      <FantasySourcesControlCenter lanes={sourceLanes} />
-
       <FantasyImportPanel
         fantasyImport={fantasyImport}
         providerBridgeFileName={providerBridgeFileName}
@@ -2721,15 +2953,19 @@ function FantasyTeamLab({
         onSleeperImport={onSleeperImport}
         onSleeperLeagueImport={onSleeperLeagueImport}
         onSleeperQueryChange={onSleeperQueryChange}
+        onSleeperRefresh={onSleeperRefresh}
+        onSleeperUseAutoWeekChange={onSleeperUseAutoWeekChange}
         onSleeperWeekChange={onSleeperWeekChange}
         screenshotFileName={screenshotFileName}
         screenshotImportMessage={screenshotImportMessage}
         screenshotImportStatus={screenshotImportStatus}
         sleeperImportMessage={sleeperImportMessage}
         sleeperImportStatus={sleeperImportStatus}
+        sleeperLastRefreshedAt={sleeperLastRefreshedAt}
         sleeperLeagueOptions={sleeperLeagueOptions}
         sleeperSelectedLeagueId={sleeperSelectedLeagueId}
         sleeperQuery={sleeperQuery}
+        sleeperUseAutoWeek={sleeperUseAutoWeek}
         sleeperWeek={sleeperWeek}
       />
 
@@ -3236,15 +3472,19 @@ function FantasyImportPanel({
   onSleeperImport,
   onSleeperLeagueImport,
   onSleeperQueryChange,
+  onSleeperRefresh,
+  onSleeperUseAutoWeekChange,
   onSleeperWeekChange,
   screenshotFileName,
   screenshotImportMessage,
   screenshotImportStatus,
   sleeperImportMessage,
   sleeperImportStatus,
+  sleeperLastRefreshedAt,
   sleeperLeagueOptions,
   sleeperSelectedLeagueId,
   sleeperQuery,
+  sleeperUseAutoWeek,
   sleeperWeek,
 }: {
   fantasyImport: ImportedFantasyLeague | null;
@@ -3266,15 +3506,19 @@ function FantasyImportPanel({
   onSleeperImport: () => void;
   onSleeperLeagueImport: (league: SleeperLeagueOption) => void;
   onSleeperQueryChange: (value: string) => void;
+  onSleeperRefresh: () => void;
+  onSleeperUseAutoWeekChange: (useAutoWeek: boolean) => void;
   onSleeperWeekChange: (week: string) => void;
   screenshotFileName: string;
   screenshotImportMessage: string;
   screenshotImportStatus: FantasyImportStatus;
   sleeperImportMessage: string;
   sleeperImportStatus: SleeperImportStatus;
+  sleeperLastRefreshedAt: string;
   sleeperLeagueOptions: SleeperLeagueOption[];
   sleeperSelectedLeagueId: string;
   sleeperQuery: string;
+  sleeperUseAutoWeek: boolean;
   sleeperWeek: string;
 }) {
   const importLabel = fantasyImport
@@ -3345,19 +3589,41 @@ function FantasyImportPanel({
               max="22"
               min="1"
               onChange={(event) => onSleeperWeekChange(event.target.value)}
-              placeholder="Week"
+              placeholder={sleeperUseAutoWeek ? "Auto" : "Week"}
               type="number"
+              disabled={sleeperUseAutoWeek}
               value={sleeperWeek}
             />
           </div>
-          <button
-            disabled={isSleeperImportLoading(sleeperImportStatus)}
-            onClick={onSleeperImport}
-            type="button"
-          >
-            <RefreshCw size={16} />
-            {sleeperImportStatus === "searching" ? "Searching" : "Find leagues"}
-          </button>
+          <label className="nfl-sleeper-auto">
+            <input
+              checked={sleeperUseAutoWeek}
+              onChange={(event) => onSleeperUseAutoWeekChange(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Auto current Sleeper week</span>
+          </label>
+          <div className="nfl-sleeper-actions">
+            <button
+              disabled={isSleeperImportLoading(sleeperImportStatus)}
+              onClick={onSleeperImport}
+              type="button"
+            >
+              <RefreshCw size={16} />
+              {sleeperImportStatus === "searching" ? "Searching" : "Find leagues"}
+            </button>
+            {fantasyImport?.sleeper ? (
+              <button
+                className="secondary"
+                disabled={isSleeperImportLoading(sleeperImportStatus)}
+                onClick={onSleeperRefresh}
+                type="button"
+              >
+                <RefreshCw size={16} />
+                {sleeperImportStatus === "loading-league" ? "Refreshing" : "Refresh"}
+              </button>
+            ) : null}
+          </div>
           <p className={cx("nfl-import-status", sleeperImportStatus)}>
             {sleeperImportMessage}
           </p>
@@ -3397,6 +3663,9 @@ function FantasyImportPanel({
                 {fantasyImport.sleeper.rosterCount} rosters ·{" "}
                 {fantasyImport.sleeper.status.replace(/-/g, " ")}
               </em>
+              {sleeperLastRefreshedAt ? (
+                <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
+              ) : null}
               {fantasyImport.settings ? (
                 <div className="nfl-sleeper-settings">
                   <span>{fantasyImport.settings.formatLabel}</span>
@@ -5916,6 +6185,76 @@ function sleeperImportUrl({
   }
 
   return `/api/nfl/fantasy/sleeper?${params}`;
+}
+
+function readSleeperSavedConnection(): SleeperSavedConnection | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawConnection = window.localStorage.getItem(sleeperStorageKey);
+
+    if (!rawConnection) {
+      return null;
+    }
+
+    return sanitizeSleeperSavedConnection(JSON.parse(rawConnection));
+  } catch {
+    return null;
+  }
+}
+
+function writeSleeperSavedConnection(connection: SleeperSavedConnection) {
+  if (typeof window === "undefined" || !connection.leagueId) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(sleeperStorageKey, JSON.stringify(connection));
+  } catch {
+    // Browser storage can be unavailable in private sessions; Sleeper still works.
+  }
+}
+
+function sanitizeSleeperSavedConnection(
+  value: unknown,
+): SleeperSavedConnection | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const saved = value as Partial<SleeperSavedConnection>;
+  const importedLeague = sanitizeImportedFantasyLeague(saved.importedLeague);
+
+  if (!importedLeague?.sleeper) {
+    return null;
+  }
+
+  const leagueId =
+    typeof saved.leagueId === "string" && saved.leagueId.trim()
+      ? saved.leagueId.trim()
+      : importedLeague.sleeper.leagueId;
+
+  if (!leagueId) {
+    return null;
+  }
+
+  return {
+    importedLeague,
+    leagueId,
+    query: typeof saved.query === "string" ? saved.query : "",
+    refreshedAt:
+      typeof saved.refreshedAt === "string" && saved.refreshedAt
+        ? saved.refreshedAt
+        : new Date().toISOString(),
+    useAutoWeek: saved.useAutoWeek !== false,
+    userId:
+      typeof saved.userId === "string"
+        ? saved.userId
+        : importedLeague.sleeper.userId ?? "",
+    week: typeof saved.week === "string" ? saved.week : "",
+  };
 }
 
 function sanitizeSleeperLeagueOptionsResponse(

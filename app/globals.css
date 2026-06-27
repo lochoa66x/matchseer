@@ -6388,6 +6388,18 @@ body {
   margin-bottom: 16px;
 }
 
+.admin-topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-topbar-actions .admin-command {
+  min-height: 44px;
+  text-decoration: none;
+}
+
 .admin-topbar h1,
 .admin-table-header h2 {
   margin: 0;
@@ -6601,6 +6613,228 @@ body {
   padding: 12px 16px;
   font-size: 0.9rem;
   font-weight: 800;
+}
+
+.nfl-admin-shell .admin-topbar,
+.nfl-admin-shell .admin-grid,
+.nfl-admin-shell .admin-message,
+.nfl-admin-status-panel,
+.nfl-admin-two-column,
+.nfl-admin-matchups-panel {
+  max-width: 1280px;
+}
+
+.nfl-admin-grid {
+  grid-template-columns: minmax(280px, 1.5fr) repeat(4, minmax(150px, 1fr));
+}
+
+.nfl-admin-status-panel,
+.nfl-admin-matchups-panel {
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.nfl-admin-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.nfl-admin-provider-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.nfl-admin-provider-card.live {
+  border-color: rgba(16, 163, 111, 0.32);
+}
+
+.nfl-admin-provider-card.error {
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.nfl-admin-provider-card.stale {
+  border-color: rgba(245, 158, 11, 0.36);
+}
+
+.nfl-admin-provider-card > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.nfl-admin-provider-card > div span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: #fff;
+  background: var(--night);
+  border-radius: 8px;
+}
+
+.nfl-admin-provider-card strong,
+.nfl-admin-provider-card em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-admin-provider-card em {
+  padding: 5px 7px;
+  color: var(--muted);
+  background: rgba(16, 22, 36, 0.06);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nfl-admin-provider-card.live em {
+  color: #064e3b;
+  background: rgba(16, 163, 111, 0.14);
+}
+
+.nfl-admin-provider-card p,
+.nfl-admin-provider-card small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.nfl-admin-position-strip,
+.nfl-admin-position-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.nfl-admin-position-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-admin-position-strip span {
+  min-width: 0;
+  padding: 5px 7px;
+  color: var(--muted);
+  background: rgba(16, 22, 36, 0.06);
+  border: 1px solid rgba(16, 22, 36, 0.06);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.nfl-admin-position-strip span.live {
+  color: #064e3b;
+  background: rgba(16, 163, 111, 0.14);
+  border-color: rgba(16, 163, 111, 0.14);
+}
+
+.nfl-admin-two-column {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 12px;
+  margin-right: auto;
+  margin-bottom: 12px;
+  margin-left: auto;
+}
+
+.nfl-admin-coverage-panel,
+.nfl-admin-setup-panel {
+  overflow: hidden;
+}
+
+.nfl-admin-position-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0 16px;
+}
+
+.nfl-admin-position-grid article,
+.nfl-admin-setup-list article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.nfl-admin-position-grid article.live {
+  border-color: rgba(16, 163, 111, 0.28);
+}
+
+.nfl-admin-position-grid span,
+.nfl-admin-setup-list span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nfl-admin-position-grid strong {
+  color: var(--ink);
+  font-size: 1.32rem;
+}
+
+.nfl-admin-position-grid em,
+.nfl-admin-setup-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.nfl-admin-coverage-panel > .admin-muted {
+  padding: 0 16px 16px;
+}
+
+.nfl-admin-setup-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.nfl-admin-setup-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-admin-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+}
+
+.nfl-admin-table {
+  min-width: 1120px;
+}
+
+.nfl-admin-table td span {
+  max-width: 360px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .traffic-panel {
@@ -10580,6 +10814,12 @@ body {
   opacity: 0.62;
 }
 
+.nfl-import-card button.secondary {
+  color: var(--nfl-ink);
+  background: rgba(143, 160, 189, 0.13);
+  border: 1px solid rgba(143, 160, 189, 0.22);
+}
+
 .nfl-file-drop {
   position: relative;
   overflow: hidden;
@@ -10647,6 +10887,37 @@ body {
   text-align: center;
 }
 
+.nfl-sleeper-row input:disabled {
+  color: var(--nfl-muted);
+  background: rgba(143, 160, 189, 0.08);
+}
+
+.nfl-sleeper-auto {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--nfl-muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.nfl-sleeper-auto input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: #2dd4bf;
+}
+
+.nfl-sleeper-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.nfl-sleeper-actions button {
+  min-width: 0;
+}
+
 .nfl-sleeper-league-list {
   display: grid;
   gap: 7px;
@@ -10708,6 +10979,12 @@ body {
 
 .nfl-sleeper-receipt strong {
   color: #fff;
+}
+
+.nfl-sleeper-receipt small {
+  color: #8ff0c1;
+  font-size: 0.68rem;
+  font-weight: 900;
 }
 
 .nfl-sleeper-settings {
@@ -11478,12 +11755,21 @@ body {
 }
 
 @media (max-width: 1180px) {
+  .nfl-admin-grid,
+  .nfl-admin-provider-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .nfl-source-lane-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 980px) {
+  .nfl-admin-two-column {
+    grid-template-columns: 1fr;
+  }
+
   .nfl-hero,
   .nfl-grid-section,
   .nfl-scenario-body,
@@ -11559,6 +11845,26 @@ body {
 @media (max-width: 640px) {
   .nfl-shell {
     padding: 14px;
+  }
+
+  .admin-topbar-actions,
+  .admin-topbar-actions .admin-command,
+  .nfl-admin-grid,
+  .nfl-admin-provider-grid,
+  .nfl-admin-position-grid,
+  .nfl-admin-setup-list {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .admin-topbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: stretch;
+  }
+
+  .admin-topbar-actions .icon-button {
+    width: 100%;
   }
 
   .nfl-topbar,

@@ -922,18 +922,24 @@ export default function AdminPage() {
           <p className="eyebrow">MatchSeer admin</p>
           <h1>Data control room</h1>
         </div>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={() => void refreshDashboard()}
-          title="Refresh dashboard"
-        >
-          {loadStatus === "loading" ? (
-            <LoaderCircle size={18} className="spin" />
-          ) : (
-            <RefreshCcw size={18} />
-          )}
-        </button>
+        <div className="admin-topbar-actions">
+          <a className="admin-command" href="/admin/nfl">
+            <Trophy size={18} />
+            NFL admin
+          </a>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => void refreshDashboard()}
+            title="Refresh dashboard"
+          >
+            {loadStatus === "loading" ? (
+              <LoaderCircle size={18} className="spin" />
+            ) : (
+              <RefreshCcw size={18} />
+            )}
+          </button>
+        </div>
       </section>
 
       <section className="admin-grid">
