@@ -691,13 +691,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const rightPlayer =
     fantasyPlayers.find((player) => player.id === rightPlayerId) ??
     defaultPlayerPair[1];
-  const startLean = useMemo(
-    () => compareFantasyPlayers(leftPlayer, rightPlayer, scoringFormat),
-    [leftPlayer, rightPlayer, scoringFormat],
-  );
   const scoutingBoard = useMemo(
     () => buildScoutingBoard(fantasyPlayers, scoringFormat, fantasyContextLayer.byTeam),
     [fantasyContextLayer.byTeam, fantasyPlayers, scoringFormat],
+  );
+  const leftScoutingPlayer =
+    scoutingBoard.find((player) => player.id === leftPlayer.id) ?? leftPlayer;
+  const rightScoutingPlayer =
+    scoutingBoard.find((player) => player.id === rightPlayer.id) ?? rightPlayer;
+  const startLean = useMemo(
+    () => compareFantasyPlayers(leftScoutingPlayer, rightScoutingPlayer, scoringFormat),
+    [leftScoutingPlayer, rightScoutingPlayer, scoringFormat],
   );
   const visibleScoutingRows = useMemo(
     () => filterScoutingRows(scoutingBoard, scoutingPosition, scoutingDepth),
@@ -1357,9 +1361,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             </div>
             <div className="nfl-player-duel">
               <FantasyDuelPlayer
-                player={leftPlayer}
+                player={leftScoutingPlayer}
                 scoringFormat={scoringFormat}
-                winner={startLean.id === leftPlayer.id}
+                winner={startLean.id === leftScoutingPlayer.id}
               />
               <div className="nfl-duel-verdict">
                 <Sparkles size={20} />
@@ -1368,9 +1372,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <p>{startLean.verdict}</p>
               </div>
               <FantasyDuelPlayer
-                player={rightPlayer}
+                player={rightScoutingPlayer}
                 scoringFormat={scoringFormat}
-                winner={startLean.id === rightPlayer.id}
+                winner={startLean.id === rightScoutingPlayer.id}
               />
             </div>
           </section>
@@ -1826,7 +1830,7 @@ function FantasyCard({
   player: FantasyPlayer;
   scoringFormat: ScoringFormat;
 }) {
-  const fantasy = fantasyProjection(player, scoringFormat);
+  const fantasy = fantasyProjectionForDisplay(player, scoringFormat);
 
   return (
     <article className="nfl-fantasy-card">
@@ -1867,30 +1871,177 @@ function ProjectionReceipt({
   player: FantasyPlayer;
   projection: FantasyProjection;
 }) {
-  const sourceProjection = player.sourceProjection ?? projection.projection;
-  const sourceLabel =
-    typeof player.sourceProjection === "number" ? "Source" : "Model seed";
-  const delta =
-    typeof player.seerDelta === "number"
-      ? player.seerDelta
-      : projection.projection - sourceProjection;
-  const tags = player.seerAdjustments?.slice(0, compact ? 2 : 4) ?? [];
+  const receipt = fantasyProjectionReceipt(player, projection, compact);
 
   return (
     <div className={cx("nfl-projection-receipt", compact && "compact")}>
-      <small>
-        {sourceLabel} {sourceProjection.toFixed(1)} -&gt; Seer{" "}
-        {projection.projection.toFixed(1)} {formatFantasyDelta(delta)}
-      </small>
-      {tags.length > 0 ? (
-        <div>
-          {tags.map((tag) => (
-            <span key={tag}>{tag}</span>
+      <div className="nfl-receipt-scoreline">
+        <span>
+          <em>{receipt.sourceLabel}</em>
+          <strong>{receipt.sourceProjection.toFixed(1)}</strong>
+        </span>
+        <span>
+          <em>Seer nudge</em>
+          <strong className={cx(receipt.delta > 0 && "plus", receipt.delta < 0 && "minus")}>
+            {formatFantasyDelta(receipt.delta)}
+          </strong>
+        </span>
+        <span>
+          <em>{receipt.finalLabel}</em>
+          <strong>{receipt.finalProjection.toFixed(1)}</strong>
+        </span>
+      </div>
+      {!compact ? <small>{receipt.summary}</small> : null}
+      {receipt.reasons.length > 0 ? (
+        <div className="nfl-receipt-reasons">
+          {receipt.reasons.map((reason) => (
+            <span key={reason}>{reason}</span>
           ))}
         </div>
       ) : null}
     </div>
   );
+}
+
+function isScoutingRow(player: FantasyPlayer): player is ScoutingRow {
+  const maybeRow = player as Partial<ScoutingRow>;
+
+  return (
+    typeof maybeRow.contextProjection?.projection === "number" &&
+    typeof maybeRow.context?.projectionNudge === "number"
+  );
+}
+
+function fantasyProjectionForDisplay(
+  player: FantasyPlayer,
+  scoringFormat: ScoringFormat,
+): FantasyProjection {
+  return isScoutingRow(player) ? player.contextProjection : fantasyProjection(player, scoringFormat);
+}
+
+function fantasyProjectionReceipt(
+  player: FantasyPlayer,
+  projection: FantasyProjection,
+  compact: boolean,
+) {
+  const sourceProjection = fantasyReceiptSourceProjection(player, projection);
+  const finalProjection = round1(
+    isScoutingRow(player) ? player.contextProjection.projection : projection.projection,
+  );
+  const delta = round1(finalProjection - sourceProjection);
+  const reasons = fantasyReceiptReasons(player, compact ? 2 : 4);
+  const moveCopy =
+    delta === 0
+      ? "left the source read alone"
+      : `${delta > 0 ? "added" : "trimmed"} ${Math.abs(delta).toFixed(1)}`;
+  const reasonCopy = reasons[0] ? ` because ${reasons[0].toLowerCase()}` : ".";
+
+  return {
+    delta,
+    finalLabel: isScoutingRow(player) ? "Final Seer" : "Seer",
+    finalProjection,
+    reasons,
+    sourceLabel: fantasyReceiptSourceLabel(player),
+    sourceProjection,
+    summary: `Source starts at ${sourceProjection.toFixed(1)}. The Seer ${moveCopy}${reasonCopy}`,
+  };
+}
+
+function fantasyReceiptSourceProjection(
+  player: FantasyPlayer,
+  projection: FantasyProjection,
+) {
+  if (isScoutingRow(player)) {
+    return fantasySourceProjection(player);
+  }
+
+  if (typeof player.sourceProjection === "number") {
+    return round1(player.sourceProjection);
+  }
+
+  return round1(projection.projection - projectionDelta(player));
+}
+
+function fantasyReceiptSourceLabel(player: FantasyPlayer) {
+  if (player.projectionSource) {
+    return "Source";
+  }
+
+  return typeof player.sourceProjection === "number" ? "Source" : "Model seed";
+}
+
+function fantasyReceiptReasons(player: FantasyPlayer, limit: number) {
+  const reasons: string[] = [];
+
+  if (isScoutingRow(player)) {
+    reasons.push(
+      ...player.context.adjustments
+        .filter((adjustment) => Math.abs(adjustment.delta) >= 0.1)
+        .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+        .map((adjustment) => fantasyContextReceiptReason(adjustment)),
+    );
+  } else if (player.seerAdjustmentDetails?.length) {
+    reasons.push(
+      ...player.seerAdjustmentDetails
+        .filter((adjustment) => Math.abs(adjustment.delta) >= 0.1)
+        .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+        .map(
+          (adjustment) =>
+            `${titleCaseWords(adjustment.label)} ${formatFantasyDelta(adjustment.delta)}`,
+        ),
+    );
+  } else if (player.seerAdjustments?.length) {
+    reasons.push(...player.seerAdjustments);
+  }
+
+  reasons.push(...fantasyFallbackReceiptReasons(player));
+
+  return uniqueStrings(reasons)
+    .filter((reason) => reason.trim().length > 0)
+    .slice(0, limit);
+}
+
+function fantasyContextReceiptReason(adjustment: FantasyContextAdjustment) {
+  return `${adjustment.label} ${formatFantasyDelta(adjustment.delta)}: ${adjustment.summary}`;
+}
+
+function fantasyFallbackReceiptReasons(player: FantasyPlayer) {
+  const reasons = [
+    player.matchup >= 78
+      ? "Matchup boost: opponent lane grades friendly"
+      : player.matchup <= 66
+        ? "Matchup tax: opponent lane is heavier"
+        : "Matchup neutral: no major defense swing",
+    player.health <= 70
+      ? "Health watch: availability trims trust"
+      : player.health >= 86
+        ? "Health boost: clean availability read"
+        : "Health stable: playable availability",
+    player.chaos >= 64
+      ? "Chaos tax: wider boom-bust range"
+      : player.chaos <= 42
+        ? "Chaos calm: stable range"
+        : "Chaos neutral: normal variance",
+    player.roleSecurity && player.roleSecurity >= 78
+      ? "Role boost: usage looks secure"
+      : player.targetShare >= 22 || player.carryShare >= 24
+        ? "Role boost: volume is doing work"
+        : "Role watch: usage could wobble",
+  ];
+
+  return reasons;
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function titleCaseWords(value: string) {
+  return value
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function fantasySignalTags(player: FantasyPlayer) {
@@ -1935,7 +2086,7 @@ function FantasyDuelPlayer({
   scoringFormat: ScoringFormat;
   winner: boolean;
 }) {
-  const fantasy = fantasyProjection(player, scoringFormat);
+  const fantasy = fantasyProjectionForDisplay(player, scoringFormat);
 
   return (
     <article className={cx("nfl-duel-player", winner && "winner")}>
@@ -1948,6 +2099,7 @@ function FantasyDuelPlayer({
           </em>
         </div>
       </div>
+      <ProjectionReceipt player={player} projection={fantasy} />
       <MiniMeter
         icon={<LineChart size={16} />}
         label={`${scoringLabels[scoringFormat]} projection`}
@@ -2116,6 +2268,11 @@ function ScoutingBoard({
                     <span key={trait}>{trait}</span>
                   ))}
                 </div>
+                <ProjectionReceipt
+                  compact
+                  player={player}
+                  projection={player.contextProjection}
+                />
               </div>
               <div className="nfl-scout-metric">
                 <span>Projection</span>
@@ -2496,11 +2653,19 @@ function FantasyDecisionEnginePanel({
                   : "No eligible player found"}
               </em>
             </div>
-            <div className="nfl-lineup-receipt">
-              <span>Source {slot.sourceProjection.toFixed(1)}</span>
-              <strong>Seer {slot.seerProjection.toFixed(1)}</strong>
-              <em>{formatFantasyDelta(slot.delta)}</em>
-            </div>
+            {slot.player ? (
+              <ProjectionReceipt
+                compact
+                player={slot.player}
+                projection={slot.player.contextProjection}
+              />
+            ) : (
+              <div className="nfl-lineup-receipt">
+                <span>Source {slot.sourceProjection.toFixed(1)}</span>
+                <strong>Seer {slot.seerProjection.toFixed(1)}</strong>
+                <em>{formatFantasyDelta(slot.delta)}</em>
+              </div>
+            )}
             {slot.context ? (
               <div className="nfl-context-chips">
                 {slot.context.chips.slice(0, 4).map((chip) => (
@@ -2534,7 +2699,12 @@ function FantasyDecisionEnginePanel({
           <span>Start/sit receipts</span>
           {report.startSitReceipts.slice(0, 5).map((receipt) => (
             <p key={`${receipt.label}-${receipt.player.id}`}>
-              <strong>{receipt.label}</strong> {receipt.summary}
+              <strong>{receipt.label}</strong>{" "}
+              <small>
+                Source {receipt.sourceProjection.toFixed(1)} · Seer{" "}
+                {receipt.seerProjection.toFixed(1)} · {formatFantasyDelta(receipt.delta)}
+              </small>{" "}
+              {receipt.summary}
             </p>
           ))}
         </div>
@@ -3146,7 +3316,7 @@ function startSitSummary(
           ? "TD swing"
           : "role stability";
 
-  return `${player.name} fits ${slotLabel}: source ${sourceProjection.toFixed(1)}, base Seer ${seerProjection.toFixed(1)}, context Seer ${contextProjection.toFixed(1)} with ${opponentRead} and ${volumeRead}.`;
+  return `${player.name} fits ${slotLabel}: source ${sourceProjection.toFixed(1)}, base Seer ${seerProjection.toFixed(1)}, final Seer ${contextProjection.toFixed(1)} with ${opponentRead} and ${volumeRead}.`;
 }
 
 function fantasyDecisionTags(player: ScoutingRow, scoringFormat: ScoringFormat) {
@@ -3698,8 +3868,18 @@ function compareFantasyPlayers(
   right: FantasyPlayer,
   scoringFormat: ScoringFormat,
 ) {
-  const leftScore = fantasyScore(left, scoringFormat);
-  const rightScore = fantasyScore(right, scoringFormat);
+  const leftScore = fantasyScore(
+    left,
+    scoringFormat,
+    fantasyProjectionForDisplay(left, scoringFormat),
+    isScoutingRow(left) ? left.context : undefined,
+  );
+  const rightScore = fantasyScore(
+    right,
+    scoringFormat,
+    fantasyProjectionForDisplay(right, scoringFormat),
+    isScoutingRow(right) ? right.context : undefined,
+  );
   const winner = leftScore >= rightScore ? left : right;
   const loser = winner.id === left.id ? right : left;
   const margin = Math.abs(leftScore - rightScore);
