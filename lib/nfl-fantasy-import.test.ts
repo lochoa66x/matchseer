@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyFantasyProviderBridge,
   applyFantasyProjectionRealism,
   buildSleeperFantasyLeague,
+  createFantasyProviderBridgeImport,
   createManualFantasyLeague,
   createSeededFantasyPlayerPool,
   fantasyPlayersFromSourceProjections,
@@ -152,6 +154,79 @@ describe("NFL fantasy imports", () => {
     expect(player.seerAdjustments?.some((tag) => tag.includes("clean track"))).toBe(
       true,
     );
+  });
+
+  it("parses manual CSV provider bridge uploads with metadata", () => {
+    const bridge = createFantasyProviderBridgeImport({
+      providerLabel: "Friday Sheet",
+      season: "2026",
+      text: `Player,Team,Pos,Projected Points,Rank,Position Rank,Provider,Week,Updated At
+Josh Allen,BUF,QB,25.2,3,1,Fantasy Sheet,1,2026-09-04T12:00:00.000Z
+Brock Bowers,LV,TE,15.1,22,1,Fantasy Sheet,1,2026-09-04T12:00:00.000Z`,
+      updatedAt: "2026-09-04T13:00:00.000Z",
+      week: "1",
+    });
+
+    expect(bridge.providerLabel).toBe("Friday Sheet");
+    expect(bridge.projections).toHaveLength(2);
+    expect(bridge.projections[0]).toMatchObject({
+      name: "Josh Allen",
+      position: "QB",
+      projection: 25.2,
+      sourceRank: 3,
+      positionRank: 1,
+      season: "2026",
+      week: "1",
+    });
+  });
+
+  it("applies provider bridge rows over seeded source projections and keeps the Seer capped", () => {
+    const bridge = createFantasyProviderBridgeImport({
+      providerLabel: "Projection Room",
+      text: JSON.stringify({
+        provider: "Projection Room",
+        season: "2026",
+        week: 1,
+        updatedAt: "2026-09-04T12:00:00.000Z",
+        projections: [
+          {
+            playerName: "Josh Allen",
+            team: "BUF",
+            position: "QB",
+            projection: 30,
+            sourceRank: 1,
+            positionRank: 1,
+          },
+          {
+            playerName: "New Deep Sleeper",
+            team: "DAL",
+            position: "WR",
+            projection: 9.5,
+            positionRank: 88,
+          },
+        ],
+      }),
+    });
+    const players = applyFantasyProviderBridge([knownPlayer], bridge.projections, {
+      cap: 1.2,
+      matchups: [
+        {
+          team: "BUF",
+          weather: "Dome",
+          pace: 72,
+          teamWin: 54,
+          opponentWin: 46,
+          opponentDefense: 74,
+          teamHealth: 88,
+        },
+      ],
+    });
+    const known = players.find((player) => player.id === knownPlayer.id);
+
+    expect(known?.sourceProjection).toBe(30);
+    expect(known?.sourceProviderLabel).toBe("Projection Room");
+    expect(known?.seerDelta).toBeLessThanOrEqual(1.2);
+    expect(players.some((player) => player.name === "New Deep Sleeper")).toBe(true);
   });
 
   it("keeps kicker and defense projection rows in their own lanes", () => {

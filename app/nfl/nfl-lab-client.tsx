@@ -23,10 +23,15 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  applyFantasyProviderBridge,
   createSeededFantasyPlayerPool,
   createManualFantasyLeague,
+  createFantasyProviderBridgeImport,
   mergeFantasyPlayerPools,
   sanitizeImportedFantasyLeague,
+  type FantasyProviderBridgeImport,
+  type FantasyProjectionMatchupContext,
+  type FantasySourceProjection,
   type ImportedFantasyLeague,
   type ImportedFantasyTeam,
   type NflFantasyPlayer,
@@ -588,6 +593,11 @@ const seededFantasyPlayers: FantasyPlayer[] = createSeededFantasyPlayerPool();
 
 const seededPlayerPair = [seededFantasyPlayers[0], seededFantasyPlayers[1]] as const;
 
+const sampleProviderBridgeText =
+  "player,team,position,projection,rank,positionRank,provider,season,week,updatedAt\n" +
+  "Josh Allen,BUF,QB,25.4,4,2,Friday Sheet,2026,1,2026-09-04T12:00:00.000Z\n" +
+  "Amon-Ra St. Brown,DET,WR,22.1,8,3,Friday Sheet,2026,1,2026-09-04T12:00:00.000Z";
+
 const seededNflDataset: NflSeerDataset = {
   source: "seeded-fallback",
   season: "2026",
@@ -614,6 +624,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [activeFantasyTeamId, setActiveFantasyTeamId] = useState("seer-house");
   const [opponentFantasyTeamId, setOpponentFantasyTeamId] = useState("rival-house");
   const [fantasyImport, setFantasyImport] = useState<ImportedFantasyLeague | null>(null);
+  const [providerBridgeImport, setProviderBridgeImport] =
+    useState<FantasyProviderBridgeImport | null>(null);
+  const [providerBridgeText, setProviderBridgeText] = useState(sampleProviderBridgeText);
+  const [providerBridgeFileName, setProviderBridgeFileName] = useState("");
+  const [providerBridgeStatus, setProviderBridgeStatus] =
+    useState<FantasyImportStatus>("idle");
+  const [providerBridgeMessage, setProviderBridgeMessage] = useState(
+    "Load a projections or rankings CSV/JSON to refresh the Source side.",
+  );
   const [sleeperQuery, setSleeperQuery] = useState("");
   const [sleeperImportStatus, setSleeperImportStatus] =
     useState<FantasyImportStatus>("idle");
@@ -649,21 +668,38 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     nflDataset.fantasyPlayers.length > 0
       ? nflDataset.fantasyPlayers
       : seededFantasyPlayers;
+  const providerBridgeBaseFantasyPlayers = useMemo(
+    () =>
+      providerBridgeImport
+        ? applyFantasyProviderBridge(
+            baseFantasyPlayers,
+            providerBridgeImport.projections,
+            {
+              matchups: fantasyProjectionContextsFromMatchups(matchups),
+            },
+          )
+        : baseFantasyPlayers,
+    [baseFantasyPlayers, matchups, providerBridgeImport],
+  );
   const fantasyPlayers = useMemo(
     () =>
       fantasyImport
-        ? mergeFantasyPlayerPools(baseFantasyPlayers, fantasyImport.players)
-        : baseFantasyPlayers,
-    [baseFantasyPlayers, fantasyImport],
+        ? mergeFantasyPlayerPools(providerBridgeBaseFantasyPlayers, fantasyImport.players)
+        : providerBridgeBaseFantasyPlayers,
+    [fantasyImport, providerBridgeBaseFantasyPlayers],
+  );
+  const fantasyDataset = useMemo(
+    () => withFantasyProviderBridgeDataset(nflDataset, providerBridgeImport),
+    [nflDataset, providerBridgeImport],
   );
   const fantasyContextLayer = useMemo(
     () =>
       buildFantasyContextLayer({
-        dataset: nflDataset,
+        dataset: fantasyDataset,
         matchups,
         players: fantasyPlayers,
       }),
-    [fantasyPlayers, matchups, nflDataset],
+    [fantasyDataset, fantasyPlayers, matchups],
   );
   const defaultPlayerPair = useMemo(
     () =>
@@ -706,6 +742,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const visibleScoutingRows = useMemo(
     () => filterScoutingRows(scoutingBoard, scoutingPosition, scoutingDepth),
     [scoutingBoard, scoutingDepth, scoutingPosition],
+  );
+  const hasLiveOrImportedSourceRankings = Boolean(
+    providerBridgeImport?.projections.some(
+      (projection) =>
+        typeof projection.sourceRank === "number" ||
+        typeof projection.positionRank === "number",
+    ) ||
+      (fantasyDataset.providerStatus.fantasy === "live" &&
+        (fantasyDataset.providerStatus.fantasyCoverage?.totalRankings ?? 0) > 0),
   );
   const fantasyTeams = useMemo(() => {
     if (fantasyImport?.teams.length) {
@@ -928,6 +973,61 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     setScreenshotImportMessage(message);
   }
 
+  function applyProviderBridgeImport(sourceText: string, label?: string) {
+    setProviderBridgeStatus("loading");
+
+    try {
+      const bridgeImport = createFantasyProviderBridgeImport({
+        providerLabel: label ? cleanProviderFileLabel(label) : undefined,
+        season: nflDataset.season,
+        text: sourceText,
+        week: weekFromDatasetLabel(nflDataset.weekLabel),
+      });
+
+      setProviderBridgeImport(bridgeImport);
+      setProviderBridgeStatus("ready");
+      setProviderBridgeMessage(
+        `${bridgeImport.providerLabel} loaded ${bridgeImport.projections.length} player source row${bridgeImport.projections.length === 1 ? "" : "s"}.`,
+      );
+      setScoutRead(null);
+      setScoutStatus("idle");
+    } catch (error) {
+      setProviderBridgeStatus("error");
+      setProviderBridgeMessage(
+        error instanceof Error
+          ? error.message
+          : "Provider bridge could not read that CSV or JSON.",
+      );
+    }
+  }
+
+  function handleProviderBridgeFile(file: File | null | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setProviderBridgeFileName(file.name);
+    setProviderBridgeStatus("loading");
+    setProviderBridgeMessage(`Reading ${file.name}...`);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setProviderBridgeStatus("error");
+        setProviderBridgeMessage("That provider file could not be read.");
+        return;
+      }
+
+      setProviderBridgeText(reader.result);
+      applyProviderBridgeImport(reader.result, file.name);
+    };
+    reader.onerror = () => {
+      setProviderBridgeStatus("error");
+      setProviderBridgeMessage("That provider file could not be read.");
+    };
+    reader.readAsText(file);
+  }
+
   async function requestSleeperImport() {
     const query = sleeperQuery.trim();
 
@@ -1137,7 +1237,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
       <NflDataRibbon
         contextStatus={fantasyContextLayer.status}
-        dataset={nflDataset}
+        dataset={fantasyDataset}
         status={nflDataStatus}
       />
 
@@ -1289,6 +1389,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onDepthChange={updateScoutingDepth}
             onPositionChange={updateScoutingPosition}
             onRequest={requestScoutingRead}
+            hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
             position={scoutingPosition}
             rows={visibleScoutingRows}
             scoringFormat={scoringFormat}
@@ -1299,6 +1400,11 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             activeReport={activeTeamReport}
             contextStatus={fantasyContextLayer.status}
             fantasyImport={fantasyImport}
+            providerBridgeFileName={providerBridgeFileName}
+            providerBridgeImport={providerBridgeImport}
+            providerBridgeMessage={providerBridgeMessage}
+            providerBridgeStatus={providerBridgeStatus}
+            providerBridgeText={providerBridgeText}
             manualImportMessage={manualImportMessage}
             manualImportStatus={manualImportStatus}
             manualRosterText={manualRosterText}
@@ -1306,6 +1412,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onManualImport={() => applyManualRosterImport("manual")}
             onLensChange={setTeamLens}
             onOpponentTeamChange={setOpponentFantasyTeamId}
+            onProviderBridgeFile={handleProviderBridgeFile}
+            onProviderBridgeImport={() => applyProviderBridgeImport(providerBridgeText)}
+            onProviderBridgeTextChange={setProviderBridgeText}
             onScoringChange={setScoringFormat}
             onScreenshotFile={handleScreenshotFile}
             onScreenshotImport={requestScreenshotRosterImport}
@@ -2126,6 +2235,7 @@ function ScoutingBoard({
   analysis,
   allRows,
   depth,
+  hasLiveOrImportedSourceRankings,
   onDepthChange,
   onPositionChange,
   onRequest,
@@ -2137,6 +2247,7 @@ function ScoutingBoard({
   analysis: NflScoutingAnalysis | null;
   allRows: ScoutingRow[];
   depth: ScoutingDepth;
+  hasLiveOrImportedSourceRankings: boolean;
   onDepthChange: (depth: ScoutingDepth) => void;
   onPositionChange: (position: ScoutingPosition) => void;
   onRequest: () => void;
@@ -2161,8 +2272,9 @@ function ScoutingBoard({
           </div>
           <h2>Seer ranking board</h2>
           <p>
-            Format-aware projection, role pulse, matchup, health, and chaos. Baseline
-            rank is a placeholder until a live external ranking feed is connected.
+            {hasLiveOrImportedSourceRankings
+              ? "Format-aware projection, provider ranking, role pulse, matchup, health, and chaos."
+              : "Format-aware projection, role pulse, matchup, health, and chaos. Baseline rank is a placeholder until a live or imported ranking feed is connected."}
           </p>
         </div>
         <div className="nfl-scouting-actions">
@@ -2312,6 +2424,11 @@ function FantasyTeamLab({
   activeReport,
   contextStatus,
   fantasyImport,
+  providerBridgeFileName,
+  providerBridgeImport,
+  providerBridgeMessage,
+  providerBridgeStatus,
+  providerBridgeText,
   manualImportMessage,
   manualImportStatus,
   manualRosterText,
@@ -2320,6 +2437,9 @@ function FantasyTeamLab({
   onLensChange,
   onManualRosterTextChange,
   onOpponentTeamChange,
+  onProviderBridgeFile,
+  onProviderBridgeImport,
+  onProviderBridgeTextChange,
   onScoringChange,
   onScreenshotFile,
   onScreenshotImport,
@@ -2340,6 +2460,11 @@ function FantasyTeamLab({
   activeReport: FantasyTeamReport;
   contextStatus: FantasyContextStatus;
   fantasyImport: ImportedFantasyLeague | null;
+  providerBridgeFileName: string;
+  providerBridgeImport: FantasyProviderBridgeImport | null;
+  providerBridgeMessage: string;
+  providerBridgeStatus: FantasyImportStatus;
+  providerBridgeText: string;
   manualImportMessage: string;
   manualImportStatus: FantasyImportStatus;
   manualRosterText: string;
@@ -2348,6 +2473,9 @@ function FantasyTeamLab({
   onLensChange: (lens: FantasyTeamLens) => void;
   onManualRosterTextChange: (value: string) => void;
   onOpponentTeamChange: (teamId: string) => void;
+  onProviderBridgeFile: (file: File | null | undefined) => void;
+  onProviderBridgeImport: () => void;
+  onProviderBridgeTextChange: (value: string) => void;
   onScoringChange: (format: ScoringFormat) => void;
   onScreenshotFile: (file: File | null | undefined) => void;
   onScreenshotImport: () => void;
@@ -2398,11 +2526,19 @@ function FantasyTeamLab({
 
       <FantasyImportPanel
         fantasyImport={fantasyImport}
+        providerBridgeFileName={providerBridgeFileName}
+        providerBridgeImport={providerBridgeImport}
+        providerBridgeMessage={providerBridgeMessage}
+        providerBridgeStatus={providerBridgeStatus}
+        providerBridgeText={providerBridgeText}
         manualImportMessage={manualImportMessage}
         manualImportStatus={manualImportStatus}
         manualRosterText={manualRosterText}
         onManualImport={onManualImport}
         onManualRosterTextChange={onManualRosterTextChange}
+        onProviderBridgeFile={onProviderBridgeFile}
+        onProviderBridgeImport={onProviderBridgeImport}
+        onProviderBridgeTextChange={onProviderBridgeTextChange}
         onScreenshotFile={onScreenshotFile}
         onScreenshotImport={onScreenshotImport}
         onSleeperImport={onSleeperImport}
@@ -2720,11 +2856,19 @@ function FantasyDecisionEnginePanel({
 
 function FantasyImportPanel({
   fantasyImport,
+  providerBridgeFileName,
+  providerBridgeImport,
+  providerBridgeMessage,
+  providerBridgeStatus,
+  providerBridgeText,
   manualImportMessage,
   manualImportStatus,
   manualRosterText,
   onManualImport,
   onManualRosterTextChange,
+  onProviderBridgeFile,
+  onProviderBridgeImport,
+  onProviderBridgeTextChange,
   onScreenshotFile,
   onScreenshotImport,
   onSleeperImport,
@@ -2737,11 +2881,19 @@ function FantasyImportPanel({
   sleeperQuery,
 }: {
   fantasyImport: ImportedFantasyLeague | null;
+  providerBridgeFileName: string;
+  providerBridgeImport: FantasyProviderBridgeImport | null;
+  providerBridgeMessage: string;
+  providerBridgeStatus: FantasyImportStatus;
+  providerBridgeText: string;
   manualImportMessage: string;
   manualImportStatus: FantasyImportStatus;
   manualRosterText: string;
   onManualImport: () => void;
   onManualRosterTextChange: (value: string) => void;
+  onProviderBridgeFile: (file: File | null | undefined) => void;
+  onProviderBridgeImport: () => void;
+  onProviderBridgeTextChange: (value: string) => void;
   onScreenshotFile: (file: File | null | undefined) => void;
   onScreenshotImport: () => void;
   onSleeperImport: () => void;
@@ -2756,18 +2908,54 @@ function FantasyImportPanel({
   const importLabel = fantasyImport
     ? `${fantasyImport.label} · ${fantasyImport.teams.length} team${fantasyImport.teams.length === 1 ? "" : "s"}`
     : "Seeded lab rosters";
+  const providerLabel = providerBridgeImport
+    ? `${providerBridgeImport.providerLabel} · ${providerBridgeImport.projections.length} rows`
+    : "Seeded projection spine";
 
   return (
     <div className="nfl-fantasy-import-panel">
       <div className="nfl-import-panel-head">
         <div>
-          <span>Roster source</span>
+          <span>Roster + provider source</span>
           <strong>{importLabel}</strong>
+          <small>{providerLabel}</small>
         </div>
-        <em>{fantasyImport?.source ?? "demo"}</em>
+        <em>{providerBridgeImport ? "provider bridge" : fantasyImport?.source ?? "demo"}</em>
       </div>
 
       <div className="nfl-import-grid">
+        <article className="nfl-import-card wide provider">
+          <div>
+            <LineChart size={18} />
+            <strong>Provider bridge</strong>
+          </div>
+          <label className="nfl-file-drop">
+            <LineChart size={16} />
+            <span>{providerBridgeFileName || "CSV or JSON"}</span>
+            <input
+              accept=".csv,.json,application/json,text/csv,text/plain"
+              onChange={(event) => onProviderBridgeFile(event.target.files?.[0])}
+              type="file"
+            />
+          </label>
+          <textarea
+            onChange={(event) => onProviderBridgeTextChange(event.target.value)}
+            spellCheck={false}
+            value={providerBridgeText}
+          />
+          <button
+            disabled={providerBridgeStatus === "loading"}
+            onClick={onProviderBridgeImport}
+            type="button"
+          >
+            <LineChart size={16} />
+            {providerBridgeStatus === "loading" ? "Loading" : "Load provider"}
+          </button>
+          <p className={cx("nfl-import-status", providerBridgeStatus)}>
+            {providerBridgeMessage}
+          </p>
+        </article>
+
         <article className="nfl-import-card">
           <div>
             <RefreshCw size={18} />
@@ -4883,6 +5071,233 @@ function formatHealthSwing(matchup: NflMatchup, value: number) {
   }
 
   return "Even";
+}
+
+function withFantasyProviderBridgeDataset(
+  dataset: NflSeerDataset,
+  providerBridgeImport: FantasyProviderBridgeImport | null,
+): NflSeerDataset {
+  if (!providerBridgeImport) {
+    return dataset;
+  }
+
+  const provider = fantasyProviderStatusFromBridge(providerBridgeImport);
+  const coverage = mergeFantasyCoverageStatus(
+    dataset.providerStatus.fantasyCoverage,
+    fantasyCoverageFromSourceProjections(providerBridgeImport.projections),
+  );
+  const existingProviders = dataset.providerStatus.fantasyProviders ?? [];
+  const notes = [
+    `${providerBridgeImport.providerLabel} source rows are loaded in this browser session.`,
+    ...dataset.providerStatus.notes,
+  ].filter((note, index, allNotes) => allNotes.indexOf(note) === index);
+
+  return {
+    ...dataset,
+    providerStatus: {
+      ...dataset.providerStatus,
+      fantasy: "live",
+      fantasyCoverage: coverage,
+      fantasyProviders: [
+        provider,
+        ...existingProviders.filter((existing) => existing.id !== provider.id),
+      ],
+      notes,
+    },
+  };
+}
+
+function fantasyProviderStatusFromBridge(
+  providerBridgeImport: FantasyProviderBridgeImport,
+): NflFantasyProviderStatus {
+  return {
+    count: providerBridgeImport.projections.length,
+    freshness: fantasyFreshnessFromUpdatedAt(providerBridgeImport.updatedAt),
+    id: "provider-bridge-upload",
+    kind: providerBridgeImport.projections.some(
+      (projection) => typeof projection.projection === "number",
+    )
+      ? "projections"
+      : "rankings",
+    label: providerBridgeImport.providerLabel,
+    message: `${providerBridgeImport.notes.join(" ")} Browser upload, ready for Sleeper/NFL/feed adapters later.`,
+    positions: fantasyPositionCountsFromSourceProjections(providerBridgeImport.projections),
+    source: "browser upload",
+    status: "live",
+    updatedAt: providerBridgeImport.updatedAt,
+  };
+}
+
+function fantasyCoverageFromSourceProjections(
+  projections: FantasySourceProjection[],
+): NflFantasyCoverageStatus {
+  const positions = emptyFantasyCoveragePositions();
+
+  projections.forEach((projection) => {
+    const position = normalizeScoutingPosition(projection.position);
+    positions[position].players += 1;
+
+    if (typeof projection.projection === "number") {
+      positions[position].projections += 1;
+    }
+
+    if (
+      typeof projection.sourceRank === "number" ||
+      typeof projection.positionRank === "number"
+    ) {
+      positions[position].rankings += 1;
+    }
+  });
+
+  fantasyCoveragePositions.forEach((position) => {
+    const row = positions[position];
+    row.total = row.players + row.projections + row.rankings;
+  });
+
+  return {
+    missingPositions: fantasyCoveragePositions.filter(
+      (position) => positions[position].total === 0,
+    ),
+    positions,
+    totalPlayers: projections.length,
+    totalProjections: projections.filter(
+      (projection) => typeof projection.projection === "number",
+    ).length,
+    totalRankings: projections.filter(
+      (projection) =>
+        typeof projection.sourceRank === "number" ||
+        typeof projection.positionRank === "number",
+    ).length,
+  };
+}
+
+function mergeFantasyCoverageStatus(
+  existingCoverage: NflFantasyCoverageStatus | undefined,
+  bridgeCoverage: NflFantasyCoverageStatus,
+): NflFantasyCoverageStatus {
+  const baseCoverage =
+    existingCoverage ??
+    ({
+      missingPositions: fantasyCoveragePositions,
+      positions: emptyFantasyCoveragePositions(),
+      totalPlayers: 0,
+      totalProjections: 0,
+      totalRankings: 0,
+    } satisfies NflFantasyCoverageStatus);
+  const positions = emptyFantasyCoveragePositions();
+
+  fantasyCoveragePositions.forEach((position) => {
+    positions[position] = {
+      players:
+        baseCoverage.positions[position].players +
+        bridgeCoverage.positions[position].players,
+      projections:
+        baseCoverage.positions[position].projections +
+        bridgeCoverage.positions[position].projections,
+      rankings:
+        baseCoverage.positions[position].rankings +
+        bridgeCoverage.positions[position].rankings,
+      total:
+        baseCoverage.positions[position].total +
+        bridgeCoverage.positions[position].total,
+    };
+  });
+
+  return {
+    missingPositions: fantasyCoveragePositions.filter(
+      (position) => positions[position].total === 0,
+    ),
+    positions,
+    totalPlayers: baseCoverage.totalPlayers + bridgeCoverage.totalPlayers,
+    totalProjections:
+      baseCoverage.totalProjections + bridgeCoverage.totalProjections,
+    totalRankings: baseCoverage.totalRankings + bridgeCoverage.totalRankings,
+  };
+}
+
+function emptyFantasyCoveragePositions(): NflFantasyCoverageStatus["positions"] {
+  return fantasyCoveragePositions.reduce<NflFantasyCoverageStatus["positions"]>(
+    (positions, position) => {
+      positions[position] = {
+        players: 0,
+        projections: 0,
+        rankings: 0,
+        total: 0,
+      };
+      return positions;
+    },
+    {} as NflFantasyCoverageStatus["positions"],
+  );
+}
+
+function fantasyPositionCountsFromSourceProjections(
+  projections: FantasySourceProjection[],
+): FantasyPositionCounts {
+  return projections.reduce(
+    (counts, projection) => {
+      counts[normalizeScoutingPosition(projection.position)] += 1;
+      return counts;
+    },
+    {
+      DST: 0,
+      K: 0,
+      QB: 0,
+      RB: 0,
+      TE: 0,
+      WR: 0,
+    } satisfies FantasyPositionCounts,
+  );
+}
+
+function fantasyFreshnessFromUpdatedAt(updatedAt: string): FantasyProviderFreshness {
+  const timestamp = Date.parse(updatedAt);
+
+  if (!Number.isFinite(timestamp)) {
+    return "unknown";
+  }
+
+  const ageMs = Date.now() - timestamp;
+
+  return ageMs <= 1000 * 60 * 60 * 24 * 7 ? "fresh" : "stale";
+}
+
+function fantasyProjectionContextsFromMatchups(
+  matchups: NflMatchup[],
+): FantasyProjectionMatchupContext[] {
+  return matchups.flatMap((matchup) => [
+    {
+      opponent: `vs ${matchup.away.code}`,
+      opponentDefense: matchup.away.defense,
+      opponentWin: matchup.awayWin,
+      pace: matchup.pace,
+      team: matchup.home.code,
+      teamHealth: matchup.home.injuries,
+      teamOffense: matchup.home.offense,
+      teamWin: matchup.homeWin,
+      venue: matchup.venue,
+      weather: matchup.weather,
+    },
+    {
+      opponent: `at ${matchup.home.code}`,
+      opponentDefense: matchup.home.defense,
+      opponentWin: matchup.homeWin,
+      pace: matchup.pace,
+      team: matchup.away.code,
+      teamHealth: matchup.away.injuries,
+      teamOffense: matchup.away.offense,
+      teamWin: matchup.awayWin,
+      venue: matchup.venue,
+      weather: matchup.weather,
+    },
+  ]);
+}
+
+function cleanProviderFileLabel(fileName: string) {
+  return fileName.replace(/\.(csv|json|txt)$/i, "").replace(/[-_]+/g, " ").trim();
+}
+
+function weekFromDatasetLabel(weekLabel: string) {
+  return weekLabel.match(/\d+/)?.[0];
 }
 
 function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {

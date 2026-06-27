@@ -60,6 +60,10 @@ export type NflFantasyPlayer = {
   seerAdjustmentDetails?: FantasyProjectionAdjustment[];
   projectionSource?: string;
   rankingSource?: string;
+  sourceProviderLabel?: string;
+  sourceSeason?: string;
+  sourceWeek?: string;
+  sourceUpdatedAt?: string;
 };
 
 export type ImportedFantasyTeam = {
@@ -101,6 +105,10 @@ export type FantasySourceProjection = {
   dynastyValue?: number;
   depthTier?: FantasyDepthTier;
   rankingSource?: string;
+  providerLabel?: string;
+  season?: string;
+  week?: string;
+  updatedAt?: string;
 };
 
 export type FantasyProjectionMatchupContext = {
@@ -134,6 +142,30 @@ type ManualPlayerLine = {
   dynastyValue?: number;
   depthTier?: FantasyDepthTier;
   rankingSource?: string;
+  sourceProviderLabel?: string;
+  sourceSeason?: string;
+  sourceWeek?: string;
+  sourceUpdatedAt?: string;
+};
+
+export type FantasyProviderBridgeImport = {
+  id: string;
+  label: string;
+  providerLabel: string;
+  source: "manual-upload";
+  season?: string;
+  week?: string;
+  updatedAt: string;
+  projections: FantasySourceProjection[];
+  notes: string[];
+};
+
+export type FantasyProviderBridgeInput = {
+  text: string;
+  providerLabel?: string;
+  season?: string;
+  week?: string;
+  updatedAt?: string;
 };
 
 export type SleeperLeague = {
@@ -664,11 +696,86 @@ export function mergeFantasyPlayerPools(
 }
 
 export function normalizeFantasyProjectionFeed(payload: unknown): FantasySourceProjection[] {
-  const rows = projectionRowsFromPayload(payload);
+  const rows = projectionRowsFromPayload(
+    typeof payload === "string" ? fantasyProjectionPayloadFromText(payload) : payload,
+  );
 
   return rows
     .map((row, index) => normalizeSourceProjection(row, index))
     .filter((projection): projection is FantasySourceProjection => projection !== null);
+}
+
+export function createFantasyProviderBridgeImport({
+  providerLabel,
+  season,
+  text,
+  updatedAt,
+  week,
+}: FantasyProviderBridgeInput): FantasyProviderBridgeImport {
+  const payload = fantasyProjectionPayloadFromText(text);
+  const metadata = providerBridgeMetadata(payload);
+  const rawProjections = normalizeFantasyProjectionFeed(payload);
+  const label =
+    cleanLine(providerLabel) ||
+    metadata.providerLabel ||
+    rawProjections[0]?.providerLabel ||
+    rawProjections[0]?.source ||
+    "Manual provider upload";
+  const importSeason = cleanLine(season) || metadata.season || rawProjections[0]?.season;
+  const importWeek = cleanLine(week) || metadata.week || rawProjections[0]?.week;
+  const importUpdatedAt =
+    cleanLine(updatedAt) ||
+    metadata.updatedAt ||
+    newestProjectionUpdatedAt(rawProjections) ||
+    new Date().toISOString();
+  const projections = rawProjections.map((projection) => {
+    const rowProvider =
+      projection.providerLabel === "projection-feed"
+        ? undefined
+        : projection.providerLabel;
+    const rowSource =
+      projection.source === "projection-feed" ? undefined : projection.source;
+
+    return {
+      ...projection,
+      providerLabel: rowProvider ?? label,
+      rankingSource:
+        projection.rankingSource === "projection-feed"
+          ? label
+          : projection.rankingSource ?? rowSource ?? label,
+      season: projection.season ?? importSeason,
+      source: rowSource || label,
+      updatedAt: projection.updatedAt ?? importUpdatedAt,
+      week: projection.week ?? importWeek,
+    };
+  });
+  const projectionCount = projections.filter(
+    (projection) => typeof projection.projection === "number",
+  ).length;
+  const rankingCount = projections.filter(
+    (projection) =>
+      typeof projection.sourceRank === "number" ||
+      typeof projection.positionRank === "number",
+  ).length;
+
+  if (projections.length === 0) {
+    throw new Error("No projection or ranking rows found.");
+  }
+
+  return {
+    id: `provider-bridge-${slugify(label)}-${Date.parse(importUpdatedAt) || Date.now()}`,
+    label: `${label}${importWeek ? ` · Week ${importWeek}` : ""}`,
+    notes: [
+      `${projections.length} player rows loaded.`,
+      `${projectionCount} projections · ${rankingCount} rankings.`,
+    ],
+    projections,
+    providerLabel: label,
+    season: importSeason,
+    source: "manual-upload",
+    updatedAt: importUpdatedAt,
+    week: importWeek,
+  };
 }
 
 export function mergeFantasySourceFeeds(
@@ -696,7 +803,11 @@ export function mergeFantasySourceFeeds(
         .filter(Boolean)
         .filter((value, index, values) => values.indexOf(value) === index)
         .join(" + "),
+      providerLabel: projection.providerLabel ?? current.providerLabel,
       rankingSource: projection.rankingSource ?? current.rankingSource,
+      season: projection.season ?? current.season,
+      updatedAt: projection.updatedAt ?? current.updatedAt,
+      week: projection.week ?? current.week,
     });
   });
 
@@ -727,6 +838,10 @@ export function fantasyPlayersFromSourceProjections(
         roleSecurity: projection.roleSecurity,
         dynastyValue: projection.dynastyValue,
         depthTier: projection.depthTier,
+        sourceProviderLabel: projection.providerLabel ?? projection.source,
+        sourceSeason: projection.season,
+        sourceWeek: projection.week,
+        sourceUpdatedAt: projection.updatedAt,
         rankingSource: projection.rankingSource ?? projection.source,
       },
       rank,
@@ -745,20 +860,25 @@ export function applyFantasyProjectionRealism(
 
   return players.map((player) => {
     const source = matchSourceProjection(player, projectionIndex);
-    const sourceProjection = player.sourceProjection ?? source?.projection;
+    const sourceProjection = source?.projection ?? player.sourceProjection;
 
     if (typeof sourceProjection !== "number") {
       return {
         ...player,
         opponent: source?.opponent ?? player.opponent,
-        sourceRank: player.sourceRank ?? source?.sourceRank,
-        positionRank: player.positionRank ?? source?.positionRank,
+        sourceProviderLabel:
+          source?.providerLabel ?? source?.source ?? player.sourceProviderLabel,
+        sourceRank: source?.sourceRank ?? player.sourceRank,
+        positionRank: source?.positionRank ?? player.positionRank,
         age: player.age ?? source?.age,
         experience: player.experience ?? source?.experience,
         roleSecurity: player.roleSecurity ?? source?.roleSecurity,
         dynastyValue: player.dynastyValue ?? source?.dynastyValue,
         depthTier: player.depthTier ?? source?.depthTier,
-        rankingSource: source?.rankingSource ?? player.rankingSource,
+        rankingSource: source?.rankingSource ?? source?.source ?? player.rankingSource,
+        sourceSeason: source?.season ?? player.sourceSeason,
+        sourceUpdatedAt: source?.updatedAt ?? player.sourceUpdatedAt,
+        sourceWeek: source?.week ?? player.sourceWeek,
         seerAdjustments:
           player.seerAdjustments && player.seerAdjustments.length > 0
             ? player.seerAdjustments
@@ -787,17 +907,43 @@ export function applyFantasyProjectionRealism(
       seerAdjustmentDetails: adjustmentDetails,
       seerAdjustments:
         adjustmentLabels.length > 0 ? adjustmentLabels : ["Source and Seer agree"],
-      projectionSource: source?.source ?? player.projectionSource ?? "imported projection",
-      sourceRank: player.sourceRank ?? source?.sourceRank,
-      positionRank: player.positionRank ?? source?.positionRank,
+      projectionSource:
+        source?.providerLabel ?? source?.source ?? player.projectionSource ?? "imported projection",
+      sourceProviderLabel:
+        source?.providerLabel ?? source?.source ?? player.sourceProviderLabel,
+      sourceRank: source?.sourceRank ?? player.sourceRank,
+      positionRank: source?.positionRank ?? player.positionRank,
       age: player.age ?? source?.age,
       experience: player.experience ?? source?.experience,
       roleSecurity: player.roleSecurity ?? source?.roleSecurity,
       dynastyValue: player.dynastyValue ?? source?.dynastyValue,
       depthTier: player.depthTier ?? source?.depthTier,
-      rankingSource: source?.rankingSource ?? player.rankingSource,
+      rankingSource: source?.rankingSource ?? source?.source ?? player.rankingSource,
+      sourceSeason: source?.season ?? player.sourceSeason,
+      sourceUpdatedAt: source?.updatedAt ?? player.sourceUpdatedAt,
+      sourceWeek: source?.week ?? player.sourceWeek,
     };
   });
+}
+
+export function applyFantasyProviderBridge(
+  players: NflFantasyPlayer[],
+  sourceProjections: FantasySourceProjection[],
+  options: FantasyProjectionRealismOptions = {},
+) {
+  const knownPlayers = applyFantasyProjectionRealism(players, sourceProjections, options);
+  const generatedPlayers = fantasyPlayersFromSourceProjections(sourceProjections).filter(
+    (generatedPlayer) => !findMatchingPlayer(players, generatedPlayer),
+  );
+
+  if (generatedPlayers.length === 0) {
+    return knownPlayers;
+  }
+
+  return [
+    ...knownPlayers,
+    ...applyFantasyProjectionRealism(generatedPlayers, sourceProjections, options),
+  ];
 }
 
 export function sanitizeImportedFantasyLeague(
@@ -1060,6 +1206,10 @@ function createGeneratedFantasyPlayer({
     sourceProjection,
     seerAdjustments: seerAdjustmentLabels({ chaos, health, matchup, position }),
     rankingSource: line.rankingSource,
+    sourceProviderLabel: line.sourceProviderLabel,
+    sourceSeason: line.sourceSeason,
+    sourceUpdatedAt: line.sourceUpdatedAt,
+    sourceWeek: line.sourceWeek,
   };
 
   return applyFantasyProjectionRealism([player], [], { cap: 2.4 })[0];
@@ -1289,6 +1439,10 @@ function isDefenseId(playerId: string) {
 }
 
 function projectionRowsFromPayload(payload: unknown): unknown[] {
+  if (typeof payload === "string") {
+    return projectionRowsFromPayload(fantasyProjectionPayloadFromText(payload));
+  }
+
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -1306,6 +1460,8 @@ function projectionRowsFromPayload(payload: unknown): unknown[] {
     "fantasyRankings",
     "players",
     "fantasyPlayers",
+    "sourceProjections",
+    "rows",
     "data",
   ]) {
     const value = record[key];
@@ -1318,6 +1474,180 @@ function projectionRowsFromPayload(payload: unknown): unknown[] {
   return Object.values(record).filter(
     (value) => typeof value === "object" && value !== null,
   );
+}
+
+function fantasyProjectionPayloadFromText(text: string): unknown {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return parseCsvText(trimmed);
+  }
+}
+
+function providerBridgeMetadata(payload: unknown) {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    const firstRow = Array.isArray(payload) ? payload[0] : null;
+    return providerBridgeMetadata(firstRow);
+  }
+
+  const record = payload as Record<string, unknown>;
+  const directProvider =
+    cleanLine(record.providerLabel) ||
+    cleanLine(record.provider) ||
+    cleanLine(record.source) ||
+    cleanLine(record.label) ||
+    cleanLine(record.name);
+
+  return {
+    providerLabel: directProvider || undefined,
+    season: cleanLine(record.season) || undefined,
+    updatedAt:
+      cleanLine(record.updatedAt) ||
+      cleanLine(record.updated_at) ||
+      cleanLine(record.lastUpdated) ||
+      undefined,
+    week: cleanLine(record.week) || cleanLine(record.scoringPeriod) || undefined,
+  };
+}
+
+function newestProjectionUpdatedAt(projections: FantasySourceProjection[]) {
+  return projections
+    .map((projection) => projection.updatedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
+function parseCsvText(text: string) {
+  const records = csvRecords(text);
+  const [headers, ...rows] = records;
+
+  if (!headers || headers.length === 0) {
+    return [];
+  }
+
+  const keys = headers.map(csvHeaderKey);
+
+  return rows
+    .filter((row) => row.some((cell) => cell.trim().length > 0))
+    .map((row) =>
+      keys.reduce<Record<string, string>>((record, key, index) => {
+        record[key] = row[index]?.trim() ?? "";
+        return record;
+      }, {}),
+    );
+}
+
+function csvRecords(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (char === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell);
+  rows.push(row);
+
+  return rows.filter((cells) => cells.some((value) => value.trim().length > 0));
+}
+
+function csvHeaderKey(header: string) {
+  const key = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const mapped: Record<string, string> = {
+    adp: "adp",
+    age: "age",
+    depthtier: "depthTier",
+    dynasty: "dynastyValue",
+    dynastyvalue: "dynastyValue",
+    ecr: "ecr",
+    experience: "experience",
+    fantasypoints: "fantasyPoints",
+    format: "scoring",
+    fullname: "fullName",
+    halfppr: "halfPpr",
+    keepervalue: "dynastyValue",
+    lastupdated: "lastUpdated",
+    longtermvalue: "dynastyValue",
+    name: "name",
+    nflteam: "nflTeam",
+    opponent: "opponent",
+    overall: "overall",
+    overallrank: "overallRank",
+    player: "playerName",
+    playerid: "playerId",
+    playername: "playerName",
+    points: "points",
+    pos: "pos",
+    positionalrank: "positionRank",
+    position: "position",
+    positionrank: "positionRank",
+    posrank: "posRank",
+    projected: "projected",
+    projectedpoints: "projectedPoints",
+    projection: "projection",
+    provider: "provider",
+    providerlabel: "providerLabel",
+    rank: "rank",
+    rankingsource: "rankingSource",
+    rolescore: "roleScore",
+    rolesecurity: "roleSecurity",
+    roletier: "roleTier",
+    scoring: "scoring",
+    scoringformat: "scoringFormat",
+    scoringperiod: "scoringPeriod",
+    season: "season",
+    source: "source",
+    sourcerank: "sourceRank",
+    standard: "standard",
+    team: "team",
+    teamcode: "teamCode",
+    tier: "tier",
+    updatedat: "updatedAt",
+    week: "week",
+    years: "years",
+  };
+
+  return mapped[key] ?? header.trim();
 }
 
 function normalizeSourceProjection(
@@ -1361,7 +1691,12 @@ function normalizeSourceProjection(
     row.position_rank,
     row.pos_rank,
   );
-  const source = cleanLine(row.source) || cleanLine(row.provider) || "projection-feed";
+  const providerLabel =
+    cleanLine(row.providerLabel) ||
+    cleanLine(row.provider) ||
+    cleanLine(row.source) ||
+    "projection-feed";
+  const source = cleanLine(row.source) || providerLabel;
 
   if (
     !name ||
@@ -1383,6 +1718,7 @@ function normalizeSourceProjection(
     projection: typeof projection === "number" ? round1(projection) : undefined,
     scoring: scoringFromProjectionRow(row),
     source,
+    providerLabel,
     opponent:
       cleanLine(row.opponent) ||
       cleanLine(row.opp) ||
@@ -1400,6 +1736,13 @@ function normalizeSourceProjection(
       row.longTermValue,
     ),
     depthTier: depthTierFromValue(row.depthTier ?? row.tier ?? row.roleTier),
+    season: cleanLine(row.season) || undefined,
+    updatedAt:
+      cleanLine(row.updatedAt) ||
+      cleanLine(row.updated_at) ||
+      cleanLine(row.lastUpdated) ||
+      undefined,
+    week: cleanLine(row.week) || cleanLine(row.scoringPeriod) || undefined,
     rankingSource: cleanLine(row.rankingSource) || source,
   };
 }
@@ -1496,6 +1839,10 @@ function projectionReceiptFields(player: NflFantasyPlayer) {
     seerAdjustmentDetails: player.seerAdjustmentDetails,
     projectionSource: player.projectionSource,
     rankingSource: player.rankingSource,
+    sourceProviderLabel: player.sourceProviderLabel,
+    sourceSeason: player.sourceSeason,
+    sourceUpdatedAt: player.sourceUpdatedAt,
+    sourceWeek: player.sourceWeek,
   };
 }
 
@@ -1735,7 +2082,11 @@ function injuryDrag(value: string | undefined) {
 }
 
 function cleanLine(value: unknown) {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (typeof value === "string") {
+    return value.replace(/\s+/g, " ").trim();
+  }
+
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "";
 }
 
 function normalizeName(value: string) {

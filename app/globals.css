@@ -10295,6 +10295,12 @@ body {
   white-space: nowrap;
 }
 
+.nfl-import-panel-head small {
+  color: var(--nfl-muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
 .nfl-import-panel-head em {
   flex: 0 0 auto;
   padding: 7px 9px;
@@ -10307,7 +10313,7 @@ body {
 
 .nfl-import-grid {
   display: grid;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(260px, 1.25fr) minmax(190px, 0.8fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -10317,6 +10323,10 @@ body {
   gap: 9px;
   min-width: 0;
   padding: 12px;
+}
+
+.nfl-import-card.wide {
+  grid-column: span 2;
 }
 
 .nfl-import-card > div {
@@ -10351,6 +10361,10 @@ body {
   resize: vertical;
   padding: 10px;
   line-height: 1.35;
+}
+
+.nfl-import-card.provider textarea {
+  min-height: 94px;
 }
 
 .nfl-import-card button,
@@ -11073,6 +11087,10 @@ body {
   .nfl-matchup-score-grid,
   .nfl-player-duel {
     grid-template-columns: 1fr;
+  }
+
+  .nfl-import-card.wide {
+    grid-column: auto;
   }
 
   .nfl-fantasy-head,
