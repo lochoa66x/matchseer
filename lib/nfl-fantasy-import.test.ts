@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyFantasyProviderBridge,
   applyFantasyProjectionRealism,
+  buildFantasyMatchupWeaknessPlan,
   buildSleeperFantasyLeague,
   createFantasyProviderBridgeImport,
   createManualFantasyLeague,
@@ -48,7 +49,130 @@ const knownPlayer: NflFantasyPlayer = {
   read: "Known player.",
 };
 
+const matchupPlanEdges = [
+  {
+    myDepth: 1,
+    myProjection: 22,
+    myRisk: 45,
+    myRoleSecurity: 80,
+    opponentDepth: 1,
+    opponentProjection: 20,
+    opponentRisk: 45,
+    opponentRoleSecurity: 75,
+    position: "QB",
+  },
+  {
+    myDepth: 1,
+    myProjection: 18,
+    myRisk: 62,
+    myRoleSecurity: 64,
+    opponentDepth: 3,
+    opponentProjection: 27,
+    opponentRisk: 44,
+    opponentRoleSecurity: 82,
+    position: "RB",
+  },
+  {
+    myDepth: 3,
+    myProjection: 31,
+    myRisk: 40,
+    myRoleSecurity: 84,
+    opponentDepth: 1,
+    opponentProjection: 20,
+    opponentRisk: 70,
+    opponentRoleSecurity: 58,
+    position: "WR",
+  },
+  { myProjection: 10, opponentProjection: 11, position: "TE" },
+  { myProjection: 8, opponentProjection: 8, position: "K" },
+  { myProjection: 7, opponentProjection: 7, position: "DST" },
+];
+
 describe("NFL fantasy imports", () => {
+  it("builds a matchup plan from weak and attack lanes", () => {
+    const plan = buildFantasyMatchupWeaknessPlan({
+      myTeamName: "Seer House",
+      opponentTeamName: "Rival",
+      positionEdges: matchupPlanEdges,
+    });
+
+    expect(plan.myWeakPosition).toBe("RB");
+    expect(plan.opponentWeakPosition).toBe("WR");
+    expect(plan.dangerLane.title).toBe("Protect RB");
+    expect(plan.attackLane.title).toBe("Attack WR");
+    expect(plan.swingChecklist).toHaveLength(4);
+  });
+
+  it("uses same-position bench cover as a matchup lever", () => {
+    const plan = buildFantasyMatchupWeaknessPlan({
+      myBench: [
+        {
+          floor: 9,
+          name: "Bench RB",
+          position: "RB",
+          projection: 12,
+          roleSecurity: 80,
+        },
+      ],
+      myTeamName: "Seer House",
+      opponentTeamName: "Rival",
+      positionEdges: matchupPlanEdges,
+    });
+
+    expect(plan.benchLever).toMatchObject({
+      playerName: "Bench RB",
+      position: "RB",
+      type: "bench",
+    });
+  });
+
+  it("finds plausible trade paths from opponent surplus into my weakness", () => {
+    const plan = buildFantasyMatchupWeaknessPlan({
+      myPlayers: [
+        {
+          floor: 11,
+          name: "My WR",
+          position: "WR",
+          projection: 15,
+          roleSecurity: 78,
+        },
+      ],
+      myTeamName: "Seer House",
+      opponentPlayers: [
+        {
+          floor: 12,
+          name: "Opponent RB",
+          position: "RB",
+          projection: 16,
+          roleSecurity: 78,
+        },
+      ],
+      opponentTeamName: "Rival",
+      positionEdges: matchupPlanEdges,
+    });
+
+    expect(plan.tradePath).toMatchObject({
+      offerName: "My WR",
+      targetName: "Opponent RB",
+      type: "trade",
+    });
+  });
+
+  it("falls back to waivers when no fair trade lane exists", () => {
+    const plan = buildFantasyMatchupWeaknessPlan({
+      lens: "dynasty",
+      myTeamName: "Seer House",
+      opponentTeamName: "Rival",
+      positionEdges: matchupPlanEdges,
+    });
+
+    expect(plan.tradePath).toMatchObject({
+      position: "RB",
+      type: "waiver",
+    });
+    expect(plan.tradePath.summary).toContain("young role growth");
+  });
+
   it("parses pasted my-team and opponent rosters", () => {
     const league = createManualFantasyLeague({
       knownPlayers: [knownPlayer],

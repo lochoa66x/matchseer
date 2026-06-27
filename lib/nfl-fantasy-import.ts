@@ -32,6 +32,72 @@ export type FantasySourceCoverageStatus = {
 
 export type FantasySourceFreshness = "fresh" | "stale" | "unknown";
 
+export type FantasyMatchupPlanLens = "redraft" | "dynasty" | string;
+
+export type FantasyMatchupPlanPosition = {
+  position: FantasySourcePosition | string;
+  myProjection: number;
+  opponentProjection: number;
+  myDepth?: number;
+  opponentDepth?: number;
+  myRisk?: number;
+  opponentRisk?: number;
+  myRoleSecurity?: number;
+  opponentRoleSecurity?: number;
+};
+
+export type FantasyMatchupPlanPlayer = {
+  name: string;
+  position: FantasySourcePosition | string;
+  projection: number;
+  floor?: number;
+  ceiling?: number;
+  risk?: number;
+  roleSecurity?: number;
+  dynastyValue?: number;
+};
+
+export type FantasyMatchupWeaknessPlan = {
+  attackLane: {
+    position: FantasySourcePosition;
+    title: string;
+    summary: string;
+    edge: number;
+  };
+  dangerLane: {
+    position: FantasySourcePosition;
+    title: string;
+    summary: string;
+    gap: number;
+  };
+  benchLever: {
+    type: "bench" | "hold";
+    playerName?: string;
+    position: FantasySourcePosition;
+    summary: string;
+  };
+  tradePath: {
+    type: "trade" | "waiver";
+    targetName?: string;
+    offerName?: string;
+    position: FantasySourcePosition;
+    summary: string;
+  };
+  swingChecklist: string[];
+  myWeakPosition: FantasySourcePosition;
+  opponentWeakPosition: FantasySourcePosition;
+};
+
+export type FantasyMatchupWeaknessPlanInput = {
+  myTeamName: string;
+  opponentTeamName: string;
+  lens?: FantasyMatchupPlanLens;
+  positionEdges: FantasyMatchupPlanPosition[];
+  myBench?: FantasyMatchupPlanPlayer[];
+  myPlayers?: FantasyMatchupPlanPlayer[];
+  opponentPlayers?: FantasyMatchupPlanPlayer[];
+};
+
 export type NflFantasyPlayer = {
   id: string;
   name: string;
@@ -873,6 +939,249 @@ export function sleeperLeagueOptionsFromLeagues({
       userId,
     }))
     .filter((league) => league.leagueId.length > 0);
+}
+
+export function buildFantasyMatchupWeaknessPlan({
+  lens = "redraft",
+  myBench = [],
+  myPlayers = [],
+  myTeamName,
+  opponentPlayers = [],
+  opponentTeamName,
+  positionEdges,
+}: FantasyMatchupWeaknessPlanInput): FantasyMatchupWeaknessPlan {
+  const normalizedEdges = normalizeMatchupPlanEdges(positionEdges);
+  const myWeakEdge =
+    [...normalizedEdges].sort((left, right) => right.myWeakScore - left.myWeakScore)[0] ??
+    normalizedEdges[0];
+  const opponentWeakEdge =
+    [...normalizedEdges].sort(
+      (left, right) => right.opponentWeakScore - left.opponentWeakScore,
+    )[0] ?? normalizedEdges[0];
+  const benchLever = matchupBenchLever(myBench, myWeakEdge);
+  const tradePath = matchupTradePath({
+    lens,
+    myPlayers,
+    myWeakEdge,
+    opponentPlayers,
+    opponentWeakEdge,
+  });
+
+  return {
+    attackLane: {
+      edge: round1(Math.max(0, opponentWeakEdge.myProjection - opponentWeakEdge.opponentProjection)),
+      position: opponentWeakEdge.position,
+      summary:
+        opponentWeakEdge.myProjection > opponentWeakEdge.opponentProjection
+          ? `${myTeamName} can attack ${opponentTeamName}'s ${opponentWeakEdge.position} lane by leaning into a ${round1(opponentWeakEdge.myProjection - opponentWeakEdge.opponentProjection).toFixed(1)} point edge.`
+          : `${opponentTeamName}'s ${opponentWeakEdge.position} lane is the thinnest relative spot; keep pressure there with floor and role volume.`,
+      title: `Attack ${opponentWeakEdge.position}`,
+    },
+    benchLever,
+    dangerLane: {
+      gap: round1(Math.max(0, myWeakEdge.opponentProjection - myWeakEdge.myProjection)),
+      position: myWeakEdge.position,
+      summary:
+        myWeakEdge.opponentProjection > myWeakEdge.myProjection
+          ? `${opponentTeamName} can hurt you at ${myWeakEdge.position}; the gap is ${round1(myWeakEdge.opponentProjection - myWeakEdge.myProjection).toFixed(1)} before bench or trade fixes.`
+          : `${myTeamName}'s ${myWeakEdge.position} lane has the most fragility once depth, role security, and chaos are included.`,
+      title: `Protect ${myWeakEdge.position}`,
+    },
+    myWeakPosition: myWeakEdge.position,
+    opponentWeakPosition: opponentWeakEdge.position,
+    swingChecklist: matchupSwingChecklist({
+      benchLever,
+      myTeamName,
+      myWeakEdge,
+      opponentTeamName,
+      opponentWeakEdge,
+      tradePath,
+    }),
+    tradePath,
+  };
+}
+
+type NormalizedMatchupPlanEdge = FantasyMatchupPlanPosition & {
+  position: FantasySourcePosition;
+  myWeakScore: number;
+  opponentWeakScore: number;
+};
+
+function normalizeMatchupPlanEdges(
+  edges: FantasyMatchupPlanPosition[],
+): NormalizedMatchupPlanEdge[] {
+  const normalized = edges.map((edge) => {
+    const position = normalizePosition(edge.position) as FantasySourcePosition;
+    const myGap = edge.opponentProjection - edge.myProjection;
+    const opponentGap = edge.myProjection - edge.opponentProjection;
+    const myWeakScore =
+      myGap +
+      Math.max(0, 2 - (edge.myDepth ?? 1)) * 1.4 +
+      (edge.myRisk ?? 50) / 45 -
+      (edge.myRoleSecurity ?? 72) / 120;
+    const opponentWeakScore =
+      opponentGap +
+      Math.max(0, 2 - (edge.opponentDepth ?? 1)) * 1.4 +
+      (edge.opponentRisk ?? 50) / 45 -
+      (edge.opponentRoleSecurity ?? 72) / 120;
+
+    return {
+      ...edge,
+      myWeakScore,
+      opponentWeakScore,
+      position,
+    };
+  });
+
+  return normalized.length > 0
+    ? normalized
+    : [
+        {
+          myDepth: 0,
+          myProjection: 0,
+          myRisk: 50,
+          myRoleSecurity: 70,
+          myWeakScore: 0,
+          opponentDepth: 0,
+          opponentProjection: 0,
+          opponentRisk: 50,
+          opponentRoleSecurity: 70,
+          opponentWeakScore: 0,
+          position: "WR",
+        },
+      ];
+}
+
+function matchupBenchLever(
+  myBench: FantasyMatchupPlanPlayer[],
+  myWeakEdge: NormalizedMatchupPlanEdge,
+): FantasyMatchupWeaknessPlan["benchLever"] {
+  const candidate = myBench
+    .filter((player) => normalizePosition(player.position) === myWeakEdge.position)
+    .sort((left, right) => matchupPlayerUtility(right) - matchupPlayerUtility(left))[0];
+
+  if (!candidate) {
+    return {
+      position: myWeakEdge.position,
+      summary: `No bench ${myWeakEdge.position} cover is obvious; keep the waiver list warm for that lane.`,
+      type: "hold",
+    };
+  }
+
+  const coverValue = round1(
+    candidate.projection + (candidate.floor ?? candidate.projection) * 0.25,
+  );
+
+  return {
+    playerName: candidate.name,
+    position: myWeakEdge.position,
+    summary: `${candidate.name} is the bench lever at ${myWeakEdge.position}: ${candidate.projection.toFixed(1)} projected with enough floor to cover the weak lane.`,
+    type: coverValue >= Math.max(8, myWeakEdge.myProjection * 0.28) ? "bench" : "hold",
+  };
+}
+
+function matchupTradePath({
+  lens,
+  myPlayers,
+  myWeakEdge,
+  opponentPlayers,
+  opponentWeakEdge,
+}: {
+  lens: FantasyMatchupPlanLens;
+  myPlayers: FantasyMatchupPlanPlayer[];
+  myWeakEdge: NormalizedMatchupPlanEdge;
+  opponentPlayers: FantasyMatchupPlanPlayer[];
+  opponentWeakEdge: NormalizedMatchupPlanEdge;
+}): FantasyMatchupWeaknessPlan["tradePath"] {
+  const target = opponentPlayers
+    .filter((player) => normalizePosition(player.position) === myWeakEdge.position)
+    .sort(
+      (left, right) => matchupPlayerUtility(right, lens) - matchupPlayerUtility(left, lens),
+    )[0];
+  const offer = myPlayers
+    .filter((player) => normalizePosition(player.position) === opponentWeakEdge.position)
+    .sort(
+      (left, right) => matchupPlayerUtility(right, lens) - matchupPlayerUtility(left, lens),
+    )[0];
+
+  if (target && offer && matchupTradeLooksPlausible({ lens, offer, target })) {
+    return {
+      offerName: offer.name,
+      position: myWeakEdge.position,
+      summary: `Float ${offer.name} for ${target.name}: it attacks your ${myWeakEdge.position} need while giving the other side help at ${opponentWeakEdge.position}.`,
+      targetName: target.name,
+      type: "trade",
+    };
+  }
+
+  return {
+    position: myWeakEdge.position,
+    summary:
+      lens === "dynasty"
+        ? `No fair trade lane is obvious. Use waivers for young role growth at ${myWeakEdge.position} before moving core pieces.`
+        : `No fair trade lane is obvious. Stream waivers or bench volume at ${myWeakEdge.position} before forcing a deal.`,
+    type: "waiver",
+  };
+}
+
+function matchupTradeLooksPlausible({
+  lens,
+  offer,
+  target,
+}: {
+  lens: FantasyMatchupPlanLens;
+  offer: FantasyMatchupPlanPlayer;
+  target: FantasyMatchupPlanPlayer;
+}) {
+  const offerValue = matchupPlayerUtility(offer, lens);
+  const targetValue = matchupPlayerUtility(target, lens);
+
+  return offerValue >= targetValue * 0.72 && offerValue <= targetValue * 1.32;
+}
+
+function matchupPlayerUtility(
+  player: FantasyMatchupPlanPlayer,
+  lens: FantasyMatchupPlanLens = "redraft",
+) {
+  const base =
+    player.projection * 1.6 +
+    (player.floor ?? player.projection) * 0.55 +
+    (player.ceiling ?? player.projection) * 0.2 +
+    (player.roleSecurity ?? 72) * 0.05 -
+    (player.risk ?? 48) * 0.05;
+  const dynastyBoost =
+    lens === "dynasty"
+      ? (player.dynastyValue ?? player.roleSecurity ?? 72) * 0.16
+      : 0;
+
+  return base + dynastyBoost;
+}
+
+function matchupSwingChecklist({
+  benchLever,
+  myTeamName,
+  myWeakEdge,
+  opponentTeamName,
+  opponentWeakEdge,
+  tradePath,
+}: {
+  benchLever: FantasyMatchupWeaknessPlan["benchLever"];
+  myTeamName: string;
+  myWeakEdge: NormalizedMatchupPlanEdge;
+  opponentTeamName: string;
+  opponentWeakEdge: NormalizedMatchupPlanEdge;
+  tradePath: FantasyMatchupWeaknessPlan["tradePath"];
+}) {
+  return [
+    `${myTeamName} must keep ${myWeakEdge.position} within ${Math.max(2, Math.round(Math.abs(myWeakEdge.opponentProjection - myWeakEdge.myProjection)))} points.`,
+    `Attack ${opponentTeamName}'s ${opponentWeakEdge.position} lane with the safest role-volume play.`,
+    benchLever.type === "bench"
+      ? `Use ${benchLever.playerName} as the bench lever if late news hits ${benchLever.position}.`
+      : `Keep a waiver backup ready for ${benchLever.position}.`,
+    tradePath.type === "trade"
+      ? `Only push the trade path if ${tradePath.targetName} is attainable without gutting the weekly lineup.`
+      : `Do not force a trade; patch ${tradePath.position} with waiver or bench flexibility.`,
+  ];
 }
 
 export function mergeFantasyPlayerPools(

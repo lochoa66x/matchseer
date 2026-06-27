@@ -24,11 +24,15 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   applyFantasyProviderBridge,
+  buildFantasyMatchupWeaknessPlan,
   createSeededFantasyPlayerPool,
   createManualFantasyLeague,
   createFantasyProviderBridgeImport,
   mergeFantasyPlayerPools,
   sanitizeImportedFantasyLeague,
+  type FantasyMatchupPlanPlayer,
+  type FantasyMatchupPlanPosition,
+  type FantasyMatchupWeaknessPlan,
   type FantasyProviderBridgeImport,
   type FantasyProjectionMatchupContext,
   type FantasySourceProjection,
@@ -281,6 +285,7 @@ type FantasyMatchupReport = {
   confidence: number;
   chaos: number;
   positionEdges: FantasyPositionEdge[];
+  beatPlan: FantasyMatchupWeaknessPlan;
   strongestEdge: FantasyPositionEdge;
   swingFactors: string[];
   recommendation: string;
@@ -2772,6 +2777,8 @@ function FantasyTeamLab({
         teamLens={teamLens}
       />
 
+      <BeatOpponentCard plan={matchupReport.beatPlan} />
+
       <div className="nfl-team-lab-grid">
         <article className="nfl-team-report-card">
           <div className="nfl-team-report-top">
@@ -2885,6 +2892,63 @@ function FantasyTeamLab({
         </div>
       </article>
     </section>
+  );
+}
+
+function BeatOpponentCard({ plan }: { plan: FantasyMatchupWeaknessPlan }) {
+  const benchTitle =
+    plan.benchLever.type === "bench"
+      ? plan.benchLever.playerName ?? `Bench ${plan.benchLever.position}`
+      : `Cover ${plan.benchLever.position}`;
+  const tradeTitle =
+    plan.tradePath.type === "trade"
+      ? `Target ${plan.tradePath.targetName}`
+      : `${plan.tradePath.position} waiver path`;
+
+  return (
+    <article className="nfl-beat-opponent-card">
+      <div className="nfl-beat-head">
+        <div>
+          <span>
+            <Swords size={16} />
+            Beat this opponent
+          </span>
+          <strong>
+            Attack {plan.opponentWeakPosition}, protect {plan.myWeakPosition}
+          </strong>
+        </div>
+        <b>{plan.tradePath.type === "trade" ? "Trade lane" : "Waiver lane"}</b>
+      </div>
+
+      <div className="nfl-beat-grid">
+        <div className="hot">
+          <span>{plan.attackLane.title}</span>
+          <strong>+{plan.attackLane.edge.toFixed(1)}</strong>
+          <p>{plan.attackLane.summary}</p>
+        </div>
+        <div>
+          <span>{plan.dangerLane.title}</span>
+          <strong>{plan.dangerLane.gap.toFixed(1)} gap</strong>
+          <p>{plan.dangerLane.summary}</p>
+        </div>
+        <div>
+          <span>Bench lever</span>
+          <strong>{benchTitle}</strong>
+          <p>{plan.benchLever.summary}</p>
+        </div>
+        <div>
+          <span>{tradeTitle}</span>
+          <strong>{plan.tradePath.type === "trade" ? "Offer fit" : "Patch mode"}</strong>
+          <p>{plan.tradePath.summary}</p>
+        </div>
+      </div>
+
+      <div className="nfl-beat-checklist">
+        {plan.swingChecklist.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -3984,6 +4048,15 @@ function compareFantasyTeams({
       ? "True toss-up"
       : `${edgeTeam.name} +${edgeMagnitude.toFixed(1)}`;
   const positionEdges = fantasyPositionEdges(leftReport, rightReport);
+  const beatPlan = buildFantasyMatchupWeaknessPlan({
+    lens,
+    myBench: fantasyPlanPlayers(leftReport.benchPlayers),
+    myPlayers: fantasyPlanPlayers(leftReport.players),
+    myTeamName: leftReport.team.name,
+    opponentPlayers: fantasyPlanPlayers(rightReport.players),
+    opponentTeamName: rightReport.team.name,
+    positionEdges: fantasyMatchupPlanPositions(leftReport, rightReport, positionEdges),
+  });
   const strongestEdge =
     [...positionEdges].sort((leftEdge, rightEdge) => rightEdge.gap - leftEdge.gap)[0] ??
     positionEdges[0];
@@ -4022,6 +4095,7 @@ function compareFantasyTeams({
     confidence,
     chaos,
     positionEdges,
+    beatPlan,
     strongestEdge,
     swingFactors: fantasySwingFactors(leftReport, rightReport),
     recommendation:
@@ -4065,6 +4139,64 @@ function fantasyPositionEdges(
       summary,
     };
   });
+}
+
+function fantasyMatchupPlanPositions(
+  leftReport: FantasyTeamReport,
+  rightReport: FantasyTeamReport,
+  positionEdges: FantasyPositionEdge[],
+): FantasyMatchupPlanPosition[] {
+  return positionEdges.map((edge) => ({
+    myDepth: fantasyPositionDepth(leftReport, edge.position),
+    myProjection: edge.leftProjection,
+    myRisk: fantasyPositionRisk(leftReport, edge.position),
+    myRoleSecurity: fantasyPositionRoleSecurity(leftReport, edge.position),
+    opponentDepth: fantasyPositionDepth(rightReport, edge.position),
+    opponentProjection: edge.rightProjection,
+    opponentRisk: fantasyPositionRisk(rightReport, edge.position),
+    opponentRoleSecurity: fantasyPositionRoleSecurity(rightReport, edge.position),
+    position: edge.position,
+  }));
+}
+
+function fantasyPlanPlayers(players: ScoutingRow[]): FantasyMatchupPlanPlayer[] {
+  return players.map((player) => ({
+    ceiling: player.contextProjection.ceiling,
+    dynastyValue: player.dynastyValue,
+    floor: player.contextProjection.floor,
+    name: player.name,
+    position: normalizeScoutingPosition(player.position),
+    projection: player.contextProjection.projection,
+    risk: player.chaos,
+    roleSecurity: player.roleSecurity ?? player.health,
+  }));
+}
+
+function fantasyPositionPlayers(report: FantasyTeamReport, position: FantasyPosition) {
+  return report.players.filter(
+    (player) => normalizeScoutingPosition(player.position) === position,
+  );
+}
+
+function fantasyPositionDepth(report: FantasyTeamReport, position: FantasyPosition) {
+  return fantasyPositionPlayers(report, position).length;
+}
+
+function fantasyPositionRisk(report: FantasyTeamReport, position: FantasyPosition) {
+  const players = fantasyPositionPlayers(report, position);
+
+  return players.length > 0 ? average(players.map((player) => player.chaos)) : report.risk;
+}
+
+function fantasyPositionRoleSecurity(
+  report: FantasyTeamReport,
+  position: FantasyPosition,
+) {
+  const players = fantasyPositionPlayers(report, position);
+
+  return players.length > 0
+    ? average(players.map((player) => player.roleSecurity ?? player.health))
+    : 72;
 }
 
 function fantasyStrengths(

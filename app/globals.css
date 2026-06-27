@@ -10773,6 +10773,119 @@ body {
   border-radius: 8px;
 }
 
+.nfl-beat-opponent-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.1), transparent 40%),
+    rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  border-radius: 8px;
+}
+
+.nfl-beat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-beat-head > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.nfl-beat-head span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8ff0c1;
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-beat-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.18rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-beat-head b {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  color: #06100f;
+  background: linear-gradient(100deg, #f7c51d, #2dd4bf);
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+
+.nfl-beat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-beat-grid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(5, 12, 28, 0.36);
+  border: 1px solid rgba(143, 160, 189, 0.15);
+  border-radius: 8px;
+}
+
+.nfl-beat-grid > div.hot {
+  border-color: rgba(247, 197, 29, 0.48);
+}
+
+.nfl-beat-grid span {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-beat-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-beat-grid p {
+  margin: 0;
+  color: #d9e4f5;
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.36;
+}
+
+.nfl-beat-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nfl-beat-checklist span {
+  min-width: 0;
+  padding: 7px 9px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
 .nfl-decision-head {
   display: flex;
   align-items: flex-start;
@@ -11358,6 +11471,7 @@ body {
   .nfl-grid-section,
   .nfl-scenario-body,
   .nfl-team-lab-grid,
+  .nfl-beat-grid,
   .nfl-decision-summary,
   .nfl-lineup-grid,
   .nfl-startsit-grid,
@@ -11431,6 +11545,7 @@ body {
   }
 
   .nfl-topbar,
+  .nfl-beat-head,
   .nfl-decision-head,
   .nfl-import-panel-head,
   .nfl-fantasy-matchup-head,
@@ -11515,6 +11630,10 @@ body {
 
   .nfl-source-vs-seer {
     text-align: left;
+  }
+
+  .nfl-beat-head strong {
+    white-space: normal;
   }
 
   .nfl-lane-snapshot {
