@@ -17,6 +17,21 @@ export type FantasyDepthTier =
   | "stash"
   | "streamer";
 
+export type FantasySourcePosition = "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+
+export type FantasySourceCoverageStatus = {
+  totalPlayers: number;
+  totalProjections: number;
+  totalRankings: number;
+  positions: Record<
+    FantasySourcePosition,
+    { players: number; projections: number; rankings: number; total: number }
+  >;
+  missingPositions: FantasySourcePosition[];
+};
+
+export type FantasySourceFreshness = "fresh" | "stale" | "unknown";
+
 export type NflFantasyPlayer = {
   id: string;
   name: string;
@@ -53,11 +68,16 @@ export type NflFantasyPlayer = {
   depthTier?: FantasyDepthTier;
   source?: FantasyImportSource;
   sourceProjection?: number;
+  sourceBlendProjection?: number;
+  sourceProjectionWeight?: number;
+  sourceTrustLabel?: string;
   seerProjection?: number;
   seerDelta?: number;
   seerAdjustmentCap?: number;
   seerAdjustments?: string[];
   seerAdjustmentDetails?: FantasyProjectionAdjustment[];
+  crowdSignalDelta?: number;
+  crowdSignalLabel?: string;
   projectionSource?: string;
   rankingSource?: string;
   sourceProviderLabel?: string;
@@ -122,11 +142,14 @@ export type FantasyProjectionMatchupContext = {
   opponentDefense?: number;
   teamHealth?: number;
   venue?: string;
+  crowdNudge?: number;
+  crowdSignal?: string;
 };
 
 export type FantasyProjectionRealismOptions = {
   cap?: number;
   matchups?: FantasyProjectionMatchupContext[];
+  sourceWeight?: number;
 };
 
 type ManualPlayerLine = {
@@ -260,6 +283,15 @@ const positionTokens = new Set([
   "BN",
   "BENCH",
 ]);
+
+const fantasySourcePositions: FantasySourcePosition[] = [
+  "QB",
+  "RB",
+  "WR",
+  "TE",
+  "K",
+  "DST",
+];
 
 type SeededFantasySpineRow = {
   name: string;
@@ -819,6 +851,116 @@ export function mergeFantasySourceFeeds(
   );
 }
 
+function emptyFantasySourceCoveragePositions(): FantasySourceCoverageStatus["positions"] {
+  return fantasySourcePositions.reduce<FantasySourceCoverageStatus["positions"]>(
+    (positions, position) => {
+      positions[position] = {
+        players: 0,
+        projections: 0,
+        rankings: 0,
+        total: 0,
+      };
+      return positions;
+    },
+    {} as FantasySourceCoverageStatus["positions"],
+  );
+}
+
+export function fantasySourceCoverageFromProjections(
+  projections: FantasySourceProjection[],
+): FantasySourceCoverageStatus {
+  const positions = emptyFantasySourceCoveragePositions();
+
+  projections.forEach((projection) => {
+    const position = normalizePosition(projection.position) as FantasySourcePosition;
+    positions[position].players += 1;
+
+    if (typeof projection.projection === "number") {
+      positions[position].projections += 1;
+    }
+
+    if (
+      typeof projection.sourceRank === "number" ||
+      typeof projection.positionRank === "number"
+    ) {
+      positions[position].rankings += 1;
+    }
+  });
+
+  fantasySourcePositions.forEach((position) => {
+    const row = positions[position];
+    row.total = row.players + row.projections + row.rankings;
+  });
+
+  return {
+    missingPositions: fantasySourcePositions.filter(
+      (position) => positions[position].total === 0,
+    ),
+    positions,
+    totalPlayers: projections.length,
+    totalProjections: projections.filter(
+      (projection) => typeof projection.projection === "number",
+    ).length,
+    totalRankings: projections.filter(
+      (projection) =>
+        typeof projection.sourceRank === "number" ||
+        typeof projection.positionRank === "number",
+    ).length,
+  };
+}
+
+export function mergeFantasySourceCoverageStatuses(
+  ...coverages: Array<FantasySourceCoverageStatus | undefined>
+): FantasySourceCoverageStatus {
+  const positions = emptyFantasySourceCoveragePositions();
+  let totalPlayers = 0;
+  let totalProjections = 0;
+  let totalRankings = 0;
+
+  coverages.forEach((coverage) => {
+    if (!coverage) {
+      return;
+    }
+
+    totalPlayers += coverage.totalPlayers;
+    totalProjections += coverage.totalProjections;
+    totalRankings += coverage.totalRankings;
+
+    fantasySourcePositions.forEach((position) => {
+      const row = coverage.positions[position];
+      positions[position].players += row.players;
+      positions[position].projections += row.projections;
+      positions[position].rankings += row.rankings;
+      positions[position].total += row.total;
+    });
+  });
+
+  return {
+    missingPositions: fantasySourcePositions.filter(
+      (position) => positions[position].total === 0,
+    ),
+    positions,
+    totalPlayers,
+    totalProjections,
+    totalRankings,
+  };
+}
+
+export function fantasySourceFreshness(
+  updatedAt: string | null | undefined,
+  nowMs = Date.now(),
+): FantasySourceFreshness {
+  const timestamp = Date.parse(updatedAt ?? "");
+
+  if (!Number.isFinite(timestamp)) {
+    return "unknown";
+  }
+
+  const ageMs = Math.max(0, nowMs - timestamp);
+
+  return ageMs <= 1000 * 60 * 60 * 24 * 7 ? "fresh" : "stale";
+}
+
 export function fantasyPlayersFromSourceProjections(
   projections: FantasySourceProjection[],
 ) {
@@ -860,9 +1002,9 @@ export function applyFantasyProjectionRealism(
 
   return players.map((player) => {
     const source = matchSourceProjection(player, projectionIndex);
-    const sourceProjection = source?.projection ?? player.sourceProjection;
+    const rawSourceProjection = source?.projection ?? player.sourceProjection;
 
-    if (typeof sourceProjection !== "number") {
+    if (typeof rawSourceProjection !== "number") {
       return {
         ...player,
         opponent: source?.opponent ?? player.opponent,
@@ -876,6 +1018,9 @@ export function applyFantasyProjectionRealism(
         dynastyValue: player.dynastyValue ?? source?.dynastyValue,
         depthTier: player.depthTier ?? source?.depthTier,
         rankingSource: source?.rankingSource ?? source?.source ?? player.rankingSource,
+        sourceTrustLabel: source
+          ? fantasySourceTrustLabel(fantasyProjectionSourceWeight(source, options))
+          : player.sourceTrustLabel,
         sourceSeason: source?.season ?? player.sourceSeason,
         sourceUpdatedAt: source?.updatedAt ?? player.sourceUpdatedAt,
         sourceWeek: source?.week ?? player.sourceWeek,
@@ -887,10 +1032,19 @@ export function applyFantasyProjectionRealism(
     }
 
     const context = matchupContextForPlayer(player, options.matchups ?? []);
+    const sourceWeight = fantasyProjectionSourceWeight(source, options);
+    const sourceBlendProjection = fantasyWeightedSourceProjection({
+      player,
+      rawSourceProjection,
+      source,
+      sourceWeight,
+    });
     const adjustmentDetails = projectionAdjustmentDetails(player, context);
     const rawDelta = sum(adjustmentDetails.map((detail) => detail.delta));
     const seerDelta = round1(clampNumber(rawDelta, -cap, cap));
-    const seerProjection = round1(Math.max(0, sourceProjection + seerDelta));
+    const seerProjection = round1(Math.max(0, sourceBlendProjection + seerDelta));
+    const crowdDelta =
+      adjustmentDetails.find((detail) => detail.label === "crowd lean")?.delta ?? 0;
     const adjustmentLabels = adjustmentDetails
       .filter((detail) => Math.abs(detail.delta) >= 0.15)
       .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
@@ -900,13 +1054,19 @@ export function applyFantasyProjectionRealism(
     return {
       ...player,
       opponent: source?.opponent ?? context?.opponent ?? player.opponent,
-      sourceProjection: round1(sourceProjection),
+      sourceProjection: round1(rawSourceProjection),
+      sourceBlendProjection,
+      sourceProjectionWeight: sourceWeight,
+      sourceTrustLabel: fantasySourceTrustLabel(sourceWeight),
       seerProjection,
       seerDelta,
       seerAdjustmentCap: cap,
       seerAdjustmentDetails: adjustmentDetails,
       seerAdjustments:
         adjustmentLabels.length > 0 ? adjustmentLabels : ["Source and Seer agree"],
+      crowdSignalDelta: round1(crowdDelta),
+      crowdSignalLabel:
+        crowdDelta !== 0 ? context?.crowdSignal ?? "Crowd read nudged this lane" : undefined,
       projectionSource:
         source?.providerLabel ?? source?.source ?? player.projectionSource ?? "imported projection",
       sourceProviderLabel:
@@ -1832,11 +1992,16 @@ function projectionReceiptFields(player: NflFantasyPlayer) {
     dynastyValue: player.dynastyValue,
     depthTier: player.depthTier,
     sourceProjection: player.sourceProjection,
+    sourceBlendProjection: player.sourceBlendProjection,
+    sourceProjectionWeight: player.sourceProjectionWeight,
+    sourceTrustLabel: player.sourceTrustLabel,
     seerProjection: player.seerProjection,
     seerDelta: player.seerDelta,
     seerAdjustmentCap: player.seerAdjustmentCap,
     seerAdjustments: player.seerAdjustments,
     seerAdjustmentDetails: player.seerAdjustmentDetails,
+    crowdSignalDelta: player.crowdSignalDelta,
+    crowdSignalLabel: player.crowdSignalLabel,
     projectionSource: player.projectionSource,
     rankingSource: player.rankingSource,
     sourceProviderLabel: player.sourceProviderLabel,
@@ -1851,6 +2016,71 @@ function matchupContextForPlayer(
   matchups: FantasyProjectionMatchupContext[],
 ) {
   return matchups.find((matchup) => matchup.team === normalizeTeam(player.team));
+}
+
+function fantasyProjectionSourceWeight(
+  source: FantasySourceProjection | null,
+  options: FantasyProjectionRealismOptions,
+) {
+  if (typeof options.sourceWeight === "number") {
+    return round2(clampNumber(options.sourceWeight, 0.35, 0.96));
+  }
+
+  if (!source) {
+    return 1;
+  }
+
+  let weight = typeof source.projection === "number" ? 0.84 : 0.62;
+
+  if (
+    typeof source.sourceRank === "number" ||
+    typeof source.positionRank === "number"
+  ) {
+    weight += 0.05;
+  }
+
+  const freshness = fantasySourceFreshness(source.updatedAt);
+
+  if (freshness === "stale") {
+    weight -= 0.14;
+  } else if (freshness === "unknown") {
+    weight -= 0.04;
+  }
+
+  return round2(clampNumber(weight, 0.45, 0.94));
+}
+
+function fantasyWeightedSourceProjection({
+  player,
+  rawSourceProjection,
+  source,
+  sourceWeight,
+}: {
+  player: NflFantasyPlayer;
+  rawSourceProjection: number;
+  source: FantasySourceProjection | null;
+  sourceWeight: number;
+}) {
+  if (
+    !source ||
+    typeof source.projection !== "number" ||
+    typeof player.sourceProjection !== "number"
+  ) {
+    return round1(rawSourceProjection);
+  }
+
+  return round1(
+    player.sourceProjection * (1 - sourceWeight) +
+      rawSourceProjection * sourceWeight,
+  );
+}
+
+function fantasySourceTrustLabel(sourceWeight: number) {
+  if (sourceWeight >= 0.95) {
+    return "Source fully trusted";
+  }
+
+  return `${Math.round(sourceWeight * 100)}% source blend`;
 }
 
 function projectionAdjustmentDetails(
@@ -1938,6 +2168,17 @@ function projectionAdjustmentDetails(
       label: "team health",
       delta: round1((context.teamHealth - 78) / 36),
     });
+  }
+
+  if (typeof context?.crowdNudge === "number") {
+    const crowdDelta = clampNumber(context.crowdNudge, -0.3, 0.3);
+
+    if (Math.abs(crowdDelta) >= 0.05) {
+      details.push({
+        label: "crowd lean",
+        delta: crowdDelta,
+      });
+    }
   }
 
   return details
@@ -2133,6 +2374,10 @@ function clampNumber(value: number, min: number, max: number) {
 
 function round1(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function formatSignedDecimal(value: number) {

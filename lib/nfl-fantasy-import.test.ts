@@ -7,7 +7,10 @@ import {
   createManualFantasyLeague,
   createSeededFantasyPlayerPool,
   fantasyPlayersFromSourceProjections,
+  fantasySourceCoverageFromProjections,
+  fantasySourceFreshness,
   mergeFantasyPlayerPools,
+  mergeFantasySourceCoverageStatuses,
   mergeFantasySourceFeeds,
   normalizeFantasyProjectionFeed,
   sanitizeImportedFantasyLeague,
@@ -225,8 +228,114 @@ Brock Bowers,LV,TE,15.1,22,1,Fantasy Sheet,1,2026-09-04T12:00:00.000Z`,
 
     expect(known?.sourceProjection).toBe(30);
     expect(known?.sourceProviderLabel).toBe("Projection Room");
+    expect(known?.sourceBlendProjection).toBeLessThanOrEqual(30);
+    expect(known?.sourceProjectionWeight).toBeGreaterThan(0.75);
     expect(known?.seerDelta).toBeLessThanOrEqual(1.2);
     expect(players.some((player) => player.name === "New Deep Sleeper")).toBe(true);
+  });
+
+  it("merges source coverage across projection and ranking lanes", () => {
+    const projectionCoverage = fantasySourceCoverageFromProjections(
+      normalizeFantasyProjectionFeed({
+        projections: [
+          {
+            playerName: "Josh Allen",
+            team: "BUF",
+            position: "QB",
+            projectedPoints: 25,
+          },
+        ],
+      }),
+    );
+    const rankingCoverage = fantasySourceCoverageFromProjections(
+      normalizeFantasyProjectionFeed({
+        rankings: [
+          {
+            playerName: "Amon-Ra St. Brown",
+            team: "DET",
+            position: "WR",
+            rank: 8,
+            positionRank: 3,
+          },
+        ],
+      }),
+    );
+    const merged = mergeFantasySourceCoverageStatuses(
+      projectionCoverage,
+      rankingCoverage,
+    );
+
+    expect(merged.totalPlayers).toBe(2);
+    expect(merged.totalProjections).toBe(1);
+    expect(merged.totalRankings).toBe(1);
+    expect(merged.positions.QB.projections).toBe(1);
+    expect(merged.positions.WR.rankings).toBe(1);
+    expect(merged.missingPositions).toContain("RB");
+  });
+
+  it("marks old source updates stale for control-center receipts", () => {
+    expect(
+      fantasySourceFreshness(
+        "2026-09-01T12:00:00.000Z",
+        Date.parse("2026-09-04T12:00:00.000Z"),
+      ),
+    ).toBe("fresh");
+    expect(
+      fantasySourceFreshness(
+        "2026-08-20T12:00:00.000Z",
+        Date.parse("2026-09-04T12:00:00.000Z"),
+      ),
+    ).toBe("stale");
+    expect(fantasySourceFreshness("not-a-date")).toBe("unknown");
+  });
+
+  it("keeps provider projection raw while using a weighted source baseline", () => {
+    const [player] = applyFantasyProjectionRealism(
+      [{ ...knownPlayer, sourceProjection: 24 }],
+      [
+        {
+          id: "josh-allen-provider",
+          name: "Josh Allen",
+          position: "QB",
+          projection: 30,
+          providerLabel: "Projection Room",
+          source: "Projection Room",
+          team: "BUF",
+          updatedAt: "2026-09-04T12:00:00.000Z",
+        },
+      ],
+      { sourceWeight: 0.75 },
+    );
+
+    expect(player.sourceProjection).toBe(30);
+    expect(player.sourceBlendProjection).toBe(28.5);
+    expect(player.sourceProjectionWeight).toBe(0.75);
+    expect(player.sourceTrustLabel).toBe("75% source blend");
+    expect(player.seerProjection).toBeDefined();
+  });
+
+  it("caps crowd read as a tiny fantasy nudge", () => {
+    const [player] = applyFantasyProjectionRealism(
+      [{ ...knownPlayer, sourceProjection: 24 }],
+      [],
+      {
+        matchups: [
+          {
+            crowdNudge: 3,
+            crowdSignal: "Crowd read favors BUF",
+            team: "BUF",
+          },
+        ],
+      },
+    );
+
+    expect(player.crowdSignalDelta).toBe(0.3);
+    expect(
+      player.seerAdjustmentDetails?.find(
+        (adjustment) => adjustment.label === "crowd lean",
+      )?.delta,
+    ).toBe(0.3);
+    expect(player.crowdSignalLabel).toBe("Crowd read favors BUF");
   });
 
   it("keeps kicker and defense projection rows in their own lanes", () => {

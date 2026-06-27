@@ -45,6 +45,7 @@ type ScoutingDepth = "top10" | "top25" | "deep";
 type FantasyProviderStatusValue = "live" | "fallback" | "missing" | "error";
 type FantasyProviderFreshness = "fresh" | "stale" | "unknown";
 type FantasyProviderKind = "sleeper" | "players" | "projections" | "rankings";
+type FantasySourceLaneKind = "roster" | "projection" | "ranking" | "context" | "crowd";
 type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
 type NflLabMode = "nfl" | "fantasy";
@@ -338,6 +339,28 @@ type NflFantasyCoverageStatus = {
     { players: number; projections: number; rankings: number; total: number }
   >;
   missingPositions: FantasyPosition[];
+};
+
+type FantasySourceRows = {
+  roster: number;
+  projections: number;
+  rankings: number;
+  context: number;
+  crowd: number;
+};
+
+type FantasySourceLane = {
+  id: string;
+  kind: FantasySourceLaneKind;
+  label: string;
+  providerName: string;
+  status: FantasyProviderStatusValue;
+  freshness: FantasyProviderFreshness;
+  source: string;
+  trustWeight: number;
+  rows: FantasySourceRows;
+  positions: FantasyPositionCounts;
+  message: string;
 };
 
 type NflSeerDataset = {
@@ -700,6 +723,25 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         players: fantasyPlayers,
       }),
     [fantasyDataset, fantasyPlayers, matchups],
+  );
+  const fantasySourceLanes = useMemo(
+    () =>
+      buildFantasySourceLanes({
+        contextStatus: fantasyContextLayer.status,
+        dataset: fantasyDataset,
+        fantasyImport,
+        matchups,
+        players: fantasyPlayers,
+        providerBridgeImport,
+      }),
+    [
+      fantasyContextLayer.status,
+      fantasyDataset,
+      fantasyImport,
+      fantasyPlayers,
+      matchups,
+      providerBridgeImport,
+    ],
   );
   const defaultPlayerPair = useMemo(
     () =>
@@ -1405,6 +1447,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             providerBridgeMessage={providerBridgeMessage}
             providerBridgeStatus={providerBridgeStatus}
             providerBridgeText={providerBridgeText}
+            sourceLanes={fantasySourceLanes}
             manualImportMessage={manualImportMessage}
             manualImportStatus={manualImportStatus}
             manualRosterText={manualRosterText}
@@ -2034,6 +2077,7 @@ function fantasyProjectionReceipt(
   compact: boolean,
 ) {
   const sourceProjection = fantasyReceiptSourceProjection(player, projection);
+  const blendProjection = fantasyReceiptBlendProjection(player, sourceProjection);
   const finalProjection = round1(
     isScoutingRow(player) ? player.contextProjection.projection : projection.projection,
   );
@@ -2044,6 +2088,10 @@ function fantasyProjectionReceipt(
       ? "left the source read alone"
       : `${delta > 0 ? "added" : "trimmed"} ${Math.abs(delta).toFixed(1)}`;
   const reasonCopy = reasons[0] ? ` because ${reasons[0].toLowerCase()}` : ".";
+  const blendCopy =
+    Math.abs(blendProjection - sourceProjection) >= 0.1
+      ? ` Weighted baseline is ${blendProjection.toFixed(1)}.`
+      : "";
 
   return {
     delta,
@@ -2052,7 +2100,7 @@ function fantasyProjectionReceipt(
     reasons,
     sourceLabel: fantasyReceiptSourceLabel(player),
     sourceProjection,
-    summary: `Source starts at ${sourceProjection.toFixed(1)}. The Seer ${moveCopy}${reasonCopy}`,
+    summary: `Source says ${sourceProjection.toFixed(1)}.${blendCopy} The Seer ${moveCopy}${reasonCopy}`,
   };
 }
 
@@ -2069,6 +2117,14 @@ function fantasyReceiptSourceProjection(
   }
 
   return round1(projection.projection - projectionDelta(player));
+}
+
+function fantasyReceiptBlendProjection(player: FantasyPlayer, sourceProjection: number) {
+  if (typeof player.sourceBlendProjection === "number") {
+    return round1(player.sourceBlendProjection);
+  }
+
+  return sourceProjection;
 }
 
 function fantasyReceiptSourceLabel(player: FantasyPlayer) {
@@ -2101,6 +2157,18 @@ function fantasyReceiptReasons(player: FantasyPlayer, limit: number) {
     );
   } else if (player.seerAdjustments?.length) {
     reasons.push(...player.seerAdjustments);
+  }
+
+  if (
+    player.sourceTrustLabel &&
+    typeof player.sourceProjectionWeight === "number" &&
+    player.sourceProjectionWeight < 0.95
+  ) {
+    reasons.push(player.sourceTrustLabel);
+  }
+
+  if (player.crowdSignalLabel && player.crowdSignalDelta) {
+    reasons.push(`${player.crowdSignalLabel} ${formatFantasyDelta(player.crowdSignalDelta)}`);
   }
 
   reasons.push(...fantasyFallbackReceiptReasons(player));
@@ -2454,6 +2522,7 @@ function FantasyTeamLab({
   sleeperImportMessage,
   sleeperImportStatus,
   sleeperQuery,
+  sourceLanes,
   teamLens,
   teams,
 }: {
@@ -2490,6 +2559,7 @@ function FantasyTeamLab({
   sleeperImportMessage: string;
   sleeperImportStatus: FantasyImportStatus;
   sleeperQuery: string;
+  sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
   teams: FantasyTeam[];
 }) {
@@ -2523,6 +2593,8 @@ function FantasyTeamLab({
           </div>
         </div>
       </div>
+
+      <FantasySourcesControlCenter lanes={sourceLanes} />
 
       <FantasyImportPanel
         fantasyImport={fantasyImport}
@@ -2852,6 +2924,123 @@ function FantasyDecisionEnginePanel({
       ) : null}
     </article>
   );
+}
+
+function FantasySourcesControlCenter({ lanes }: { lanes: FantasySourceLane[] }) {
+  const liveLanes = lanes.filter((lane) => lane.status === "live").length;
+  const totalRows = sum(
+    lanes.map((lane) =>
+      Object.values(lane.rows).reduce((laneTotal, count) => laneTotal + count, 0),
+    ),
+  );
+
+  return (
+    <section className="nfl-source-control-center" aria-label="Fantasy source control center">
+      <div className="nfl-source-control-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <ShieldCheck size={17} />
+            Source control
+          </div>
+          <h3>Fantasy Sources Control Center</h3>
+          <p>
+            {liveLanes}/{lanes.length} lanes live · {totalRows} source rows · Seer
+            nudges stay capped.
+          </p>
+        </div>
+        <strong>fun-first forecast</strong>
+      </div>
+      <div className="nfl-source-lane-grid">
+        {lanes.map((lane) => (
+          <article
+            className={cx(
+              "nfl-source-lane-card",
+              lane.status === "live" && "live",
+              lane.status === "error" && "error",
+              lane.freshness === "stale" && "stale",
+            )}
+            key={lane.id}
+          >
+            <div className="nfl-source-lane-top">
+              <span>{sourceLaneIcon(lane.kind)}</span>
+              <div>
+                <strong>{lane.label}</strong>
+                <em>{lane.providerName}</em>
+              </div>
+              <b>{sourceLaneStatusCopy(lane)}</b>
+            </div>
+            <p>{lane.message}</p>
+            <div className="nfl-source-row-pills">
+              {fantasySourceLaneRowParts(lane.rows).map((part) => (
+                <span key={part}>{part}</span>
+              ))}
+            </div>
+            <div className="nfl-source-position-strip">
+              {fantasyCoveragePositions.map((position) => (
+                <span
+                  className={cx((lane.positions[position] ?? 0) > 0 && "live")}
+                  key={position}
+                >
+                  {scoutingRankLabel(position)} {lane.positions[position] ?? 0}
+                </span>
+              ))}
+            </div>
+            <div className="nfl-source-trust-meter">
+              <div>
+                <span>Trust weight</span>
+                <strong>{lane.trustWeight}%</strong>
+              </div>
+              <i>
+                <b style={{ width: `${lane.trustWeight}%` }} />
+              </i>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function sourceLaneIcon(kind: FantasySourceLaneKind) {
+  if (kind === "roster") {
+    return <UsersRound size={17} />;
+  }
+
+  if (kind === "projection") {
+    return <LineChart size={17} />;
+  }
+
+  if (kind === "ranking") {
+    return <Trophy size={17} />;
+  }
+
+  if (kind === "context") {
+    return <Gauge size={17} />;
+  }
+
+  return <Activity size={17} />;
+}
+
+function sourceLaneStatusCopy(lane: FantasySourceLane) {
+  if (lane.status === "live") {
+    return lane.freshness === "stale" ? "stale" : "live";
+  }
+
+  if (lane.status === "error") {
+    return "needs check";
+  }
+
+  return "fallback";
+}
+
+function fantasySourceLaneRowParts(rows: FantasySourceRows) {
+  return [
+    rows.roster > 0 ? `${rows.roster} roster` : "",
+    rows.projections > 0 ? `${rows.projections} proj` : "",
+    rows.rankings > 0 ? `${rows.rankings} rank` : "",
+    rows.context > 0 ? `${rows.context} context` : "",
+    rows.crowd > 0 ? `${rows.crowd} crowd` : "",
+  ].filter(Boolean);
 }
 
 function FantasyImportPanel({
@@ -5249,8 +5438,10 @@ function fantasyPositionCountsFromSourceProjections(
   );
 }
 
-function fantasyFreshnessFromUpdatedAt(updatedAt: string): FantasyProviderFreshness {
-  const timestamp = Date.parse(updatedAt);
+function fantasyFreshnessFromUpdatedAt(
+  updatedAt: string | null | undefined,
+): FantasyProviderFreshness {
+  const timestamp = Date.parse(updatedAt ?? "");
 
   if (!Number.isFinite(timestamp)) {
     return "unknown";
@@ -5266,6 +5457,8 @@ function fantasyProjectionContextsFromMatchups(
 ): FantasyProjectionMatchupContext[] {
   return matchups.flatMap((matchup) => [
     {
+      crowdNudge: fantasyCrowdNudgeForSide(matchup, "home"),
+      crowdSignal: fantasyCrowdSignalForSide(matchup, "home"),
       opponent: `vs ${matchup.away.code}`,
       opponentDefense: matchup.away.defense,
       opponentWin: matchup.awayWin,
@@ -5278,6 +5471,8 @@ function fantasyProjectionContextsFromMatchups(
       weather: matchup.weather,
     },
     {
+      crowdNudge: fantasyCrowdNudgeForSide(matchup, "away"),
+      crowdSignal: fantasyCrowdSignalForSide(matchup, "away"),
       opponent: `at ${matchup.home.code}`,
       opponentDefense: matchup.home.defense,
       opponentWin: matchup.homeWin,
@@ -5292,12 +5487,266 @@ function fantasyProjectionContextsFromMatchups(
   ]);
 }
 
+function fantasyCrowdNudgeForSide(matchup: NflMatchup, side: "home" | "away") {
+  const nudge = matchup.marketPulse?.nudge;
+
+  if (!nudge?.applied) {
+    return 0;
+  }
+
+  const pointDelta = side === "home" ? nudge.homeDelta : nudge.awayDelta;
+
+  return round1(clampValue(pointDelta * 0.06, -0.3, 0.3));
+}
+
+function fantasyCrowdSignalForSide(matchup: NflMatchup, side: "home" | "away") {
+  if (!matchup.marketPulse?.nudge.applied) {
+    return undefined;
+  }
+
+  const team = side === "home" ? matchup.home.code : matchup.away.code;
+
+  return `Crowd read nudged ${team} within the tiny cap`;
+}
+
 function cleanProviderFileLabel(fileName: string) {
   return fileName.replace(/\.(csv|json|txt)$/i, "").replace(/[-_]+/g, " ").trim();
 }
 
 function weekFromDatasetLabel(weekLabel: string) {
   return weekLabel.match(/\d+/)?.[0];
+}
+
+function buildFantasySourceLanes({
+  contextStatus,
+  dataset,
+  fantasyImport,
+  matchups,
+  players,
+  providerBridgeImport,
+}: {
+  contextStatus: FantasyContextStatus;
+  dataset: NflSeerDataset;
+  fantasyImport: ImportedFantasyLeague | null;
+  matchups: NflMatchup[];
+  players: FantasyPlayer[];
+  providerBridgeImport: FantasyProviderBridgeImport | null;
+}): FantasySourceLane[] {
+  const rosterRows = fantasyImport
+    ? fantasyImport.teams.reduce((total, team) => total + team.rosterIds.length, 0)
+    : players.length;
+  const projectionRows =
+    providerBridgeImport?.projections.filter(
+      (projection) => typeof projection.projection === "number",
+    ).length ?? 0;
+  const rankingRows =
+    providerBridgeImport?.projections.filter(
+      (projection) =>
+        typeof projection.sourceRank === "number" ||
+        typeof projection.positionRank === "number",
+    ).length ?? 0;
+  const projectionFreshness = providerBridgeImport
+    ? fantasyFreshnessFromUpdatedAt(providerBridgeImport.updatedAt)
+    : "unknown";
+  const crowdRows = matchups.filter((matchup) => matchup.marketPulse?.nudge.applied).length;
+  const crowdFreshness = fantasyFreshnessFromUpdatedAt(newestMarketPulseCapturedAt(matchups));
+  const contextStatusValue =
+    contextStatus.status === "fallback" ? "fallback" : "live";
+
+  return [
+    {
+      freshness: fantasyImport ? "fresh" : "unknown",
+      id: "source-roster",
+      kind: "roster",
+      label: "Roster source",
+      message: fantasyImport
+        ? "Imported teams drive team analysis, lineup checks, and comparison lanes."
+        : "Demo rosters are carrying the lab until a league or roster lands.",
+      positions: fantasyPositionCountsFromPlayers(
+        fantasyImport?.players.length ? fantasyImport.players : players,
+      ),
+      providerName: fantasyImport?.label ?? "Seeded lab rosters",
+      rows: { ...emptyFantasySourceRows(), roster: rosterRows },
+      source: fantasyImport?.source ?? "demo",
+      status: fantasyImport ? "live" : "fallback",
+      trustWeight: fantasyRosterTrust(fantasyImport),
+    },
+    {
+      freshness: projectionFreshness,
+      id: "source-projection",
+      kind: "projection",
+      label: "Projection source",
+      message: providerBridgeImport
+        ? "Provider points set the source side before Seer context adjusts it."
+        : "Seeded projection spine stays active until a provider sheet is loaded.",
+      positions: providerBridgeImport
+        ? fantasyPositionCountsFromSourceProjections(
+            providerBridgeImport.projections.filter(
+              (projection) => typeof projection.projection === "number",
+            ),
+          )
+        : fantasyPositionCountsFromPlayers(players),
+      providerName: providerBridgeImport?.providerLabel ?? "MatchSeer seed",
+      rows: { ...emptyFantasySourceRows(), projections: projectionRows },
+      source: providerBridgeImport ? "browser upload" : "seeded spine",
+      status: providerBridgeImport ? "live" : "fallback",
+      trustWeight: fantasyProjectionTrust(providerBridgeImport, projectionFreshness),
+    },
+    {
+      freshness: projectionFreshness,
+      id: "source-ranking",
+      kind: "ranking",
+      label: "Ranking source",
+      message: providerBridgeImport
+        ? "Ranks and position ranks guide board order without overpowering points."
+        : "Board order uses MatchSeer placeholders until rankings arrive.",
+      positions: providerBridgeImport
+        ? fantasyPositionCountsFromSourceProjections(
+            providerBridgeImport.projections.filter(
+              (projection) =>
+                typeof projection.sourceRank === "number" ||
+                typeof projection.positionRank === "number",
+            ),
+          )
+        : fantasyPositionCountsFromPlayers(players),
+      providerName: providerBridgeImport?.providerLabel ?? "MatchSeer seed",
+      rows: { ...emptyFantasySourceRows(), rankings: rankingRows },
+      source: providerBridgeImport ? "browser upload" : "seeded spine",
+      status: rankingRows > 0 ? "live" : "fallback",
+      trustWeight: fantasyRankingTrust(rankingRows, projectionFreshness),
+    },
+    {
+      freshness: contextStatus.freshness,
+      id: "source-context",
+      kind: "context",
+      label: "Game context",
+      message: contextStatus.message,
+      positions: contextPositionCounts(contextStatus.coveredTeams),
+      providerName: "NFL matchup layer",
+      rows: { ...emptyFantasySourceRows(), context: contextStatus.coveredTeams },
+      source: "schedule, venue, weather, defense",
+      status: contextStatusValue,
+      trustWeight: fantasyContextTrust(contextStatus),
+    },
+    {
+      freshness: crowdFreshness,
+      id: "source-crowd",
+      kind: "crowd",
+      label: "Crowd read",
+      message:
+        crowdRows > 0
+          ? "Fan consensus can move fantasy by a tiny capped breeze."
+          : "Crowd read is waiting, so fantasy stays on source and game context.",
+      positions: contextPositionCounts(crowdRows),
+      providerName: dataset.providerStatus.market === "live" ? "Market pulse" : "Waiting",
+      rows: { ...emptyFantasySourceRows(), crowd: crowdRows },
+      source: "fan consensus pulse",
+      status: dataset.providerStatus.market === "live" && crowdRows > 0 ? "live" : "fallback",
+      trustWeight: fantasyCrowdTrust(crowdRows),
+    },
+  ];
+}
+
+function emptyFantasySourceRows(): FantasySourceRows {
+  return {
+    context: 0,
+    crowd: 0,
+    projections: 0,
+    rankings: 0,
+    roster: 0,
+  };
+}
+
+function fantasyPositionCountsFromPlayers(players: FantasyPlayer[]): FantasyPositionCounts {
+  return players.reduce(
+    (counts, player) => {
+      counts[normalizeScoutingPosition(player.position)] += 1;
+      return counts;
+    },
+    {
+      DST: 0,
+      K: 0,
+      QB: 0,
+      RB: 0,
+      TE: 0,
+      WR: 0,
+    } satisfies FantasyPositionCounts,
+  );
+}
+
+function contextPositionCounts(count: number): FantasyPositionCounts {
+  return fantasyCoveragePositions.reduce(
+    (counts, position) => {
+      counts[position] = count > 0 ? count : 0;
+      return counts;
+    },
+    {
+      DST: 0,
+      K: 0,
+      QB: 0,
+      RB: 0,
+      TE: 0,
+      WR: 0,
+    } satisfies FantasyPositionCounts,
+  );
+}
+
+function fantasyRosterTrust(fantasyImport: ImportedFantasyLeague | null) {
+  if (!fantasyImport) {
+    return 48;
+  }
+
+  if (fantasyImport.source === "sleeper") {
+    return 84;
+  }
+
+  if (fantasyImport.source === "screenshot") {
+    return 68;
+  }
+
+  return 74;
+}
+
+function fantasyProjectionTrust(
+  providerBridgeImport: FantasyProviderBridgeImport | null,
+  freshness: FantasyProviderFreshness,
+) {
+  if (!providerBridgeImport) {
+    return 55;
+  }
+
+  return freshness === "stale" ? 68 : freshness === "unknown" ? 76 : 86;
+}
+
+function fantasyRankingTrust(rowCount: number, freshness: FantasyProviderFreshness) {
+  if (rowCount === 0) {
+    return 44;
+  }
+
+  return freshness === "stale" ? 58 : 72;
+}
+
+function fantasyContextTrust(contextStatus: FantasyContextStatus) {
+  if (contextStatus.status === "live") {
+    return 76;
+  }
+
+  if (contextStatus.status === "partial") {
+    return 62;
+  }
+
+  return 45;
+}
+
+function fantasyCrowdTrust(crowdRows: number) {
+  return crowdRows > 0 ? 8 : 0;
+}
+
+function newestMarketPulseCapturedAt(matchups: NflMatchup[]) {
+  return matchups
+    .map((matchup) => matchup.marketPulse?.capturedAt)
+    .filter((capturedAt): capturedAt is string => Boolean(capturedAt))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
 }
 
 function mergeNflDataset(payload: Partial<NflSeerDataset>): NflSeerDataset {
