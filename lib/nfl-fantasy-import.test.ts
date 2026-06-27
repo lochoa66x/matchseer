@@ -13,7 +13,9 @@ import {
   mergeFantasySourceCoverageStatuses,
   mergeFantasySourceFeeds,
   normalizeFantasyProjectionFeed,
+  parseSleeperImportQuery,
   sanitizeImportedFantasyLeague,
+  sleeperLeagueOptionsFromLeagues,
   type NflFantasyPlayer,
 } from "./nfl-fantasy-import";
 
@@ -121,6 +123,159 @@ describe("NFL fantasy imports", () => {
     expect(league.teams[0].starterIds).toHaveLength(1);
     expect(league.teams[0].benchIds).toHaveLength(1);
     expect(league.players.map((player) => player.source)).toContain("sleeper");
+  });
+
+  it("parses Sleeper league and user URLs cleanly", () => {
+    expect(
+      parseSleeperImportQuery("https://sleeper.com/leagues/123456789012345678"),
+    ).toMatchObject({
+      kind: "league",
+      token: "123456789012345678",
+    });
+    expect(parseSleeperImportQuery("https://sleeper.com/user/luis")).toMatchObject({
+      kind: "user",
+      token: "luis",
+    });
+    expect(parseSleeperImportQuery("123456789012345678")).toMatchObject({
+      kind: "id",
+      token: "123456789012345678",
+    });
+  });
+
+  it("turns username league lookups into selectable league cards", () => {
+    const leagues = sleeperLeagueOptionsFromLeagues({
+      leagues: [
+        {
+          league_id: "2",
+          name: "Archive League",
+          season: "2026",
+          status: "complete",
+          total_rosters: 10,
+        },
+        {
+          league_id: "1",
+          name: "Main League",
+          season: "2026",
+          status: "in_season",
+          total_rosters: "12",
+        },
+      ],
+      season: "2026",
+      userId: "u1",
+    });
+
+    expect(leagues).toHaveLength(2);
+    expect(leagues[0]).toMatchObject({
+      isBestGuess: true,
+      leagueId: "1",
+      name: "Main League",
+      rosterCount: 12,
+      userId: "u1",
+    });
+  });
+
+  it("detects my Sleeper matchup opponent and keeps starters and bench", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Fun League",
+        season: "2026",
+      },
+      matchups: [
+        { roster_id: 1, matchup_id: 9 },
+        { roster_id: 2, matchup_id: 9 },
+        { roster_id: 3, matchup_id: 10 },
+      ],
+      players: {
+        "111": {
+          full_name: "Amon-Ra St. Brown",
+          position: "WR",
+          team: "DET",
+          search_rank: 9,
+        },
+        "222": {
+          full_name: "Jahmyr Gibbs",
+          position: "RB",
+          team: "DET",
+          search_rank: 15,
+        },
+        "333": {
+          full_name: "Lamar Jackson",
+          position: "QB",
+          team: "BAL",
+          search_rank: 5,
+        },
+      },
+      preferredOwnerId: "u1",
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["111", "222"], starters: ["111"] },
+        { roster_id: 2, owner_id: "u2", players: ["333"], starters: ["333"] },
+        { roster_id: 3, owner_id: "u3", players: ["222"], starters: [] },
+      ],
+      users: [
+        { user_id: "u1", display_name: "Luis", metadata: { team_name: "Seer House" } },
+        { user_id: "u2", display_name: "Rival" },
+        { user_id: "u3", display_name: "Other" },
+      ],
+      week: 1,
+    });
+
+    expect(league.teams[0].id).toBe("sleeper-roster-1");
+    expect(league.teams[1].id).toBe("sleeper-roster-2");
+    expect(league.suggestedTeamId).toBe("sleeper-roster-1");
+    expect(league.suggestedOpponentTeamId).toBe("sleeper-roster-2");
+    expect(league.sleeper).toMatchObject({
+      matchupId: "9",
+      rosterCount: 3,
+      selectedRosterId: "1",
+      opponentRosterId: "2",
+      status: "matched",
+    });
+    expect(league.teams[0].starterIds).toHaveLength(1);
+    expect(league.teams[0].benchIds).toHaveLength(1);
+  });
+
+  it("falls back gracefully when Sleeper has no matchup for the selected week", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Fun League",
+        season: "2026",
+      },
+      matchups: [],
+      players: {
+        "111": {
+          full_name: "Amon-Ra St. Brown",
+          position: "WR",
+          team: "DET",
+          search_rank: 9,
+        },
+        "333": {
+          full_name: "Lamar Jackson",
+          position: "QB",
+          team: "BAL",
+          search_rank: 5,
+        },
+      },
+      preferredOwnerId: "u1",
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["111"], starters: ["111"] },
+        { roster_id: 2, owner_id: "u2", players: ["333"], starters: ["333"] },
+      ],
+      users: [
+        { user_id: "u1", display_name: "Luis" },
+        { user_id: "u2", display_name: "Rival" },
+      ],
+      week: 3,
+    });
+
+    expect(league.sleeper).toMatchObject({
+      selectedRosterId: "1",
+      status: "no-matchup",
+      week: 3,
+    });
+    expect(league.suggestedTeamId).toBe("sleeper-roster-1");
+    expect(league.suggestedOpponentTeamId).toBe("sleeper-roster-2");
   });
 
   it("normalizes projection feeds and matches players by name team position", () => {

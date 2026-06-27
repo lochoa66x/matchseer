@@ -106,6 +106,9 @@ export type ImportedFantasyLeague = {
   teams: ImportedFantasyTeam[];
   players: NflFantasyPlayer[];
   notes: string[];
+  sleeper?: SleeperImportReceipt;
+  suggestedTeamId?: string;
+  suggestedOpponentTeamId?: string;
 };
 
 export type FantasySourceProjection = {
@@ -195,6 +198,8 @@ export type SleeperLeague = {
   league_id?: string | number | null;
   name?: string | null;
   season?: string | number | null;
+  status?: string | null;
+  total_rosters?: string | number | null;
 };
 
 export type SleeperRoster = {
@@ -230,6 +235,36 @@ export type SleeperPlayer = {
 export type SleeperMatchup = {
   roster_id?: string | number | null;
   matchup_id?: string | number | null;
+};
+
+export type SleeperImportReceipt = {
+  leagueId: string;
+  leagueName: string;
+  season?: string;
+  week?: number;
+  matchupId?: string;
+  rosterCount: number;
+  selectedRosterId?: string;
+  opponentRosterId?: string;
+  selectedTeamId?: string;
+  opponentTeamId?: string;
+  userId?: string;
+  status: "matched" | "no-matchup" | "no-user-match";
+};
+
+export type SleeperLeagueOption = {
+  leagueId: string;
+  name: string;
+  season?: string;
+  status?: string;
+  rosterCount?: number;
+  userId?: string;
+  isBestGuess: boolean;
+};
+
+export type SleeperImportQuery = {
+  token: string;
+  kind: "league" | "user" | "id" | "empty";
 };
 
 const nflTeamColors: Record<string, string> = {
@@ -611,6 +646,8 @@ export function buildSleeperFantasyLeague({
   league,
   matchups = [],
   players,
+  preferredOwnerId,
+  preferredRosterId,
   rosters,
   users,
   week,
@@ -618,6 +655,8 @@ export function buildSleeperFantasyLeague({
   league: SleeperLeague;
   matchups?: SleeperMatchup[];
   players: Record<string, SleeperPlayer>;
+  preferredOwnerId?: string;
+  preferredRosterId?: string;
   rosters: SleeperRoster[];
   users: SleeperUser[];
   week?: number;
@@ -632,8 +671,45 @@ export function buildSleeperFantasyLeague({
       .map((matchup) => [stringId(matchup.roster_id), stringId(matchup.matchup_id)] as const)
       .filter(([rosterId, matchupId]) => rosterId.length > 0 && matchupId.length > 0),
   );
+  const preferredRoster =
+    rosters.find((roster) => stringId(roster.roster_id) === stringId(preferredRosterId)) ??
+    rosters.find((roster) => stringId(roster.owner_id) === stringId(preferredOwnerId)) ??
+    null;
+  const preferredSleeperRosterId = stringId(preferredRoster?.roster_id);
+  const preferredMatchupId = matchupByRosterId.get(preferredSleeperRosterId);
+  const opponentRoster =
+    preferredMatchupId
+      ? rosters.find((roster) => {
+          const rosterId = stringId(roster.roster_id);
+
+          return (
+            rosterId !== preferredSleeperRosterId &&
+            matchupByRosterId.get(rosterId) === preferredMatchupId
+          );
+        }) ?? null
+      : null;
+  const opponentSleeperRosterId = stringId(opponentRoster?.roster_id);
   const importedPlayers = new Map<string, NflFantasyPlayer>();
   const sortedRosters = [...rosters].sort((left, right) => {
+    const leftRosterId = stringId(left.roster_id);
+    const rightRosterId = stringId(right.roster_id);
+
+    if (leftRosterId === preferredSleeperRosterId) {
+      return -1;
+    }
+
+    if (rightRosterId === preferredSleeperRosterId) {
+      return 1;
+    }
+
+    if (leftRosterId === opponentSleeperRosterId) {
+      return -1;
+    }
+
+    if (rightRosterId === opponentSleeperRosterId) {
+      return 1;
+    }
+
     const leftMatchup = matchupByRosterId.get(stringId(left.roster_id)) ?? "";
     const rightMatchup = matchupByRosterId.get(stringId(right.roster_id)) ?? "";
 
@@ -688,6 +764,30 @@ export function buildSleeperFantasyLeague({
       };
     })
     .filter((team) => team.rosterIds.length > 0);
+  const selectedTeamId = preferredSleeperRosterId
+    ? `sleeper-roster-${preferredSleeperRosterId}`
+    : teams[0]?.id;
+  const opponentTeamId = opponentSleeperRosterId
+    ? `sleeper-roster-${opponentSleeperRosterId}`
+    : teams.find((team) => team.id !== selectedTeamId)?.id;
+  const receipt: SleeperImportReceipt = {
+    leagueId: stringId(league.league_id) || "league",
+    leagueName: cleanLine(league.name) || "Sleeper league import",
+    matchupId: preferredMatchupId,
+    opponentRosterId: opponentSleeperRosterId || undefined,
+    opponentTeamId,
+    rosterCount: rosters.length,
+    season: stringId(league.season) || undefined,
+    selectedRosterId: preferredSleeperRosterId || undefined,
+    selectedTeamId,
+    status: preferredSleeperRosterId
+      ? preferredMatchupId && opponentSleeperRosterId
+        ? "matched"
+        : "no-matchup"
+      : "no-user-match",
+    userId: stringId(preferredOwnerId) || undefined,
+    week,
+  };
 
   return {
     id: `sleeper-${stringId(league.league_id) || "league"}`,
@@ -697,11 +797,82 @@ export function buildSleeperFantasyLeague({
     week,
     teams,
     players: [...importedPlayers.values()],
+    sleeper: receipt,
+    suggestedOpponentTeamId: opponentTeamId,
+    suggestedTeamId: selectedTeamId,
     notes: [
       "Sleeper import loaded rosters, starters, benches, and player names.",
+      receipt.status === "matched"
+        ? `Matched roster ${receipt.selectedRosterId} to matchup ${receipt.matchupId}.`
+        : receipt.status === "no-matchup"
+          ? "Your roster loaded, but no current matchup opponent was found for that week."
+          : "League loaded, but no Sleeper user roster was matched automatically.",
       "Sleeper projections are not included in the public roster endpoint, so the Seer creates the forecast layer from role, position, matchup, and health signals.",
     ],
   };
+}
+
+export function parseSleeperImportQuery(value: string): SleeperImportQuery {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { kind: "empty", token: "" };
+  }
+
+  const leagueUrlMatch = trimmed.match(
+    /sleeper\.com\/leagues?\/(?:nfl\/)?(\d{8,})/i,
+  );
+
+  if (leagueUrlMatch) {
+    return { kind: "league", token: leagueUrlMatch[1] };
+  }
+
+  const userUrlMatch = trimmed.match(/sleeper\.com\/user\/([^/?#\s]+)/i);
+
+  if (userUrlMatch) {
+    return { kind: "user", token: decodeURIComponent(userUrlMatch[1]) };
+  }
+
+  if (/^\d{8,}$/.test(trimmed)) {
+    return { kind: "id", token: trimmed };
+  }
+
+  return { kind: "user", token: trimmed };
+}
+
+export function sleeperLeagueOptionsFromLeagues({
+  leagues,
+  season,
+  userId,
+}: {
+  leagues: SleeperLeague[];
+  season?: string;
+  userId?: string;
+}): SleeperLeagueOption[] {
+  const sortedLeagues = [...leagues].sort((left, right) => {
+    const statusRank =
+      sleeperLeagueStatusRank(left.status) - sleeperLeagueStatusRank(right.status);
+
+    if (statusRank !== 0) {
+      return statusRank;
+    }
+
+    return (cleanLine(left.name) || stringId(left.league_id)).localeCompare(
+      cleanLine(right.name) || stringId(right.league_id),
+    );
+  });
+
+  return sortedLeagues
+    .map((league, index) => ({
+      isBestGuess: index === 0,
+      leagueId: stringId(league.league_id),
+      name: cleanLine(league.name) || `Sleeper league ${stringId(league.league_id)}`,
+      rosterCount: numberFromLooseValue(league.total_rosters),
+      season: stringId(league.season) || season,
+      status: cleanLine(league.status) || undefined,
+      userId,
+    }))
+    .filter((league) => league.leagueId.length > 0);
 }
 
 export function mergeFantasyPlayerPools(
@@ -1145,6 +1316,58 @@ export function sanitizeImportedFantasyLeague(
     notes: Array.isArray(league.notes)
       ? league.notes.filter((note) => typeof note === "string")
       : [],
+    sleeper: sanitizeSleeperImportReceipt(league.sleeper),
+    suggestedOpponentTeamId:
+      typeof league.suggestedOpponentTeamId === "string" &&
+      teams.some((team) => team.id === league.suggestedOpponentTeamId)
+        ? league.suggestedOpponentTeamId
+        : undefined,
+    suggestedTeamId:
+      typeof league.suggestedTeamId === "string" &&
+      teams.some((team) => team.id === league.suggestedTeamId)
+        ? league.suggestedTeamId
+        : undefined,
+  };
+}
+
+function sanitizeSleeperImportReceipt(value: unknown): SleeperImportReceipt | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const receipt = value as Partial<SleeperImportReceipt>;
+
+  if (
+    typeof receipt.leagueId !== "string" ||
+    typeof receipt.leagueName !== "string" ||
+    typeof receipt.rosterCount !== "number" ||
+    !isSleeperImportReceiptStatus(receipt.status)
+  ) {
+    return undefined;
+  }
+
+  return {
+    leagueId: receipt.leagueId,
+    leagueName: receipt.leagueName,
+    matchupId:
+      typeof receipt.matchupId === "string" ? receipt.matchupId : undefined,
+    opponentRosterId:
+      typeof receipt.opponentRosterId === "string"
+        ? receipt.opponentRosterId
+        : undefined,
+    opponentTeamId:
+      typeof receipt.opponentTeamId === "string" ? receipt.opponentTeamId : undefined,
+    rosterCount: receipt.rosterCount,
+    season: typeof receipt.season === "string" ? receipt.season : undefined,
+    selectedRosterId:
+      typeof receipt.selectedRosterId === "string"
+        ? receipt.selectedRosterId
+        : undefined,
+    selectedTeamId:
+      typeof receipt.selectedTeamId === "string" ? receipt.selectedTeamId : undefined,
+    status: receipt.status,
+    userId: typeof receipt.userId === "string" ? receipt.userId : undefined,
+    week: typeof receipt.week === "number" ? receipt.week : undefined,
   };
 }
 
@@ -1572,6 +1795,43 @@ function isImportSource(value: unknown): value is FantasyImportSource {
     value === "screenshot" ||
     value === "feed"
   );
+}
+
+function isSleeperImportReceiptStatus(
+  value: unknown,
+): value is SleeperImportReceipt["status"] {
+  return value === "matched" || value === "no-matchup" || value === "no-user-match";
+}
+
+function sleeperLeagueStatusRank(value: unknown) {
+  const status = cleanLine(value);
+
+  if (status === "in_season") {
+    return 0;
+  }
+
+  if (status === "pre_draft") {
+    return 1;
+  }
+
+  if (status === "drafting") {
+    return 2;
+  }
+
+  if (status === "complete") {
+    return 3;
+  }
+
+  return 4;
+}
+
+function numberFromLooseValue(value: unknown) {
+  const numberValue =
+    typeof value === "string" || typeof value === "number" ? Number(value) : NaN;
+
+  return Number.isFinite(numberValue) && numberValue >= 0
+    ? Math.round(numberValue)
+    : undefined;
 }
 
 function normalizeSleeperIds(values: string[] | null | undefined) {

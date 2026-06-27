@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   buildSleeperFantasyLeague,
+  parseSleeperImportQuery,
+  sleeperLeagueOptionsFromLeagues,
   type SleeperMatchup,
   type SleeperPlayer,
   type SleeperRoster,
@@ -20,6 +22,8 @@ type SleeperState = {
 
 type SleeperUserLookup = {
   user_id?: string | number | null;
+  username?: string | null;
+  display_name?: string | null;
 };
 
 type SleeperLeagueLookup = {
@@ -27,21 +31,22 @@ type SleeperLeagueLookup = {
   name?: string | null;
   status?: string | null;
   season?: string | number | null;
+  total_rosters?: string | number | null;
 };
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const rawLeagueId = searchParams.get("leagueId")?.trim() ?? "";
+  const rawUserId = searchParams.get("userId")?.trim() ?? "";
   const rawQuery =
     searchParams.get("q") ??
     searchParams.get("query") ??
-    searchParams.get("leagueId") ??
-    searchParams.get("username") ??
-    "";
-  const query = extractSleeperToken(rawQuery);
+    (rawLeagueId || searchParams.get("username") || "");
+  const query = parseSleeperImportQuery(rawLeagueId || rawQuery);
   const explicitSeason = searchParams.get("season")?.trim();
   const explicitWeek = numberFromValue(searchParams.get("week"));
 
-  if (!query) {
+  if (!query.token) {
     return NextResponse.json(
       { error: "Enter a Sleeper username, league id, or league link." },
       { status: 400 },
@@ -62,11 +67,28 @@ export async function GET(request: Request) {
       numberFromValue(state.display_week) ??
       numberFromValue(state.week) ??
       undefined;
-    const league = looksLikeSleeperId(query)
-      ? await sleeperJson<SleeperLeagueLookup>(`/league/${query}`, {
-          cache: "no-store",
-        })
-      : await leagueFromUsername(query, season);
+    const lookup = rawLeagueId
+      ? {
+          league: await sleeperJson<SleeperLeagueLookup>(`/league/${rawLeagueId}`, {
+            cache: "no-store",
+          }),
+          userId: rawUserId,
+        }
+      : await resolveSleeperLookup(query, season, rawUserId);
+
+    if ("leagueOptions" in lookup) {
+      return NextResponse.json({
+        mode: "league-options",
+        season,
+        userId: lookup.userId,
+        username: lookup.username,
+        week,
+        leagues: lookup.leagueOptions,
+        message: `${lookup.leagueOptions.length} Sleeper leagues found. Pick the one to analyze.`,
+      });
+    }
+
+    const { league } = lookup;
     const leagueId = stringFromValue(league.league_id);
 
     if (!leagueId) {
@@ -96,6 +118,7 @@ export async function GET(request: Request) {
       league,
       matchups,
       players,
+      preferredOwnerId: lookup.userId,
       rosters,
       users,
       week,
@@ -122,12 +145,46 @@ export async function GET(request: Request) {
   }
 }
 
-async function leagueFromUsername(username: string, season: string) {
+async function resolveSleeperLookup(
+  query: ReturnType<typeof parseSleeperImportQuery>,
+  season: string,
+  userIdHint: string,
+): Promise<
+  | { league: SleeperLeagueLookup; userId: string }
+  | {
+      leagueOptions: ReturnType<typeof sleeperLeagueOptionsFromLeagues>;
+      userId: string;
+      username: string;
+    }
+> {
+  if (query.kind === "league") {
+    return {
+      league: await sleeperJson<SleeperLeagueLookup>(`/league/${query.token}`, {
+        cache: "no-store",
+      }),
+      userId: userIdHint,
+    };
+  }
+
+  if (query.kind === "id" && !userIdHint) {
+    try {
+      const league = await sleeperJson<SleeperLeagueLookup>(`/league/${query.token}`, {
+        cache: "no-store",
+      });
+
+      if (stringFromValue(league.league_id)) {
+        return { league, userId: "" };
+      }
+    } catch {
+      // Numeric Sleeper user ids look like league ids, so fall through to user lookup.
+    }
+  }
+
   const user = await sleeperJson<SleeperUserLookup>(
-    `/user/${encodeURIComponent(username)}`,
+    `/user/${encodeURIComponent(query.token)}`,
     { cache: "no-store" },
   );
-  const userId = stringFromValue(user.user_id);
+  const userId = stringFromValue(user.user_id) || userIdHint;
 
   if (!userId) {
     throw new Error("Sleeper user was not found.");
@@ -137,16 +194,33 @@ async function leagueFromUsername(username: string, season: string) {
     `/user/${userId}/leagues/nfl/${encodeURIComponent(season)}`,
     { cache: "no-store" },
   );
-  const league =
-    leagues.find((candidate) => candidate.status === "in_season") ??
-    leagues.find((candidate) => candidate.status === "pre_draft") ??
-    leagues[0];
+  const leagueOptions = sleeperLeagueOptionsFromLeagues({
+    leagues,
+    season,
+    userId,
+  });
+
+  if (leagueOptions.length === 0) {
+    throw new Error(`No Sleeper NFL leagues found for ${season}.`);
+  }
+
+  if (leagueOptions.length > 1) {
+    return {
+      leagueOptions,
+      userId,
+      username: stringFromValue(user.display_name) || stringFromValue(user.username),
+    };
+  }
+
+  const league = leagues.find(
+    (candidate) => stringFromValue(candidate.league_id) === leagueOptions[0].leagueId,
+  );
 
   if (!league) {
     throw new Error(`No Sleeper NFL leagues found for ${season}.`);
   }
 
-  return league;
+  return { league, userId };
 }
 
 async function sleeperJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -163,17 +237,6 @@ async function sleeperJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
-}
-
-function extractSleeperToken(value: string) {
-  const trimmed = value.trim();
-  const idMatch = trimmed.match(/\d{8,}/);
-
-  return idMatch?.[0] ?? trimmed;
-}
-
-function looksLikeSleeperId(value: string) {
-  return /^\d{8,}$/.test(value);
 }
 
 function stringFromValue(value: unknown) {

@@ -10623,6 +10623,93 @@ body {
   color: #f7c51d;
 }
 
+.nfl-import-status.searching,
+.nfl-import-status.loading-league {
+  color: #f7c51d;
+}
+
+.nfl-import-status.imported,
+.nfl-import-status.leagues-found {
+  color: #8ff0c1;
+}
+
+.nfl-import-status.no-matchup {
+  color: #ffdf7e;
+}
+
+.nfl-sleeper-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 7px;
+}
+
+.nfl-sleeper-row input:last-child {
+  text-align: center;
+}
+
+.nfl-sleeper-league-list {
+  display: grid;
+  gap: 7px;
+}
+
+.nfl-sleeper-league-list button {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-height: 0;
+  padding: 10px;
+  color: var(--nfl-ink);
+  background: rgba(143, 160, 189, 0.1);
+  border: 1px solid rgba(143, 160, 189, 0.18);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.nfl-sleeper-league-list button.best,
+.nfl-sleeper-league-list button.active {
+  border-color: rgba(45, 212, 191, 0.36);
+}
+
+.nfl-sleeper-league-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-sleeper-league-list span,
+.nfl-sleeper-league-list em,
+.nfl-sleeper-receipt {
+  color: var(--nfl-muted);
+  font-style: normal;
+}
+
+.nfl-sleeper-league-list em {
+  padding: 4px 6px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-sleeper-receipt {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  background: rgba(45, 212, 191, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.16);
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.nfl-sleeper-receipt strong {
+  color: #fff;
+}
+
 .nfl-lens-toggle {
   display: grid;
   grid-template-columns: repeat(2, minmax(104px, 1fr));
