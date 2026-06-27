@@ -8923,6 +8923,12 @@ body {
   border-color: var(--nfl-line);
 }
 
+.nfl-topbar nav a.active {
+  color: #06100f;
+  background: linear-gradient(100deg, rgba(247, 197, 29, 0.94), rgba(45, 212, 191, 0.94));
+  border-color: transparent;
+}
+
 .nfl-disclaimer {
   gap: 9px;
   margin-bottom: 18px;
@@ -9199,6 +9205,7 @@ body {
 }
 
 .nfl-matchup-rail h1,
+.nfl-fantasy-panel h1,
 .nfl-scenario-lab h2,
 .nfl-fantasy-panel h2,
 .nfl-scouting-board h2,
@@ -9211,6 +9218,7 @@ body {
   letter-spacing: 0;
 }
 
+.nfl-fantasy-panel h1,
 .nfl-fantasy-panel h2,
 .nfl-scenario-lab h2,
 .nfl-scouting-board h2,
@@ -9719,6 +9727,15 @@ body {
   grid-template-columns: minmax(320px, 0.86fr) minmax(0, 1.14fr);
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.nfl-grid-section.game-only,
+.nfl-grid-section.fantasy-only {
+  grid-template-columns: 1fr;
+}
+
+.nfl-grid-section.fantasy-only .nfl-fantasy-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .nfl-compare-card {
@@ -10971,7 +10988,8 @@ body {
     width: 100%;
   }
 
-  .nfl-fantasy-list {
+  .nfl-fantasy-list,
+  .nfl-grid-section.fantasy-only .nfl-fantasy-list {
     grid-template-columns: 1fr;
   }
 
