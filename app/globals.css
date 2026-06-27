@@ -9010,6 +9010,7 @@ body {
 }
 
 .nfl-provider-grid,
+.nfl-context-receipt,
 .nfl-source-coverage,
 .nfl-source-coverage-lanes,
 .nfl-provider-strip > div:first-child,
@@ -9047,6 +9048,7 @@ body {
   margin-bottom: 7px;
 }
 
+.nfl-context-receipt strong,
 .nfl-provider-strip strong,
 .nfl-source-coverage strong {
   min-width: 0;
@@ -9077,6 +9079,7 @@ body {
   background: #fca5a5;
 }
 
+.nfl-context-receipt p,
 .nfl-provider-strip p,
 .nfl-source-coverage p {
   margin: 0;
@@ -9085,6 +9088,7 @@ body {
   line-height: 1.35;
 }
 
+.nfl-context-receipt em,
 .nfl-provider-strip em,
 .nfl-source-coverage em {
   display: block;
@@ -9139,6 +9143,17 @@ body {
 .nfl-source-coverage p {
   grid-column: 1 / -1;
   color: #ffd2d2;
+}
+
+.nfl-context-receipt {
+  flex-basis: 100%;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(247, 197, 29, 0.06);
+  border: 1px solid rgba(247, 197, 29, 0.18);
+  border-radius: 8px;
 }
 
 .nfl-hero {
@@ -10434,7 +10449,7 @@ body {
 }
 
 .nfl-decision-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .nfl-decision-summary div,
@@ -10520,10 +10535,39 @@ body {
   line-height: 1.36;
 }
 
+.nfl-adjustment-receipts,
+.nfl-context-chips,
 .nfl-lineup-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.nfl-context-chips span {
+  padding: 5px 7px;
+  color: #d9e4f5;
+  background: rgba(143, 160, 189, 0.12);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  text-transform: none;
+}
+
+.nfl-adjustment-receipts span {
+  padding: 5px 7px;
+  color: #ffd2d2;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: none;
+}
+
+.nfl-adjustment-receipts span.plus {
+  color: #c8f7dc;
+  background: rgba(52, 245, 166, 0.1);
+  border-color: rgba(52, 245, 166, 0.18);
 }
 
 .nfl-lineup-tags span {
@@ -10545,6 +10589,14 @@ body {
 
 .nfl-startsit-list strong {
   color: #8ff0c1;
+}
+
+.nfl-context-warning {
+  margin: 0;
+  color: #ffd2d2;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
 }
 
 .nfl-team-lab-grid,
@@ -10970,6 +11022,7 @@ body {
   }
 
   .nfl-provider-grid,
+  .nfl-context-receipt,
   .nfl-source-coverage,
   .nfl-source-coverage-lanes {
     grid-template-columns: 1fr;

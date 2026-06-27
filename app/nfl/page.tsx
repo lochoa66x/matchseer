@@ -96,8 +96,88 @@ type FantasyProjection = {
   ceiling: number;
 };
 
+type FantasyContextStatusValue = "live" | "partial" | "fallback";
+type FantasyContextFreshness = "fresh" | "stale" | "unknown";
+type FantasyContextAdjustmentKind =
+  | "matchup"
+  | "weather"
+  | "pace"
+  | "role"
+  | "volatility";
+
+type FantasyContextAdjustment = {
+  kind: FantasyContextAdjustmentKind;
+  label: string;
+  delta: number;
+  summary: string;
+};
+
+type FantasyPlayerContext = {
+  status: FantasyContextStatusValue;
+  freshness: FantasyContextFreshness;
+  source: string;
+  message: string;
+  opponent: string;
+  opponentCode: string;
+  venue: string;
+  weather: string;
+  roof: string;
+  surface: string;
+  pace: number;
+  opponentDefense: number;
+  defenseVsPosition: number;
+  teamHealth: number;
+  gameScript: number;
+  roleSignal: number;
+  redZoneSignal: number;
+  touchSignal: number;
+  adjustments: FantasyContextAdjustment[];
+  projectionNudge: number;
+  totalDelta: number;
+  chips: string[];
+};
+
+type NflFantasyTeamContext = {
+  status: FantasyContextStatusValue;
+  freshness: FantasyContextFreshness;
+  source: string;
+  message: string;
+  team: string;
+  opponent: string;
+  opponentCode: string;
+  venue: string;
+  weather: string;
+  roof: string;
+  surface: string;
+  pace: number;
+  teamWin: number;
+  opponentWin: number;
+  teamOffense: number;
+  opponentOffense: number;
+  opponentDefense: number;
+  opponentTrenches: number;
+  opponentCoaching: number;
+  teamHealth: number;
+};
+
+type FantasyContextLayer = {
+  byTeam: Record<string, NflFantasyTeamContext>;
+  status: FantasyContextStatus;
+};
+
+type FantasyContextStatus = {
+  status: FantasyContextStatusValue;
+  freshness: FantasyContextFreshness;
+  coveredTeams: number;
+  totalTeams: number;
+  message: string;
+  warnings: string[];
+};
+
 type ScoutingRow = FantasyPlayer & {
   fantasy: FantasyProjection;
+  context: FantasyPlayerContext;
+  contextProjection: FantasyProjection;
   rankDelta: number;
   score: number;
 };
@@ -114,11 +194,14 @@ type FantasyLineupSlotPick = {
   id: FantasyLineupSlotId;
   label: string;
   player: ScoutingRow | null;
+  context: FantasyPlayerContext | null;
   sourceProjection: number;
   seerProjection: number;
+  contextDelta: number;
   delta: number;
   receipt: string;
   tags: string[];
+  adjustmentReceipts: FantasyContextAdjustment[];
 };
 
 type FantasyDecisionReceipt = {
@@ -129,6 +212,7 @@ type FantasyDecisionReceipt = {
   delta: number;
   summary: string;
   tags: string[];
+  adjustmentReceipts: FantasyContextAdjustment[];
 };
 
 type FantasyBenchAlternative = {
@@ -570,6 +654,15 @@ export default function NflPage() {
         : baseFantasyPlayers,
     [baseFantasyPlayers, fantasyImport],
   );
+  const fantasyContextLayer = useMemo(
+    () =>
+      buildFantasyContextLayer({
+        dataset: nflDataset,
+        matchups,
+        players: fantasyPlayers,
+      }),
+    [fantasyPlayers, matchups, nflDataset],
+  );
   const defaultPlayerPair = useMemo(
     () =>
       [
@@ -601,8 +694,8 @@ export default function NflPage() {
     [leftPlayer, rightPlayer, scoringFormat],
   );
   const scoutingBoard = useMemo(
-    () => buildScoutingBoard(fantasyPlayers, scoringFormat),
-    [fantasyPlayers, scoringFormat],
+    () => buildScoutingBoard(fantasyPlayers, scoringFormat, fantasyContextLayer.byTeam),
+    [fantasyContextLayer.byTeam, fantasyPlayers, scoringFormat],
   );
   const visibleScoutingRows = useMemo(
     () => filterScoutingRows(scoutingBoard, scoutingPosition, scoutingDepth),
@@ -625,22 +718,31 @@ export default function NflPage() {
     () =>
       analyzeFantasyTeam({
         allPlayers: fantasyPlayers,
+        contextByTeam: fantasyContextLayer.byTeam,
         lens: teamLens,
         scoringFormat,
         team: activeFantasyTeam,
       }),
-    [activeFantasyTeam, fantasyPlayers, scoringFormat, teamLens],
+    [activeFantasyTeam, fantasyContextLayer.byTeam, fantasyPlayers, scoringFormat, teamLens],
   );
   const fantasyMatchupReport = useMemo(
     () =>
       compareFantasyTeams({
         allPlayers: fantasyPlayers,
+        contextByTeam: fantasyContextLayer.byTeam,
         left: activeFantasyTeam,
         lens: teamLens,
         right: opponentFantasyTeam,
         scoringFormat,
       }),
-    [activeFantasyTeam, fantasyPlayers, opponentFantasyTeam, scoringFormat, teamLens],
+    [
+      activeFantasyTeam,
+      fantasyContextLayer.byTeam,
+      fantasyPlayers,
+      opponentFantasyTeam,
+      scoringFormat,
+      teamLens,
+    ],
   );
 
   useEffect(() => {
@@ -776,9 +878,9 @@ export default function NflPage() {
             team: player.team,
             position: player.position,
             opponent: player.opponent,
-            projection: player.fantasy.projection,
-            floor: player.fantasy.floor,
-            ceiling: player.fantasy.ceiling,
+            projection: player.contextProjection.projection,
+            floor: player.contextProjection.floor,
+            ceiling: player.contextProjection.ceiling,
             baselineRank: player.nflRank,
             seerRank: index + 1,
             overallSeerRank: scoutingBoard.findIndex((row) => row.id === player.id) + 1,
@@ -1012,7 +1114,11 @@ export default function NflPage() {
         <span>{nflIndependenceDisclaimer}</span>
       </div>
 
-      <NflDataRibbon dataset={nflDataset} status={nflDataStatus} />
+      <NflDataRibbon
+        contextStatus={fantasyContextLayer.status}
+        dataset={nflDataset}
+        status={nflDataStatus}
+      />
 
       <section className="nfl-hero" id="team-seer">
         <div className="nfl-matchup-rail" aria-label="NFL matchup list">
@@ -1151,6 +1257,7 @@ export default function NflPage() {
 
       <FantasyTeamLab
         activeReport={activeTeamReport}
+        contextStatus={fantasyContextLayer.status}
         fantasyImport={fantasyImport}
         manualImportMessage={manualImportMessage}
         manualImportStatus={manualImportStatus}
@@ -1230,9 +1337,11 @@ export default function NflPage() {
 }
 
 function NflDataRibbon({
+  contextStatus,
   dataset,
   status,
 }: {
+  contextStatus: FantasyContextStatus;
   dataset: NflSeerDataset;
   status: NflDataStatus;
 }) {
@@ -1267,6 +1376,9 @@ function NflDataRibbon({
         </span>
         <span className={cx(dataset.providerStatus.market === "live" && "live")}>
           Crowd {dataset.providerStatus.market}
+        </span>
+        <span className={cx(contextStatus.status === "live" && "live")}>
+          Context {contextStatus.status}
         </span>
       </div>
       {dataset.providerStatus.notes.length > 0 ? (
@@ -1341,6 +1453,21 @@ function NflDataRibbon({
           ) : null}
         </div>
       ) : null}
+      <div className="nfl-context-receipt" aria-label="Fantasy context status">
+        <div>
+          <strong>Matchup context</strong>
+          <em>
+            {contextStatus.coveredTeams}/{contextStatus.totalTeams} team lanes ·{" "}
+            {contextStatus.freshness}
+          </em>
+        </div>
+        <p>
+          {contextStatus.message}
+          {contextStatus.warnings.length > 0
+            ? ` ${contextStatus.warnings.slice(0, 1).join(" ")}`
+            : ""}
+        </p>
+      </div>
     </section>
   );
 }
@@ -1948,12 +2075,13 @@ function ScoutingBoard({
               </div>
               <div className="nfl-scout-metric">
                 <span>Projection</span>
-                <strong>{player.fantasy.projection.toFixed(1)}</strong>
+                <strong>{player.contextProjection.projection.toFixed(1)}</strong>
               </div>
               <div className="nfl-scout-metric">
                 <span>Range</span>
                 <strong>
-                  {player.fantasy.floor.toFixed(1)}-{player.fantasy.ceiling.toFixed(1)}
+                  {player.contextProjection.floor.toFixed(1)}-
+                  {player.contextProjection.ceiling.toFixed(1)}
                 </strong>
               </div>
               <div className="nfl-rank-delta">
@@ -1981,6 +2109,7 @@ function ScoutingBoard({
 
 function FantasyTeamLab({
   activeReport,
+  contextStatus,
   fantasyImport,
   manualImportMessage,
   manualImportStatus,
@@ -2008,6 +2137,7 @@ function FantasyTeamLab({
   teams,
 }: {
   activeReport: FantasyTeamReport;
+  contextStatus: FantasyContextStatus;
   fantasyImport: ImportedFantasyLeague | null;
   manualImportMessage: string;
   manualImportStatus: FantasyImportStatus;
@@ -2119,6 +2249,7 @@ function FantasyTeamLab({
       </div>
 
       <FantasyDecisionEnginePanel
+        contextStatus={contextStatus}
         matchupReport={matchupReport}
         report={activeReport}
         scoringFormat={scoringFormat}
@@ -2165,10 +2296,14 @@ function FantasyTeamLab({
                     <em>
                       {player.position} · {player.opponent}
                     </em>
-                    <ProjectionReceipt player={player} projection={player.fantasy} compact />
+                    <ProjectionReceipt
+                      player={player}
+                      projection={player.contextProjection}
+                      compact
+                    />
                   </div>
                 </div>
-                <strong>{player.fantasy.projection.toFixed(1)}</strong>
+                <strong>{player.contextProjection.projection.toFixed(1)}</strong>
               </div>
             ))}
           </div>
@@ -2238,11 +2373,13 @@ function FantasyTeamLab({
 }
 
 function FantasyDecisionEnginePanel({
+  contextStatus,
   matchupReport,
   report,
   scoringFormat,
   teamLens,
 }: {
+  contextStatus: FantasyContextStatus;
   matchupReport: FantasyMatchupReport;
   report: FantasyTeamReport;
   scoringFormat: ScoringFormat;
@@ -2265,7 +2402,7 @@ function FantasyDecisionEnginePanel({
           <strong>Best lineup for {report.team.name}</strong>
           <em>
             {scoringLabels[scoringFormat]} · {teamLensLabels[teamLens]} ·{" "}
-            {matchupReport.edgeLabel}
+            {matchupReport.edgeLabel} · context {contextStatus.status}
           </em>
         </div>
         <div className="nfl-source-vs-seer">
@@ -2283,6 +2420,12 @@ function FantasyDecisionEnginePanel({
         <div>
           <span>Chaos</span>
           <strong>{matchupReport.chaos}%</strong>
+        </div>
+        <div>
+          <span>Context</span>
+          <strong>
+            {contextStatus.coveredTeams}/{contextStatus.totalTeams}
+          </strong>
         </div>
         <div>
           <span>Strong lane</span>
@@ -2314,7 +2457,23 @@ function FantasyDecisionEnginePanel({
               <strong>Seer {slot.seerProjection.toFixed(1)}</strong>
               <em>{formatFantasyDelta(slot.delta)}</em>
             </div>
+            {slot.context ? (
+              <div className="nfl-context-chips">
+                {slot.context.chips.slice(0, 4).map((chip) => (
+                  <span key={chip}>{chip}</span>
+                ))}
+              </div>
+            ) : null}
             <p>{slot.receipt}</p>
+            {slot.adjustmentReceipts.length > 0 ? (
+              <div className="nfl-adjustment-receipts">
+                {slot.adjustmentReceipts.slice(0, 5).map((adjustment) => (
+                  <span className={cx(adjustment.delta > 0 && "plus")} key={adjustment.kind}>
+                    {adjustment.label} {formatFantasyDelta(adjustment.delta)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {slot.tags.length > 0 ? (
               <div className="nfl-lineup-tags">
                 {slot.tags.map((tag) => (
@@ -2338,6 +2497,9 @@ function FantasyDecisionEnginePanel({
         <AdviceList title="Close calls" items={closeCallItems} />
         <AdviceList title="Bench pressure" items={benchItems} />
       </div>
+      {contextStatus.warnings.length > 0 ? (
+        <p className="nfl-context-warning">{contextStatus.warnings.join(" ")}</p>
+      ) : null}
     </article>
   );
 }
@@ -2549,16 +2711,18 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
 
 function analyzeFantasyTeam({
   allPlayers,
+  contextByTeam,
   lens,
   scoringFormat,
   team,
 }: {
   allPlayers: FantasyPlayer[];
+  contextByTeam: Record<string, NflFantasyTeamContext>;
   lens: FantasyTeamLens;
   scoringFormat: ScoringFormat;
   team: FantasyTeam;
 }): FantasyTeamReport {
-  const board = buildScoutingBoard(allPlayers, scoringFormat);
+  const board = buildScoutingBoard(allPlayers, scoringFormat, contextByTeam);
   const rosterIdSet = new Set(team.rosterIds);
   const fullRoster = board.filter((player) => rosterIdSet.has(player.id));
   const rosterPool =
@@ -2576,9 +2740,13 @@ function analyzeFantasyTeam({
         : board.slice(0, 1);
   const benchPlayers = decision.benchPlayers;
   const lanes = fantasyRosterLanes(decision.lineup);
-  const projection = round1(sum(roster.map((player) => player.fantasy.projection)));
-  const floor = round1(sum(roster.map((player) => player.fantasy.floor)));
-  const ceiling = round1(sum(roster.map((player) => player.fantasy.ceiling)));
+  const projection = round1(
+    sum(roster.map((player) => player.contextProjection.projection)),
+  );
+  const floor = round1(sum(roster.map((player) => player.contextProjection.floor)));
+  const ceiling = round1(
+    sum(roster.map((player) => player.contextProjection.ceiling)),
+  );
   const balance = teamBalance(roster);
   const depth = teamDepth(fullRoster.length > 0 ? fullRoster : roster);
   const risk = teamRisk(roster);
@@ -2696,6 +2864,9 @@ function fantasyLineupSlotPick(
 ): FantasyLineupSlotPick {
   if (!player) {
     return {
+      adjustmentReceipts: [],
+      context: null,
+      contextDelta: 0,
       delta: 0,
       id: slot.id,
       label: slot.label,
@@ -2708,17 +2879,23 @@ function fantasyLineupSlotPick(
   }
 
   const sourceProjection = fantasySourceProjection(player);
-  const seerProjection = round1(player.fantasy.projection);
+  const seerProjection = round1(player.contextProjection.projection);
   const delta = round1(seerProjection - sourceProjection);
   const tags = fantasyDecisionTags(player, scoringFormat).slice(0, 4);
   const tagCopy = tags.slice(0, 2).join(" and ").toLowerCase();
+  const adjustmentReceipts = player.context.adjustments
+    .filter((adjustment) => Math.abs(adjustment.delta) >= 0.1)
+    .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
 
   return {
+    adjustmentReceipts,
+    context: player.context,
+    contextDelta: player.context.projectionNudge,
     delta,
     id: slot.id,
     label: slot.label,
     player,
-    receipt: `${player.name} gets the ${slot.label} lane with ${tagCopy || "a balanced profile"}.`,
+    receipt: `${player.name} gets the ${slot.label} lane with ${tagCopy || "a balanced profile"}. ${contextReceiptLine(player.context)}`,
     seerProjection,
     sourceProjection,
     tags,
@@ -2753,16 +2930,17 @@ function fantasyLineupFitScore(
   const flexPenalty = slot.id === "FLEX" && position === "TE" ? 0.25 : 0;
 
   return (
-    player.fantasy.projection * 1.5 +
-    player.fantasy.floor * 0.62 +
-    player.fantasy.ceiling * 0.24 +
+    player.contextProjection.projection * 1.5 +
+    player.contextProjection.floor * 0.62 +
+    player.contextProjection.ceiling * 0.24 +
     player.matchup * 0.055 +
     player.health * 0.04 -
     player.chaos * 0.05 +
     pprBoost +
     roleBoost +
     dynastyBoost -
-    flexPenalty
+    flexPenalty +
+    player.context.projectionNudge * 1.15
   );
 }
 
@@ -2784,8 +2962,8 @@ function fantasyBenchAlternatives(
         )
         .sort(
           (left, right) =>
-            (left.player?.fantasy.projection ?? 0) -
-              (right.player?.fantasy.projection ?? 0) ||
+            (left.player?.contextProjection.projection ?? 0) -
+              (right.player?.contextProjection.projection ?? 0) ||
             fantasyLineupFitScore(benchPlayer, slotDefinition(left.id), scoringFormat, lens) -
               fantasyLineupFitScore(benchPlayer, slotDefinition(right.id), scoringFormat, lens),
         );
@@ -2796,7 +2974,8 @@ function fantasyBenchAlternatives(
       }
 
       const lift = round1(
-        benchPlayer.fantasy.projection - targetSlot.player.fantasy.projection,
+        benchPlayer.contextProjection.projection -
+          targetSlot.player.contextProjection.projection,
       );
       const summary =
         lift > 0
@@ -2815,7 +2994,7 @@ function fantasyBenchAlternatives(
     .sort(
       (left, right) =>
         right.lift - left.lift ||
-        right.player.fantasy.floor - left.player.fantasy.floor,
+        right.player.contextProjection.floor - left.player.contextProjection.floor,
     )
     .slice(0, 3);
 }
@@ -2836,7 +3015,8 @@ function fantasyCloseCalls(
       }
 
       const gap = round1(
-        targetSlot.player.fantasy.projection - alternative.player.fantasy.projection,
+        targetSlot.player.contextProjection.projection -
+          alternative.player.contextProjection.projection,
       );
       const summary =
         gap <= 0
@@ -2870,6 +3050,7 @@ function fantasyDecisionReceipts(
         delta: slot.delta,
         label: `Start ${slot.label}`,
         player,
+        adjustmentReceipts: slot.adjustmentReceipts,
         seerProjection: slot.seerProjection,
         sourceProjection: slot.sourceProjection,
         summary: startSitSummary(player, slot.label, scoringFormat),
@@ -2879,9 +3060,10 @@ function fantasyDecisionReceipts(
   const benchReceipts = benchAlternatives.slice(0, 2).map((alternative) => {
     const player = alternative.player;
     const sourceProjection = fantasySourceProjection(player);
-    const seerProjection = round1(player.fantasy.projection);
+    const seerProjection = round1(player.contextProjection.projection);
 
     return {
+      adjustmentReceipts: player.context.adjustments,
       delta: round1(seerProjection - sourceProjection),
       label: `Watch ${alternative.slotLabel}`,
       player,
@@ -2902,10 +3084,11 @@ function startSitSummary(
 ) {
   const sourceProjection = fantasySourceProjection(player);
   const seerProjection = round1(player.fantasy.projection);
+  const contextProjection = round1(player.contextProjection.projection);
   const opponentRead =
-    player.matchup >= 75
+    player.context.defenseVsPosition <= 68
       ? "friendly opponent lane"
-      : player.matchup <= 62
+      : player.context.defenseVsPosition >= 78
         ? "defensive tax"
         : "neutral opponent read";
   const volumeRead =
@@ -2919,16 +3102,22 @@ function startSitSummary(
           ? "TD swing"
           : "role stability";
 
-  return `${player.name} fits ${slotLabel}: source ${sourceProjection.toFixed(1)}, Seer ${seerProjection.toFixed(1)} with ${opponentRead} and ${volumeRead}.`;
+  return `${player.name} fits ${slotLabel}: source ${sourceProjection.toFixed(1)}, base Seer ${seerProjection.toFixed(1)}, context Seer ${contextProjection.toFixed(1)} with ${opponentRead} and ${volumeRead}.`;
 }
 
 function fantasyDecisionTags(player: ScoutingRow, scoringFormat: ScoringFormat) {
   const tags = [
-    player.matchup >= 75
+    player.context.defenseVsPosition <= 68
       ? "Matchup boost"
-      : player.matchup <= 62
+      : player.context.defenseVsPosition >= 78
         ? "Defense tax"
         : "Neutral matchup",
+    player.context.weather.toLowerCase().includes("wind") ||
+    player.context.weather.toLowerCase().includes("snow")
+      ? "Weather watch"
+      : player.context.roof === "Dome"
+        ? "Clean track"
+        : "Open-air read",
     player.health >= 82
       ? "Clean health"
       : player.health <= 68
@@ -2976,7 +3165,9 @@ function fantasyRosterLanes(lineup: FantasyLineupSlotPick[]) {
         (player): player is ScoutingRow =>
           player !== null && normalizeScoutingPosition(player.position) === position,
       );
-    const value = round1(sum(players.map((player) => player.fantasy.projection)));
+    const value = round1(
+      sum(players.map((player) => player.contextProjection.projection)),
+    );
     const label = `${scoutingRankLabel(position)}${position === "RB" || position === "WR" ? " room" : ""}`;
     const summary =
       players.length > 0
@@ -2995,19 +3186,33 @@ function fantasyRosterLanes(lineup: FantasyLineupSlotPick[]) {
 
 function compareFantasyTeams({
   allPlayers,
+  contextByTeam,
   left,
   lens,
   right,
   scoringFormat,
 }: {
   allPlayers: FantasyPlayer[];
+  contextByTeam: Record<string, NflFantasyTeamContext>;
   left: FantasyTeam;
   lens: FantasyTeamLens;
   right: FantasyTeam;
   scoringFormat: ScoringFormat;
 }): FantasyMatchupReport {
-  const leftReport = analyzeFantasyTeam({ allPlayers, lens, scoringFormat, team: left });
-  const rightReport = analyzeFantasyTeam({ allPlayers, lens, scoringFormat, team: right });
+  const leftReport = analyzeFantasyTeam({
+    allPlayers,
+    contextByTeam,
+    lens,
+    scoringFormat,
+    team: left,
+  });
+  const rightReport = analyzeFantasyTeam({
+    allPlayers,
+    contextByTeam,
+    lens,
+    scoringFormat,
+    team: right,
+  });
   const projectionGap = round1(leftReport.projection - rightReport.projection);
   const edgeTeam = projectionGap >= 0 ? leftReport.team : rightReport.team;
   const trailingReport = projectionGap >= 0 ? rightReport : leftReport;
@@ -3073,14 +3278,14 @@ function fantasyPositionEdges(
       sum(
         leftReport.players
           .filter((player) => normalizeScoutingPosition(player.position) === position)
-          .map((player) => player.fantasy.projection),
+          .map((player) => player.contextProjection.projection),
       ),
     );
     const rightProjection = round1(
       sum(
         rightReport.players
           .filter((player) => normalizeScoutingPosition(player.position) === position)
-          .map((player) => player.fantasy.projection),
+          .map((player) => player.contextProjection.projection),
       ),
     );
     const rawGap = round1(leftProjection - rightProjection);
@@ -3116,7 +3321,7 @@ function fantasyStrengths(
   );
 
   return [
-    `${top.name} is the lineup anchor at ${top.fantasy.projection.toFixed(1)} projected points.`,
+    `${top.name} is the lineup anchor at ${top.contextProjection.projection.toFixed(1)} context-adjusted points.`,
     receivingFloor >= 6 && scoringFormat !== "standard"
       ? "Reception volume gives this roster a nice PPR safety net."
       : rushingControl >= 22
@@ -3181,7 +3386,7 @@ function fantasyMoves(
   const moves: string[] = [];
   const highChaos = [...roster].sort((left, right) => right.chaos - left.chaos)[0];
   const bestFloor = [...roster].sort(
-    (left, right) => right.fantasy.floor - left.fantasy.floor,
+    (left, right) => right.contextProjection.floor - left.contextProjection.floor,
   )[0];
 
   if ((positionCounts.QB ?? 0) > 1) {
@@ -3213,17 +3418,17 @@ function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow
   }
 
   const weakestStarter = [...starters].sort(
-    (left, right) => left.fantasy.projection - right.fantasy.projection,
+    (left, right) => left.contextProjection.projection - right.contextProjection.projection,
   )[0];
   const bestBench = [...benchPlayers].sort(
-    (left, right) => right.fantasy.projection - left.fantasy.projection,
+    (left, right) => right.contextProjection.projection - left.contextProjection.projection,
   )[0];
   const samePositionBench = benchPlayers
     .filter((player) => player.position === weakestStarter.position)
-    .sort((left, right) => right.fantasy.floor - left.fantasy.floor)[0];
+    .sort((left, right) => right.contextProjection.floor - left.contextProjection.floor)[0];
   const ideas: string[] = [];
 
-  if (bestBench.fantasy.projection > weakestStarter.fantasy.projection + 1.5) {
+  if (bestBench.contextProjection.projection > weakestStarter.contextProjection.projection + 1.5) {
     ideas.push(
       `${bestBench.name} is pushing past ${weakestStarter.name}; check the slot before kickoff.`,
     );
@@ -3236,7 +3441,7 @@ function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow
   if (
     samePositionBench &&
     samePositionBench.id !== bestBench.id &&
-    samePositionBench.fantasy.floor > weakestStarter.fantasy.floor
+    samePositionBench.contextProjection.floor > weakestStarter.contextProjection.floor
   ) {
     ideas.push(
       `${samePositionBench.name} has the cleaner ${samePositionBench.position} floor if you need less chaos.`,
@@ -3355,7 +3560,7 @@ function tradeFitScore(
   }
 
   if (needs.has("floor")) {
-    score += player.fantasy.floor * 1.2 - player.chaos * 0.2;
+    score += player.contextProjection.floor * 1.2 - player.chaos * 0.2;
   }
 
   if (needs.has("core") || lens === "dynasty") {
@@ -3383,7 +3588,7 @@ function teamBalance(roster: ScoutingRow[]) {
 function teamDepth(roster: ScoutingRow[]) {
   const playable = roster.filter(
     (player) =>
-      player.fantasy.projection >= 12 || (player.roleSecurity ?? 0) >= 74,
+      player.contextProjection.projection >= 12 || (player.roleSecurity ?? 0) >= 74,
   ).length;
   const roleSecurity = average(
     roster.map((player) => player.roleSecurity ?? player.health),
@@ -3537,22 +3742,601 @@ function scoutingRankLabel(position: ScoutingPosition) {
   return position === "DST" ? "Def" : position;
 }
 
-function buildScoutingBoard(players: FantasyPlayer[], scoringFormat: ScoringFormat) {
+function buildFantasyContextLayer({
+  dataset,
+  matchups,
+  players,
+}: {
+  dataset: NflSeerDataset;
+  matchups: NflMatchup[];
+  players: FantasyPlayer[];
+}): FantasyContextLayer {
+  const byTeam = matchups.reduce<Record<string, NflFantasyTeamContext>>(
+    (contexts, matchup) => {
+      contexts[matchup.home.code] = matchupTeamContext({
+        matchup,
+        opponent: matchup.away,
+        side: "home",
+        team: matchup.home,
+        updatedAt: dataset.updatedAt,
+        status: dataset.providerStatus.schedule === "live" ? "live" : "fallback",
+      });
+      contexts[matchup.away.code] = matchupTeamContext({
+        matchup,
+        opponent: matchup.home,
+        side: "away",
+        team: matchup.away,
+        updatedAt: dataset.updatedAt,
+        status: dataset.providerStatus.schedule === "live" ? "live" : "fallback",
+      });
+      return contexts;
+    },
+    {},
+  );
+  const playerTeams = [
+    ...new Set(
+      players
+        .map((player) => normalizeTeamCode(player.team))
+        .filter((team) => team !== "FA"),
+    ),
+  ];
+  const coveredTeams = playerTeams.filter((team) => byTeam[team]).length;
+  const totalTeams = Math.max(1, playerTeams.length);
+  const freshness = contextFreshness(dataset.updatedAt);
+  const uncovered = Math.max(0, totalTeams - coveredTeams);
+  const status: FantasyContextStatusValue =
+    dataset.providerStatus.schedule === "live" && uncovered === 0
+      ? "live"
+      : coveredTeams > 0
+        ? "partial"
+        : "fallback";
+
+  return {
+    byTeam,
+    status: {
+      coveredTeams,
+      freshness,
+      message:
+        status === "live"
+          ? "Game context is live across loaded fantasy teams."
+          : status === "partial"
+            ? "Game context is live for part of the fantasy pool; uncovered teams use role and matchup fallback."
+            : "Game context is using seeded matchup fallback until the slate feed covers these teams.",
+      status,
+      totalTeams,
+      warnings:
+        uncovered > 0
+          ? [`${uncovered} fantasy team lane${uncovered === 1 ? "" : "s"} need live opponent context.`]
+          : [],
+    },
+  };
+}
+
+function matchupTeamContext({
+  matchup,
+  opponent,
+  side,
+  status,
+  team,
+  updatedAt,
+}: {
+  matchup: NflMatchup;
+  opponent: NflTeam;
+  side: "away" | "home";
+  status: FantasyContextStatusValue;
+  team: NflTeam;
+  updatedAt: string;
+}): NflFantasyTeamContext {
+  const roof = roofRead(matchup.venue, matchup.weather);
+
+  return {
+    freshness: contextFreshness(updatedAt),
+    message: `${team.code} context comes from ${matchup.week}: ${matchup.weather}, ${matchup.venue}.`,
+    opponent: `${side === "home" ? "vs" : "at"} ${opponent.code}`,
+    opponentCode: opponent.code,
+    opponentCoaching: opponent.coaching,
+    opponentDefense: opponent.defense,
+    opponentOffense: opponent.offense,
+    opponentTrenches: opponent.trenches,
+    opponentWin: side === "home" ? matchup.awayWin : matchup.homeWin,
+    pace: matchup.pace,
+    roof,
+    source: status === "live" ? "schedule feed" : "seeded matchup rail",
+    status,
+    surface: surfaceRead(matchup.venue, matchup.weather, roof),
+    team: team.code,
+    teamHealth: team.injuries,
+    teamOffense: team.offense,
+    teamWin: side === "home" ? matchup.homeWin : matchup.awayWin,
+    venue: matchup.venue,
+    weather: matchup.weather,
+  };
+}
+
+function fantasyPlayerContext(
+  player: FantasyPlayer,
+  contextByTeam: Record<string, NflFantasyTeamContext>,
+  fantasy: FantasyProjection,
+): FantasyPlayerContext {
+  const position = normalizeScoutingPosition(player.position);
+  const teamContext = contextByTeam[normalizeTeamCode(player.team)];
+  const roleSignal = playerRoleSignal(player);
+  const touchSignal = playerTouchSignal(player, position);
+  const redZoneSignal = player.touchdownPulse;
+  const fallbackDefense = clampMeter(142 - player.matchup);
+  const context =
+    teamContext ??
+    fallbackTeamContext({
+      fallbackDefense,
+      player,
+    });
+  const defenseVsPosition = defenseVsFantasyPosition(context, position, fallbackDefense);
+  const adjustments = fantasyContextAdjustments({
+    context,
+    defenseVsPosition,
+    fantasy,
+    player,
+    position,
+    redZoneSignal,
+    roleSignal,
+    touchSignal,
+  });
+  const existingKinds = existingAdjustmentKinds(player);
+  const projectionNudge = round1(
+    clampValue(
+      sum(
+        adjustments
+          .filter((adjustment) => !existingKinds.has(adjustment.kind))
+          .map((adjustment) => adjustment.delta),
+      ),
+      -1.8,
+      1.8,
+    ),
+  );
+  const totalDelta = round1(sum(adjustments.map((adjustment) => adjustment.delta)));
+  const chips = [
+    `${context.opponentCode} vs ${scoutingRankLabel(position)} ${Math.round(defenseVsPosition)}`,
+    context.weather,
+    `${context.roof} · ${context.surface}`,
+    `Pace ${Math.round(context.pace)}`,
+    `Role ${Math.round(roleSignal)}`,
+  ];
+
+  return {
+    adjustments,
+    chips,
+    defenseVsPosition,
+    freshness: context.freshness,
+    gameScript: context.teamWin - context.opponentWin,
+    message: context.message,
+    opponent: context.opponent,
+    opponentCode: context.opponentCode,
+    opponentDefense: context.opponentDefense,
+    pace: context.pace,
+    projectionNudge,
+    redZoneSignal,
+    roleSignal,
+    roof: context.roof,
+    source: context.source,
+    status: context.status,
+    surface: context.surface,
+    teamHealth: context.teamHealth,
+    totalDelta,
+    touchSignal,
+    venue: context.venue,
+    weather: context.weather,
+  };
+}
+
+function fallbackTeamContext({
+  fallbackDefense,
+  player,
+}: {
+  fallbackDefense: number;
+  player: FantasyPlayer;
+}): NflFantasyTeamContext {
+  return {
+    freshness: "unknown",
+    message: `${player.name} is using player-role fallback until the schedule context covers ${player.team}.`,
+    opponent: player.opponent,
+    opponentCode: cleanOpponentCode(player.opponent),
+    opponentCoaching: fallbackDefense,
+    opponentDefense: fallbackDefense,
+    opponentOffense: 72,
+    opponentTrenches: fallbackDefense,
+    opponentWin: 50,
+    pace: 66,
+    roof: "Unknown roof",
+    source: "fantasy fallback",
+    status: "fallback",
+    surface: "Unknown surface",
+    team: normalizeTeamCode(player.team),
+    teamHealth: player.health,
+    teamOffense: 72,
+    teamWin: 50,
+    venue: "Context fallback",
+    weather: "Weather TBD",
+  };
+}
+
+function fantasyContextAdjustments({
+  context,
+  defenseVsPosition,
+  fantasy,
+  player,
+  position,
+  redZoneSignal,
+  roleSignal,
+  touchSignal,
+}: {
+  context: NflFantasyTeamContext;
+  defenseVsPosition: number;
+  fantasy: FantasyProjection;
+  player: FantasyPlayer;
+  position: ScoutingPlayerPosition;
+  redZoneSignal: number;
+  roleSignal: number;
+  touchSignal: number;
+}): FantasyContextAdjustment[] {
+  const matchupDelta = round1(clampValue((72 - defenseVsPosition) / 19, -1.15, 1.15));
+  const weatherDelta = fantasyWeatherDelta(context.weather, context.roof, position);
+  const paceDelta = round1(clampValue((context.pace - 66) / 28, -0.75, 0.75));
+  const roleDelta = round1(
+    clampValue(
+      (roleSignal - 76) / 44 +
+        (player.health - 82) / 48 +
+        (touchSignal - 42) / 72 +
+        (redZoneSignal - 60) / 90,
+      -1.05,
+      1.05,
+    ),
+  );
+  const volatilityDelta = round1(clampValue(-(player.chaos - 50) / 40, -0.95, 0.95));
+
+  const adjustments: FantasyContextAdjustment[] = [
+    {
+      delta: matchupDelta,
+      kind: "matchup",
+      label: `Defense vs ${scoutingRankLabel(position)}`,
+      summary:
+        matchupDelta >= 0
+          ? "Opponent lane is friendlier than average."
+          : "Opponent lane adds resistance.",
+    },
+    {
+      delta: weatherDelta,
+      kind: "weather",
+      label: "Weather",
+      summary:
+        weatherDelta >= 0
+          ? "Conditions help the fantasy path."
+          : "Conditions trim the clean projection path.",
+    },
+    {
+      delta: paceDelta,
+      kind: "pace",
+      label: "Pace",
+      summary:
+        paceDelta >= 0
+          ? "Game environment adds play volume."
+          : "Game environment is a little slower.",
+    },
+    {
+      delta: roleDelta,
+      kind: "role",
+      label: "Role / health",
+      summary:
+        roleDelta >= 0
+          ? "Usage and health support the start."
+          : "Role or health keeps the Seer cautious.",
+    },
+    {
+      delta: volatilityDelta,
+      kind: "volatility",
+      label: "Volatility",
+      summary:
+        volatilityDelta >= 0
+          ? "Range is stable enough for lineup trust."
+          : "Chaos pushes this closer to a swing play.",
+    },
+  ];
+
+  return adjustments.filter((adjustment) => adjustment.delta !== 0);
+}
+
+function applyFantasyContextProjection(
+  fantasy: FantasyProjection,
+  context: FantasyPlayerContext,
+): FantasyProjection {
+  const projection = round1(Math.max(0, fantasy.projection + context.projectionNudge));
+  const floor = round1(
+    Math.max(
+      0,
+      fantasy.floor +
+        context.projectionNudge * 0.55 +
+        Math.min(0, context.projectionNudge) * 0.25,
+    ),
+  );
+  const ceiling = round1(
+    Math.max(
+      projection,
+      fantasy.ceiling +
+        context.projectionNudge * 0.75 +
+        Math.max(0, context.pace - 70) * 0.03,
+    ),
+  );
+
+  return { ceiling, floor, projection };
+}
+
+function defenseVsFantasyPosition(
+  context: NflFantasyTeamContext,
+  position: ScoutingPlayerPosition,
+  fallbackDefense: number,
+) {
+  if (context.status === "fallback") {
+    return fallbackDefense;
+  }
+
+  if (position === "QB") {
+    return clampMeter(
+      Math.round(
+        context.opponentDefense * 0.58 +
+          context.opponentTrenches * 0.2 +
+          context.opponentCoaching * 0.22,
+      ),
+    );
+  }
+
+  if (position === "RB") {
+    return clampMeter(
+      Math.round(
+        context.opponentDefense * 0.38 +
+          context.opponentTrenches * 0.46 +
+          context.opponentCoaching * 0.16,
+      ),
+    );
+  }
+
+  if (position === "WR") {
+    return clampMeter(
+      Math.round(
+        context.opponentDefense * 0.62 +
+          context.opponentTrenches * 0.1 +
+          context.opponentCoaching * 0.28,
+      ),
+    );
+  }
+
+  if (position === "TE") {
+    return clampMeter(
+      Math.round(
+        context.opponentDefense * 0.52 +
+          context.opponentTrenches * 0.18 +
+          context.opponentCoaching * 0.3,
+      ),
+    );
+  }
+
+  if (position === "K") {
+    return clampMeter(
+      Math.round(
+        context.opponentDefense * 0.45 +
+          context.opponentTrenches * 0.1 +
+          (context.weather.toLowerCase().includes("wind") ? 88 : 62) * 0.45,
+      ),
+    );
+  }
+
+  return clampMeter(
+    Math.round(context.opponentOffense * 0.62 + context.opponentWin * 0.38),
+  );
+}
+
+function fantasyWeatherDelta(
+  weather: string,
+  roof: string,
+  position: ScoutingPlayerPosition,
+) {
+  const normalized = weather.toLowerCase();
+  const badAir =
+    normalized.includes("wind") ||
+    normalized.includes("snow") ||
+    normalized.includes("rain") ||
+    normalized.includes("storm");
+  const cleanTrack =
+    roof === "Dome" ||
+    normalized.includes("clear") ||
+    normalized.includes("clean");
+
+  if (badAir) {
+    if (position === "RB" || position === "DST") {
+      return 0.25;
+    }
+
+    return position === "K" ? -0.8 : -0.55;
+  }
+
+  if (cleanTrack) {
+    return position === "QB" || position === "WR" || position === "TE" ? 0.35 : 0.12;
+  }
+
+  return 0;
+}
+
+function existingAdjustmentKinds(player: FantasyPlayer) {
+  return new Set(
+    (player.seerAdjustmentDetails ?? []).map((adjustment) =>
+      adjustmentKindFromLabel(adjustment.label),
+    ),
+  );
+}
+
+function adjustmentKindFromLabel(label: string): FantasyContextAdjustmentKind {
+  const normalized = label.toLowerCase();
+
+  if (
+    normalized.includes("defense") ||
+    normalized.includes("matchup") ||
+    normalized.includes("script")
+  ) {
+    return "matchup";
+  }
+
+  if (normalized.includes("weather") || normalized.includes("track")) {
+    return "weather";
+  }
+
+  if (normalized.includes("pace")) {
+    return "pace";
+  }
+
+  if (
+    normalized.includes("role") ||
+    normalized.includes("health") ||
+    normalized.includes("team health")
+  ) {
+    return "role";
+  }
+
+  return "volatility";
+}
+
+function contextReceiptLine(context: FantasyPlayerContext) {
+  const strongest = [...context.adjustments]
+    .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+    .slice(0, 2);
+
+  if (strongest.length === 0) {
+    return "Context stayed neutral.";
+  }
+
+  return `Context: ${strongest
+    .map((adjustment) => `${adjustment.label.toLowerCase()} ${formatFantasyDelta(adjustment.delta)}`)
+    .join(", ")}.`;
+}
+
+function playerRoleSignal(player: FantasyPlayer) {
+  return clampMeter(
+    Math.round(
+      (player.roleSecurity ?? player.health) * 0.5 +
+        player.health * 0.28 +
+        player.targetShare * 0.08 +
+        player.carryShare * 0.08 +
+        player.touchdownPulse * 0.06,
+    ),
+  );
+}
+
+function playerTouchSignal(player: FantasyPlayer, position: ScoutingPlayerPosition) {
+  if (position === "QB") {
+    return clampMeter(player.carryShare * 1.9 + player.touchdownPulse * 0.48);
+  }
+
+  if (position === "RB") {
+    return clampMeter(player.carryShare * 1.05 + player.targetShare * 0.8);
+  }
+
+  if (position === "WR" || position === "TE") {
+    return clampMeter(player.targetShare * 1.9 + player.baseline.receptions * 4);
+  }
+
+  return player.touchdownPulse;
+}
+
+function roofRead(venue: string, weather: string) {
+  const value = `${venue} ${weather}`.toLowerCase();
+
+  if (
+    value.includes("dome") ||
+    value.includes("ford field") ||
+    value.includes("sofi") ||
+    value.includes("allegiant") ||
+    value.includes("state farm") ||
+    value.includes("at&t") ||
+    value.includes("lucas oil") ||
+    value.includes("superdome") ||
+    value.includes("nrg") ||
+    value.includes("u.s. bank") ||
+    value.includes("mercedes-benz")
+  ) {
+    return "Dome";
+  }
+
+  return "Open roof";
+}
+
+function surfaceRead(venue: string, weather: string, roof: string) {
+  const value = `${venue} ${weather}`.toLowerCase();
+
+  if (roof === "Dome" || value.includes("clean") || value.includes("clear")) {
+    return "Fast track";
+  }
+
+  if (value.includes("snow") || value.includes("rain") || value.includes("storm")) {
+    return "Heavy field";
+  }
+
+  return "Outdoor field";
+}
+
+function contextFreshness(updatedAt: string): FantasyContextFreshness {
+  const date = new Date(updatedAt);
+
+  if (Number.isNaN(date.getTime()) || updatedAt === new Date(0).toISOString()) {
+    return "unknown";
+  }
+
+  const ageHours = Math.max(0, (Date.now() - date.getTime()) / 36e5);
+
+  return ageHours <= 72 ? "fresh" : "stale";
+}
+
+function cleanOpponentCode(opponent: string) {
+  const code = opponent.toUpperCase().match(/\b[A-Z]{2,3}\b/)?.[0];
+
+  return code ?? "NFL";
+}
+
+function normalizeTeamCode(team: string) {
+  const normalized = team.toUpperCase();
+
+  return normalized.length > 0 ? normalized : "FA";
+}
+
+function clampValue(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildScoutingBoard(
+  players: FantasyPlayer[],
+  scoringFormat: ScoringFormat,
+  contextByTeam: Record<string, NflFantasyTeamContext> = {},
+) {
   return players
     .map((player) => {
       const fantasy = fantasyProjection(player, scoringFormat);
+      const context = fantasyPlayerContext(player, contextByTeam, fantasy);
+      const contextProjection = applyFantasyContextProjection(fantasy, context);
       return {
         ...player,
         fantasy,
+        context,
+        contextProjection,
         rankDelta: player.nflRank - player.seerRank,
-        score: fantasyScore(player, scoringFormat),
+        score: fantasyScore(player, scoringFormat, contextProjection, context),
       };
     })
     .sort((a, b) => b.score - a.score);
 }
 
-function fantasyScore(player: FantasyPlayer, scoringFormat: ScoringFormat) {
-  const fantasy = fantasyProjection(player, scoringFormat);
+function fantasyScore(
+  player: FantasyPlayer,
+  scoringFormat: ScoringFormat,
+  fantasy = fantasyProjection(player, scoringFormat),
+  context?: FantasyPlayerContext,
+) {
+  const contextBoost = context ? context.projectionNudge * 1.8 : 0;
 
   return (
     fantasy.projection * 3.2 +
@@ -3560,7 +4344,8 @@ function fantasyScore(player: FantasyPlayer, scoringFormat: ScoringFormat) {
     fantasy.ceiling * 1.1 +
     player.matchup * 0.18 +
     player.health * 0.14 -
-    player.chaos * 0.18
+    player.chaos * 0.18 +
+    contextBoost
   );
 }
 
