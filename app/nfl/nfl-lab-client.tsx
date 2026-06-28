@@ -42,6 +42,13 @@ import {
   type NflFantasyPlayer,
   type SleeperLeagueOption,
 } from "../../lib/nfl-fantasy-import";
+import type { SeerVoiceId } from "../../lib/domain";
+import {
+  defaultNflVoiceId,
+  getSeerVoice,
+  seerVoiceOptionsForMode,
+  type SeerVoiceProfile,
+} from "../../lib/seer-voices";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 type FantasyTeamLens = "redraft" | "dynasty";
@@ -56,7 +63,32 @@ type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
 type NflLabMode = "nfl" | "fantasy";
 type FantasyView = "overview" | "players" | "roster" | "rookies" | "compare";
+type FantasyActionKind = "start" | "watch" | "swap" | "market";
+type FantasyActionStrength = "high" | "medium" | "low";
 type FantasyLineupSlotId = string;
+
+type FantasyActionItem = {
+  kind: FantasyActionKind;
+  title: string;
+  playerName?: string;
+  label: string;
+  detail: string;
+  meta: string;
+  strength: FantasyActionStrength;
+};
+
+type NflOracleAngle = "close" | "weather" | "quarterback" | "trenches" | "clean";
+
+type NflOracleContext = {
+  angle: NflOracleAngle;
+  favorite: NflTeam;
+  gap: number;
+  lead: string;
+  matchup: NflMatchup;
+  scenario: ScenarioImpact;
+  underdog: NflTeam;
+  weatherTeam: NflTeam;
+};
 
 type NflTeam = {
   code: string;
@@ -671,6 +703,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [activeMatchupId, setActiveMatchupId] = useState(seededMatchups[0].id);
   const [seerQuestion, setSeerQuestion] = useState("");
   const [seerQuestionAsked, setSeerQuestionAsked] = useState(false);
+  const [nflVoiceId, setNflVoiceId] = useState<SeerVoiceId>(defaultNflVoiceId);
   const [leftPlayerId, setLeftPlayerId] = useState(seededPlayerPair[0].id);
   const [rightPlayerId, setRightPlayerId] = useState(seededPlayerPair[1].id);
   const [scoringFormat, setScoringFormat] = useState<ScoringFormat>("fullPpr");
@@ -829,14 +862,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     () => readableMatchupPalette(activeMatchup.away.color, activeMatchup.home.color),
     [activeMatchup.away.color, activeMatchup.home.color],
   );
+  const nflVoiceOptions = useMemo(() => seerVoiceOptionsForMode("nfl"), []);
+  const nflVoice = useMemo(() => getSeerVoice(nflVoiceId), [nflVoiceId]);
   const seerOracleRead = useMemo(
     () =>
       buildNflSeerOracleRead({
         matchup: activeMatchup,
         question: seerQuestion,
         scenario: activeScenario,
+        voice: nflVoice,
       }),
-    [activeMatchup, activeScenario, seerQuestion],
+    [activeMatchup, activeScenario, nflVoice, seerQuestion],
   );
   const leftPlayer =
     fantasyPlayers.find((player) => player.id === leftPlayerId) ??
@@ -926,6 +962,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         teamLens,
       }),
     [activeTeamReport, fantasyMatchupReport, scoutRead, scoringFormat, teamLens],
+  );
+  const fantasyActionQueue = useMemo(
+    () =>
+      buildFantasyActionQueue({
+        matchupReport: fantasyMatchupReport,
+        report: activeTeamReport,
+      }),
+    [activeTeamReport, fantasyMatchupReport],
   );
 
   useEffect(() => {
@@ -1791,6 +1835,22 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     <Sparkles size={17} />
                     Ask the Seer
                   </span>
+                  <label className="nfl-voice-select">
+                    <span>Ask voice</span>
+                    <select
+                      aria-label="Ask the Seer voice"
+                      onChange={(event) =>
+                        setNflVoiceId(event.target.value as SeerVoiceId)
+                      }
+                      value={nflVoiceId}
+                    >
+                      {nflVoiceOptions.map((voice) => (
+                        <option key={voice.id} value={voice.id}>
+                          {voice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     onClick={() => setSeerQuestionAsked(true)}
                     type="button"
@@ -1807,6 +1867,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   rows={2}
                   value={seerQuestion}
                 />
+                <p className="nfl-voice-note">
+                  <strong>{nflVoice.shortName}:</strong> {nflVoice.onboardingLine}
+                </p>
                 {seerQuestionAsked ? (
                   <p className="nfl-seer-oracle-answer">{seerOracleRead}</p>
                 ) : null}
@@ -1875,6 +1938,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
           {fantasyView === "overview" ? (
             <FantasyOverview
+              actions={fantasyActionQueue}
               matchupReport={fantasyMatchupReport}
               report={activeTeamReport}
               rows={scoutingBoard.slice(0, 8)}
@@ -2768,12 +2832,14 @@ function FantasyViewTabs({
 }
 
 function FantasyOverview({
+  actions,
   matchupReport,
   report,
   rows,
   scoringFormat,
   teamLens,
 }: {
+  actions: FantasyActionItem[];
   matchupReport: FantasyMatchupReport;
   report: FantasyTeamReport;
   rows: ScoutingRow[];
@@ -2787,6 +2853,8 @@ function FantasyOverview({
 
   return (
     <section className="nfl-fantasy-overview" id="fantasy-overview">
+      <FantasyActionQueue actions={actions} />
+
       <article className="nfl-fantasy-focus-panel">
         <div className="nfl-section-kicker">
           <Sparkles size={17} />
@@ -2852,6 +2920,55 @@ function FantasyOverview({
       </article>
     </section>
   );
+}
+
+function FantasyActionQueue({ actions }: { actions: FantasyActionItem[] }) {
+  return (
+    <section className="nfl-fantasy-action-queue" aria-label="Fantasy action queue">
+      <div className="nfl-fantasy-action-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <ClipboardList size={17} />
+            Fantasy action queue
+          </div>
+          <h2>Your next moves</h2>
+        </div>
+        <span>{actions.length} live reads</span>
+      </div>
+      <div className="nfl-fantasy-action-grid">
+        {actions.map((action) => (
+          <article
+            className={cx("nfl-action-card", action.kind, action.strength)}
+            key={`${action.kind}-${action.title}-${action.playerName ?? action.label}`}
+          >
+            <div className="nfl-action-icon">{fantasyActionIcon(action.kind)}</div>
+            <div>
+              <span>{action.title}</span>
+              <strong>{action.playerName ?? action.label}</strong>
+              <p>{action.detail}</p>
+              <em>{action.meta}</em>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function fantasyActionIcon(kind: FantasyActionKind) {
+  if (kind === "start") {
+    return <ShieldCheck size={18} />;
+  }
+
+  if (kind === "watch") {
+    return <Timer size={18} />;
+  }
+
+  if (kind === "swap") {
+    return <RefreshCw size={18} />;
+  }
+
+  return <LineChart size={18} />;
 }
 
 function FantasySpotlightRow({
@@ -4392,22 +4509,20 @@ function FantasyImportPanel({
           ) : null}
           {fantasyImport?.sleeper ? (
             <div className="nfl-sleeper-receipt">
-              <div className="nfl-sleeper-receipt-main">
-                <span>{fantasyImport.sleeper.leagueName}</span>
-                <strong>
-                  Week {fantasyImport.sleeper.week ?? "?"} ·{" "}
-                  {fantasyImport.sleeper.matchupId
-                    ? `matchup ${fantasyImport.sleeper.matchupId}`
-                    : "no matchup"}
-                </strong>
-                <em>
-                  {fantasyImport.sleeper.rosterCount} rosters ·{" "}
-                  {fantasyImport.sleeper.status.replace(/-/g, " ")}
-                </em>
-                {sleeperLastRefreshedAt ? (
-                  <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
-                ) : null}
-              </div>
+              <span>{fantasyImport.sleeper.leagueName}</span>
+              <strong>
+                Week {fantasyImport.sleeper.week ?? "?"} ·{" "}
+                {fantasyImport.sleeper.matchupId
+                  ? `matchup ${fantasyImport.sleeper.matchupId}`
+                  : "no matchup"}
+              </strong>
+              <em>
+                {fantasyImport.sleeper.rosterCount} rosters ·{" "}
+                {fantasyImport.sleeper.status.replace(/-/g, " ")}
+              </em>
+              {sleeperLastRefreshedAt ? (
+                <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
+              ) : null}
               {fantasyImport.settings ? (
                 <div className="nfl-sleeper-settings">
                   <span>{fantasyImport.settings.formatLabel}</span>
@@ -5717,6 +5832,110 @@ function buildFantasyHeroRead({
   };
 }
 
+function buildFantasyActionQueue({
+  matchupReport,
+  report,
+}: {
+  matchupReport: FantasyMatchupReport;
+  report: FantasyTeamReport;
+}): FantasyActionItem[] {
+  const topStart =
+    [...report.startSitReceipts]
+      .filter((receipt) => receipt.label.startsWith("Start "))
+      .sort((left, right) => right.seerProjection - left.seerProjection)[0] ??
+    report.startSitReceipts[0];
+  const closeCall = report.closeCalls[0];
+  const benchSwap =
+    report.benchAlternatives.find((alternative) => alternative.lift >= 0) ??
+    report.benchAlternatives[0];
+  const marketIdea =
+    report.tradeIdeas[0] ??
+    report.benchUpgrades[0] ??
+    report.moves[0] ??
+    `Use waivers or a small trade to patch ${report.weakestLane.label}.`;
+  const actions: FantasyActionItem[] = [];
+
+  actions.push(
+    topStart
+      ? {
+          detail: topStart.summary,
+          kind: "start",
+          label: topStart.label,
+          meta: `${topStart.seerProjection.toFixed(1)} pts · ${formatFantasyDelta(
+            topStart.delta,
+          )} vs source`,
+          playerName: topStart.player.name,
+          strength: "high",
+          title: "Start with confidence",
+        }
+      : {
+          detail: report.strongestLane.summary,
+          kind: "start",
+          label: report.strongestLane.label,
+          meta: `${report.projection.toFixed(1)} projected team points`,
+          strength: "high",
+          title: "Start with confidence",
+        },
+  );
+
+  actions.push(
+    closeCall
+      ? {
+          detail: closeCall.summary,
+          kind: "watch",
+          label: closeCall.slotLabel,
+          meta: `${Math.abs(closeCall.gap).toFixed(1)} pts apart`,
+          playerName: closeCall.challenger.name,
+          strength: "medium",
+          title: "Re-check before kickoff",
+        }
+      : {
+          detail: `${report.weakestLane.label} is the pressure point. Re-check injury reports, weather, and role notes before lineup lock.`,
+          kind: "watch",
+          label: "News watch",
+          meta: `${matchupReport.confidence}% confidence · ${matchupReport.chaos}% variance`,
+          strength: "medium",
+          title: "Re-check before kickoff",
+        },
+  );
+
+  actions.push(
+    benchSwap
+      ? {
+          detail: benchSwap.summary,
+          kind: "swap",
+          label: benchSwap.slotLabel,
+          meta:
+            benchSwap.lift >= 0
+              ? `+${benchSwap.lift.toFixed(1)} if news holds`
+              : `${Math.abs(benchSwap.lift).toFixed(1)} behind starter`,
+          playerName: benchSwap.player.name,
+          strength: benchSwap.lift >= 0 ? "high" : "medium",
+          title: "Bench if news holds",
+        }
+      : {
+          detail:
+            "No bench player is forcing a move right now. Hold the starters unless late role or injury news changes the room.",
+          kind: "swap",
+          label: "Bench watch",
+          meta: "Hold current lineup",
+          strength: "low",
+          title: "Bench if news holds",
+        },
+  );
+
+  actions.push({
+    detail: marketIdea,
+    kind: "market",
+    label: report.weakestLane.label,
+    meta: `Patch priority: ${report.weakestLane.label}`,
+    strength: "low",
+    title: "Trade/waiver idea",
+  });
+
+  return actions;
+}
+
 function buildRookieWatchRows(rows: ScoutingRow[]) {
   const taggedRows = rows.filter((player) => {
     const searchableText = [
@@ -6659,10 +6878,12 @@ function buildNflSeerOracleRead({
   matchup,
   question,
   scenario,
+  voice,
 }: {
   matchup: NflMatchup;
   question: string;
   scenario: ScenarioImpact;
+  voice: SeerVoiceProfile;
 }) {
   const cleanQuestion = question.trim().replace(/\s+/g, " ");
   const favorite = scenario.homeWin >= scenario.awayWin ? matchup.home : matchup.away;
@@ -6675,26 +6896,98 @@ function buildNflSeerOracleRead({
       ? matchup.away
       : matchup.home;
   const promptLead = cleanQuestion
-    ? `${cleanQuestion} The Seer says:`
-    : "The Seer says:";
+    ? `${cleanQuestion} ${voice.shortName} says:`
+    : `${voice.shortName} says:`;
+  const angle: NflOracleAngle =
+    gap <= 6
+      ? "close"
+      : scenario.weatherDrag >= 62
+        ? "weather"
+        : qbGap >= trenchGap && qbGap >= 5
+          ? "quarterback"
+          : trenchGap >= 5
+            ? "trenches"
+            : "clean";
+  const context: NflOracleContext = {
+    angle,
+    favorite,
+    gap,
+    lead: promptLead,
+    matchup,
+    scenario,
+    underdog,
+    weatherTeam,
+  };
 
-  if (gap <= 6) {
-    return `${promptLead} ${matchup.away.code} and ${matchup.home.code} are close enough that one third-down escape can tilt the room. The lean is ${favorite.code} ${scenario.leanProbability}%, but ${underdog.code} is very much alive if the QB duel gets weird late.`;
+  return formatNflVoiceRead(voice.id, context);
+}
+
+function formatNflVoiceRead(voiceId: SeerVoiceId, context: NflOracleContext) {
+  const { angle, favorite, lead, matchup, scenario, underdog, weatherTeam } = context;
+
+  if (voiceId === "nfl-big-bro") {
+    if (angle === "close") {
+      return `${lead} Do not overthink it: ${matchup.away.code} and ${matchup.home.code} are close enough that one late escape changes the whole night. I trust ${favorite.code} by a hair, but ${underdog.code} can absolutely make this uncomfortable.`;
+    }
+
+    if (angle === "weather") {
+      return `${lead} This is where toughness matters. ${favorite.code} has the cleaner ${scenario.leanProbability}% path, and ${weatherTeam.code} handles the bad-air stuff better. ${underdog.code} needs short fields and one red-zone punch.`;
+    }
+
+    return `${lead} I am riding with ${favorite.code} because the cleaner path is there. ${underdog.code} needs to turn this into a messy possession game, but the ${scenario.projected} script still starts with ${favorite.code}.`;
   }
 
-  if (scenario.weatherDrag >= 62) {
-    return `${promptLead} ${favorite.code} has the ${scenario.leanProbability}% path, with ${weatherTeam.code} carrying the better bad-air profile. If ${underdog.code} wants the upset, it needs short fields and a red-zone steal.`;
+  if (voiceId === "nfl-gridiron-professor") {
+    if (angle === "quarterback") {
+      return `${lead} The quarterback leverage is doing the lecture here. ${favorite.code} has the tidier creation lane, so ${underdog.code} must win pressure timing instead of trying to match highlight for highlight.`;
+    }
+
+    if (angle === "trenches") {
+      return `${lead} The trench math is not subtle. ${favorite.code} owns the sturdier script, while ${underdog.code} needs early disruption before the game settles into its preferred shape.`;
+    }
+
+    return `${lead} The model is basically circling hidden possessions, not magic dust. ${favorite.code} is the cleaner side at ${scenario.leanProbability}%, but the margin stays thin enough for one leverage snap to matter.`;
   }
 
-  if (qbGap >= trenchGap && qbGap >= 5) {
-    return `${promptLead} ${favorite.code} gets the nod because the quarterback lane is cleaner. ${underdog.code} can still flip it by turning this into a pressure game instead of a highlight trade.`;
+  if (voiceId === "nfl-booth-analyst") {
+    if (angle === "close") {
+      return `${lead} This is a thin-margin game. ${favorite.code} gets the lean because the path is slightly cleaner, but ${underdog.code} stays live if it wins third down and keeps the late script tight.`;
+    }
+
+    if (angle === "weather") {
+      return `${lead} Weather is the swing factor. ${favorite.code} has the edge, but the key is whether ${weatherTeam.code}'s bad-weather profile controls tempo and keeps the score path near ${scenario.projected}.`;
+    }
+
+    return `${lead} The hinge is control. ${favorite.code} has the better route to the projected ${scenario.projected} finish, while ${underdog.code} needs a turnover or field-position swing to flip the script.`;
   }
 
-  if (trenchGap >= 5) {
-    return `${promptLead} ${favorite.code} owns the sturdier trench script. ${underdog.code} needs the first punch, then enough chaos to keep the favorite from settling in.`;
+  if (voiceId === "classic-seer") {
+    if (angle === "close") {
+      return `${lead} ${matchup.away.code} and ${matchup.home.code} are close enough that one third-down escape can tilt the room. The lean is ${favorite.code} ${scenario.leanProbability}%, but ${underdog.code} is very much alive if the QB duel gets weird late.`;
+    }
+
+    if (angle === "weather") {
+      return `${lead} ${favorite.code} has the ${scenario.leanProbability}% path, with ${weatherTeam.code} carrying the better bad-air profile. If ${underdog.code} wants the upset, it needs short fields and a red-zone steal.`;
+    }
   }
 
-  return `${promptLead} ${favorite.code} is the cleaner side, but the Seer is not pounding the table. The score path says ${scenario.projected}, and the upset door opens if ${underdog.code} wins the hidden possessions.`;
+  if (angle === "close") {
+    return `${lead} This one is close-close. I lean ${favorite.code}, but not with a megaphone. If ${underdog.code} gets the late ball with room to breathe, the whole read starts sweating.`;
+  }
+
+  if (angle === "weather") {
+    return `${lead} The weather is doing main-character stuff. ${favorite.code} still has the cleaner path, but ${weatherTeam.code}'s bad-air profile is why this does not feel like a normal spreadsheet game.`;
+  }
+
+  if (angle === "quarterback") {
+    return `${lead} The QB lane is the difference for me. ${favorite.code} can create cleaner answers, while ${underdog.code} needs pressure and awkward downs to make the night sideways.`;
+  }
+
+  if (angle === "trenches") {
+    return `${lead} This starts up front. ${favorite.code} has the steadier trench script, and ${underdog.code} needs the first real punch before the game gets comfortable.`;
+  }
+
+  return `${lead} ${favorite.code} is the cleaner side, but I am not yelling about it. The score path says ${scenario.projected}, and ${underdog.code} can open the upset door by winning the hidden possessions.`;
 }
 
 function scenarioFactors(

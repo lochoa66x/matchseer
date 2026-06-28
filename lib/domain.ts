@@ -1,4 +1,15 @@
 export type Language = "en" | "es" | "fr";
+export type SeerVoiceId =
+  | "classic-seer"
+  | "celtic-trickster"
+  | "highland-strategist"
+  | "latin-playmaker"
+  | "grandstand-englishman"
+  | "nfl-big-bro"
+  | "nfl-best-friend"
+  | "nfl-gridiron-professor"
+  | "nfl-booth-analyst"
+  | "fantasy-smart-friend";
 
 export type MatchStatus = "Live" | "Upcoming" | "Final";
 
@@ -150,10 +161,13 @@ export type MatchSummary = {
 export type ForecastInterpretationRequest = {
   matchId: string;
   language: Language;
+  voiceId?: SeerVoiceId;
 };
 
 export type ForecastInterpretation = {
   language: Language;
+  voiceId?: SeerVoiceId;
+  voiceName?: string;
   headline: string;
   summary: string;
   toneLine: string;

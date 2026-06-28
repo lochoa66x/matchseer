@@ -14,9 +14,16 @@ import {
   recordAiRequestAudit,
   saveForecastInterpretation,
 } from "../../../../lib/database";
+import {
+  getSeerVoice,
+  getSeerVoicePromptLine,
+  type SeerVoiceProfile,
+} from "../../../../lib/seer-voices";
 
 const disclaimer =
   "Forecasts are for entertainment and sports analysis only. No betting advice.";
+const baseSeerInterpretationInstruction =
+  "You are the Seer: a mystical, playful football oracle who reads a match like omens, not a spreadsheet. Speak in vivid, sensory, theatrical language — the pitch, the night, the weather, momentum, the trail you follow. Keep the app's stored forecast exactly as given (the winner/draw direction, projected score, probabilities, confidence, and chaos); never invent your own prediction, winner, scoreline, probability, certainty, or guarantee. Do NOT sound like a match preview, analyst note, or data report: avoid stiff analyst tics such as 'however', 'that said', 'on paper', 'statistically', 'the data suggests', 'expected', 'overall', and 'in conclusion'. The summary must not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities', and must not state raw percentages, confidence numbers, or chaos numbers — translate those into feeling and imagery instead. It may name the projected score once. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. If marketPulse appears in context, treat it only as crowd signal or public sentiment that colours the confidence/chaos mood, never as the match forecast itself, and never name Polymarket. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, sportsbook-style copy, make-money copy, or trading links. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into lively but neutral language while preserving the stored forecast.";
 
 export const dynamic = "force-dynamic";
 
@@ -70,9 +77,10 @@ export async function POST(request: Request) {
 
   const language = body.language;
   const model = process.env.OPENAI_MODEL ?? "gpt-5.5";
+  const voice = getSeerVoice(body.voiceId);
 
   if (isPendingMatchRead(match)) {
-    const interpretation = createPendingMatchInterpretation(match, language);
+    const interpretation = createPendingMatchInterpretation(match, language, voice);
 
     await recordAiRequestAudit({
       matchId: match.id,
@@ -80,6 +88,7 @@ export async function POST(request: Request) {
       requestPayload: {
         matchId: match.id,
         language,
+        voiceId: voice.id,
         reason: "pending-teams",
       },
       responsePayload: null,
@@ -102,6 +111,7 @@ export async function POST(request: Request) {
     language,
     result.source === "database",
     officialModelCall,
+    voice,
   );
 
   if (match.status === "Final") {
@@ -111,6 +121,7 @@ export async function POST(request: Request) {
       requestPayload: {
         matchId: match.id,
         language,
+        voiceId: voice.id,
         reason: "completed-match",
       },
       responsePayload: null,
@@ -141,6 +152,7 @@ export async function POST(request: Request) {
     language,
     model,
     officialModelCall,
+    voice,
   );
 
   try {
@@ -177,6 +189,7 @@ export async function POST(request: Request) {
       language,
       fallback,
       officialModelCall,
+      voice,
     );
     const safetyIssue = getInterpretationSafetyIssue(interpretation);
 
@@ -195,6 +208,7 @@ export async function POST(request: Request) {
         match,
         model,
         officialModelCall,
+        voice,
         safetyIssue,
         blockedInterpretation: interpretation,
       });
@@ -278,6 +292,7 @@ function isPendingMatchRead(match: MatchSummary) {
 function createPendingMatchInterpretation(
   match: MatchSummary,
   language: Language,
+  voice: SeerVoiceProfile,
 ): ForecastInterpretation {
   const copy = {
     en: {
@@ -324,6 +339,8 @@ function createPendingMatchInterpretation(
 
   return {
     language,
+    voiceId: voice.id,
+    voiceName: voice.name,
     headline: text.headline,
     summary: text.summary,
     toneLine: text.toneLine,
@@ -353,6 +370,7 @@ async function requestRepairedInterpretation({
   match,
   model,
   officialModelCall,
+  voice,
   safetyIssue,
 }: {
   blockedInterpretation: ForecastInterpretation;
@@ -361,6 +379,7 @@ async function requestRepairedInterpretation({
   match: MatchSummary;
   model: string;
   officialModelCall: OfficialModelCall;
+  voice: SeerVoiceProfile;
   safetyIssue: SafetyIssue;
 }) {
   const repairRequest = createOpenAiRequest(
@@ -368,6 +387,7 @@ async function requestRepairedInterpretation({
     language,
     model,
     officialModelCall,
+    voice,
     {
       blockedInterpretation,
       safetyIssue,
@@ -403,6 +423,7 @@ async function requestRepairedInterpretation({
       language,
       fallback,
       officialModelCall,
+      voice,
     );
     const repairSafetyIssue = getInterpretationSafetyIssue(interpretation);
 
@@ -450,6 +471,7 @@ function createFallbackInterpretation(
   language: Language,
   usingDatabase: boolean,
   officialModelCall: OfficialModelCall,
+  voice: SeerVoiceProfile,
 ): ForecastInterpretation {
   const context =
     match.forecast.reasons[language]?.[0] ?? match.forecast.tone[language];
@@ -470,6 +492,8 @@ function createFallbackInterpretation(
 
   return {
     language,
+    voiceId: voice.id,
+    voiceName: voice.name,
     headline: fallbackCopy.headline,
     summary: fallbackCopy.summary,
     toneLine: fallbackCopy.toneLine,
@@ -579,6 +603,7 @@ function createOpenAiRequest(
   language: Language,
   model: string,
   officialModelCall: OfficialModelCall,
+  voice: SeerVoiceProfile,
   repairContext?: RepairContext,
 ) {
   return {
@@ -589,8 +614,9 @@ function createOpenAiRequest(
         content: [
           {
             type: "input_text",
-            text:
-              "You are the Seer: a mystical, playful football oracle who reads a match like omens, not a spreadsheet. Speak in vivid, sensory, theatrical language — the pitch, the night, the weather, momentum, the trail you follow. Keep the app's stored forecast exactly as given (the winner/draw direction, projected score, probabilities, confidence, and chaos); never invent your own prediction, winner, scoreline, probability, certainty, or guarantee. Do NOT sound like a match preview, analyst note, or data report: avoid stiff analyst tics such as 'however', 'that said', 'on paper', 'statistically', 'the data suggests', 'expected', 'overall', and 'in conclusion'. The summary must not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities', and must not state raw percentages, confidence numbers, or chaos numbers — translate those into feeling and imagery instead. It may name the projected score once. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. If marketPulse appears in context, treat it only as crowd signal or public sentiment that colours the confidence/chaos mood, never as the match forecast itself, and never name Polymarket. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, sportsbook-style copy, make-money copy, or trading links. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into lively but neutral language while preserving the stored forecast.",
+            text: `${baseSeerInterpretationInstruction} ${getSeerVoicePromptLine(
+              voice,
+            )}`,
           },
         ],
       },
@@ -602,6 +628,12 @@ function createOpenAiRequest(
             text: JSON.stringify({
               language,
               officialModelForecast: officialModelCall,
+              voice: {
+                id: voice.id,
+                name: voice.name,
+                label: voice.label,
+                description: voice.description,
+              },
               match: {
                 id: match.id,
                 teams: {
@@ -713,6 +745,7 @@ function parseOpenAiInterpretation(
   language: Language,
   fallback: ForecastInterpretation,
   officialModelCall: OfficialModelCall,
+  voice: SeerVoiceProfile,
 ): ForecastInterpretation {
   const parsed = JSON.parse(extractOutputText(responsePayload)) as Partial<
     ForecastInterpretation
@@ -720,6 +753,8 @@ function parseOpenAiInterpretation(
 
   const interpretation = {
     language,
+    voiceId: voice.id,
+    voiceName: voice.name,
     headline: parsed.headline ?? fallback.headline,
     summary: parsed.summary ?? fallback.summary,
     toneLine: parsed.toneLine ?? fallback.toneLine,
