@@ -52,6 +52,7 @@ import {
 import {
   buildFantasyTradePackages,
   type FantasyTradeBuilderResult,
+  type FantasyTradeImpactPreview,
   type FantasyTradePlayer,
   type FantasyTradePosition,
   type FantasyTradeTeam,
@@ -3850,6 +3851,8 @@ function FantasyTradeBuilderSection({
                 </p>
               </div>
 
+              <TradeImpactPreviewCard impact={tradePackage.impact} />
+
               <div className="nfl-trade-walkaway">
                 <span>Walk-away line</span>
                 <strong>{tradePackage.walkAwayLine}</strong>
@@ -3867,6 +3870,62 @@ function FantasyTradeBuilderSection({
         </article>
       )}
     </section>
+  );
+}
+
+function TradeImpactPreviewCard({ impact }: { impact: FantasyTradeImpactPreview }) {
+  const myStarterDelta = formatFantasyDelta(impact.myTeam.starterProjectionDelta);
+  const myBenchDelta = formatFantasyDelta(impact.myTeam.benchDepthDelta);
+  const myDynastyDelta = formatFantasyDelta(impact.myTeam.dynastyValueDelta);
+  const theirStarterDelta = formatFantasyDelta(impact.partnerTeam.starterProjectionDelta);
+
+  return (
+    <div className="nfl-trade-impact-card">
+      <div className="nfl-trade-impact-head">
+        <span>Trade impact</span>
+        <strong>{impact.myTeam.teamName}</strong>
+      </div>
+      <div className="nfl-trade-impact-grid">
+        <div>
+          <span>My starters</span>
+          <strong>{myStarterDelta}</strong>
+        </div>
+        <div>
+          <span>My bench</span>
+          <strong>{myBenchDelta}</strong>
+        </div>
+        <div>
+          <span>Dynasty</span>
+          <strong>{myDynastyDelta}</strong>
+        </div>
+        <div>
+          <span>Their starters</span>
+          <strong>{theirStarterDelta}</strong>
+        </div>
+      </div>
+      <div className="nfl-trade-impact-lanes">
+        <span>
+          Need lane{" "}
+          <strong>
+            {scoutingRankLabel(impact.myTeam.weakestPositionBefore)} →{" "}
+            {scoutingRankLabel(impact.myTeam.weakestPositionAfter)}
+          </strong>
+        </span>
+        <span>
+          Their need{" "}
+          <strong>
+            {scoutingRankLabel(impact.partnerTeam.weakestPositionBefore)} →{" "}
+            {scoutingRankLabel(impact.partnerTeam.weakestPositionAfter)}
+          </strong>
+        </span>
+      </div>
+      <div className="nfl-trade-impact-copy">
+        <p>{impact.verdict}</p>
+        <p>{impact.overpayWarning}</p>
+        <p>{impact.counterOffer}</p>
+        <p>{impact.regretCheck}</p>
+      </div>
+    </div>
   );
 }
 

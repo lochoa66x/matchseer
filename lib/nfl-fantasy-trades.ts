@@ -27,9 +27,36 @@ export type FantasyTradeTeam = {
 
 export type FantasyTradePackageTier = "safe" | "fair" | "aggressive";
 
+export type FantasyTradeTeamImpact = {
+  teamName: string;
+  starterProjectionBefore: number;
+  starterProjectionAfter: number;
+  starterProjectionDelta: number;
+  benchDepthBefore: number;
+  benchDepthAfter: number;
+  benchDepthDelta: number;
+  dynastyValueBefore: number;
+  dynastyValueAfter: number;
+  dynastyValueDelta: number;
+  strongestPositionBefore: FantasyTradePosition;
+  strongestPositionAfter: FantasyTradePosition;
+  weakestPositionBefore: FantasyTradePosition;
+  weakestPositionAfter: FantasyTradePosition;
+};
+
+export type FantasyTradeImpactPreview = {
+  myTeam: FantasyTradeTeamImpact;
+  partnerTeam: FantasyTradeTeamImpact;
+  verdict: string;
+  overpayWarning: string;
+  counterOffer: string;
+  regretCheck: string;
+};
+
 export type FantasyTradePackage = {
   tier: FantasyTradePackageTier;
   title: string;
+  partnerTeamId: string;
   partnerTeam: string;
   target: FantasyTradePlayer;
   offerPlayers: FantasyTradePlayer[];
@@ -43,6 +70,7 @@ export type FantasyTradePackage = {
   whyTheyMightAccept: string;
   risk: string;
   doNotInclude: FantasyTradePlayer[];
+  impact: FantasyTradeImpactPreview;
 };
 
 export type FantasyTradeBuilderResult = {
@@ -231,14 +259,27 @@ function buildPackages({
     );
     const valueGap = round1(offerValue - receiveValue);
     const walkAwayValue = round1(receiveValue * config.maxRatio);
+    const impact = buildTradeImpactPreview({
+      active,
+      lens,
+      offerPlayers,
+      partner: target.team,
+      receiveValue,
+      scoringFormat,
+      target: target.player,
+      tier,
+      offerValue,
+    });
 
     packages.push({
       doNotInclude,
       fairnessScore: clampScore(
         Math.round(100 - Math.abs(offerValue / Math.max(1, receiveValue) - 1) * 100),
       ),
+      impact,
       offerPlayers,
       offerValue,
+      partnerTeamId: target.team.id,
       partnerTeam: target.team.name,
       receiveValue,
       risk: tradePackageRisk(tier, target.player, offerPlayers, lens),
@@ -254,6 +295,185 @@ function buildPackages({
   }
 
   return dedupePackages(packages);
+}
+
+function buildTradeImpactPreview({
+  active,
+  lens,
+  offerPlayers,
+  offerValue,
+  partner,
+  receiveValue,
+  scoringFormat,
+  target,
+  tier,
+}: {
+  active: FantasyTradeTeam;
+  lens: FantasyTradeLens;
+  offerPlayers: FantasyTradePlayer[];
+  offerValue: number;
+  partner: FantasyTradeTeam;
+  receiveValue: number;
+  scoringFormat: FantasyTradeScoringFormat;
+  target: FantasyTradePlayer;
+  tier: FantasyTradePackageTier;
+}): FantasyTradeImpactPreview {
+  const offerIds = new Set(offerPlayers.map((player) => player.id));
+  const activeAfter = tradeTeamWithMoves(active, {
+    add: [target],
+    removeIds: offerIds,
+  });
+  const partnerAfter = tradeTeamWithMoves(partner, {
+    add: offerPlayers,
+    removeIds: new Set([target.id]),
+  });
+  const myTeam = teamImpact(active, activeAfter, scoringFormat, lens);
+  const partnerTeam = teamImpact(partner, partnerAfter, scoringFormat, lens);
+  const overpayRatio = offerValue / Math.max(1, receiveValue);
+  const overpayWarning =
+    overpayRatio > 1.16
+      ? `This is getting expensive: you are paying ${round1((overpayRatio - 1) * 100)}% above the target value.`
+      : myTeam.starterProjectionDelta < -0.6
+        ? "This costs weekly lineup points, so only do it if the target fixes a fragile position."
+        : "No major overpay flag. The package protects your core and keeps the roster shape playable.";
+  const verdict =
+    myTeam.starterProjectionDelta >= 1
+      ? `Do this if ${target.name} becomes your weekly starter.`
+      : myTeam.starterProjectionDelta >= 0
+        ? `This is playable if you need ${positionLabel(normalizeTradePosition(target.position))} stability.`
+        : `Only do this if you trust ${target.name}'s role more than the raw projection.`;
+  const extraAskLimit =
+    tier === "aggressive"
+      ? "Do not add another starter."
+      : "If they ask for more, add a small bench piece only.";
+  const counterOffer =
+    overpayRatio > 1.12
+      ? `Counter lower: remove ${offerPlayers[offerPlayers.length - 1]?.name ?? "the extra piece"} before adding anything else.`
+      : `${extraAskLimit} Keep the walk-away line intact.`;
+  const regretCheck =
+    lens === "dynasty" && myTeam.dynastyValueDelta < -2
+      ? "Dynasty regret risk is real: you are giving up future value for a current-week patch."
+      : myTeam.benchDepthDelta < -3
+        ? "Depth gets thinner. Make sure waivers can cover the bye/injury weeks."
+        : "Regret risk is manageable because the bench and core stay intact.";
+
+  return {
+    counterOffer,
+    myTeam,
+    overpayWarning,
+    partnerTeam,
+    regretCheck,
+    verdict,
+  };
+}
+
+function tradeTeamWithMoves(
+  team: FantasyTradeTeam,
+  {
+    add,
+    removeIds,
+  }: {
+    add: FantasyTradePlayer[];
+    removeIds: Set<string>;
+  },
+): FantasyTradeTeam {
+  const remaining = team.players.filter((player) => !removeIds.has(player.id));
+  const existingIds = new Set(remaining.map((player) => player.id));
+  const additions = add
+    .filter((player) => !existingIds.has(player.id))
+    .map((player) => ({ ...player, starter: false }));
+
+  return {
+    ...team,
+    players: [...remaining, ...additions],
+  };
+}
+
+function teamImpact(
+  before: FantasyTradeTeam,
+  after: FantasyTradeTeam,
+  scoringFormat: FantasyTradeScoringFormat,
+  lens: FantasyTradeLens,
+): FantasyTradeTeamImpact {
+  const beforeSnapshot = tradeTeamSnapshot(before, scoringFormat, lens);
+  const afterSnapshot = tradeTeamSnapshot(after, scoringFormat, lens);
+
+  return {
+    benchDepthAfter: afterSnapshot.benchDepth,
+    benchDepthBefore: beforeSnapshot.benchDepth,
+    benchDepthDelta: round1(afterSnapshot.benchDepth - beforeSnapshot.benchDepth),
+    dynastyValueAfter: afterSnapshot.dynastyValue,
+    dynastyValueBefore: beforeSnapshot.dynastyValue,
+    dynastyValueDelta: round1(afterSnapshot.dynastyValue - beforeSnapshot.dynastyValue),
+    starterProjectionAfter: afterSnapshot.starterProjection,
+    starterProjectionBefore: beforeSnapshot.starterProjection,
+    starterProjectionDelta: round1(
+      afterSnapshot.starterProjection - beforeSnapshot.starterProjection,
+    ),
+    strongestPositionAfter: afterSnapshot.strongestPosition,
+    strongestPositionBefore: beforeSnapshot.strongestPosition,
+    teamName: before.name,
+    weakestPositionAfter: afterSnapshot.weakestPosition,
+    weakestPositionBefore: beforeSnapshot.weakestPosition,
+  };
+}
+
+function tradeTeamSnapshot(
+  team: FantasyTradeTeam,
+  scoringFormat: FantasyTradeScoringFormat,
+  lens: FantasyTradeLens,
+) {
+  const usedIds = new Set<string>();
+  const positionRows = tradePositions.map((position) => {
+    const starters = team.players
+      .filter((player) => normalizeTradePosition(player.position) === position)
+      .sort(
+        (left, right) =>
+          fantasyTradePlayerValue(right, scoringFormat, lens) -
+          fantasyTradePlayerValue(left, scoringFormat, lens),
+      )
+      .slice(0, starterNeeds[position]);
+
+    starters.forEach((player) => usedIds.add(player.id));
+
+    return {
+      position,
+      projection: round1(sum(starters.map((player) => player.projection))),
+    };
+  });
+  const benchPlayers = team.players
+    .filter((player) => !usedIds.has(player.id))
+    .sort((left, right) => right.projection - left.projection);
+  const coreRows = positionRows.filter((row) =>
+    coreTradePositions.includes(row.position),
+  );
+  const strongestPosition =
+    [...coreRows].sort((left, right) => right.projection - left.projection)[0]
+      ?.position ?? "WR";
+  const weakestPosition =
+    [...coreRows].sort((left, right) => left.projection - right.projection)[0]
+      ?.position ?? "WR";
+  const dynastyPlayers = [...team.players]
+    .sort(
+      (left, right) =>
+        (right.dynastyValue ?? right.roleSecurity ?? 70) -
+        (left.dynastyValue ?? left.roleSecurity ?? 70),
+    )
+    .slice(0, 10);
+
+  return {
+    benchDepth: round1(sum(benchPlayers.slice(0, 5).map((player) => player.projection))),
+    dynastyValue: round1(
+      average(
+        dynastyPlayers.map(
+          (player) => player.dynastyValue ?? player.roleSecurity ?? 70,
+        ),
+      ),
+    ),
+    starterProjection: round1(sum(positionRows.map((row) => row.projection))),
+    strongestPosition,
+    weakestPosition,
+  };
 }
 
 function pickOfferPlayers({

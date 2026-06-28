@@ -61,6 +61,11 @@ describe("buildFantasyTradePackages", () => {
     expect(result.surplusPosition).toBe("RB");
     expect(result.packages[0].target.position).toBe("WR");
     expect(result.packages[0].offerPlayers.some((offer) => offer.position === "RB")).toBe(true);
+    expect(result.packages[0].impact.myTeam.teamName).toBe("mine");
+    expect(result.packages[0].impact.partnerTeam.teamName).toBe("rival");
+    expect(result.packages[0].impact.myTeam.starterProjectionDelta).toBeGreaterThan(0);
+    expect(result.packages[0].impact.verdict).toContain("target-wr");
+    expect(result.packages[0].impact.counterOffer.length).toBeGreaterThan(10);
   });
 
   it("sets a walk-away line and protects core players from overpay packages", () => {
@@ -92,6 +97,10 @@ describe("buildFantasyTradePackages", () => {
       expect(tradePackage.offerPlayers.map((offer) => offer.name)).not.toContain(
         "untouchable",
       );
+      expect(tradePackage.impact.overpayWarning).toMatch(
+        /overpay|expensive|lineup|protects/i,
+      );
+      expect(tradePackage.impact.regretCheck.length).toBeGreaterThan(10);
     }
   });
 
