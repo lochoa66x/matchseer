@@ -12824,6 +12824,209 @@ body {
   font-weight: 900;
 }
 
+.nfl-league-power-map {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 15px;
+  background:
+    linear-gradient(140deg, rgba(16, 22, 28, 0.94), rgba(13, 24, 31, 0.92)),
+    radial-gradient(circle at 8% 10%, rgba(217, 180, 74, 0.1), transparent 28%),
+    radial-gradient(circle at 92% 5%, rgba(157, 242, 189, 0.08), transparent 26%);
+  border: 1px solid rgba(188, 198, 181, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.28);
+}
+
+.nfl-league-power-hero,
+.nfl-league-summary-grid,
+.nfl-league-matchup-grid,
+.nfl-league-row {
+  display: grid;
+  gap: 10px;
+}
+
+.nfl-league-power-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.24fr);
+  align-items: stretch;
+}
+
+.nfl-league-power-hero h2 {
+  margin: 5px 0 6px;
+  color: #fff;
+  font-size: clamp(1.55rem, 2.4vw, 2.45rem);
+  letter-spacing: 0;
+  line-height: 1.02;
+}
+
+.nfl-league-power-hero p,
+.nfl-league-summary-grid p,
+.nfl-league-matchup-grid p {
+  margin: 0;
+  color: #dce8f7;
+  font-size: 0.92rem;
+  font-weight: 760;
+  line-height: 1.42;
+}
+
+.nfl-league-rank-card {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  background: rgba(5, 12, 28, 0.48);
+  border: 1px solid rgba(217, 180, 74, 0.26);
+  border-radius: 8px;
+  text-align: right;
+}
+
+.nfl-league-rank-card span,
+.nfl-league-summary-grid span,
+.nfl-league-matchup-grid span,
+.nfl-league-team span,
+.nfl-league-meter em,
+.nfl-league-lanes span {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nfl-league-rank-card strong {
+  color: #fff;
+  font-size: 2.4rem;
+  line-height: 0.95;
+}
+
+.nfl-league-rank-card em {
+  color: #c8f7dc;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.nfl-league-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-league-summary-grid article,
+.nfl-league-matchup-grid article {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  background: rgba(5, 12, 28, 0.38);
+  border: 1px solid rgba(143, 160, 189, 0.15);
+  border-radius: 8px;
+}
+
+.nfl-league-summary-grid strong,
+.nfl-league-matchup-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.08rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-league-matchup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nfl-league-matchup-grid article {
+  border-color: rgba(157, 242, 189, 0.2);
+}
+
+.nfl-league-matchup-grid article.warning {
+  border-color: rgba(217, 180, 74, 0.24);
+}
+
+.nfl-league-table {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-league-row {
+  grid-template-columns: 68px minmax(150px, 0.8fr) minmax(220px, 1fr) minmax(190px, 0.72fr);
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.13);
+  border-radius: 8px;
+}
+
+.nfl-league-row.active {
+  background: rgba(157, 242, 189, 0.065);
+  border-color: rgba(157, 242, 189, 0.26);
+}
+
+.nfl-league-rank,
+.nfl-league-team,
+.nfl-league-meter,
+.nfl-league-lanes {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nfl-league-rank span {
+  color: #fff;
+  font-size: 1.12rem;
+  font-weight: 950;
+}
+
+.nfl-league-rank em {
+  color: #c8f7dc;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.nfl-league-team strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-league-meter i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: rgba(143, 160, 189, 0.16);
+  border-radius: 999px;
+}
+
+.nfl-league-meter b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8fb3d9, #c8f7dc);
+}
+
+.nfl-league-lanes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nfl-league-lanes span {
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px;
+  color: #dce8f7;
+  background: rgba(143, 160, 189, 0.1);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 999px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nfl-player-compare {
   margin-bottom: 20px;
 }
@@ -12945,6 +13148,10 @@ body {
   .nfl-startsit-grid,
   .nfl-position-edge-grid,
   .nfl-import-grid,
+  .nfl-league-power-hero,
+  .nfl-league-summary-grid,
+  .nfl-league-matchup-grid,
+  .nfl-league-row,
   .nfl-matchup-score-grid,
   .nfl-player-duel,
   .nfl-source-lane-grid,
@@ -13054,6 +13261,7 @@ body {
   .nfl-fantasy-team-head,
   .nfl-scenario-head,
   .nfl-team-report-top,
+  .nfl-league-power-hero,
   .nfl-player-compare-head {
     align-items: flex-start;
     flex-direction: column;
@@ -13086,8 +13294,14 @@ body {
   .nfl-source-coverage-lanes,
   .nfl-fantasy-action-grid,
   .nfl-fantasy-spotlight-row,
+  .nfl-league-lanes,
   .nfl-rookie-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .nfl-league-rank-card {
+    width: 100%;
+    text-align: left;
   }
 
   .nfl-hero-vs {

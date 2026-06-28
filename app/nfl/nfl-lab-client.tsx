@@ -316,6 +316,33 @@ type FantasyMatchupReport = {
   recommendation: string;
 };
 
+type FantasyLeaguePowerTeam = {
+  report: FantasyTeamReport;
+  rank: number;
+  score: number;
+  starterScore: number;
+  benchScore: number;
+  dynastyScore: number;
+  volatility: number;
+  injurySensitivity: number;
+  strongestPosition: FantasyPositionEdge;
+  weakestPosition: FantasyPositionEdge;
+  easiestUpgrade: string;
+  matchupWeakness: string;
+  recommendation: string;
+};
+
+type FantasyLeaguePowerMap = {
+  teams: FantasyLeaguePowerTeam[];
+  active: FantasyLeaguePowerTeam;
+  rankLabel: string;
+  teamCount: number;
+  easiestUpgrade: string;
+  bestMatchup: FantasyLeaguePowerTeam;
+  badMatchup: FantasyLeaguePowerTeam;
+  recommendation: string;
+};
+
 type FantasyPositionEdge = {
   position: ScoutingPlayerPosition;
   leftProjection: number;
@@ -944,6 +971,25 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       fantasyContextLayer.byTeam,
       fantasyPlayers,
       opponentFantasyTeam,
+      scoringFormat,
+      teamLens,
+    ],
+  );
+  const fantasyLeaguePowerMap = useMemo(
+    () =>
+      buildFantasyLeaguePowerMap({
+        activeTeamId: activeFantasyTeam.id,
+        allPlayers: fantasyPlayers,
+        contextByTeam: fantasyContextLayer.byTeam,
+        lens: teamLens,
+        scoringFormat,
+        teams: fantasyTeams,
+      }),
+    [
+      activeFantasyTeam.id,
+      fantasyContextLayer.byTeam,
+      fantasyPlayers,
+      fantasyTeams,
       scoringFormat,
       teamLens,
     ],
@@ -2021,17 +2067,24 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           ) : null}
 
           {fantasyView === "compare" ? (
-            <FantasyPlayerCompareSection
-              fantasyPlayers={fantasyPlayers}
-              leftPlayer={leftScoutingPlayer}
-              leftPlayerId={leftPlayerId}
-              onLeftPlayerChange={setLeftPlayerId}
-              onRightPlayerChange={setRightPlayerId}
-              rightPlayer={rightScoutingPlayer}
-              rightPlayerId={rightPlayerId}
-              scoringFormat={scoringFormat}
-              startLean={startLean}
-            />
+            <>
+              <FantasyLeaguePowerMapSection
+                leagueMap={fantasyLeaguePowerMap}
+                scoringFormat={scoringFormat}
+                teamLens={teamLens}
+              />
+              <FantasyPlayerCompareSection
+                fantasyPlayers={fantasyPlayers}
+                leftPlayer={leftScoutingPlayer}
+                leftPlayerId={leftPlayerId}
+                onLeftPlayerChange={setLeftPlayerId}
+                onRightPlayerChange={setRightPlayerId}
+                rightPlayer={rightScoutingPlayer}
+                rightPlayerId={rightPlayerId}
+                scoringFormat={scoringFormat}
+                startLean={startLean}
+              />
+            </>
           ) : null}
         </>
       )}
@@ -3070,6 +3123,114 @@ function FantasyRookieBoard({
             </article>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function FantasyLeaguePowerMapSection({
+  leagueMap,
+  scoringFormat,
+  teamLens,
+}: {
+  leagueMap: FantasyLeaguePowerMap;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}) {
+  const active = leagueMap.active;
+  const topTeams = leagueMap.teams.slice(0, Math.min(leagueMap.teams.length, 6));
+
+  return (
+    <section className="nfl-league-power-map" id="league-power-map">
+      <div className="nfl-league-power-hero">
+        <div>
+          <div className="nfl-section-kicker">
+            <Trophy size={17} />
+            League power map
+          </div>
+          <h2>{active.report.team.name} vs the room</h2>
+          <p>{leagueMap.recommendation}</p>
+        </div>
+        <div className="nfl-league-rank-card">
+          <span>{leagueMap.rankLabel}</span>
+          <strong>{active.score}</strong>
+          <em>
+            {scoringLabels[scoringFormat]} · {teamLensLabels[teamLens]}
+          </em>
+        </div>
+      </div>
+
+      <div className="nfl-league-summary-grid">
+        <article>
+          <span>Strongest lane</span>
+          <strong>{scoutingRankLabel(active.strongestPosition.position)}</strong>
+          <p>{active.strongestPosition.summary}</p>
+        </article>
+        <article>
+          <span>Weakest lane</span>
+          <strong>{scoutingRankLabel(active.weakestPosition.position)}</strong>
+          <p>{active.matchupWeakness}</p>
+        </article>
+        <article>
+          <span>Easiest upgrade</span>
+          <strong>{leagueMap.easiestUpgrade}</strong>
+          <p>{active.easiestUpgrade}</p>
+        </article>
+      </div>
+
+      <div className="nfl-league-matchup-grid">
+        <article>
+          <span>Good matchup</span>
+          <strong>{leagueMap.bestMatchup.report.team.name}</strong>
+          <p>
+            Your roster lines up well here because their weakest lane is{" "}
+            {leagueMap.bestMatchup.weakestPosition
+              ? scoutingRankLabel(leagueMap.bestMatchup.weakestPosition.position)
+              : "depth"}.
+          </p>
+        </article>
+        <article className="warning">
+          <span>Tough matchup</span>
+          <strong>{leagueMap.badMatchup.report.team.name}</strong>
+          <p>
+            This is the team to plan for carefully: their strongest lane is{" "}
+            {scoutingRankLabel(leagueMap.badMatchup.strongestPosition.position)}.
+          </p>
+        </article>
+      </div>
+
+      <div className="nfl-league-table" aria-label="Fantasy league team strength">
+        {topTeams.map((team) => (
+          <article
+            className={cx(
+              "nfl-league-row",
+              team.report.team.id === active.report.team.id && "active",
+            )}
+            key={team.report.team.id}
+          >
+            <div className="nfl-league-rank">
+              <span>#{team.rank}</span>
+              <em>{team.score}</em>
+            </div>
+            <div className="nfl-league-team">
+              <strong>{team.report.team.name}</strong>
+              <span>{team.report.team.manager}</span>
+            </div>
+            <div className="nfl-league-meter">
+              <i>
+                <b style={{ width: `${team.score}%` }} />
+              </i>
+              <em>
+                {team.report.projection.toFixed(1)} starter pts ·{" "}
+                {team.benchScore} bench
+              </em>
+            </div>
+            <div className="nfl-league-lanes">
+              <span>{scoutingRankLabel(team.strongestPosition.position)} edge</span>
+              <span>{scoutingRankLabel(team.weakestPosition.position)} need</span>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -5304,6 +5465,327 @@ function compareFantasyTeams({
         ? "This is close enough that one lineup choice can decide it. Break ties with safer roles, not bigger names."
         : `${edgeTeam.name} has the cleaner path right now. The other side can close the gap by fixing ${trailingReport.weakestLane.label} and choosing the steadier play in close calls.`,
   };
+}
+
+function buildFantasyLeaguePowerMap({
+  activeTeamId,
+  allPlayers,
+  contextByTeam,
+  lens,
+  scoringFormat,
+  teams,
+}: {
+  activeTeamId: string;
+  allPlayers: FantasyPlayer[];
+  contextByTeam: Record<string, NflFantasyTeamContext>;
+  lens: FantasyTeamLens;
+  scoringFormat: ScoringFormat;
+  teams: FantasyTeam[];
+}): FantasyLeaguePowerMap {
+  const reports = teams.map((team) =>
+    analyzeFantasyTeam({
+      allPlayers,
+      contextByTeam,
+      lens,
+      scoringFormat,
+      team,
+    }),
+  );
+  const positionAverages = fantasyLeaguePositionAverages(reports);
+  const rankedTeams = reports
+    .map((report) => buildFantasyLeaguePowerTeam(report, positionAverages, lens))
+    .sort((left, right) => right.score - left.score || right.report.projection - left.report.projection)
+    .map((team, index) => ({
+      ...team,
+      rank: index + 1,
+    }));
+  const active =
+    rankedTeams.find((team) => team.report.team.id === activeTeamId) ??
+    rankedTeams[0] ??
+    buildFantasyLeaguePowerTeam(
+      analyzeFantasyTeam({
+        allPlayers,
+        contextByTeam,
+        lens,
+        scoringFormat,
+        team: teams[0],
+      }),
+      positionAverages,
+      lens,
+    );
+  const opponents = rankedTeams.filter(
+    (team) => team.report.team.id !== active.report.team.id,
+  );
+  const bestMatchup =
+    [...opponents].sort(
+      (left, right) =>
+        fantasyLeagueMatchupFitScore(active.report, right.report) -
+        fantasyLeagueMatchupFitScore(active.report, left.report),
+    )[0] ?? active;
+  const badMatchup =
+    [...opponents].sort(
+      (left, right) =>
+        fantasyLeagueMatchupFitScore(active.report, left.report) -
+        fantasyLeagueMatchupFitScore(active.report, right.report),
+    )[0] ?? active;
+
+  return {
+    active,
+    badMatchup,
+    bestMatchup,
+    easiestUpgrade: `${scoutingRankLabel(active.weakestPosition.position)} help`,
+    rankLabel: `#${active.rank} of ${rankedTeams.length}`,
+    recommendation: fantasyLeaguePowerRecommendation({
+      active,
+      badMatchup,
+      bestMatchup,
+      lens,
+      teamCount: rankedTeams.length,
+    }),
+    teamCount: rankedTeams.length,
+    teams: rankedTeams,
+  };
+}
+
+function buildFantasyLeaguePowerTeam(
+  report: FantasyTeamReport,
+  positionAverages: Record<FantasyPosition, number>,
+  lens: FantasyTeamLens,
+): FantasyLeaguePowerTeam {
+  const positionEdges = fantasyLeaguePositionEdges(report, positionAverages);
+  const strongestPosition =
+    [...positionEdges].sort(
+      (left, right) =>
+        right.leftProjection - right.rightProjection -
+        (left.leftProjection - left.rightProjection),
+    )[0] ?? positionEdges[0];
+  const weakestPosition =
+    [...positionEdges].sort(
+      (left, right) =>
+        left.leftProjection - left.rightProjection -
+        (right.leftProjection - right.rightProjection),
+    )[0] ?? positionEdges[0];
+  const starterScore = clampMeter(
+    Math.round(
+      average(report.players.map((player) => player.contextProjection.projection)) * 5.4 +
+        report.floor * 0.05,
+    ),
+  );
+  const benchScore = fantasyLeagueBenchScore(report);
+  const dynastyScore = report.dynastyCore;
+  const volatility = report.risk;
+  const injurySensitivity = fantasyLeagueInjurySensitivity(report);
+  const score = clampMeter(
+    Math.round(
+      report.score * 0.38 +
+        starterScore * 0.24 +
+        benchScore * 0.14 +
+        report.balance * 0.08 +
+        (100 - volatility) * 0.07 +
+        (100 - injurySensitivity) * 0.05 +
+        (lens === "dynasty" ? dynastyScore * 0.16 : report.depth * 0.1),
+    ),
+  );
+
+  return {
+    benchScore,
+    dynastyScore,
+    easiestUpgrade: fantasyLeagueUpgradeCopy(report, weakestPosition),
+    injurySensitivity,
+    matchupWeakness: fantasyLeagueWeaknessCopy(report, weakestPosition),
+    rank: 0,
+    recommendation: fantasyLeagueTeamRecommendation(report, weakestPosition, lens),
+    report,
+    score,
+    starterScore,
+    strongestPosition,
+    volatility,
+    weakestPosition,
+  };
+}
+
+function fantasyLeaguePositionAverages(
+  reports: FantasyTeamReport[],
+): Record<FantasyPosition, number> {
+  return fantasyCoveragePositions.reduce<Record<FantasyPosition, number>>(
+    (averages, position) => {
+      averages[position] = round1(
+        average(reports.map((report) => fantasyTeamPositionProjection(report, position))),
+      );
+
+      return averages;
+    },
+    {
+      QB: 0,
+      RB: 0,
+      WR: 0,
+      TE: 0,
+      K: 0,
+      DST: 0,
+    },
+  );
+}
+
+function fantasyLeaguePositionEdges(
+  report: FantasyTeamReport,
+  positionAverages: Record<FantasyPosition, number>,
+): FantasyPositionEdge[] {
+  return fantasyCoveragePositions.map((position) => {
+    const leftProjection = fantasyTeamPositionProjection(report, position);
+    const rightProjection = positionAverages[position] ?? 0;
+    const rawGap = round1(leftProjection - rightProjection);
+    const gap = Math.abs(rawGap);
+
+    return {
+      edgeTeamName: rawGap >= 0 ? report.team.name : "League average",
+      gap,
+      leftProjection,
+      position,
+      rightProjection,
+      summary:
+        Math.abs(rawGap) < 0.4
+          ? "Near league average"
+          : rawGap > 0
+            ? `+${gap.toFixed(1)} vs league`
+            : `${gap.toFixed(1)} under league`,
+    };
+  });
+}
+
+function fantasyTeamPositionProjection(
+  report: FantasyTeamReport,
+  position: FantasyPosition,
+) {
+  return round1(
+    sum(
+      report.players
+        .filter((player) => normalizeScoutingPosition(player.position) === position)
+        .map((player) => player.contextProjection.projection),
+    ),
+  );
+}
+
+function fantasyLeagueBenchScore(report: FantasyTeamReport) {
+  const benchProjection = average(
+    report.benchPlayers
+      .slice(0, 6)
+      .map((player) => player.contextProjection.projection),
+  );
+  const playableBench = report.benchPlayers.filter(
+    (player) => player.contextProjection.projection >= 7.5,
+  ).length;
+
+  return clampMeter(Math.round(benchProjection * 5.2 + playableBench * 5));
+}
+
+function fantasyLeagueInjurySensitivity(report: FantasyTeamReport) {
+  const starterHealth = average(report.players.map((player) => player.health));
+  const roleSecurity = average(
+    report.players.map((player) => player.roleSecurity ?? player.health),
+  );
+
+  return clampMeter(
+    Math.round((100 - starterHealth) * 0.62 + report.risk * 0.24 + (100 - roleSecurity) * 0.3),
+  );
+}
+
+function fantasyLeagueMatchupFitScore(
+  active: FantasyTeamReport,
+  opponent: FantasyTeamReport,
+) {
+  const positionEdge = fantasyPositionEdges(active, opponent).reduce(
+    (total, edge) =>
+      total +
+      (edge.edgeTeamName === active.team.name ? edge.gap : -edge.gap) *
+        (edge.position === "QB" ? 0.9 : edge.position === "K" || edge.position === "DST" ? 0.45 : 1),
+    0,
+  );
+
+  return (
+    active.projection -
+    opponent.projection +
+    (active.floor - opponent.floor) * 0.32 +
+    (opponent.risk - active.risk) * 0.08 +
+    positionEdge * 0.74
+  );
+}
+
+function fantasyLeagueUpgradeCopy(
+  report: FantasyTeamReport,
+  weakestPosition: FantasyPositionEdge,
+) {
+  const position = scoutingRankLabel(weakestPosition.position);
+  const benchHelp = report.benchPlayers.find(
+    (player) => normalizeScoutingPosition(player.position) === weakestPosition.position,
+  );
+
+  if (benchHelp && benchHelp.contextProjection.projection >= 7) {
+    return `Your easiest internal check is ${benchHelp.name}; if news improves, he can patch ${position}.`;
+  }
+
+  if (weakestPosition.position === "K" || weakestPosition.position === "DST") {
+    return `Stream ${position} by matchup before chasing a bigger trade.`;
+  }
+
+  return `Look for a steadier ${position} with role security. You do not need a star; you need usable weekly points.`;
+}
+
+function fantasyLeagueWeaknessCopy(
+  report: FantasyTeamReport,
+  weakestPosition: FantasyPositionEdge,
+) {
+  const position = scoutingRankLabel(weakestPosition.position);
+  const weakestPlayer = report.players
+    .filter((player) => normalizeScoutingPosition(player.position) === weakestPosition.position)
+    .sort((left, right) => left.contextProjection.projection - right.contextProjection.projection)[0];
+
+  if (weakestPlayer) {
+    return `${position} is the lane to watch. ${weakestPlayer.name} is carrying ${weakestPlayer.contextProjection.projection.toFixed(1)} projected points, so one small role dip can hurt.`;
+  }
+
+  return `${position} is thin compared with the league. Add a playable option before the next tight matchup.`;
+}
+
+function fantasyLeagueTeamRecommendation(
+  report: FantasyTeamReport,
+  weakestPosition: FantasyPositionEdge,
+  lens: FantasyTeamLens,
+) {
+  const position = scoutingRankLabel(weakestPosition.position);
+
+  if (lens === "dynasty" && report.dynastyCore < 64) {
+    return `Do not spend future value to solve everything at once. Start by adding a younger ${position} with a real role.`;
+  }
+
+  if (report.risk >= 62) {
+    return `Your ceiling is fine, but the room is swingy. Fix ${position} with floor, not another boom-bust player.`;
+  }
+
+  return `This roster is workable. The cleanest move is a small ${position} upgrade that protects your weekly floor.`;
+}
+
+function fantasyLeaguePowerRecommendation({
+  active,
+  badMatchup,
+  bestMatchup,
+  lens,
+  teamCount,
+}: {
+  active: FantasyLeaguePowerTeam;
+  badMatchup: FantasyLeaguePowerTeam;
+  bestMatchup: FantasyLeaguePowerTeam;
+  lens: FantasyTeamLens;
+  teamCount: number;
+}) {
+  if (active.rank <= 3) {
+    return `${active.report.team.name} profiles like a contender. Do not force a big trade; protect ${scoutingRankLabel(active.weakestPosition.position)} and plan carefully for ${badMatchup.report.team.name}.`;
+  }
+
+  if (active.rank > Math.ceil(teamCount / 2) && lens === "dynasty") {
+    return `${active.report.team.name} needs a dynasty-friendly reset: keep the core, patch ${scoutingRankLabel(active.weakestPosition.position)}, and target managers like ${bestMatchup.report.team.name} where your strengths travel.`;
+  }
+
+  return `${active.report.team.name} is in the chase tier. You match up best with ${bestMatchup.report.team.name}; the dangerous room is ${badMatchup.report.team.name}, so fix ${scoutingRankLabel(active.weakestPosition.position)} before that week.`;
 }
 
 function fantasyPositionEdges(
