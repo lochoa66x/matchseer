@@ -12945,6 +12945,144 @@ body {
   border-color: rgba(217, 180, 74, 0.24);
 }
 
+.nfl-target-finder {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  background: rgba(5, 12, 28, 0.34);
+  border: 1px solid rgba(157, 242, 189, 0.14);
+  border-radius: 8px;
+}
+
+.nfl-target-finder-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-target-finder-head h3 {
+  margin: 4px 0 0;
+  color: #fff;
+  font-size: 1.18rem;
+  letter-spacing: 0;
+}
+
+.nfl-target-finder-head > span {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-target-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-target-card {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 210px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.13);
+  border-radius: 8px;
+}
+
+.nfl-target-card.waiver {
+  border-color: rgba(157, 242, 189, 0.22);
+}
+
+.nfl-target-card.trade {
+  border-color: rgba(143, 179, 217, 0.24);
+}
+
+.nfl-target-card.drop {
+  border-color: rgba(217, 180, 74, 0.22);
+}
+
+.nfl-target-card-top,
+.nfl-target-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nfl-target-card-top span,
+.nfl-target-card small,
+.nfl-target-action span {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nfl-target-card-top em {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-target-card.upside-swing .nfl-target-card-top em {
+  background: #d9b44a;
+}
+
+.nfl-target-card.stash .nfl-target-card-top em {
+  background: #8fb3d9;
+}
+
+.nfl-target-card.avoid .nfl-target-card-top em {
+  color: #ffe8d9;
+  background: rgba(248, 113, 113, 0.24);
+}
+
+.nfl-target-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.08rem;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-target-card p {
+  margin: 0;
+  color: #dce8f7;
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.nfl-target-action {
+  align-self: end;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(143, 160, 189, 0.13);
+}
+
+.nfl-target-action b {
+  color: #c8f7dc;
+  font-size: 0.82rem;
+}
+
 .nfl-league-table {
   display: grid;
   gap: 8px;
@@ -13190,6 +13328,10 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .nfl-target-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .nfl-scouting-tools {
     align-items: flex-start;
     flex-direction: column;
@@ -13262,6 +13404,7 @@ body {
   .nfl-scenario-head,
   .nfl-team-report-top,
   .nfl-league-power-hero,
+  .nfl-target-finder-head,
   .nfl-player-compare-head {
     align-items: flex-start;
     flex-direction: column;
@@ -13294,6 +13437,7 @@ body {
   .nfl-source-coverage-lanes,
   .nfl-fantasy-action-grid,
   .nfl-fantasy-spotlight-row,
+  .nfl-target-grid,
   .nfl-league-lanes,
   .nfl-rookie-metrics {
     grid-template-columns: 1fr;

@@ -332,6 +332,21 @@ type FantasyLeaguePowerTeam = {
   recommendation: string;
 };
 
+type FantasyMoveTargetKind = "waiver" | "trade" | "drop";
+type FantasyMoveRisk = "safe floor" | "upside swing" | "stash" | "avoid";
+
+type FantasyMoveTarget = {
+  kind: FantasyMoveTargetKind;
+  title: string;
+  playerName: string;
+  teamLabel: string;
+  position: ScoutingPlayerPosition;
+  risk: FantasyMoveRisk;
+  action: string;
+  reason: string;
+  value: string;
+};
+
 type FantasyLeaguePowerMap = {
   teams: FantasyLeaguePowerTeam[];
   active: FantasyLeaguePowerTeam;
@@ -340,6 +355,7 @@ type FantasyLeaguePowerMap = {
   easiestUpgrade: string;
   bestMatchup: FantasyLeaguePowerTeam;
   badMatchup: FantasyLeaguePowerTeam;
+  moveTargets: FantasyMoveTarget[];
   recommendation: string;
 };
 
@@ -3199,6 +3215,8 @@ function FantasyLeaguePowerMapSection({
         </article>
       </div>
 
+      <FantasyMoveTargetFinder targets={leagueMap.moveTargets} />
+
       <div className="nfl-league-table" aria-label="Fantasy league team strength">
         {topTeams.map((team) => (
           <article
@@ -3228,6 +3246,45 @@ function FantasyLeaguePowerMapSection({
             <div className="nfl-league-lanes">
               <span>{scoutingRankLabel(team.strongestPosition.position)} edge</span>
               <span>{scoutingRankLabel(team.weakestPosition.position)} need</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FantasyMoveTargetFinder({ targets }: { targets: FantasyMoveTarget[] }) {
+  return (
+    <section className="nfl-target-finder" aria-label="Fantasy waiver and trade targets">
+      <div className="nfl-target-finder-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <LineChart size={17} />
+            Waiver + trade finder
+          </div>
+          <h3>Specific next moves</h3>
+        </div>
+        <span>{targets.length} ideas</span>
+      </div>
+      <div className="nfl-target-grid">
+        {targets.map((target) => (
+          <article
+            className={cx("nfl-target-card", target.kind, target.risk.replace(" ", "-"))}
+            key={`${target.kind}-${target.playerName}-${target.position}`}
+          >
+            <div className="nfl-target-card-top">
+              <span>{target.title}</span>
+              <em>{target.risk}</em>
+            </div>
+            <strong>{target.playerName}</strong>
+            <small>
+              {scoutingRankLabel(target.position)} · {target.teamLabel}
+            </small>
+            <p>{target.reason}</p>
+            <div className="nfl-target-action">
+              <b>{target.action}</b>
+              <span>{target.value}</span>
             </div>
           </article>
         ))}
@@ -5528,12 +5585,22 @@ function buildFantasyLeaguePowerMap({
         fantasyLeagueMatchupFitScore(active.report, left.report) -
         fantasyLeagueMatchupFitScore(active.report, right.report),
     )[0] ?? active;
+  const moveTargets = buildFantasyMoveTargets({
+    active,
+    allPlayers,
+    contextByTeam,
+    lens,
+    rankedTeams,
+    scoringFormat,
+    teams,
+  });
 
   return {
     active,
     badMatchup,
     bestMatchup,
     easiestUpgrade: `${scoutingRankLabel(active.weakestPosition.position)} help`,
+    moveTargets,
     rankLabel: `#${active.rank} of ${rankedTeams.length}`,
     recommendation: fantasyLeaguePowerRecommendation({
       active,
@@ -5545,6 +5612,307 @@ function buildFantasyLeaguePowerMap({
     teamCount: rankedTeams.length,
     teams: rankedTeams,
   };
+}
+
+function buildFantasyMoveTargets({
+  active,
+  allPlayers,
+  contextByTeam,
+  lens,
+  rankedTeams,
+  scoringFormat,
+  teams,
+}: {
+  active: FantasyLeaguePowerTeam;
+  allPlayers: FantasyPlayer[];
+  contextByTeam: Record<string, NflFantasyTeamContext>;
+  lens: FantasyTeamLens;
+  rankedTeams: FantasyLeaguePowerTeam[];
+  scoringFormat: ScoringFormat;
+  teams: FantasyTeam[];
+}): FantasyMoveTarget[] {
+  return [
+    buildWaiverMoveTarget({
+      active,
+      allPlayers,
+      contextByTeam,
+      lens,
+      scoringFormat,
+      teams,
+    }),
+    buildTradeMoveTarget({ active, lens, rankedTeams, scoringFormat }),
+    buildDropMoveTarget({ active, lens, scoringFormat }),
+  ];
+}
+
+function buildWaiverMoveTarget({
+  active,
+  allPlayers,
+  contextByTeam,
+  lens,
+  scoringFormat,
+  teams,
+}: {
+  active: FantasyLeaguePowerTeam;
+  allPlayers: FantasyPlayer[];
+  contextByTeam: Record<string, NflFantasyTeamContext>;
+  lens: FantasyTeamLens;
+  scoringFormat: ScoringFormat;
+  teams: FantasyTeam[];
+}): FantasyMoveTarget {
+  const board = buildScoutingBoard(allPlayers, scoringFormat, contextByTeam);
+  const rosteredIds = new Set(teams.flatMap((team) => team.rosterIds));
+  const position = active.weakestPosition.position;
+  const freeAgents = board.filter((player) => !rosteredIds.has(player.id));
+  const candidates = freeAgents.length > 0 ? freeAgents : active.report.benchPlayers;
+  const target =
+    [...candidates].sort(
+      (left, right) =>
+        fantasyMoveCandidateScore(right, position, lens, "waiver") -
+        fantasyMoveCandidateScore(left, position, lens, "waiver"),
+    )[0] ?? active.report.players[0];
+
+  if (!target) {
+    return fallbackFantasyMoveTarget("waiver", position);
+  }
+
+  const isTrueFreeAgent = freeAgents.some((player) => player.id === target.id);
+
+  return {
+    action: isTrueFreeAgent ? "Add or watch" : "Watch list",
+    kind: "waiver",
+    playerName: target.name,
+    position: normalizeScoutingPosition(target.position),
+    reason: fantasyMoveReason({
+      lens,
+      player: target,
+      scoringFormat,
+      weakestPosition: position,
+    }),
+    risk: fantasyMoveRisk(target, lens),
+    teamLabel: isTrueFreeAgent ? `${target.team} · unrostered` : `${target.team} · internal watch`,
+    title: isTrueFreeAgent ? "Waiver target" : "Waiver scan",
+    value: `${target.contextProjection.projection.toFixed(1)} proj · ${target.contextProjection.floor.toFixed(1)} floor`,
+  };
+}
+
+function buildTradeMoveTarget({
+  active,
+  lens,
+  rankedTeams,
+  scoringFormat,
+}: {
+  active: FantasyLeaguePowerTeam;
+  lens: FantasyTeamLens;
+  rankedTeams: FantasyLeaguePowerTeam[];
+  scoringFormat: ScoringFormat;
+}): FantasyMoveTarget {
+  const position = active.weakestPosition.position;
+  const activeRosterIds = new Set(active.report.team.rosterIds);
+  const tradePool = rankedTeams
+    .filter((team) => team.report.team.id !== active.report.team.id)
+    .flatMap((team) =>
+      [...team.report.players, ...team.report.benchPlayers].map((player) => ({
+        player,
+        team,
+      })),
+    )
+    .filter(({ player }) => !activeRosterIds.has(player.id));
+  const directPositionTargets = tradePool.filter(
+    ({ player }) => normalizeScoutingPosition(player.position) === position,
+  );
+  const candidates =
+    directPositionTargets.length > 0
+      ? directPositionTargets
+      : tradePool.filter(({ player }) => player.contextProjection.projection >= 7);
+  const target =
+    [...candidates].sort(
+      (left, right) =>
+        fantasyMoveCandidateScore(right.player, position, lens, "trade") -
+        fantasyMoveCandidateScore(left.player, position, lens, "trade"),
+    )[0] ?? tradePool[0];
+
+  if (!target) {
+    return fallbackFantasyMoveTarget("trade", position);
+  }
+
+  return {
+    action: "Trade ask",
+    kind: "trade",
+    playerName: target.player.name,
+    position: normalizeScoutingPosition(target.player.position),
+    reason: fantasyMoveReason({
+      lens,
+      player: target.player,
+      scoringFormat,
+      weakestPosition: position,
+    }),
+    risk: fantasyMoveRisk(target.player, lens),
+    teamLabel: `${target.team.report.team.name} · ${target.player.team}`,
+    title: "Trade target",
+    value: `${target.player.contextProjection.projection.toFixed(1)} proj · role ${
+      target.player.roleSecurity ?? target.player.health
+    }`,
+  };
+}
+
+function buildDropMoveTarget({
+  active,
+  lens,
+  scoringFormat,
+}: {
+  active: FantasyLeaguePowerTeam;
+  lens: FantasyTeamLens;
+  scoringFormat: ScoringFormat;
+}): FantasyMoveTarget {
+  const position = active.weakestPosition.position;
+  const candidatePool =
+    active.report.benchPlayers.length > 0
+      ? active.report.benchPlayers
+      : active.report.players.slice(-3);
+  const target =
+    [...candidatePool].sort(
+      (left, right) =>
+        fantasyDropCandidateScore(right, lens) - fantasyDropCandidateScore(left, lens),
+    )[0] ?? active.report.players[active.report.players.length - 1];
+
+  if (!target) {
+    return fallbackFantasyMoveTarget("drop", position);
+  }
+
+  return {
+    action: "Drop candidate",
+    kind: "drop",
+    playerName: target.name,
+    position: normalizeScoutingPosition(target.position),
+    reason:
+      lens === "dynasty" && (target.dynastyValue ?? target.health) >= 72
+        ? `${target.name} is not an auto-drop in dynasty, but he is the first bench name to re-check if you need room.`
+        : `${target.name} is the easiest roster spot to question because the projection is modest and the role is not carrying enough weekly value.`,
+    risk: fantasyMoveRisk(target, lens),
+    teamLabel: `${target.team} · ${scoringLabels[scoringFormat]}`,
+    title: "Drop candidate",
+    value: `${target.contextProjection.projection.toFixed(1)} proj · ${target.chaos}% volatility`,
+  };
+}
+
+function fallbackFantasyMoveTarget(
+  kind: FantasyMoveTargetKind,
+  position: ScoutingPlayerPosition,
+): FantasyMoveTarget {
+  const title =
+    kind === "waiver"
+      ? "Waiver scan"
+      : kind === "trade"
+        ? "Trade target"
+        : "Drop candidate";
+
+  return {
+    action: "No clean move",
+    kind,
+    playerName: "No obvious player yet",
+    position,
+    reason:
+      "The current league import does not expose a clean player target here. Re-check after rosters, waivers, or projections refresh.",
+    risk: "avoid",
+    teamLabel: "Waiting for better data",
+    title,
+    value: `${scoutingRankLabel(position)} need`,
+  };
+}
+
+function fantasyMoveCandidateScore(
+  player: ScoutingRow,
+  weakestPosition: ScoutingPlayerPosition,
+  lens: FantasyTeamLens,
+  kind: "waiver" | "trade",
+) {
+  const position = normalizeScoutingPosition(player.position);
+  const positionBoost = position === weakestPosition ? 9 : 0;
+  const dynastyBoost =
+    lens === "dynasty" ? (player.dynastyValue ?? player.health) * 0.12 : 0;
+  const tradeCostPenalty =
+    kind === "trade" && player.contextProjection.projection >= 18 ? 2.4 : 0;
+
+  return (
+    player.contextProjection.projection * 1.4 +
+    player.contextProjection.floor * 0.58 +
+    player.contextProjection.ceiling * 0.2 +
+    (player.roleSecurity ?? player.health) * 0.08 +
+    player.matchup * 0.035 -
+    player.chaos * 0.045 +
+    positionBoost +
+    dynastyBoost -
+    tradeCostPenalty
+  );
+}
+
+function fantasyDropCandidateScore(player: ScoutingRow, lens: FantasyTeamLens) {
+  const dynastyProtection =
+    lens === "dynasty" ? (player.dynastyValue ?? player.health) * 0.18 : 0;
+  const roleProtection = (player.roleSecurity ?? player.health) * 0.12;
+
+  return (
+    100 -
+    player.contextProjection.projection * 4.1 -
+    player.contextProjection.floor * 1.7 -
+    roleProtection -
+    dynastyProtection +
+    player.chaos * 0.26 +
+    (100 - player.health) * 0.16
+  );
+}
+
+function fantasyMoveRisk(player: ScoutingRow, lens: FantasyTeamLens): FantasyMoveRisk {
+  const dynastyValue = player.dynastyValue ?? player.health;
+  const roleSecurity = player.roleSecurity ?? player.health;
+  const ceilingGap = player.contextProjection.ceiling - player.contextProjection.projection;
+
+  if (lens === "dynasty" && dynastyValue >= 78 && player.contextProjection.projection < 10) {
+    return "stash";
+  }
+
+  if (player.health <= 62 || roleSecurity <= 58) {
+    return "avoid";
+  }
+
+  if (ceilingGap >= 8 || player.chaos >= 62) {
+    return "upside swing";
+  }
+
+  return "safe floor";
+}
+
+function fantasyMoveReason({
+  lens,
+  player,
+  scoringFormat,
+  weakestPosition,
+}: {
+  lens: FantasyTeamLens;
+  player: ScoutingRow;
+  scoringFormat: ScoringFormat;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const positionCopy =
+    position === weakestPosition
+      ? `He directly patches your ${scoutingRankLabel(weakestPosition)} lane.`
+      : `He does not match the weakest lane perfectly, but the value is useful.`;
+  const scoringCopy =
+    scoringFormat !== "standard" &&
+    (position === "WR" || position === "TE" || position === "RB") &&
+    player.baseline.receptions >= 4
+      ? "The catch volume matters in this scoring format."
+      : player.carryShare >= 22
+        ? "The touch share gives you a clearer weekly role."
+        : "The profile is more about matchup and role stability than pure volume.";
+  const dynastyCopy =
+    lens === "dynasty" && (player.dynastyValue ?? player.health) >= 74
+      ? " Dynasty value makes him easier to hold if the first week is quiet."
+      : "";
+
+  return `${positionCopy} ${scoringCopy}${dynastyCopy}`;
 }
 
 function buildFantasyLeaguePowerTeam(
