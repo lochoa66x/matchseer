@@ -738,6 +738,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     nflDataStatus === "fallback" &&
     nflDataset.source === "seeded-fallback";
   const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
+  const uniqueSlateWeeks = useMemo(
+    () => Array.from(new Set(matchups.map((matchup) => matchup.week).filter(Boolean))),
+    [matchups],
+  );
+  const slateLabel =
+    uniqueSlateWeeks.length === 1
+      ? `${uniqueSlateWeeks[0]} slate`
+      : `${uniqueSlateWeeks.length} week slate`;
+  const useSlotLabelsInSlate = uniqueSlateWeeks.length === 1;
   const baseFantasyPlayers =
     nflDataset.fantasyPlayers.length > 0
       ? nflDataset.fantasyPlayers
@@ -813,6 +822,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const activeScenario = useMemo(
     () => buildScenarioImpact(activeMatchup, activeScenarioLevers),
     [activeMatchup, activeScenarioLevers],
+  );
+  const activeMatchupPalette = useMemo(
+    () => readableMatchupPalette(activeMatchup.away.color, activeMatchup.home.color),
+    [activeMatchup.away.color, activeMatchup.home.color],
   );
   const seerOracleRead = useMemo(
     () =>
@@ -1635,6 +1648,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 Same Seer brain, new field: team pulse, game script, live pressure,
                 and chaos without pretending the future is a spreadsheet.
               </p>
+              <div className="nfl-slate-meta">
+                <span>{slateLabel}</span>
+                <span>{matchups.length} games</span>
+              </div>
               {isSeededLabMode ? (
                 <div className="nfl-slate-chip">
                   <Sparkles size={15} />
@@ -1652,7 +1669,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     onClick={() => setActiveMatchupId(matchup.id)}
                     type="button"
                   >
-                    <span>{matchup.week}</span>
+                    <span>{useSlotLabelsInSlate ? matchup.slot : matchup.week}</span>
                     <strong>
                       {matchup.away.code} at {matchup.home.code}
                     </strong>
@@ -1667,32 +1684,59 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <span>{activeMatchup.slot}</span>
                 <strong>{activeMatchup.venue}</strong>
               </div>
-              <div className="nfl-hero-faceoff" aria-label="NFL hero matchup">
-                <HeroTeamCard role="Road aura" team={activeMatchup.away} />
-                <div className="nfl-hero-vs">
+
+              <div className="nfl-game-stage" aria-label="NFL hero matchup">
+                <HeroTeamCard
+                  role="Road"
+                  team={activeMatchup.away}
+                  toneColor={activeMatchupPalette.away}
+                />
+                <div className="nfl-stage-core">
                   <span>{activeMatchup.week}</span>
-                  <strong>QB duel</strong>
-                  <em>{activeMatchup.weather}</em>
-                </div>
-                <HeroTeamCard role="Home spell" team={activeMatchup.home} />
-              </div>
-              <div className="nfl-projection-strip">
-                <div>
-                  <span>Seer lean</span>
                   <strong>
                     {activeScenario.leanCode} {activeScenario.leanProbability}%
                   </strong>
+                  <em>{activeScenario.projected}</em>
                 </div>
-                <div>
-                  <span>Projected</span>
-                  <strong>{activeScenario.projected}</strong>
+                <HeroTeamCard
+                  role="Home"
+                  team={activeMatchup.home}
+                  toneColor={activeMatchupPalette.home}
+                />
+              </div>
+
+              <div className="nfl-hero-intel">
+                <div className="nfl-seer-verdict">
+                  <span>
+                    <Sparkles size={16} />
+                    Seer verdict
+                  </span>
+                  <strong>{activeScenario.read}</strong>
                 </div>
-                <div>
-                  <span>Game script</span>
-                  <strong>{activeScenario.pace}% pace</strong>
+                <div className="nfl-signal-stack" aria-label="Seer signal summary">
+                  <div>
+                    <span>Projected</span>
+                    <strong>{activeScenario.projected}</strong>
+                    <em>score path</em>
+                  </div>
+                  <div>
+                    <span>Script</span>
+                    <strong>{activeScenario.pace}%</strong>
+                    <em>pace lane</em>
+                  </div>
+                  <div>
+                    <span>Confidence</span>
+                    <strong>{activeScenario.confidence}%</strong>
+                    <em>signal hold</em>
+                  </div>
+                  <div>
+                    <span>Weather</span>
+                    <strong>{activeScenario.weatherDrag}%</strong>
+                    <em>drag factor</em>
+                  </div>
                 </div>
               </div>
-              <p className="nfl-seer-read">{activeScenario.read}</p>
+
               <div className="nfl-ask-seer" id="ask-seer">
                 <div className="nfl-ask-seer-head">
                   <span>
@@ -1719,32 +1763,16 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   <p className="nfl-seer-oracle-answer">{seerOracleRead}</p>
                 ) : null}
               </div>
+
               <ProbabilityBar
-                leftColor={activeMatchup.away.color}
+                leftColor={activeMatchupPalette.away}
                 leftLabel={activeMatchup.away.code}
                 leftValue={activeScenario.awayWin}
-                rightColor={activeMatchup.home.color}
+                rightColor={activeMatchupPalette.home}
                 rightLabel={activeMatchup.home.code}
                 rightValue={activeScenario.homeWin}
               />
-              <div className="nfl-meter-grid">
-                <MiniMeter
-                  icon={<Gauge size={16} />}
-                  label="Confidence"
-                  value={activeScenario.confidence}
-                />
-                <MiniMeter
-                  hot
-                  icon={<Activity size={16} />}
-                  label="Chaos"
-                  value={activeScenario.chaos}
-                />
-                <MiniMeter
-                  icon={<Wind size={16} />}
-                  label="Weather drag"
-                  value={activeScenario.weatherDrag}
-                />
-              </div>
+
               <div className="nfl-edge-row">
                 {activeMatchup.edges.map((edge) => (
                   <span key={edge}>{edge}</span>
@@ -2254,7 +2282,16 @@ function NflSeerLoading() {
   );
 }
 
-function HeroTeamCard({ role, team }: { role: string; team: NflTeam }) {
+function HeroTeamCard({
+  role,
+  team,
+  toneColor,
+}: {
+  role: string;
+  team: NflTeam;
+  toneColor?: string;
+}) {
+  const accentColor = toneColor ?? team.color;
   const qbTone =
     team.qb >= 90 ? "Superstar QB" : team.qb >= 85 ? "Star QB" : "QB path";
   const trenchTone =
@@ -2265,22 +2302,32 @@ function HeroTeamCard({ role, team }: { role: string; team: NflTeam }) {
         : "Pressure test";
 
   return (
-    <div className="nfl-hero-team" style={{ borderColor: team.color }}>
+    <div className="nfl-hero-team" style={{ borderColor: accentColor }}>
       <div className="nfl-hero-team-top">
-        <span style={{ background: team.color }}>{team.code}</span>
+        <span style={{ background: accentColor }}>{team.code}</span>
         <em>{role}</em>
       </div>
-      <div>
+      <div className="nfl-hero-team-name">
         <strong>{team.name}</strong>
         <small>{team.city}</small>
       </div>
+      <div className="nfl-hero-team-metrics">
+        <span>
+          <em>Off</em>
+          <b>{team.offense}</b>
+        </span>
+        <span>
+          <em>QB</em>
+          <b>{team.qb}</b>
+        </span>
+        <span>
+          <em>Def</em>
+          <b>{team.defense}</b>
+        </span>
+      </div>
       <div className="nfl-hero-team-chips">
-        <span>
-          {qbTone} {team.qb}
-        </span>
-        <span>
-          {trenchTone} {team.trenches}
-        </span>
+        <span>{qbTone}</span>
+        <span>{trenchTone}</span>
       </div>
     </div>
   );
@@ -2296,6 +2343,49 @@ function TeamPill({ team, align = "left" }: { team: NflTeam; align?: "left" | "r
       </div>
     </div>
   );
+}
+
+function readableMatchupPalette(awayColor: string, homeColor: string) {
+  const fallback = {
+    away: "#8fb3d9",
+    home: "#34f5a6",
+  };
+  const awayRgb = colorToRgb(awayColor);
+  const homeRgb = colorToRgb(homeColor);
+
+  if (!awayRgb || !homeRgb) {
+    return { away: awayColor, home: homeColor };
+  }
+
+  const distance = Math.hypot(
+    awayRgb[0] - homeRgb[0],
+    awayRgb[1] - homeRgb[1],
+    awayRgb[2] - homeRgb[2],
+  );
+  const awayLum = colorLuminance(awayRgb);
+  const homeLum = colorLuminance(homeRgb);
+  const bothDark = awayLum < 0.18 && homeLum < 0.18;
+
+  if (distance < 88 || bothDark) {
+    return fallback;
+  }
+
+  return { away: awayColor, home: homeColor };
+}
+
+function colorToRgb(color: string): [number, number, number] | null {
+  const match = color.trim().match(/^#?([a-f\d]{6})$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number.parseInt(match[1], 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function colorLuminance([red, green, blue]: [number, number, number]) {
+  return (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
 }
 
 function ProbabilityBar({
@@ -2401,6 +2491,7 @@ function MiniMeter({
 }
 
 function TeamCompare({ matchup }: { matchup: NflMatchup }) {
+  const palette = readableMatchupPalette(matchup.away.color, matchup.home.color);
   const rows = [
     ["Offense", matchup.away.offense, matchup.home.offense],
     ["Defense", matchup.away.defense, matchup.home.defense],
@@ -2423,8 +2514,14 @@ function TeamCompare({ matchup }: { matchup: NflMatchup }) {
             <div>
               <span>{label}</span>
               <i>
-                <b style={{ width: `${away}%`, background: matchup.away.color }} />
-                <b style={{ width: `${home}%`, background: matchup.home.color }} />
+                <b
+                  className="away"
+                  style={{ width: `${away}%`, background: palette.away }}
+                />
+                <b
+                  className="home"
+                  style={{ width: `${home}%`, background: palette.home }}
+                />
               </i>
             </div>
             <strong>{home}</strong>

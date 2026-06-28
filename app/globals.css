@@ -9085,18 +9085,28 @@ body {
 
 /* === NFL Lab === */
 .nfl-shell {
-  --nfl-ink: #edf4ff;
-  --nfl-muted: #9cadc9;
-  --nfl-panel: rgba(13, 20, 35, 0.88);
-  --nfl-panel-strong: rgba(18, 27, 48, 0.96);
-  --nfl-line: rgba(143, 160, 189, 0.22);
+  --nfl-ink: #f4f7f2;
+  --nfl-muted: #aab6aa;
+  --nfl-gold: #d9b44a;
+  --nfl-mint: #9df2bd;
+  --nfl-turf: #123a2f;
+  --nfl-panel: rgba(11, 16, 22, 0.9);
+  --nfl-panel-strong: rgba(15, 22, 29, 0.97);
+  --nfl-line: rgba(188, 198, 181, 0.18);
   min-height: 100vh;
   padding: 20px;
   color: var(--nfl-ink);
   background:
-    radial-gradient(circle at 12% -10%, rgba(245, 197, 24, 0.08), transparent 32%),
-    radial-gradient(circle at 90% 4%, rgba(45, 212, 191, 0.08), transparent 30%),
-    linear-gradient(180deg, #050812, #080b12 48%, #07090f);
+    linear-gradient(115deg, rgba(217, 180, 74, 0.09), transparent 24%),
+    linear-gradient(245deg, rgba(82, 197, 134, 0.11), transparent 30%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.018) 0,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 92px
+    ),
+    linear-gradient(180deg, #050807, #0b1110 48%, #070908);
 }
 
 .nfl-topbar,
@@ -9119,6 +9129,11 @@ body {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+  padding: 10px 12px;
+  background: rgba(8, 12, 14, 0.54);
+  border: 1px solid rgba(188, 198, 181, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
 }
 
 .nfl-brand,
@@ -9199,10 +9214,10 @@ body {
 .nfl-topbar nav a {
   min-height: 36px;
   padding: 9px 11px;
-  color: rgba(237, 244, 255, 0.78);
+  color: rgba(244, 247, 242, 0.74);
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid transparent;
+  background: rgba(244, 247, 242, 0.045);
+  border: 1px solid rgba(188, 198, 181, 0.08);
   border-radius: 8px;
   font-size: 0.78rem;
   font-weight: 900;
@@ -9214,8 +9229,8 @@ body {
 }
 
 .nfl-topbar nav a.active {
-  color: #06100f;
-  background: linear-gradient(100deg, rgba(247, 197, 29, 0.94), rgba(45, 212, 191, 0.94));
+  color: #07100c;
+  background: linear-gradient(105deg, var(--nfl-gold), var(--nfl-mint));
   border-color: transparent;
 }
 
@@ -9471,7 +9486,9 @@ body {
   background: var(--nfl-panel);
   border: 1px solid var(--nfl-line);
   border-radius: 8px;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.045) inset;
 }
 
 .nfl-matchup-rail,
@@ -9487,7 +9504,7 @@ body {
 
 .nfl-section-kicker {
   gap: 8px;
-  color: var(--nfl-muted);
+  color: rgba(217, 180, 74, 0.92);
   font-size: 0.78rem;
   font-weight: 950;
   letter-spacing: 0;
@@ -9503,8 +9520,8 @@ body {
 .nfl-player-compare h2 {
   margin: 8px 0 10px;
   color: #fff;
-  font-size: clamp(2rem, 5vw, 4.4rem);
-  line-height: 0.96;
+  font-size: clamp(2rem, 4.4vw, 4rem);
+  line-height: 0.94;
   letter-spacing: 0;
 }
 
@@ -9551,6 +9568,24 @@ body {
   font-weight: 950;
 }
 
+.nfl-slate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.nfl-slate-meta span {
+  min-height: 30px;
+  padding: 6px 9px;
+  color: #e8eadf;
+  background: rgba(217, 180, 74, 0.08);
+  border: 1px solid rgba(217, 180, 74, 0.18);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 .nfl-loading-list {
   display: grid;
   gap: 10px;
@@ -9583,20 +9618,22 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px 10px;
   width: 100%;
-  padding: 12px;
+  min-height: 72px;
+  padding: 12px 13px;
   color: var(--nfl-ink);
   text-align: left;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 160, 189, 0.14);
+  background: rgba(244, 247, 242, 0.035);
+  border: 1px solid rgba(188, 198, 181, 0.12);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .nfl-matchup-button.active {
   background:
-    linear-gradient(135deg, rgba(247, 197, 29, 0.16), rgba(45, 212, 191, 0.08)),
-    rgba(255, 255, 255, 0.055);
-  border-color: rgba(247, 197, 29, 0.42);
+    linear-gradient(120deg, rgba(217, 180, 74, 0.18), rgba(157, 242, 189, 0.08)),
+    rgba(244, 247, 242, 0.055);
+  border-color: rgba(217, 180, 74, 0.46);
+  box-shadow: 0 0 0 1px rgba(217, 180, 74, 0.12) inset;
 }
 
 .nfl-matchup-button span,
@@ -9656,16 +9693,26 @@ body {
 .nfl-matchup-button em {
   grid-row: span 2;
   align-self: center;
-  color: #fff;
+  color: var(--nfl-mint);
 }
 
 .nfl-seer-card {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(143, 160, 189, 0.12), transparent 34%),
-    linear-gradient(150deg, rgba(45, 212, 191, 0.1), rgba(247, 197, 29, 0.06)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 22%),
+    linear-gradient(130deg, rgba(18, 58, 47, 0.58), rgba(217, 180, 74, 0.08) 48%, rgba(7, 10, 12, 0.18)),
     var(--nfl-panel-strong);
+}
+
+.nfl-seer-card::before {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  left: 18px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--nfl-gold), var(--nfl-mint), transparent);
+  content: "";
 }
 
 .nfl-seer-loading-card {
@@ -9678,11 +9725,120 @@ body {
 .nfl-card-topline {
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  padding: 7px 0 0;
 }
 
 .nfl-card-topline strong {
+  color: #fff;
   font-size: 0.88rem;
+}
+
+.nfl-game-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 0.28fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.nfl-stage-core {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(217, 180, 74, 0.12), rgba(157, 242, 189, 0.055)),
+    rgba(6, 16, 15, 0.58);
+  border: 1px solid rgba(217, 180, 74, 0.22);
+  border-radius: 8px;
+}
+
+.nfl-stage-core span,
+.nfl-stage-core em {
+  color: var(--nfl-muted);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.nfl-stage-core strong {
+  color: var(--nfl-mint);
+  font-size: clamp(1.35rem, 2.35vw, 2.15rem);
+  line-height: 0.98;
+}
+
+.nfl-hero-intel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(240px, 0.82fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nfl-seer-verdict,
+.nfl-signal-stack div {
+  background: rgba(5, 9, 10, 0.42);
+  border: 1px solid rgba(188, 198, 181, 0.12);
+  border-radius: 8px;
+}
+
+.nfl-seer-verdict {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.nfl-seer-verdict > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--nfl-gold);
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-seer-verdict strong {
+  color: #fff;
+  font-size: clamp(1.28rem, 2.1vw, 2.25rem);
+  line-height: 1.08;
+}
+
+.nfl-signal-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-signal-stack div {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.nfl-signal-stack span,
+.nfl-signal-stack em {
+  color: var(--nfl-muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-signal-stack strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.08rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nfl-hero-faceoff {
@@ -9695,16 +9851,18 @@ body {
 
 .nfl-hero-team {
   display: flex;
-  min-height: 188px;
+  min-width: 0;
+  min-height: 206px;
   flex-direction: column;
   justify-content: space-between;
-  gap: 18px;
-  padding: 14px;
+  gap: 15px;
+  padding: 15px;
   overflow: hidden;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 58%),
-    rgba(6, 16, 15, 0.44);
-  border: 1px solid rgba(143, 160, 189, 0.2);
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09), transparent 50%),
+    linear-gradient(180deg, rgba(18, 58, 47, 0.36), rgba(5, 9, 10, 0.34)),
+    rgba(6, 16, 15, 0.48);
+  border: 1px solid rgba(188, 198, 181, 0.18);
   border-radius: 8px;
 }
 
@@ -9720,10 +9878,11 @@ body {
   min-width: 58px;
   height: 42px;
   place-items: center;
-  color: #06100f;
+  color: #07100c;
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 950;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
 }
 
 .nfl-hero-team-top em {
@@ -9737,9 +9896,13 @@ body {
 
 .nfl-hero-team strong {
   display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: #fff;
-  font-size: clamp(2.25rem, 5.4vw, 5.2rem);
-  line-height: 0.86;
+  font-size: clamp(1.85rem, 3.28vw, 3.58rem);
+  line-height: 0.92;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nfl-hero-team small {
@@ -9748,6 +9911,35 @@ body {
   color: var(--nfl-muted);
   font-size: 0.82rem;
   font-weight: 850;
+}
+
+.nfl-hero-team-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-hero-team-metrics span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 8px;
+  background: rgba(244, 247, 242, 0.055);
+  border: 1px solid rgba(188, 198, 181, 0.12);
+  border-radius: 8px;
+}
+
+.nfl-hero-team-metrics em {
+  color: var(--nfl-muted);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.nfl-hero-team-metrics b {
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .nfl-hero-team-chips {
@@ -9759,9 +9951,9 @@ body {
 .nfl-hero-team-chips span {
   min-height: 28px;
   padding: 6px 9px;
-  color: #dce8f7;
-  background: rgba(143, 160, 189, 0.12);
-  border: 1px solid rgba(143, 160, 189, 0.18);
+  color: #dce7d9;
+  background: rgba(18, 58, 47, 0.34);
+  border: 1px solid rgba(157, 242, 189, 0.13);
   border-radius: 999px;
   font-size: 0.74rem;
   font-weight: 850;
@@ -9959,9 +10151,11 @@ body {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
-  padding: 12px;
-  background: rgba(6, 16, 15, 0.42);
-  border: 1px solid rgba(45, 212, 191, 0.24);
+  padding: 13px;
+  background:
+    linear-gradient(100deg, rgba(217, 180, 74, 0.075), rgba(157, 242, 189, 0.035)),
+    rgba(5, 9, 10, 0.44);
+  border: 1px solid rgba(157, 242, 189, 0.2);
   border-radius: 8px;
 }
 
@@ -9980,19 +10174,19 @@ body {
 }
 
 .nfl-ask-seer-head > span {
-  color: #fff;
+  color: var(--nfl-mint);
   font-size: 0.94rem;
   font-weight: 950;
 }
 
 .nfl-ask-seer textarea {
   width: 100%;
-  min-height: 58px;
+  min-height: 54px;
   padding: 10px 11px;
   resize: vertical;
   color: #fff;
-  background: rgba(3, 8, 12, 0.52);
-  border: 1px solid rgba(143, 160, 189, 0.22);
+  background: rgba(2, 5, 6, 0.64);
+  border: 1px solid rgba(188, 198, 181, 0.18);
   border-radius: 8px;
   font: inherit;
   font-weight: 800;
@@ -10006,8 +10200,8 @@ body {
 .nfl-ask-seer button {
   min-height: 38px;
   padding: 8px 12px;
-  color: #06100f;
-  background: #c8f7dc;
+  color: #07100c;
+  background: linear-gradient(105deg, var(--nfl-gold), var(--nfl-mint));
   border: 0;
   border-radius: 8px;
   cursor: pointer;
@@ -10044,9 +10238,10 @@ body {
 
 .nfl-probability-track {
   display: flex;
-  height: 12px;
+  height: 14px;
   overflow: hidden;
-  background: rgba(143, 160, 189, 0.18);
+  background: rgba(244, 247, 242, 0.1);
+  border: 1px solid rgba(188, 198, 181, 0.08);
   border-radius: 999px;
 }
 
@@ -10136,8 +10331,8 @@ body {
 .nfl-edge-row span {
   min-height: 30px;
   padding: 6px 10px;
-  color: #06100f;
-  background: #c8f7dc;
+  color: #07100c;
+  background: #d9ead3;
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 900;
@@ -10339,17 +10534,39 @@ body {
 }
 
 .nfl-compare-row i {
-  display: flex;
-  gap: 4px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
   height: 9px;
   overflow: hidden;
   background: rgba(143, 160, 189, 0.18);
   border-radius: 999px;
 }
 
+.nfl-compare-row i::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(220, 232, 247, 0.28);
+  content: "";
+}
+
 .nfl-compare-row b {
   display: block;
+  max-width: 100%;
+  height: 100%;
   border-radius: inherit;
+}
+
+.nfl-compare-row b.away {
+  justify-self: end;
+}
+
+.nfl-compare-row b.home {
+  justify-self: start;
 }
 
 .nfl-fantasy-list {
@@ -12107,6 +12324,8 @@ body {
   }
 
   .nfl-hero,
+  .nfl-game-stage,
+  .nfl-hero-intel,
   .nfl-grid-section,
   .nfl-scenario-body,
   .nfl-team-lab-grid,
