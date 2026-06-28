@@ -9494,6 +9494,8 @@ body {
 .nfl-scenario-lab,
 .nfl-scouting-board,
 .nfl-fantasy-team-lab,
+.nfl-standings-panel,
+.nfl-trade-builder,
 .nfl-player-compare {
   background: var(--nfl-panel);
   border: 1px solid var(--nfl-line);
@@ -9514,6 +9516,8 @@ body {
 .nfl-scenario-lab,
 .nfl-scouting-board,
 .nfl-fantasy-team-lab,
+.nfl-standings-panel,
+.nfl-trade-builder,
 .nfl-player-compare {
   padding: 18px;
 }
@@ -9536,6 +9540,8 @@ body {
 .nfl-fantasy-rookies h2,
 .nfl-scouting-board h2,
 .nfl-fantasy-team-lab h2,
+.nfl-standings-panel h2,
+.nfl-trade-builder h2,
 .nfl-player-compare h2 {
   margin: 8px 0 10px;
   color: #fff;
@@ -9551,6 +9557,8 @@ body {
 .nfl-scenario-lab h2,
 .nfl-scouting-board h2,
 .nfl-fantasy-team-lab h2,
+.nfl-standings-panel h2,
+.nfl-trade-builder h2,
 .nfl-player-compare h2 {
   font-size: clamp(1.55rem, 3vw, 2.4rem);
 }
@@ -9561,7 +9569,9 @@ body {
 .nfl-fantasy-head p,
 .nfl-scenario-read p,
 .nfl-scouting-head p,
-.nfl-fantasy-team-head p {
+.nfl-fantasy-team-head p,
+.nfl-standings-head p,
+.nfl-trade-builder p {
   margin: 0 0 16px;
   color: var(--nfl-muted);
   font-size: 0.95rem;
@@ -9607,6 +9617,95 @@ body {
   border-radius: 999px;
   font-size: 0.76rem;
   font-weight: 900;
+}
+
+.nfl-slate-controls {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 10px;
+  background: rgba(5, 12, 28, 0.44);
+  border: 1px solid rgba(143, 160, 189, 0.14);
+  border-radius: 8px;
+}
+
+.nfl-phase-toggle,
+.nfl-week-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.nfl-phase-toggle button,
+.nfl-week-strip button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  color: #dce8f7;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.nfl-phase-toggle button {
+  padding: 0 10px;
+}
+
+.nfl-week-strip button {
+  width: 42px;
+}
+
+.nfl-phase-toggle button.active,
+.nfl-week-strip button.active {
+  color: #06100f;
+  background: linear-gradient(100deg, #d9b44a, #8ff0c1);
+  border-color: transparent;
+}
+
+.nfl-group-select {
+  display: grid;
+  gap: 5px;
+}
+
+.nfl-group-select span,
+.nfl-slate-controls p {
+  margin: 0;
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.nfl-group-select select {
+  min-height: 38px;
+  color: #fff;
+  background: rgba(5, 12, 28, 0.72);
+  border: 1px solid rgba(143, 160, 189, 0.2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.nfl-empty-slate-card {
+  display: grid;
+  gap: 5px;
+  min-height: 94px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px dashed rgba(143, 160, 189, 0.22);
+  border-radius: 8px;
+}
+
+.nfl-empty-slate-card strong {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.nfl-empty-slate-card p {
+  margin: 0;
+  font-size: 0.78rem;
 }
 
 .nfl-loading-list {
@@ -13083,6 +13182,309 @@ body {
   font-size: 0.82rem;
 }
 
+.nfl-trade-builder {
+  display: grid;
+  gap: 13px;
+  margin-bottom: 18px;
+  background:
+    linear-gradient(140deg, rgba(15, 24, 31, 0.96), rgba(8, 18, 22, 0.95)),
+    radial-gradient(circle at 12% 0%, rgba(217, 180, 74, 0.1), transparent 30%),
+    radial-gradient(circle at 92% 8%, rgba(143, 240, 193, 0.1), transparent 28%);
+}
+
+.nfl-trade-builder-hero,
+.nfl-trade-guardrail,
+.nfl-trade-package-top,
+.nfl-trade-value-row,
+.nfl-trade-walkaway,
+.nfl-standings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-trade-builder-hero h2,
+.nfl-standings-head h2 {
+  margin: 5px 0 7px;
+  color: #fff;
+  line-height: 1.02;
+}
+
+.nfl-trade-builder-hero p,
+.nfl-trade-explainer p,
+.nfl-trade-empty-card p {
+  margin: 0;
+  color: #dce8f7;
+  font-size: 0.9rem;
+  font-weight: 760;
+  line-height: 1.42;
+}
+
+.nfl-trade-lane-card,
+.nfl-trade-guardrail,
+.nfl-trade-empty-card {
+  min-width: 0;
+  padding: 12px;
+  background: rgba(5, 12, 28, 0.45);
+  border: 1px solid rgba(143, 160, 189, 0.15);
+  border-radius: 8px;
+}
+
+.nfl-trade-lane-card {
+  flex: 0 0 min(240px, 38%);
+  text-align: right;
+}
+
+.nfl-trade-lane-card span,
+.nfl-trade-guardrail span,
+.nfl-trade-package-top span,
+.nfl-trade-value-row span,
+.nfl-trade-walkaway span,
+.nfl-trade-flow span,
+.nfl-standings-row em,
+.nfl-standings-row small {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nfl-trade-lane-card strong {
+  display: block;
+  margin: 4px 0;
+  color: #fff;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.nfl-trade-lane-card em {
+  color: #c8f7dc;
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.nfl-trade-guardrail {
+  align-items: center;
+  border-color: rgba(217, 180, 74, 0.22);
+}
+
+.nfl-trade-guardrail strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.nfl-trade-guardrail p {
+  max-width: 560px;
+  margin: 0;
+  color: #dce8f7;
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.nfl-trade-package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-trade-package-card {
+  display: grid;
+  align-content: start;
+  gap: 11px;
+  min-height: 430px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.048);
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 8px;
+}
+
+.nfl-trade-package-card.safe {
+  border-color: rgba(143, 240, 193, 0.28);
+}
+
+.nfl-trade-package-card.fair {
+  border-color: rgba(143, 179, 217, 0.28);
+}
+
+.nfl-trade-package-card.aggressive {
+  border-color: rgba(217, 180, 74, 0.32);
+}
+
+.nfl-trade-package-top em {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-trade-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.nfl-trade-flow > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(5, 12, 28, 0.42);
+  border: 1px solid rgba(143, 160, 189, 0.13);
+  border-radius: 8px;
+}
+
+.nfl-trade-flow > svg {
+  align-self: center;
+  color: #d9b44a;
+}
+
+.nfl-trade-player-inline {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nfl-trade-player-inline strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.93rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-trade-player-inline span {
+  overflow: hidden;
+  color: #c8f7dc;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-trade-value-row {
+  align-items: center;
+  padding: 8px;
+  background: rgba(5, 12, 28, 0.35);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 8px;
+}
+
+.nfl-trade-value-row strong {
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.nfl-trade-value-row .warning strong {
+  color: #d9b44a;
+}
+
+.nfl-trade-explainer {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-trade-explainer strong {
+  color: #fff;
+}
+
+.nfl-trade-walkaway {
+  align-self: end;
+  display: grid;
+  gap: 5px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(143, 160, 189, 0.14);
+}
+
+.nfl-trade-walkaway strong,
+.nfl-trade-empty-card strong {
+  color: #d9b44a;
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.nfl-standings-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  background:
+    linear-gradient(140deg, rgba(15, 24, 31, 0.92), rgba(8, 18, 22, 0.92)),
+    radial-gradient(circle at 10% 0%, rgba(143, 179, 217, 0.1), transparent 28%);
+}
+
+.nfl-standings-head {
+  align-items: flex-end;
+}
+
+.nfl-standings-head strong {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  color: #06100f;
+  background: #c8f7dc;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-standings-table {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-standings-row {
+  display: grid;
+  grid-template-columns: 44px minmax(150px, 1fr) 80px minmax(110px, 0.5fr) minmax(120px, 0.45fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(143, 160, 189, 0.13);
+  border-radius: 8px;
+}
+
+.nfl-standings-row > span,
+.nfl-standings-row b {
+  color: #fff;
+  font-weight: 950;
+}
+
+.nfl-standings-row strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-standings-row i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+}
+
+.nfl-standings-row i span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8fb3d9, #8ff0c1);
+  border-radius: inherit;
+}
+
 .nfl-league-table {
   display: grid;
   gap: 8px;
@@ -13293,6 +13695,10 @@ body {
   .nfl-matchup-score-grid,
   .nfl-player-duel,
   .nfl-source-lane-grid,
+  .nfl-standings-row,
+  .nfl-trade-builder-hero,
+  .nfl-trade-flow,
+  .nfl-trade-package-grid,
   .nfl-rookie-row {
     grid-template-columns: 1fr;
   }
@@ -13328,7 +13734,8 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .nfl-target-grid {
+  .nfl-target-grid,
+  .nfl-trade-package-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -13401,10 +13808,13 @@ body {
   .nfl-import-panel-head,
   .nfl-fantasy-matchup-head,
   .nfl-fantasy-team-head,
+  .nfl-standings-head,
   .nfl-scenario-head,
   .nfl-team-report-top,
   .nfl-league-power-hero,
   .nfl-target-finder-head,
+  .nfl-trade-builder-hero,
+  .nfl-trade-guardrail,
   .nfl-player-compare-head {
     align-items: flex-start;
     flex-direction: column;
@@ -13438,9 +13848,18 @@ body {
   .nfl-fantasy-action-grid,
   .nfl-fantasy-spotlight-row,
   .nfl-target-grid,
+  .nfl-trade-flow,
+  .nfl-trade-package-grid,
+  .nfl-trade-value-row,
   .nfl-league-lanes,
   .nfl-rookie-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .nfl-trade-lane-card {
+    flex-basis: auto;
+    width: 100%;
+    text-align: left;
   }
 
   .nfl-league-rank-card {

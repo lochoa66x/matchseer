@@ -49,6 +49,13 @@ import {
   seerVoiceOptionsForMode,
   type SeerVoiceProfile,
 } from "../../lib/seer-voices";
+import {
+  buildFantasyTradePackages,
+  type FantasyTradeBuilderResult,
+  type FantasyTradePlayer,
+  type FantasyTradePosition,
+  type FantasyTradeTeam,
+} from "../../lib/nfl-fantasy-trades";
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 type FantasyTeamLens = "redraft" | "dynasty";
@@ -62,10 +69,21 @@ type FantasySourceLaneKind = "roster" | "projection" | "ranking" | "context" | "
 type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
 type NflLabMode = "nfl" | "fantasy";
-type FantasyView = "overview" | "players" | "roster" | "rookies" | "compare";
+type FantasyView = "overview" | "players" | "roster" | "trades" | "rookies" | "compare";
 type FantasyActionKind = "start" | "watch" | "swap" | "market";
 type FantasyActionStrength = "high" | "medium" | "low";
 type FantasyLineupSlotId = string;
+type NflSeasonPhase = "preseason" | "regular";
+type NflDivision =
+  | "AFC East"
+  | "AFC North"
+  | "AFC South"
+  | "AFC West"
+  | "NFC East"
+  | "NFC North"
+  | "NFC South"
+  | "NFC West";
+type NflSlateGroup = "all" | "AFC" | "NFC" | NflDivision;
 
 type FantasyActionItem = {
   kind: FantasyActionKind;
@@ -123,6 +141,24 @@ type NflMatchup = {
   read: string;
   edges: string[];
   marketPulse?: NflMarketPulse | null;
+};
+
+type NflSlateSelection = {
+  phase: NflSeasonPhase;
+  week: number;
+};
+
+type NflStandingRow = {
+  code: string;
+  name: string;
+  division: NflDivision;
+  conference: "AFC" | "NFC";
+  wins: number;
+  losses: number;
+  ties: number;
+  projectedFor: number;
+  projectedAgainst: number;
+  strength: number;
 };
 
 type FantasyPlayer = NflFantasyPlayer;
@@ -506,6 +542,65 @@ const scoutingPositionOptions: Array<{ value: ScoutingPosition; label: string }>
 
 const fantasyCoveragePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE", "K", "DST"];
 
+const nflPhaseLabels: Record<NflSeasonPhase, string> = {
+  preseason: "Preseason",
+  regular: "Regular season",
+};
+
+const nflWeeksByPhase: Record<NflSeasonPhase, number[]> = {
+  preseason: [1, 2, 3],
+  regular: Array.from({ length: 18 }, (_, index) => index + 1),
+};
+
+const nflSlateGroups: NflSlateGroup[] = [
+  "all",
+  "AFC",
+  "NFC",
+  "AFC East",
+  "AFC North",
+  "AFC South",
+  "AFC West",
+  "NFC East",
+  "NFC North",
+  "NFC South",
+  "NFC West",
+];
+
+const nflTeamDivisions: Record<string, NflDivision> = {
+  ARI: "NFC West",
+  ATL: "NFC South",
+  BAL: "AFC North",
+  BUF: "AFC East",
+  CAR: "NFC South",
+  CHI: "NFC North",
+  CIN: "AFC North",
+  CLE: "AFC North",
+  DAL: "NFC East",
+  DEN: "AFC West",
+  DET: "NFC North",
+  GB: "NFC North",
+  HOU: "AFC South",
+  IND: "AFC South",
+  JAX: "AFC South",
+  KC: "AFC West",
+  LAC: "AFC West",
+  LAR: "NFC West",
+  LV: "AFC West",
+  MIA: "AFC East",
+  MIN: "NFC North",
+  NE: "AFC East",
+  NO: "NFC South",
+  NYG: "NFC East",
+  NYJ: "AFC East",
+  PHI: "NFC East",
+  PIT: "AFC North",
+  SEA: "NFC West",
+  SF: "NFC West",
+  TB: "NFC South",
+  TEN: "AFC South",
+  WAS: "NFC East",
+};
+
 const fantasyLineupSlots: FantasyLineupSlotDefinition[] = [
   { id: "QB", label: "QB", positions: ["QB"] },
   { id: "RB1", label: "RB1", positions: ["RB"] },
@@ -744,6 +839,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
   const [nflDataStatus, setNflDataStatus] = useState<NflDataStatus>("loading");
   const [activeMatchupId, setActiveMatchupId] = useState(seededMatchups[0].id);
+  const [nflPhase, setNflPhase] = useState<NflSeasonPhase>("regular");
+  const [nflWeek, setNflWeek] = useState(1);
+  const [nflSlateGroup, setNflSlateGroup] = useState<NflSlateGroup>("all");
   const [seerQuestion, setSeerQuestion] = useState("");
   const [seerQuestionAsked, setSeerQuestionAsked] = useState(false);
   const [nflVoiceId, setNflVoiceId] = useState<SeerVoiceId>(defaultNflVoiceId);
@@ -816,15 +914,21 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     nflDataStatus === "fallback" &&
     nflDataset.source === "seeded-fallback";
   const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
-  const uniqueSlateWeeks = useMemo(
-    () => Array.from(new Set(matchups.map((matchup) => matchup.week).filter(Boolean))),
-    [matchups],
+  const visibleNflMatchups = useMemo(
+    () =>
+      matchups.filter(
+        (matchup) =>
+          matchupMatchesSlate(matchup, { phase: nflPhase, week: nflWeek }) &&
+          matchupMatchesGroup(matchup, nflSlateGroup),
+      ),
+    [matchups, nflPhase, nflSlateGroup, nflWeek],
   );
-  const slateLabel =
-    uniqueSlateWeeks.length === 1
-      ? `${uniqueSlateWeeks[0]} slate`
-      : `${uniqueSlateWeeks.length} week slate`;
-  const useSlotLabelsInSlate = uniqueSlateWeeks.length === 1;
+  const nflStandings = useMemo(
+    () => buildNflStandings(matchups, nflSlateGroup),
+    [matchups, nflSlateGroup],
+  );
+  const slateLabel = `${nflPhaseLabels[nflPhase]} Week ${nflWeek}`;
+  const useSlotLabelsInSlate = visibleNflMatchups.length > 0;
   const baseFantasyPlayers =
     nflDataset.fantasyPlayers.length > 0
       ? nflDataset.fantasyPlayers
@@ -890,7 +994,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     [fantasyPlayers],
   );
   const activeMatchup =
-    matchups.find((matchup) => matchup.id === activeMatchupId) ?? matchups[0];
+    visibleNflMatchups.find((matchup) => matchup.id === activeMatchupId) ??
+    visibleNflMatchups[0] ??
+    matchups[0];
   const activeScenarioLevers = useMemo(
     () =>
       scenarioLeversByMatchup[activeMatchup.id] ??
@@ -1010,6 +1116,16 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       teamLens,
     ],
   );
+  const fantasyTradeBuilder = useMemo(
+    () =>
+      buildFantasyTradePackages({
+        activeTeamId: activeFantasyTeam.id,
+        lens: teamLens === "dynasty" ? "dynasty" : "redraft",
+        scoringFormat,
+        teams: fantasyTradeTeamsFromLeagueMap(fantasyLeaguePowerMap),
+      }),
+    [activeFantasyTeam.id, fantasyLeaguePowerMap, scoringFormat, teamLens],
+  );
   const rookieWatchRows = useMemo(
     () => buildRookieWatchRows(scoutingBoard),
     [scoutingBoard],
@@ -1073,6 +1189,13 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const defaultSlate = nflDefaultSelectionFromMatchups(matchups, nflDataset.weekLabel);
+
+    setNflPhase(defaultSlate.phase);
+    setNflWeek(defaultSlate.week);
+  }, [matchups, nflDataset.weekLabel]);
 
   useEffect(() => {
     const savedConnection = readSleeperSavedConnection();
@@ -1162,10 +1285,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   ]);
 
   useEffect(() => {
-    if (!matchups.some((matchup) => matchup.id === activeMatchupId)) {
-      setActiveMatchupId(matchups[0]?.id ?? seededMatchups[0].id);
+    const selectionPool = visibleNflMatchups.length > 0 ? visibleNflMatchups : matchups;
+
+    if (!selectionPool.some((matchup) => matchup.id === activeMatchupId)) {
+      setActiveMatchupId(selectionPool[0]?.id ?? seededMatchups[0].id);
     }
-  }, [activeMatchupId, matchups]);
+  }, [activeMatchupId, matchups, visibleNflMatchups]);
 
   useEffect(() => {
     if (!fantasyPlayers.some((player) => player.id === leftPlayerId)) {
@@ -1761,6 +1886,13 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 My roster
               </a>
               <a
+                className={fantasyView === "trades" ? "active" : undefined}
+                href="#fantasy-rooms"
+                onClick={() => setFantasyView("trades")}
+              >
+                Trade Builder
+              </a>
+              <a
                 className={fantasyView === "rookies" ? "active" : undefined}
                 href="#fantasy-rooms"
                 onClick={() => setFantasyView("rookies")}
@@ -1812,8 +1944,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   Lab slate
                 </div>
               ) : null}
+              <NflSlateControls
+                group={nflSlateGroup}
+                onGroupChange={setNflSlateGroup}
+                onPhaseChange={setNflPhase}
+                onWeekChange={setNflWeek}
+                phase={nflPhase}
+                week={nflWeek}
+              />
               <div className="nfl-matchup-list">
-                {matchups.map((matchup) => (
+                {visibleNflMatchups.length > 0 ? (
+                  visibleNflMatchups.map((matchup) => (
                   <button
                     className={cx(
                       "nfl-matchup-button",
@@ -1829,7 +1970,16 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     </strong>
                     <em>{matchup.projected}</em>
                   </button>
-                ))}
+                  ))
+                ) : (
+                  <article className="nfl-empty-slate-card">
+                    <strong>No games loaded here yet</strong>
+                    <p>
+                      This slate room is ready for real data. Switch weeks or divisions
+                      while the feed catches up.
+                    </p>
+                  </article>
+                )}
               </div>
             </div>
 
@@ -1962,6 +2112,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onReset={resetScenarioLevers}
           />
 
+          <NflStandingsPanel
+            group={nflSlateGroup}
+            rows={nflStandings}
+            selection={{ phase: nflPhase, week: nflWeek }}
+          />
+
           <section className="nfl-grid-section game-only" id="matchup-tissue">
             <div className="nfl-team-compare">
               <div className="nfl-section-kicker">
@@ -2072,6 +2228,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               teams={fantasyTeams}
               onSleeperUseAutoWeekChange={updateSleeperAutoWeek}
               onSleeperWeekChange={updateSleeperWeek}
+            />
+          ) : null}
+
+          {fantasyView === "trades" ? (
+            <FantasyTradeBuilderSection
+              result={fantasyTradeBuilder}
+              scoringFormat={scoringFormat}
+              teamLens={teamLens}
             />
           ) : null}
 
@@ -2239,6 +2403,122 @@ function NflDataRibbon({
             ? ` ${contextStatus.warnings.slice(0, 1).join(" ")}`
             : ""}
         </p>
+      </div>
+    </section>
+  );
+}
+
+function NflSlateControls({
+  group,
+  onGroupChange,
+  onPhaseChange,
+  onWeekChange,
+  phase,
+  week,
+}: {
+  group: NflSlateGroup;
+  onGroupChange: (group: NflSlateGroup) => void;
+  onPhaseChange: (phase: NflSeasonPhase) => void;
+  onWeekChange: (week: number) => void;
+  phase: NflSeasonPhase;
+  week: number;
+}) {
+  return (
+    <div className="nfl-slate-controls" aria-label="NFL slate controls">
+      <div className="nfl-phase-toggle" aria-label="Season phase">
+        {(Object.keys(nflPhaseLabels) as NflSeasonPhase[]).map((option) => (
+          <button
+            aria-pressed={phase === option}
+            className={cx(phase === option && "active")}
+            key={option}
+            onClick={() => onPhaseChange(option)}
+            type="button"
+          >
+            {nflPhaseLabels[option]}
+          </button>
+        ))}
+      </div>
+      <div className="nfl-week-strip" aria-label="NFL week">
+        {nflWeeksByPhase[phase].map((option) => (
+          <button
+            aria-pressed={week === option}
+            className={cx(week === option && "active")}
+            key={option}
+            onClick={() => onWeekChange(option)}
+            type="button"
+          >
+            W{option}
+          </button>
+        ))}
+      </div>
+      <label className="nfl-group-select">
+        <span>Group</span>
+        <select
+          onChange={(event) => onGroupChange(event.target.value as NflSlateGroup)}
+          value={group}
+        >
+          {nflSlateGroups.map((option) => (
+            <option key={option} value={option}>
+              {option === "all" ? "All NFL" : option}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p>Current week follows the live feed; future rooms stay ready for the next sync.</p>
+    </div>
+  );
+}
+
+function NflStandingsPanel({
+  group,
+  rows,
+  selection,
+}: {
+  group: NflSlateGroup;
+  rows: NflStandingRow[];
+  selection: NflSlateSelection;
+}) {
+  const title = group === "all" ? "NFL standings lens" : `${group} standings`;
+  const visibleRows = rows.slice(0, 8);
+
+  return (
+    <section className="nfl-standings-panel" aria-label="NFL standings">
+      <div className="nfl-standings-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Trophy size={17} />
+            Groups + standings
+          </div>
+          <h2>{title}</h2>
+          <p>
+            {nflPhaseLabels[selection.phase]} Week {selection.week} uses the loaded
+            slate first. As fresh weeks arrive, this becomes the weekly division lens.
+          </p>
+        </div>
+        <strong>{visibleRows.length} teams</strong>
+      </div>
+      <div className="nfl-standings-table">
+        {visibleRows.map((row, index) => (
+          <article className="nfl-standings-row" key={row.code}>
+            <span>#{index + 1}</span>
+            <div>
+              <strong>{row.name}</strong>
+              <em>
+                {row.division} · {row.conference}
+              </em>
+            </div>
+            <b>
+              {row.wins}-{row.losses}
+              {row.ties ? `-${row.ties}` : ""}
+            </b>
+            <small>
+              PF {row.projectedFor} · PA {row.projectedAgainst}
+            </small>
+            <i>
+              <span style={{ width: `${row.strength}%` }} />
+            </i>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -2692,6 +2972,177 @@ function TeamCompare({ matchup }: { matchup: NflMatchup }) {
   );
 }
 
+function nflDefaultSelectionFromMatchups(
+  matchups: NflMatchup[],
+  weekLabel: string,
+): NflSlateSelection {
+  return (
+    parseNflSlateSelection(matchups[0]?.week) ??
+    parseNflSlateSelection(weekLabel) ?? {
+      phase: "regular",
+      week: 1,
+    }
+  );
+}
+
+function parseNflSlateSelection(value: string | null | undefined): NflSlateSelection | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.toLowerCase();
+  const phase: NflSeasonPhase = normalized.includes("preseason")
+    ? "preseason"
+    : "regular";
+  const weekMatch = normalized.match(/week\s*(\d{1,2})/);
+  const week = weekMatch ? Number(weekMatch[1]) : null;
+
+  if (!week || !Number.isFinite(week)) {
+    return null;
+  }
+
+  return {
+    phase,
+    week,
+  };
+}
+
+function matchupMatchesSlate(matchup: NflMatchup, selection: NflSlateSelection) {
+  const matchupSelection = parseNflSlateSelection(matchup.week);
+
+  if (!matchupSelection) {
+    return selection.phase === "regular" && selection.week === 1;
+  }
+
+  return (
+    matchupSelection.phase === selection.phase && matchupSelection.week === selection.week
+  );
+}
+
+function matchupMatchesGroup(matchup: NflMatchup, group: NflSlateGroup) {
+  if (group === "all") {
+    return true;
+  }
+
+  return (
+    teamMatchesNflGroup(matchup.away, group) ||
+    teamMatchesNflGroup(matchup.home, group)
+  );
+}
+
+function teamMatchesNflGroup(team: NflTeam, group: NflSlateGroup) {
+  if (group === "all") {
+    return true;
+  }
+
+  const division = nflTeamDivisions[team.code];
+
+  if (!division) {
+    return false;
+  }
+
+  if (group === "AFC" || group === "NFC") {
+    return division.startsWith(group);
+  }
+
+  return division === group;
+}
+
+function buildNflStandings(matchups: NflMatchup[], group: NflSlateGroup) {
+  const rows = new Map<string, NflStandingRow>();
+
+  for (const matchup of matchups) {
+    const score = parseProjectedScore(matchup.projected);
+    const awayWon = matchup.awayWin > matchup.homeWin;
+    const tied = matchup.awayWin === matchup.homeWin;
+
+    updateNflStanding(rows, matchup.away, group, {
+      forPoints: score.away,
+      againstPoints: score.home,
+      result: tied ? "tie" : awayWon ? "win" : "loss",
+      strength: matchup.awayWin,
+    });
+    updateNflStanding(rows, matchup.home, group, {
+      forPoints: score.home,
+      againstPoints: score.away,
+      result: tied ? "tie" : awayWon ? "loss" : "win",
+      strength: matchup.homeWin,
+    });
+  }
+
+  return Array.from(rows.values()).sort(
+    (left, right) =>
+      right.wins - left.wins ||
+      left.losses - right.losses ||
+      right.strength - left.strength ||
+      right.projectedFor - left.projectedFor,
+  );
+}
+
+function updateNflStanding(
+  rows: Map<string, NflStandingRow>,
+  team: NflTeam,
+  group: NflSlateGroup,
+  update: {
+    againstPoints: number;
+    forPoints: number;
+    result: "win" | "loss" | "tie";
+    strength: number;
+  },
+) {
+  if (!teamMatchesNflGroup(team, group)) {
+    return;
+  }
+
+  const division = nflTeamDivisions[team.code];
+
+  if (!division) {
+    return;
+  }
+
+  const current =
+    rows.get(team.code) ??
+    ({
+      code: team.code,
+      conference: division.startsWith("AFC") ? "AFC" : "NFC",
+      division,
+      losses: 0,
+      name: `${team.city} ${team.name}`,
+      projectedAgainst: 0,
+      projectedFor: 0,
+      strength: 0,
+      ties: 0,
+      wins: 0,
+    } satisfies NflStandingRow);
+
+  current.projectedAgainst += update.againstPoints;
+  current.projectedFor += update.forPoints;
+  current.strength = Math.max(current.strength, update.strength);
+
+  if (update.result === "win") {
+    current.wins += 1;
+  } else if (update.result === "loss") {
+    current.losses += 1;
+  } else {
+    current.ties += 1;
+  }
+
+  rows.set(team.code, current);
+}
+
+function parseProjectedScore(projected: string) {
+  const scores = projected.match(/(\d{1,2})\s*-\s*(\d{1,2})/);
+
+  if (!scores) {
+    return { away: 21, home: 20 };
+  }
+
+  return {
+    away: Number(scores[1]),
+    home: Number(scores[2]),
+  };
+}
+
 function FantasyHero({
   contextStatus,
   fantasyImport,
@@ -2742,6 +3193,10 @@ function FantasyHero({
           <button onClick={() => onViewChange("roster")} type="button">
             <RefreshCw size={16} />
             Connect roster
+          </button>
+          <button className="secondary" onClick={() => onViewChange("trades")} type="button">
+            <LineChart size={16} />
+            Build trade
           </button>
           <button
             className="secondary"
@@ -2866,6 +3321,12 @@ function FantasyViewTabs({
       label: "My roster",
       meta: `${report.players.length} starters`,
       icon: <UsersRound size={17} />,
+    },
+    {
+      id: "trades",
+      label: "Trade Builder",
+      meta: "packages",
+      icon: <LineChart size={17} />,
     },
     {
       id: "rookies",
@@ -3290,6 +3751,134 @@ function FantasyMoveTargetFinder({ targets }: { targets: FantasyMoveTarget[] }) 
         ))}
       </div>
     </section>
+  );
+}
+
+function FantasyTradeBuilderSection({
+  result,
+  scoringFormat,
+  teamLens,
+}: {
+  result: FantasyTradeBuilderResult;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}) {
+  return (
+    <section className="nfl-trade-builder" id="trade-builder">
+      <div className="nfl-trade-builder-hero">
+        <div>
+          <div className="nfl-section-kicker">
+            <LineChart size={17} />
+            Trade Package Builder
+          </div>
+          <h2>Offer with a walk-away line</h2>
+          <p>{result.summary}</p>
+        </div>
+        <div className="nfl-trade-lane-card">
+          <span>Shop from</span>
+          <strong>{scoutingRankLabel(result.surplusPosition)}</strong>
+          <em>
+            Need {scoutingRankLabel(result.needPosition)} · {scoringLabels[scoringFormat]} ·{" "}
+            {teamLensLabels[teamLens]}
+          </em>
+        </div>
+      </div>
+
+      <div className="nfl-trade-guardrail">
+        <div>
+          <span>Do not include</span>
+          <strong>
+            {result.doNotInclude.length > 0
+              ? result.doNotInclude.map((player) => player.name).join(", ")
+              : "No locked core yet"}
+          </strong>
+        </div>
+        <p>
+          These are the names the builder protects first. If a counteroffer asks for
+          one of them, make them add real value or walk away.
+        </p>
+      </div>
+
+      {result.packages.length > 0 ? (
+        <div className="nfl-trade-package-grid">
+          {result.packages.map((tradePackage) => (
+            <article
+              className={cx("nfl-trade-package-card", tradePackage.tier)}
+              key={`${tradePackage.tier}-${tradePackage.target.id}`}
+            >
+              <div className="nfl-trade-package-top">
+                <span>{tradePackage.title}</span>
+                <em>{tradePackage.fairnessScore}% fair</em>
+              </div>
+
+              <div className="nfl-trade-flow">
+                <div>
+                  <span>You get</span>
+                  <TradePlayerInline player={tradePackage.target} />
+                </div>
+                <ChevronRight size={18} />
+                <div>
+                  <span>You offer</span>
+                  {tradePackage.offerPlayers.map((player) => (
+                    <TradePlayerInline key={player.id} player={player} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="nfl-trade-value-row">
+                <span>
+                  Receive <strong>{tradePackage.receiveValue.toFixed(1)}</strong>
+                </span>
+                <span>
+                  Offer <strong>{tradePackage.offerValue.toFixed(1)}</strong>
+                </span>
+                <span className={cx(tradePackage.valueGap > 0 && "warning")}>
+                  Gap <strong>{formatFantasyDelta(tradePackage.valueGap)}</strong>
+                </span>
+              </div>
+
+              <div className="nfl-trade-explainer">
+                <p>
+                  <strong>Why this helps:</strong> {tradePackage.whyItHelpsMe}
+                </p>
+                <p>
+                  <strong>Why they might accept:</strong>{" "}
+                  {tradePackage.whyTheyMightAccept}
+                </p>
+                <p>
+                  <strong>Risk:</strong> {tradePackage.risk}
+                </p>
+              </div>
+
+              <div className="nfl-trade-walkaway">
+                <span>Walk-away line</span>
+                <strong>{tradePackage.walkAwayLine}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <article className="nfl-trade-empty-card">
+          <strong>No clean package yet</strong>
+          <p>
+            Import a deeper league or wait for fresh projections. The builder is
+            refusing to invent a trade just to sound busy.
+          </p>
+        </article>
+      )}
+    </section>
+  );
+}
+
+function TradePlayerInline({ player }: { player: FantasyTradePlayer }) {
+  return (
+    <div className="nfl-trade-player-inline">
+      <strong>{player.name}</strong>
+      <span>
+        {scoutingRankLabel(normalizeScoutingPosition(player.position))} ·{" "}
+        {player.nflTeam ?? "NFL"} · {player.projection.toFixed(1)} proj
+      </span>
+    </div>
   );
 }
 
@@ -4844,6 +5433,47 @@ function FantasyTeamMiniReport({ report }: { report: FantasyTeamReport }) {
       </i>
     </div>
   );
+}
+
+function fantasyTradeTeamsFromLeagueMap(
+  leagueMap: FantasyLeaguePowerMap,
+): FantasyTradeTeam[] {
+  return leagueMap.teams.map((team) => {
+    const starterIds = new Set(team.report.players.map((player) => player.id));
+    const playersById = new Map<string, ScoutingRow>();
+
+    [...team.report.players, ...team.report.benchPlayers].forEach((player) => {
+      playersById.set(player.id, player);
+    });
+
+    return {
+      id: team.report.team.id,
+      manager: team.report.team.manager,
+      name: team.report.team.name,
+      players: Array.from(playersById.values()).map((player) =>
+        fantasyTradePlayerFromScoutingRow(player, starterIds.has(player.id)),
+      ),
+    };
+  });
+}
+
+function fantasyTradePlayerFromScoutingRow(
+  player: ScoutingRow,
+  starter: boolean,
+): FantasyTradePlayer {
+  return {
+    ceiling: player.contextProjection.ceiling,
+    dynastyValue: player.dynastyValue,
+    floor: player.contextProjection.floor,
+    id: player.id,
+    name: player.name,
+    nflTeam: player.team,
+    position: normalizeScoutingPosition(player.position) as FantasyTradePosition,
+    projection: player.contextProjection.projection,
+    risk: player.chaos,
+    roleSecurity: player.roleSecurity ?? player.health,
+    starter,
+  };
 }
 
 function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
