@@ -9085,28 +9085,21 @@ body {
 
 /* === NFL Lab === */
 .nfl-shell {
-  --nfl-ink: #f4f7f2;
-  --nfl-muted: #aab6aa;
-  --nfl-gold: #d9b44a;
-  --nfl-mint: #9df2bd;
-  --nfl-turf: #123a2f;
-  --nfl-panel: rgba(11, 16, 22, 0.9);
-  --nfl-panel-strong: rgba(15, 22, 29, 0.97);
-  --nfl-line: rgba(188, 198, 181, 0.18);
+  --nfl-ink: #f2f5ef;
+  --nfl-muted: #99a69f;
+  --nfl-gold: #c4a35a;
+  --nfl-mint: #82d6ad;
+  --nfl-turf: #12312a;
+  --nfl-panel: rgba(10, 14, 18, 0.9);
+  --nfl-panel-strong: rgba(14, 19, 23, 0.97);
+  --nfl-line: rgba(190, 202, 194, 0.16);
   min-height: 100vh;
   padding: 20px;
   color: var(--nfl-ink);
   background:
-    linear-gradient(115deg, rgba(217, 180, 74, 0.09), transparent 24%),
-    linear-gradient(245deg, rgba(82, 197, 134, 0.11), transparent 30%),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.018) 0,
-      rgba(255, 255, 255, 0.018) 1px,
-      transparent 1px,
-      transparent 92px
-    ),
-    linear-gradient(180deg, #050807, #0b1110 48%, #070908);
+    radial-gradient(circle at 74% 0%, rgba(130, 214, 173, 0.11), transparent 31%),
+    linear-gradient(130deg, rgba(196, 163, 90, 0.055), transparent 29%),
+    linear-gradient(180deg, #050706, #0b100f 48%, #050706);
 }
 
 .nfl-topbar,
@@ -11666,11 +11659,12 @@ body {
 
 .nfl-fantasy-import-panel {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 14px;
+  padding: 14px;
   background:
-    linear-gradient(135deg, rgba(143, 179, 217, 0.1), transparent 40%),
-    rgba(255, 255, 255, 0.035);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.026)),
+    rgba(7, 10, 12, 0.54);
+  border-color: rgba(190, 202, 194, 0.13);
 }
 
 .nfl-import-panel-head {
@@ -11694,37 +11688,46 @@ body {
 }
 
 .nfl-import-panel-head small {
-  color: var(--nfl-muted);
+  color: #b4bdb4;
   font-size: 0.76rem;
   font-weight: 850;
 }
 
 .nfl-import-panel-head em {
   flex: 0 0 auto;
-  padding: 7px 9px;
-  color: #06100f;
-  background: #c8f7dc;
-  border-radius: 999px;
+  padding: 6px 9px;
+  color: #dce7df;
+  background: rgba(130, 214, 173, 0.1);
+  border: 1px solid rgba(130, 214, 173, 0.18);
+  border-radius: 8px;
   font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 900;
   text-transform: capitalize;
 }
 
 .nfl-import-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(420px, 1.24fr) minmax(340px, 0.76fr);
+  gap: 12px;
+  align-items: start;
 }
 
 .nfl-import-card {
   display: grid;
   align-content: start;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
-  padding: 12px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.028)),
+    rgba(12, 16, 20, 0.72);
+  border-color: rgba(190, 202, 194, 0.14);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
 }
 
 .nfl-import-card.wide {
-  grid-column: span 2;
+  grid-column: auto;
 }
 
 .nfl-import-card > div {
@@ -11734,35 +11737,38 @@ body {
 
 .nfl-import-card > div svg,
 .nfl-file-drop svg {
-  color: #8ff0c1;
+  color: var(--nfl-mint);
 }
 
 .nfl-import-card input,
 .nfl-import-card textarea {
   width: 100%;
   color: var(--nfl-ink);
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(143, 160, 189, 0.2);
+  background: rgba(5, 8, 10, 0.46);
+  border: 1px solid rgba(190, 202, 194, 0.16);
   border-radius: 8px;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 820;
 }
 
 .nfl-import-card input {
-  min-height: 40px;
+  min-height: 38px;
   padding: 0 10px;
 }
 
 .nfl-import-card textarea {
-  min-height: 124px;
+  min-height: 112px;
   resize: vertical;
   padding: 10px;
-  line-height: 1.35;
+  line-height: 1.32;
 }
 
 .nfl-import-card.provider textarea {
-  min-height: 94px;
+  min-height: 86px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 780;
 }
 
 .nfl-import-card button,
@@ -11780,9 +11786,10 @@ body {
 .nfl-import-card button {
   display: inline-flex;
   align-items: center;
-  color: #06100f;
-  background: linear-gradient(100deg, #f7c51d, #2dd4bf);
-  border: 0;
+  color: #07100d;
+  background: linear-gradient(180deg, #d7e0d0, #8ec9ad);
+  border: 1px solid rgba(224, 235, 222, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34);
   cursor: pointer;
 }
 
@@ -11793,17 +11800,18 @@ body {
 }
 
 .nfl-import-card button.secondary {
-  color: var(--nfl-ink);
-  background: rgba(143, 160, 189, 0.13);
-  border: 1px solid rgba(143, 160, 189, 0.22);
+  color: #dce7df;
+  background: rgba(190, 202, 194, 0.08);
+  border: 1px solid rgba(190, 202, 194, 0.18);
+  box-shadow: none;
 }
 
 .nfl-file-drop {
   position: relative;
   overflow: hidden;
-  color: var(--nfl-ink);
-  background: rgba(143, 160, 189, 0.12);
-  border: 1px dashed rgba(143, 160, 189, 0.34);
+  color: #dce7df;
+  background: rgba(190, 202, 194, 0.07);
+  border: 1px dashed rgba(190, 202, 194, 0.28);
   cursor: pointer;
 }
 
@@ -11823,41 +11831,41 @@ body {
 
 .nfl-import-status {
   margin: 0;
-  color: var(--nfl-muted);
-  font-size: 0.76rem;
+  color: #a8b3aa;
+  font-size: 0.73rem;
   font-weight: 760;
-  line-height: 1.36;
+  line-height: 1.38;
 }
 
 .nfl-import-status.ready {
-  color: #8ff0c1;
+  color: #a6d9bd;
 }
 
 .nfl-import-status.error {
-  color: #ffb199;
+  color: #f1a58e;
 }
 
 .nfl-import-status.loading {
-  color: #f7c51d;
+  color: #d6bf7a;
 }
 
 .nfl-import-status.searching,
 .nfl-import-status.loading-league {
-  color: #f7c51d;
+  color: #d6bf7a;
 }
 
 .nfl-import-status.imported,
 .nfl-import-status.leagues-found {
-  color: #8ff0c1;
+  color: #a6d9bd;
 }
 
 .nfl-import-status.no-matchup {
-  color: #ffdf7e;
+  color: #d6bf7a;
 }
 
 .nfl-sleeper-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 74px;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 0.24fr);
   gap: 7px;
 }
 
@@ -11874,7 +11882,7 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--nfl-muted);
+  color: #aeb9af;
   font-size: 0.74rem;
   font-weight: 850;
 }
@@ -11883,12 +11891,12 @@ body {
   width: 16px;
   min-height: 16px;
   margin: 0;
-  accent-color: #2dd4bf;
+  accent-color: var(--nfl-mint);
 }
 
 .nfl-sleeper-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -11946,40 +11954,58 @@ body {
 
 .nfl-sleeper-receipt {
   display: grid;
-  gap: 3px;
-  padding: 9px;
-  background: rgba(45, 212, 191, 0.08);
-  border: 1px solid rgba(45, 212, 191, 0.16);
+  gap: 10px;
+  padding: 11px;
+  background: rgba(18, 49, 42, 0.34);
+  border: 1px solid rgba(130, 214, 173, 0.16);
   border-radius: 8px;
   font-size: 0.74rem;
   font-weight: 820;
 }
 
+.nfl-sleeper-receipt-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nfl-sleeper-receipt strong,
+.nfl-sleeper-receipt span,
+.nfl-sleeper-receipt em,
+.nfl-sleeper-receipt small {
+  min-width: 0;
+}
+
 .nfl-sleeper-receipt strong {
   color: #fff;
+  line-height: 1.2;
 }
 
 .nfl-sleeper-receipt small {
-  color: #8ff0c1;
+  color: #a6d9bd;
   font-size: 0.68rem;
   font-weight: 900;
 }
 
 .nfl-sleeper-settings {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
-  margin-top: 4px;
 }
 
 .nfl-sleeper-settings span {
-  padding: 4px 6px;
-  color: #d9e4f5;
-  background: rgba(143, 160, 189, 0.12);
-  border: 1px solid rgba(143, 160, 189, 0.14);
-  border-radius: 999px;
-  font-size: 0.64rem;
+  min-width: 0;
+  padding: 5px 6px;
+  overflow: hidden;
+  color: #dce7df;
+  background: rgba(190, 202, 194, 0.08);
+  border: 1px solid rgba(190, 202, 194, 0.12);
+  border-radius: 7px;
+  font-size: 0.62rem;
   font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  text-overflow: ellipsis;
 }
 
 .nfl-lens-toggle {
@@ -12991,12 +13017,19 @@ body {
   .nfl-lens-toggle,
   .nfl-import-card button,
   .nfl-file-drop,
+  .nfl-sleeper-actions button,
   .nfl-team-lab-selectors,
   .nfl-team-lab-selectors label {
     width: 100%;
   }
 
   .nfl-lens-toggle {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-sleeper-row,
+  .nfl-sleeper-actions,
+  .nfl-sleeper-settings {
     grid-template-columns: 1fr;
   }
 

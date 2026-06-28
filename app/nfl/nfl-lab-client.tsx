@@ -4392,20 +4392,22 @@ function FantasyImportPanel({
           ) : null}
           {fantasyImport?.sleeper ? (
             <div className="nfl-sleeper-receipt">
-              <span>{fantasyImport.sleeper.leagueName}</span>
-              <strong>
-                Week {fantasyImport.sleeper.week ?? "?"} ·{" "}
-                {fantasyImport.sleeper.matchupId
-                  ? `matchup ${fantasyImport.sleeper.matchupId}`
-                  : "no matchup"}
-              </strong>
-              <em>
-                {fantasyImport.sleeper.rosterCount} rosters ·{" "}
-                {fantasyImport.sleeper.status.replace(/-/g, " ")}
-              </em>
-              {sleeperLastRefreshedAt ? (
-                <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
-              ) : null}
+              <div className="nfl-sleeper-receipt-main">
+                <span>{fantasyImport.sleeper.leagueName}</span>
+                <strong>
+                  Week {fantasyImport.sleeper.week ?? "?"} ·{" "}
+                  {fantasyImport.sleeper.matchupId
+                    ? `matchup ${fantasyImport.sleeper.matchupId}`
+                    : "no matchup"}
+                </strong>
+                <em>
+                  {fantasyImport.sleeper.rosterCount} rosters ·{" "}
+                  {fantasyImport.sleeper.status.replace(/-/g, " ")}
+                </em>
+                {sleeperLastRefreshedAt ? (
+                  <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
+                ) : null}
+              </div>
               {fantasyImport.settings ? (
                 <div className="nfl-sleeper-settings">
                   <span>{fantasyImport.settings.formatLabel}</span>
