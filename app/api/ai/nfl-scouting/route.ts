@@ -152,7 +152,7 @@ function createOpenAiRequest({
           {
             type: "input_text",
             text:
-              "You are MatchSeer's pro football fantasy scout: playful, sharp, and practical. MatchSeer is independent and not affiliated with or endorsed by the NFL, NFLPA, or any team. Use real team and player names only as reference points. Use the provided algorithmic projections exactly as inputs; do not invent new projections, rankings, injuries, teams, opponents, or live news. Explain why the ranking board moves in vivid Seer language without sounding stiff. No betting advice, no odds language, no wagers, no locks, no make-money copy, and no trading links. Keep it useful for fantasy football start/sit and scouting decisions.",
+              "You are MatchSeer's pro football fantasy scout: friendly, sharp, practical, and premium. Talk like a smart friend helping set a fantasy lineup: clear recommendation first, then why, then what to watch. MatchSeer is independent and not affiliated with or endorsed by the NFL, NFLPA, or any team. Use real team and player names only as reference points. Use the provided algorithmic projections exactly as inputs; do not invent new projections, rankings, injuries, teams, opponents, or live news. Avoid mystical Seer language, betting language, odds, wagers, locks, make-money copy, trading links, and vague analyst filler. Keep it useful for fantasy football start/sit and scouting decisions.",
           },
         ],
       },
@@ -169,11 +169,11 @@ function createOpenAiRequest({
               outputRules: {
                 headline: "Short title for the scouting board.",
                 summary:
-                  "Two concise, fun sentences explaining the strongest fantasy signal on this board.",
+                  "Two concise sentences. Start with the best practical advice, then explain the main reason in plain language.",
                 factors:
-                  "Three short bullets max. Mention role, scoring format, matchup, floor, ceiling, or chaos.",
+                  "Three short bullets max. Each should be actionable and mention role, scoring format, matchup, floor, ceiling, or variance.",
                 watchlist:
-                  "One sentence naming the player who deserves extra scouting attention and why.",
+                  "One sentence naming the player to monitor before kickoff and the exact news or signal to watch.",
                 disclaimer,
               },
             }),
@@ -221,14 +221,14 @@ function createFallbackAnalysis(
   const label = scoringFormatLabel(scoringFormat);
 
   return {
-    headline: `${label} scouting trail`,
-    summary: `${top.name} sits at the front of the Seer board because the projection and range both keep the lantern bright. ${riser.name} gets the biggest nudge when role, matchup, and format all start humming together.`,
+    headline: `${label} lineup help`,
+    summary: `Start by trusting ${top.name}; he has the best blend of projection and weekly range in this group. ${riser.name} is the player to re-check because role, matchup, and format are all helping him.`,
     factors: [
       `${label} scoring is baked into every projection.`,
-      `Floor, ceiling, and role security decide the lane before the vibes get loud.`,
+      "Floor, ceiling, and role security drive the ranking before anything subjective gets involved.",
       `${roleAnchor.name} has the cleanest role-security read in this slice.`,
     ],
-    watchlist: `${riser.name} deserves the next deeper look: the Seer has him ahead of the baseline shape.`,
+    watchlist: `Watch ${riser.name} before kickoff; if his role stays clean, he is more useful than the baseline ranking suggests.`,
     disclaimer,
   };
 }

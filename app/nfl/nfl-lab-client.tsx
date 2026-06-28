@@ -449,7 +449,7 @@ const scoutingDepthOptions: Array<{
   limit: number;
   summary: string;
 }> = [
-  { value: "top10", label: "Top 10", limit: 10, summary: "starter lane" },
+  { value: "top10", label: "Top 10", limit: 10, summary: "starter tier" },
   { value: "top25", label: "Top 25", limit: 25, summary: "full roster" },
   { value: "deep", label: "Dynasty deep", limit: 80, summary: "ultra-deep shelf" },
 ];
@@ -488,9 +488,9 @@ const scoringLabels: Record<ScoringFormat, string> = {
 };
 
 const scoringCopy: Record<ScoringFormat, string> = {
-  standard: "Touchdowns and yardage carry the lantern.",
-  halfPpr: "Volume matters, but touchdowns still get teeth.",
-  fullPpr: "Targets glow brighter; reception magnets rise.",
+  standard: "Prioritize touchdowns, yardage, and real weekly roles.",
+  halfPpr: "Volume matters, but touchdowns still swing the week.",
+  fullPpr: "Targets and receptions deserve extra trust.",
 };
 
 const teamLensLabels: Record<FantasyTeamLens, string> = {
@@ -2086,7 +2086,7 @@ function NflDataRibbon({
               {fantasyCoverage.missingPositions.length > 0
                 ? `Missing ${fantasyCoverage.missingPositions
                     .map(scoutingRankLabel)
-                    .join(", ")} lanes.`
+                    .join(", ")} coverage.`
                 : ""}
             </p>
           ) : null}
@@ -2096,7 +2096,7 @@ function NflDataRibbon({
         <div>
           <strong>Matchup context</strong>
           <em>
-            {contextStatus.coveredTeams}/{contextStatus.totalTeams} team lanes ·{" "}
+            {contextStatus.coveredTeams}/{contextStatus.totalTeams} teams covered ·{" "}
             {contextStatus.freshness}
           </em>
         </div>
@@ -2600,10 +2600,10 @@ function FantasyHero({
           <BrainCircuit size={17} />
           Fantasy command room
         </div>
-        <h1>Fantasy Seer</h1>
+        <h1>Fantasy Lab</h1>
         <p>
-          Import your league, pick the scoring, and let the Seer turn projections,
-          matchup context, health, and chaos into lineup decisions that still feel fun.
+          Import your league, pick the scoring, and get clear start/sit advice:
+          who to trust, why it matters, and what to watch before kickoff.
         </p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
@@ -2639,26 +2639,26 @@ function FantasyHero({
           <div>
             <span>{report.team.manager}</span>
             <strong>{report.team.name}</strong>
-            <em>{report.projection.toFixed(1)} Seer pts</em>
+            <em>{report.projection.toFixed(1)} projected pts</em>
           </div>
           <div className="nfl-fantasy-scoreboard-core">
             <span>Matchup</span>
             <strong>{matchupReport.edgeLabel}</strong>
             <em>
-              {matchupReport.confidence}% read · {matchupReport.chaos}% chaos
+              {matchupReport.confidence}% read · {matchupReport.chaos}% variance
             </em>
           </div>
           <div>
             <span>Opponent</span>
             <strong>{opponentReport.team.name}</strong>
-            <em>{opponentReport.projection.toFixed(1)} Seer pts</em>
+            <em>{opponentReport.projection.toFixed(1)} projected pts</em>
           </div>
         </div>
 
         <div className="nfl-fantasy-read-card">
           <span>
             <Sparkles size={16} />
-            Seer read
+            Lineup read
           </span>
           <strong>{read.headline}</strong>
           <p>{read.summary}</p>
@@ -2677,14 +2677,14 @@ function FantasyHero({
                 <span>{receipt.label}</span>
                 <strong>{receipt.player.name}</strong>
                 <em>
-                  {receipt.player.position} · Seer{" "}
+                  {receipt.player.position} · Proj{" "}
                   {receipt.seerProjection.toFixed(1)} · {formatFantasyDelta(receipt.delta)}
                 </em>
               </article>
             ))
           ) : (
             <article>
-              <span>Roster lane</span>
+              <span>Roster setup</span>
               <strong>Connect a team</strong>
               <em>Sleeper, copy paste, or screenshot unlocks start/sit receipts.</em>
             </article>
@@ -2933,7 +2933,7 @@ function FantasyRookieBoard({
               </div>
               <div className="nfl-rookie-metrics">
                 <span>
-                  <em>Seer</em>
+                  <em>Proj</em>
                   <strong>{player.contextProjection.projection.toFixed(1)}</strong>
                 </span>
                 <span>
@@ -2987,7 +2987,7 @@ function FantasyPlayerCompareSection({
             <UsersRound size={17} />
             Player vs player
           </div>
-          <h2>Who gets the nod?</h2>
+          <h2>Who should I start?</h2>
         </div>
         <strong>{startLean.name}</strong>
       </div>
@@ -3022,7 +3022,7 @@ function FantasyPlayerCompareSection({
         />
         <div className="nfl-duel-verdict">
           <Sparkles size={20} />
-          <span>Seer nod</span>
+          <span>Start lean</span>
           <strong>{startLean.name}</strong>
           <p>{startLean.verdict}</p>
         </div>
@@ -3094,7 +3094,7 @@ function ProjectionReceipt({
           <strong>{receipt.sourceProjection.toFixed(1)}</strong>
         </span>
         <span>
-          <em>Seer nudge</em>
+          <em>Adjustment</em>
           <strong className={cx(receipt.delta > 0 && "plus", receipt.delta < 0 && "minus")}>
             {formatFantasyDelta(receipt.delta)}
           </strong>
@@ -3146,22 +3146,22 @@ function fantasyProjectionReceipt(
   const reasons = fantasyReceiptReasons(player, compact ? 2 : 4);
   const moveCopy =
     delta === 0
-      ? "left the source read alone"
-      : `${delta > 0 ? "added" : "trimmed"} ${Math.abs(delta).toFixed(1)}`;
-  const reasonCopy = reasons[0] ? ` because ${reasons[0].toLowerCase()}` : ".";
+      ? "kept it at the source number"
+      : `${delta > 0 ? "bumped it up" : "moved it down"} by ${Math.abs(delta).toFixed(1)}`;
+  const reasonCopy = reasons[0] ? ` Main reason: ${reasons[0]}.` : "";
   const blendCopy =
     Math.abs(blendProjection - sourceProjection) >= 0.1
-      ? ` Weighted baseline is ${blendProjection.toFixed(1)}.`
+      ? ` Blended baseline is ${blendProjection.toFixed(1)}.`
       : "";
 
   return {
     delta,
-    finalLabel: isScoutingRow(player) ? "Final Seer" : "Seer",
+    finalLabel: isScoutingRow(player) ? "Final read" : "Model",
     finalProjection,
     reasons,
     sourceLabel: fantasyReceiptSourceLabel(player),
     sourceProjection,
-    summary: `Source says ${sourceProjection.toFixed(1)}.${blendCopy} The Seer ${moveCopy}${reasonCopy}`,
+    summary: `Source starts at ${sourceProjection.toFixed(1)}.${blendCopy} We ${moveCopy}.${reasonCopy}`,
   };
 }
 
@@ -3246,25 +3246,25 @@ function fantasyContextReceiptReason(adjustment: FantasyContextAdjustment) {
 function fantasyFallbackReceiptReasons(player: FantasyPlayer) {
   const reasons = [
     player.matchup >= 78
-      ? "Matchup boost: opponent lane grades friendly"
+      ? "Matchup helps: this opponent is friendly for the position"
       : player.matchup <= 66
-        ? "Matchup tax: opponent lane is heavier"
-        : "Matchup neutral: no major defense swing",
+        ? "Matchup warning: tough opponent for the position"
+        : "Matchup is neutral: no major defense swing",
     player.health <= 70
-      ? "Health watch: availability trims trust"
+      ? "Health watch: there is less margin for surprise news"
       : player.health >= 86
-        ? "Health boost: clean availability read"
-        : "Health stable: playable availability",
+        ? "Health looks clean"
+        : "Health looks playable",
     player.chaos >= 64
-      ? "Chaos tax: wider boom-bust range"
+      ? "Volatility warning: wider boom-bust range"
       : player.chaos <= 42
-        ? "Chaos calm: stable range"
-        : "Chaos neutral: normal variance",
+        ? "Stable profile: fewer scary swings"
+        : "Normal weekly variance",
     player.roleSecurity && player.roleSecurity >= 78
-      ? "Role boost: usage looks secure"
+      ? "Role is safe: usage looks secure"
       : player.targetShare >= 22 || player.carryShare >= 24
-        ? "Role boost: volume is doing work"
-        : "Role watch: usage could wobble",
+        ? "Volume helps: touches or targets are doing the work"
+        : "Role watch: usage could change",
   ];
 
   return reasons;
@@ -3355,7 +3355,7 @@ function FantasyDuelPlayer({
         hot
       />
       <MiniMeter icon={<HeartPulse size={16} />} label="Health" value={player.health} />
-      <MiniMeter icon={<Timer size={16} />} label="Chaos" value={player.chaos} hot />
+      <MiniMeter icon={<Timer size={16} />} label="Volatility" value={player.chaos} hot />
     </article>
   );
 }
@@ -3399,11 +3399,11 @@ function ScoutingBoard({
             <Search size={17} />
             Player scouting
           </div>
-          <h2>Seer ranking board</h2>
+          <h2>Player ranking board</h2>
           <p>
             {hasLiveOrImportedSourceRankings
-              ? "Format-aware projection, provider ranking, role pulse, matchup, health, and chaos."
-              : "Format-aware projection, role pulse, matchup, health, and chaos. Baseline rank is a placeholder until a live or imported ranking feed is connected."}
+              ? "Format-aware projection, provider ranking, role pulse, matchup, health, and variance."
+              : "Format-aware projection, role pulse, matchup, health, and variance. Baseline rank is a placeholder until a live or imported ranking feed is connected."}
           </p>
         </div>
         <div className="nfl-scouting-actions">
@@ -3417,12 +3417,12 @@ function ScoutingBoard({
             type="button"
           >
             <Sparkles size={16} />
-            {status === "loading" ? "Reading..." : "Ask the Seer"}
+            {status === "loading" ? "Reading..." : "Ask AI Scout"}
           </button>
         </div>
       </div>
       <div className="nfl-scouting-tools" aria-label="Scouting board controls">
-        <div className="nfl-scouting-filter-bar" aria-label="Position lanes">
+        <div className="nfl-scouting-filter-bar" aria-label="Position filters">
           {scoutingPositionOptions.map((option) => {
             const count =
               option.value === "ALL" ? allRows.length : counts[option.value] ?? 0;
@@ -3461,7 +3461,7 @@ function ScoutingBoard({
           {analysis ? (
             <>
               <div>
-                <span>{analysis.source === "openai" ? "OpenAI scout" : "Seer fallback"}</span>
+                <span>{analysis.source === "openai" ? "AI Scout" : "Smart fallback"}</span>
                 <strong>{analysis.headline}</strong>
               </div>
               <p>{analysis.summary}</p>
@@ -3540,7 +3540,7 @@ function ScoutingBoard({
             <strong>No {scoutingPositionLabel(position).toLowerCase()} rows loaded yet</strong>
             <p>
               Add them through a projection feed, Sleeper import, roster paste, or
-              screenshot upload and this lane will fill itself.
+              screenshot upload and this board will fill itself.
             </p>
           </div>
         </article>
@@ -3653,7 +3653,7 @@ function FantasyTeamLab({
           <h2>Analyze my squad</h2>
           <p>
             Roster shape, matchup pressure, trade paths, and start/sit texture.
-            Pure fantasy fun, with the Seer doing the math in the background.
+            Pure fantasy fun, with the math staying quietly in the background.
           </p>
         </div>
         <div className="nfl-fantasy-team-controls">
@@ -3808,7 +3808,7 @@ function FantasyTeamLab({
 
         <article className="nfl-team-advice-card">
           <div className="nfl-card-topline">
-            <span>Seer coaching note</span>
+            <span>Coach note</span>
             <strong>{teamLensLabels[teamLens]}</strong>
           </div>
           <p>{teamAdviceSummary(activeReport, teamLens)}</p>
@@ -3841,7 +3841,7 @@ function FantasyTeamLab({
           <div className="nfl-matchup-verdict">
             <Sparkles size={20} />
             <span>
-              Win lean {matchupReport.winLean}% · chaos {matchupReport.chaos}%
+              Win lean {matchupReport.winLean}% · variance {matchupReport.chaos}%
             </span>
             <strong>{matchupReport.edgeTeam.name}</strong>
             <p>{matchupReport.recommendation}</p>
@@ -3891,7 +3891,7 @@ function BeatOpponentCard({ plan }: { plan: FantasyMatchupWeaknessPlan }) {
             Attack {plan.opponentWeakPosition}, protect {plan.myWeakPosition}
           </strong>
         </div>
-        <b>{plan.tradePath.type === "trade" ? "Trade lane" : "Waiver lane"}</b>
+        <b>{plan.tradePath.type === "trade" ? "Trade path" : "Waiver path"}</b>
       </div>
 
       <div className="nfl-beat-grid">
@@ -3960,8 +3960,8 @@ function FantasyDecisionEnginePanel({
           </em>
         </div>
         <div className="nfl-source-vs-seer">
-          <span>Source says {report.lineupSourceProjection.toFixed(1)}</span>
-          <strong>Seer says {report.projection.toFixed(1)}</strong>
+          <span>Source projection {report.lineupSourceProjection.toFixed(1)}</span>
+          <strong>Adjusted projection {report.projection.toFixed(1)}</strong>
           <em>{formatFantasyDelta(report.lineupSeerDelta)}</em>
         </div>
       </div>
@@ -3972,7 +3972,7 @@ function FantasyDecisionEnginePanel({
           <strong>{matchupReport.confidence}%</strong>
         </div>
         <div>
-          <span>Chaos</span>
+          <span>Variance</span>
           <strong>{matchupReport.chaos}%</strong>
         </div>
         <div>
@@ -3982,11 +3982,11 @@ function FantasyDecisionEnginePanel({
           </strong>
         </div>
         <div>
-          <span>Strong lane</span>
+          <span>Strong spot</span>
           <strong>{report.strongestLane.label}</strong>
         </div>
         <div>
-          <span>Fix lane</span>
+          <span>Needs help</span>
           <strong>{report.weakestLane.label}</strong>
         </div>
       </div>
@@ -4015,7 +4015,7 @@ function FantasyDecisionEnginePanel({
             ) : (
               <div className="nfl-lineup-receipt">
                 <span>Source {slot.sourceProjection.toFixed(1)}</span>
-                <strong>Seer {slot.seerProjection.toFixed(1)}</strong>
+                <strong>Adjusted {slot.seerProjection.toFixed(1)}</strong>
                 <em>{formatFantasyDelta(slot.delta)}</em>
               </div>
             )}
@@ -4054,7 +4054,7 @@ function FantasyDecisionEnginePanel({
             <p key={`${receipt.label}-${receipt.player.id}`}>
               <strong>{receipt.label}</strong>{" "}
               <small>
-                Source {receipt.sourceProjection.toFixed(1)} · Seer{" "}
+                Source {receipt.sourceProjection.toFixed(1)} · Adjusted{" "}
                 {receipt.seerProjection.toFixed(1)} · {formatFantasyDelta(receipt.delta)}
               </small>{" "}
               {receipt.summary}
@@ -4089,7 +4089,7 @@ function FantasySourcesControlCenter({ lanes }: { lanes: FantasySourceLane[] }) 
           </div>
           <h3>Fantasy Sources Control Center</h3>
           <p>
-            {liveLanes}/{lanes.length} lanes live · {totalRows} source rows · Seer
+            {liveLanes}/{lanes.length} sources live · {totalRows} source rows · Model
             nudges stay capped.
           </p>
         </div>
@@ -4525,7 +4525,7 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
   return [
     {
       id: "seer-house",
-      name: "Seer House",
+      name: "My Team",
       manager: "My squad",
       rosterIds:
         homeRoster.length > 0
@@ -4541,7 +4541,7 @@ function buildFantasyTeams(players: FantasyPlayer[]): FantasyTeam[] {
     },
     {
       id: "rival-house",
-      name: "Rival House",
+      name: "Opponent",
       manager: "Opponent",
       rosterIds:
         awayRoster.length > 0
@@ -4784,7 +4784,7 @@ function fantasyLineupSlotPick(
     id: slot.id,
     label: slot.label,
     player,
-    receipt: `${player.name} gets the ${slot.label} lane with ${tagCopy || "a balanced profile"}. ${contextReceiptLine(player.context)}`,
+    receipt: `Start ${player.name} at ${slot.label}. The case is ${tagCopy || "a balanced profile"}. ${contextReceiptLine(player.context)}`,
     seerProjection,
     sourceProjection,
     tags,
@@ -4879,8 +4879,8 @@ function fantasyBenchAlternatives(
       );
       const summary =
         lift > 0
-          ? `${benchPlayer.name} is ${formatFantasyDelta(lift)} over ${targetSlot.player.name} at ${targetSlot.label}.`
-          : `${benchPlayer.name} is the closest ${targetSlot.label} challenger, ${Math.abs(lift).toFixed(1)} behind ${targetSlot.player.name}.`;
+          ? `Move ${benchPlayer.name} ahead of ${targetSlot.player.name} at ${targetSlot.label}; he projects ${Math.abs(lift).toFixed(1)} better.`
+          : `${benchPlayer.name} is the closest ${targetSlot.label} alternative, ${Math.abs(lift).toFixed(1)} points behind ${targetSlot.player.name}.`;
 
       return [
         {
@@ -4921,8 +4921,8 @@ function fantasyCloseCalls(
       );
       const summary =
         gap <= 0
-          ? `${alternative.player.name} should jump ${targetSlot.player.name} at ${alternative.slotLabel}.`
-          : `${targetSlot.player.name} holds ${alternative.slotLabel}, but ${alternative.player.name} is only ${gap.toFixed(1)} back.`;
+          ? `Start ${alternative.player.name} over ${targetSlot.player.name} at ${alternative.slotLabel}.`
+          : `Keep ${targetSlot.player.name} at ${alternative.slotLabel}, but ${alternative.player.name} is close enough to revisit if news changes.`;
 
       return [
         {
@@ -4984,34 +4984,39 @@ function startSitSummary(
   scoringFormat: ScoringFormat,
 ) {
   const sourceProjection = fantasySourceProjection(player);
-  const seerProjection = round1(player.fantasy.projection);
   const contextProjection = round1(player.contextProjection.projection);
+  const projectionMove = round1(contextProjection - sourceProjection);
+  const projectionCopy =
+    projectionMove === 0
+      ? "right in line with the source"
+      : `${Math.abs(projectionMove).toFixed(1)} ${projectionMove > 0 ? "above" : "below"} the source`;
+  const position = normalizeScoutingPosition(player.position);
   const opponentRead =
     player.context.defenseVsPosition <= 68
-      ? "friendly opponent lane"
+      ? "the opponent matchup is helping"
       : player.context.defenseVsPosition >= 78
-        ? "defensive tax"
-        : "neutral opponent read";
+        ? "the opponent matchup is the main concern"
+        : "the matchup is not pushing hard either way";
   const volumeRead =
     scoringFormat !== "standard" &&
-    (player.position === "WR" || player.position === "TE") &&
+    (position === "WR" || position === "TE") &&
     player.baseline.receptions >= 5
-      ? "PPR volume"
+      ? "his catch volume matters in this scoring"
       : player.carryShare >= 24
-        ? "touch control"
+        ? "his touch share gives you a stable base"
         : player.touchdownPulse >= 78
-          ? "TD swing"
-          : "role stability";
+          ? "his touchdown path is real but swingy"
+          : "his role is steady enough to trust";
 
-  return `${player.name} fits ${slotLabel}: source ${sourceProjection.toFixed(1)}, base Seer ${seerProjection.toFixed(1)}, final Seer ${contextProjection.toFixed(1)} with ${opponentRead} and ${volumeRead}.`;
+  return `Start ${player.name} at ${slotLabel}. He projects at ${contextProjection.toFixed(1)}, ${projectionCopy}, because ${volumeRead} and ${opponentRead}.`;
 }
 
 function fantasyDecisionTags(player: ScoutingRow, scoringFormat: ScoringFormat) {
   const tags = [
     player.context.defenseVsPosition <= 68
       ? "Matchup boost"
-      : player.context.defenseVsPosition >= 78
-        ? "Defense tax"
+    : player.context.defenseVsPosition >= 78
+        ? "Tough defense"
         : "Neutral matchup",
     player.context.weather.toLowerCase().includes("wind") ||
     player.context.weather.toLowerCase().includes("snow")
@@ -5179,8 +5184,8 @@ function compareFantasyTeams({
     swingFactors: fantasySwingFactors(leftReport, rightReport),
     recommendation:
       edgeMagnitude < 2
-        ? "This matchup is close enough that one lineup choice can swing it. Chase role clarity over name value."
-        : `${edgeTeam.name} has the cleaner projected lane. The chase side can close it by patching ${trailingReport.weakestLane.label} and trimming chaos.`,
+        ? "This is close enough that one lineup choice can decide it. Break ties with safer roles, not bigger names."
+        : `${edgeTeam.name} has the cleaner path right now. The other side can close the gap by fixing ${trailingReport.weakestLane.label} and choosing the steadier play in close calls.`,
   };
 }
 
@@ -5296,15 +5301,15 @@ function fantasyStrengths(
   return [
     `${top.name} is the lineup anchor at ${top.contextProjection.projection.toFixed(1)} context-adjusted points.`,
     receivingFloor >= 6 && scoringFormat !== "standard"
-      ? "Reception volume gives this roster a nice PPR safety net."
+      ? "Your catch volume gives you a useful PPR safety net."
       : rushingControl >= 22
-        ? "Touch volume gives this roster a sturdy weekly base."
-        : "The top-end players carry enough ceiling to make the matchup interesting.",
+        ? "Your touch volume gives this roster a sturdy weekly base."
+        : "Your top players have enough ceiling to keep you live in a tight matchup.",
     lens === "dynasty" && teamDynastyCore(roster) >= 74
-      ? "The dynasty core has enough age-value and role security to build around."
+      ? "The dynasty core has enough long-term value and role security to build around."
       : roleSecurity >= 78
-        ? "Role security is steady, which makes lineup decisions easier."
-      : "The roster has a clear identity, which makes lineup decisions easier.",
+        ? "Roles look steady, which makes your weekly decisions easier."
+      : "The roster has a clear shape, which makes the next move easier to spot.",
   ];
 }
 
@@ -5320,31 +5325,31 @@ function fantasyWeaknesses(
   const weakSpots: string[] = [];
 
   if (!positionCounts.WR && scoringFormat !== "standard") {
-    weakSpots.push("PPR formats want more target volume than this roster is showing.");
+    weakSpots.push("In PPR, you need more reliable target volume from WR or TE.");
   }
 
   if (!positionCounts.RB) {
-    weakSpots.push("RB depth is thin, so one injury or committee shift can bite.");
+    weakSpots.push("RB depth is thin, so one injury or committee change can hurt quickly.");
   }
 
   if (balance < 62) {
-    weakSpots.push("The roster is tilted toward one position bucket.");
+    weakSpots.push("The roster leans too hard into one position group.");
   }
 
   if (depth < 62) {
-    weakSpots.push("Depth is light; the bench needs another usable weekly option.");
+    weakSpots.push("The bench needs one more player you can actually start in a normal week.");
   }
 
   if (risk > 58) {
-    weakSpots.push("Chaos is a little loud, so floor protection matters.");
+    weakSpots.push("There is a lot of weekly volatility, so protect your floor in close calls.");
   }
 
   if (average(roster.map((player) => player.roleSecurity ?? 72)) < 68) {
-    weakSpots.push("Role security is thin, so late news can move the lineup more than usual.");
+    weakSpots.push("A few roles are shaky, so check late news before locking the lineup.");
   }
 
   if (lens === "dynasty" && teamDynastyCore(roster) < 62) {
-    weakSpots.push("Dynasty value needs a younger, steadier core piece.");
+    weakSpots.push("For dynasty, add a younger player with a stable role before chasing pure upside.");
   }
 
   return weakSpots.slice(0, 3);
@@ -5363,23 +5368,23 @@ function fantasyMoves(
   )[0];
 
   if ((positionCounts.QB ?? 0) > 1) {
-    moves.push("If another manager needs a QB, shop the surplus for WR/RB depth.");
+    moves.push("If another manager needs a QB, use that surplus to ask for WR or RB depth.");
   }
 
   if (scoringFormat !== "standard") {
-    moves.push("Prioritize target earners; a quiet 7-catch player can patch a lot of leaks.");
+    moves.push("Prioritize target earners. A quiet 7-catch player fixes more than people think.");
   } else {
-    moves.push("In standard scoring, chase touchdown equity and early-down work first.");
+    moves.push("In standard scoring, prioritize touchdown roles and early-down work first.");
   }
 
   if (highChaos.chaos > 55) {
-    moves.push(`Pair ${highChaos.name}'s ceiling with a steadier floor play when possible.`);
+    moves.push(`When you start ${highChaos.name}, balance him with a steadier floor play elsewhere.`);
   } else {
-    moves.push(`${bestFloor.name} is the kind of stabilizer to keep in tight matchups.`);
+    moves.push(`${bestFloor.name} is the kind of stabilizer you want in tight matchups.`);
   }
 
   if (lens === "dynasty") {
-    moves.push("In dynasty, do not trade away role growth unless the return fixes two roster holes.");
+    moves.push("In dynasty, only trade away role growth if the return fixes more than one problem.");
   }
 
   return moves.slice(0, 4);
@@ -5387,7 +5392,7 @@ function fantasyMoves(
 
 function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow[]) {
   if (benchPlayers.length === 0) {
-    return ["No bench receipt yet; import a full roster to unlock swap ideas."];
+    return ["Import the full roster to get real bench swap advice."];
   }
 
   const weakestStarter = [...starters].sort(
@@ -5403,11 +5408,11 @@ function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow
 
   if (bestBench.contextProjection.projection > weakestStarter.contextProjection.projection + 1.5) {
     ideas.push(
-      `${bestBench.name} is pushing past ${weakestStarter.name}; check the slot before kickoff.`,
+      `${bestBench.name} should be in the lineup over ${weakestStarter.name} if the news holds.`,
     );
   } else {
     ideas.push(
-      `${bestBench.name} is the first bench pressure point, but the starters still hold the lane.`,
+      `${bestBench.name} is the first bench name to review, but the starters still project better.`,
     );
   }
 
@@ -5417,7 +5422,7 @@ function fantasyBenchUpgrades(starters: ScoutingRow[], benchPlayers: ScoutingRow
     samePositionBench.contextProjection.floor > weakestStarter.contextProjection.floor
   ) {
     ideas.push(
-      `${samePositionBench.name} has the cleaner ${samePositionBench.position} floor if you need less chaos.`,
+      `${samePositionBench.name} is the safer ${samePositionBench.position} option if you want less volatility.`,
     );
   }
 
@@ -5447,7 +5452,7 @@ function fantasyTradeIdeas({
     .slice(0, 2);
 
   if (candidates.length === 0) {
-    return ["Hold the core for now; the best move is improving bench flexibility."];
+    return ["Hold the core for now. The next improvement is bench flexibility, not a splashy trade."];
   }
 
   return candidates.map((player) => {
@@ -5462,16 +5467,16 @@ function fantasyTradeIdeas({
             ? "weekly ceiling"
             : "lineup flexibility";
 
-    return `Ask about ${player.name} if the price is reasonable: ${reason} fits the current roster need.`;
+    return `Ask about ${player.name} if the price is reasonable. The fit is ${reason}, which matches your current need.`;
   });
 }
 
 function teamAdviceSummary(report: FantasyTeamReport, lens: FantasyTeamLens) {
   if (lens === "dynasty") {
-    return `${report.team.name} grades ${report.score}/100 with a ${report.dynastyCore}% dynasty core. The Seer likes moves that add durable role growth without draining the weekly lineup.`;
+    return `${report.team.name} grades ${report.score}/100 with a ${report.dynastyCore}% dynasty core. The smart move is adding durable role growth without weakening this week's lineup.`;
   }
 
-  return `${report.team.name} grades ${report.score}/100 for the current matchup window. The cleanest path is protecting floor while keeping one ceiling lever in the lineup.`;
+  return `${report.team.name} grades ${report.score}/100 this week. The cleanest path is simple: protect your floor, then keep one real ceiling play in the lineup.`;
 }
 
 function fantasySwingFactors(
@@ -5480,13 +5485,13 @@ function fantasySwingFactors(
 ) {
   const factors = [
     Math.abs(leftReport.ceiling - rightReport.ceiling) >= 4
-      ? `${leftReport.ceiling > rightReport.ceiling ? leftReport.team.name : rightReport.team.name} has the better ceiling lane.`
-      : "Ceiling is close; floor choices matter more.",
+      ? `${leftReport.ceiling > rightReport.ceiling ? leftReport.team.name : rightReport.team.name} has the better ceiling if the matchup gets weird.`
+      : "Ceiling is close, so floor choices matter more.",
     Math.abs(leftReport.risk - rightReport.risk) >= 8
-      ? `${leftReport.risk > rightReport.risk ? leftReport.team.name : rightReport.team.name} carries more chaos.`
+      ? `${leftReport.risk > rightReport.risk ? leftReport.team.name : rightReport.team.name} has the shakier weekly profile.`
       : "Risk profile is fairly even.",
     Math.abs(leftReport.depth - rightReport.depth) >= 8
-      ? `${leftReport.depth > rightReport.depth ? leftReport.team.name : rightReport.team.name} has the deeper bench shape.`
+      ? `${leftReport.depth > rightReport.depth ? leftReport.team.name : rightReport.team.name} has the deeper bench.`
       : "Depth is close enough that one waiver-style move can matter.",
   ];
 
@@ -5648,8 +5653,8 @@ function compareFantasyPlayers(
     name: winner.name,
     verdict:
       margin < 5
-        ? `${winner.name} gets the tiny nod, but this is a lineup coin flip with teeth.`
-        : `${winner.name} gets the nod: stronger blend of floor, ceiling, and matchup stability over ${loser.name}.`,
+        ? `Start ${winner.name} if you need a lean, but this is close. Check injury and weather news before locking it.`
+        : `Start ${winner.name}. He has the better mix of floor, ceiling, and matchup stability than ${loser.name}.`,
   };
 }
 
@@ -5695,14 +5700,14 @@ function buildFantasyHeroRead({
     "Watch late injury news, weather movement, and role updates before lineup lock.";
 
   return {
-    headline: `${report.team.name} projects for ${report.projection.toFixed(1)} with ${report.strongestLane.label} doing the heavy lifting.`,
+    headline: `${report.team.name}: start from the steady roles, then solve ${report.weakestLane.label}.`,
     summary: `${scoringLabels[scoringFormat]} · ${teamLensLabels[teamLens]}. ${matchupReport.recommendation}`,
     factors: [
-      report.strongestLane.summary,
-      `${report.weakestLane.label} is the first pressure point.`,
+      `Trust the strength: ${report.strongestLane.summary}`,
+      `Fix first: ${report.weakestLane.label} is the pressure point.`,
       strongestEdge
-        ? `${scoutingRankLabel(strongestEdge.position)} edge: ${strongestEdge.summary}.`
-        : "Position edges are still settling.",
+        ? `Matchup edge: ${scoutingRankLabel(strongestEdge.position)} is ${strongestEdge.summary}.`
+        : "Matchup edges are still settling.",
     ],
     watchlist,
     disclaimer: "Fantasy planning only.",
@@ -5792,7 +5797,7 @@ function scoutingPositionLabel(position: ScoutingPosition) {
 
 function scoutingRankLabel(position: ScoutingPosition) {
   if (position === "ALL") {
-    return "Seer";
+    return "Rank";
   }
 
   return position === "DST" ? "Def" : position;
@@ -5862,7 +5867,7 @@ function buildFantasyContextLayer({
       totalTeams,
       warnings:
         uncovered > 0
-          ? [`${uncovered} fantasy team lane${uncovered === 1 ? "" : "s"} need live opponent context.`]
+          ? [`${uncovered} fantasy team${uncovered === 1 ? "" : "s"} need live opponent context.`]
           : [],
     },
   };
@@ -6056,8 +6061,8 @@ function fantasyContextAdjustments({
       label: `Defense vs ${scoutingRankLabel(position)}`,
       summary:
         matchupDelta >= 0
-          ? "Opponent lane is friendlier than average."
-          : "Opponent lane adds resistance.",
+          ? "The opponent has been friendlier than average for this position."
+          : "The opponent is tougher than average for this position.",
     },
     {
       delta: weatherDelta,
@@ -6065,8 +6070,8 @@ function fantasyContextAdjustments({
       label: "Weather",
       summary:
         weatherDelta >= 0
-          ? "Conditions help the fantasy path."
-          : "Conditions trim the clean projection path.",
+          ? "Conditions help the projection."
+          : "Conditions make the projection a little less comfortable.",
     },
     {
       delta: paceDelta,
@@ -6084,7 +6089,7 @@ function fantasyContextAdjustments({
       summary:
         roleDelta >= 0
           ? "Usage and health support the start."
-          : "Role or health keeps the Seer cautious.",
+          : "Role or health makes this less automatic.",
     },
     {
       delta: volatilityDelta,
@@ -6093,7 +6098,7 @@ function fantasyContextAdjustments({
       summary:
         volatilityDelta >= 0
           ? "Range is stable enough for lineup trust."
-          : "Chaos pushes this closer to a swing play.",
+          : "Volatility makes this more of a swing play.",
     },
   ];
 
@@ -6264,11 +6269,14 @@ function contextReceiptLine(context: FantasyPlayerContext) {
     .slice(0, 2);
 
   if (strongest.length === 0) {
-    return "Context stayed neutral.";
+    return "No major matchup, weather, or role adjustment here.";
   }
 
-  return `Context: ${strongest
-    .map((adjustment) => `${adjustment.label.toLowerCase()} ${formatFantasyDelta(adjustment.delta)}`)
+  return `Main context notes: ${strongest
+    .map(
+      (adjustment) =>
+        `${adjustment.label.toLowerCase()} ${formatFantasyDelta(adjustment.delta)}`,
+    )
     .join(", ")}.`;
 }
 
@@ -7233,7 +7241,7 @@ function buildFantasySourceLanes({
       kind: "roster",
       label: "Roster source",
       message: fantasyImport
-        ? "Imported teams drive team analysis, lineup checks, and comparison lanes."
+        ? "Imported teams drive team analysis, lineup checks, and comparisons."
         : "Demo rosters are carrying the lab until a league or roster lands.",
       positions: fantasyPositionCountsFromPlayers(
         fantasyImport?.players.length ? fantasyImport.players : players,
@@ -7250,7 +7258,7 @@ function buildFantasySourceLanes({
       kind: "projection",
       label: "Projection source",
       message: providerBridgeImport
-        ? "Provider points set the source side before Seer context adjusts it."
+        ? "Provider points set the source projection before context adjusts it."
         : "Seeded projection spine stays active until a provider sheet is loaded.",
       positions: providerBridgeImport
         ? fantasyPositionCountsFromSourceProjections(
@@ -7272,7 +7280,7 @@ function buildFantasySourceLanes({
       label: "Ranking source",
       message: providerBridgeImport
         ? "Ranks and position ranks guide board order without overpowering points."
-        : "Board order uses MatchSeer placeholders until rankings arrive.",
+        : "Board order uses placeholder ranks until a ranking source arrives.",
       positions: providerBridgeImport
         ? fantasyPositionCountsFromSourceProjections(
             providerBridgeImport.projections.filter(
