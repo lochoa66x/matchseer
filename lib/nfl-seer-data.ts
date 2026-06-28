@@ -432,8 +432,8 @@ function espnEventToMatchup(
     pace: matchupPace(homeTeam, awayTeam),
     read:
       edge <= 6
-        ? `${awayTeam.code} at ${homeTeam.code} opens as a thin-lane read. The Seer wants injury, weather, and depth chart receipts before shouting.`
-        : `${leader.code} has the first ${Math.max(homeWin, awayWin)}% lane from the real slate pull, with roster strength and venue pressure doing the early work.`,
+        ? `${awayTeam.code} at ${homeTeam.code} opens as a thin read. The matchup is close enough that injury news, weather, and depth charts can move the needle.`
+        : `${leader.city} carries a ${Math.max(homeWin, awayWin)}% edge. Roster strength and venue context are nudging the read, but this still profiles as a one-score game.`,
     edges: matchupEdges({ away: awayTeam, home: homeTeam, venueName, weather }),
   };
 }

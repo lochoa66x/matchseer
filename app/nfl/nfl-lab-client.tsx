@@ -55,6 +55,7 @@ type FantasySourceLaneKind = "roster" | "projection" | "ranking" | "context" | "
 type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
 type NflLabMode = "nfl" | "fantasy";
+type FantasyView = "overview" | "players" | "roster" | "rookies" | "compare";
 type FantasyLineupSlotId = string;
 
 type NflTeam = {
@@ -725,6 +726,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [scoutingDepth, setScoutingDepth] = useState<ScoutingDepth>("top10");
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
+  const [fantasyView, setFantasyView] = useState<FantasyView>("overview");
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
     Record<string, ScenarioLevers>
   >({});
@@ -909,6 +911,21 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       scoringFormat,
       teamLens,
     ],
+  );
+  const rookieWatchRows = useMemo(
+    () => buildRookieWatchRows(scoutingBoard),
+    [scoutingBoard],
+  );
+  const fantasyHeroRead = useMemo(
+    () =>
+      buildFantasyHeroRead({
+        analysis: scoutRead,
+        matchupReport: fantasyMatchupReport,
+        report: activeTeamReport,
+        scoringFormat,
+        teamLens,
+      }),
+    [activeTeamReport, fantasyMatchupReport, scoutRead, scoringFormat, teamLens],
   );
 
   useEffect(() => {
@@ -1616,10 +1633,41 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           </a>
           {isFantasyMode ? (
             <>
-              <a href="#fantasy-seer">Start/sit</a>
-              <a href="#scouting-board">Rankings</a>
-              <a href="#fantasy-team-lab">Team Lab</a>
-              <a href="#player-compare">Player vs player</a>
+              <a
+                className={fantasyView === "overview" ? "active" : undefined}
+                href="#fantasy-seer"
+                onClick={() => setFantasyView("overview")}
+              >
+                Overview
+              </a>
+              <a
+                className={fantasyView === "players" ? "active" : undefined}
+                href="#fantasy-rooms"
+                onClick={() => setFantasyView("players")}
+              >
+                Players
+              </a>
+              <a
+                className={fantasyView === "roster" ? "active" : undefined}
+                href="#fantasy-rooms"
+                onClick={() => setFantasyView("roster")}
+              >
+                My roster
+              </a>
+              <a
+                className={fantasyView === "rookies" ? "active" : undefined}
+                href="#fantasy-rooms"
+                onClick={() => setFantasyView("rookies")}
+              >
+                Rookies
+              </a>
+              <a
+                className={fantasyView === "compare" ? "active" : undefined}
+                href="#fantasy-rooms"
+                onClick={() => setFantasyView("compare")}
+              >
+                Compare
+              </a>
             </>
           ) : (
             <>
@@ -1709,7 +1757,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <div className="nfl-seer-verdict">
                   <span>
                     <Sparkles size={16} />
-                    Seer verdict
+                    Seer read
                   </span>
                   <strong>{activeScenario.read}</strong>
                 </div>
@@ -1802,146 +1850,125 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         )
       ) : (
         <>
-          <section className="nfl-grid-section fantasy-only">
-            <div className="nfl-fantasy-panel" id="fantasy-seer">
-              <div className="nfl-section-kicker">
-                <BrainCircuit size={17} />
-                Fantasy Seer
-              </div>
-              <div className="nfl-fantasy-head">
-                <div>
-                  <h1>Fantasy Seer</h1>
-                  <p>{scoringCopy[scoringFormat]}</p>
-                </div>
-                <ScoringToggle value={scoringFormat} onChange={setScoringFormat} />
-              </div>
-              <div className="nfl-fantasy-list">
-                {scoutingBoard.slice(0, 12).map((player) => (
-                  <FantasyCard
-                    key={player.id}
-                    player={player}
-                    scoringFormat={scoringFormat}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <ScoutingBoard
-            analysis={scoutRead}
-            allRows={scoutingBoard}
-            depth={scoutingDepth}
-            onDepthChange={updateScoutingDepth}
-            onPositionChange={updateScoutingPosition}
-            onRequest={requestScoutingRead}
-            hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
-            position={scoutingPosition}
-            rows={visibleScoutingRows}
-            scoringFormat={scoringFormat}
-            status={scoutStatus}
-          />
-
-          <FantasyTeamLab
-            activeReport={activeTeamReport}
+          <FantasyHero
             contextStatus={fantasyContextLayer.status}
             fantasyImport={fantasyImport}
-            providerBridgeFileName={providerBridgeFileName}
-            providerBridgeImport={providerBridgeImport}
-            providerBridgeMessage={providerBridgeMessage}
-            providerBridgeStatus={providerBridgeStatus}
-            providerBridgeText={providerBridgeText}
-            sourceLanes={fantasySourceLanes}
-            manualImportMessage={manualImportMessage}
-            manualImportStatus={manualImportStatus}
-            manualRosterText={manualRosterText}
             matchupReport={fantasyMatchupReport}
-            onManualImport={() => applyManualRosterImport("manual")}
-            onLensChange={setTeamLens}
-            onOpponentTeamChange={setOpponentFantasyTeamId}
-            onProviderBridgeFile={handleProviderBridgeFile}
-            onProviderBridgeImport={() => applyProviderBridgeImport(providerBridgeText)}
-            onProviderBridgeTextChange={setProviderBridgeText}
+            onAskSeer={requestScoutingRead}
             onScoringChange={setScoringFormat}
-            onScreenshotFile={handleScreenshotFile}
-            onScreenshotImport={requestScreenshotRosterImport}
-            onSleeperImport={requestSleeperImport}
-            onSleeperQueryChange={setSleeperQuery}
-            onSleeperRefresh={() => requestSleeperRefresh()}
-            onTeamChange={setActiveFantasyTeamId}
-            onManualRosterTextChange={setManualRosterText}
-            opponentTeamId={opponentFantasyTeam.id}
+            onViewChange={setFantasyView}
+            read={fantasyHeroRead}
+            report={activeTeamReport}
             scoringFormat={scoringFormat}
-            screenshotFileName={screenshotFileName}
-            screenshotImportMessage={screenshotImportMessage}
-            screenshotImportStatus={screenshotImportStatus}
-            sleeperImportMessage={sleeperImportMessage}
-            sleeperImportStatus={sleeperImportStatus}
-            sleeperLastRefreshedAt={sleeperLastRefreshedAt}
-            sleeperLeagueOptions={sleeperLeagueOptions}
-            sleeperSelectedLeagueId={sleeperSelectedLeagueId}
-            sleeperQuery={sleeperQuery}
-            sleeperUseAutoWeek={sleeperUseAutoWeek}
-            sleeperWeek={sleeperWeek}
-            onSleeperLeagueImport={requestSleeperLeagueImport}
+            scoutStatus={scoutStatus}
             teamLens={teamLens}
-            teams={fantasyTeams}
-            onSleeperUseAutoWeekChange={updateSleeperAutoWeek}
-            onSleeperWeekChange={updateSleeperWeek}
           />
 
-          <section className="nfl-player-compare" id="player-compare">
-            <div className="nfl-player-compare-head">
-              <div>
-                <div className="nfl-section-kicker">
-                  <UsersRound size={17} />
-                  Player vs player
-                </div>
-                <h2>Who gets the nod?</h2>
-              </div>
-              <strong>{startLean.name}</strong>
-            </div>
-            <div className="nfl-player-selectors">
-              <select
-                value={leftPlayerId}
-                onChange={(event) => setLeftPlayerId(event.target.value)}
-              >
-                {fantasyPlayers.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronRight size={18} />
-              <select
-                value={rightPlayerId}
-                onChange={(event) => setRightPlayerId(event.target.value)}
-              >
-                {fantasyPlayers.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {player.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="nfl-player-duel">
-              <FantasyDuelPlayer
-                player={leftScoutingPlayer}
-                scoringFormat={scoringFormat}
-                winner={startLean.id === leftScoutingPlayer.id}
-              />
-              <div className="nfl-duel-verdict">
-                <Sparkles size={20} />
-                <span>Seer nod</span>
-                <strong>{startLean.name}</strong>
-                <p>{startLean.verdict}</p>
-              </div>
-              <FantasyDuelPlayer
-                player={rightScoutingPlayer}
-                scoringFormat={scoringFormat}
-                winner={startLean.id === rightScoutingPlayer.id}
-              />
-            </div>
-          </section>
+          <FantasyViewTabs
+            current={fantasyView}
+            matchupReport={fantasyMatchupReport}
+            onChange={setFantasyView}
+            report={activeTeamReport}
+            rookieCount={rookieWatchRows.length}
+            totalPlayers={scoutingBoard.length}
+          />
+
+          {fantasyView === "overview" ? (
+            <FantasyOverview
+              matchupReport={fantasyMatchupReport}
+              report={activeTeamReport}
+              rows={scoutingBoard.slice(0, 8)}
+              scoringFormat={scoringFormat}
+              teamLens={teamLens}
+            />
+          ) : null}
+
+          {fantasyView === "players" ? (
+            <ScoutingBoard
+              analysis={scoutRead}
+              allRows={scoutingBoard}
+              depth={scoutingDepth}
+              onDepthChange={updateScoutingDepth}
+              onPositionChange={updateScoutingPosition}
+              onRequest={requestScoutingRead}
+              hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
+              position={scoutingPosition}
+              rows={visibleScoutingRows}
+              scoringFormat={scoringFormat}
+              status={scoutStatus}
+            />
+          ) : null}
+
+          {fantasyView === "roster" ? (
+            <FantasyTeamLab
+              activeReport={activeTeamReport}
+              contextStatus={fantasyContextLayer.status}
+              fantasyImport={fantasyImport}
+              providerBridgeFileName={providerBridgeFileName}
+              providerBridgeImport={providerBridgeImport}
+              providerBridgeMessage={providerBridgeMessage}
+              providerBridgeStatus={providerBridgeStatus}
+              providerBridgeText={providerBridgeText}
+              sourceLanes={fantasySourceLanes}
+              manualImportMessage={manualImportMessage}
+              manualImportStatus={manualImportStatus}
+              manualRosterText={manualRosterText}
+              matchupReport={fantasyMatchupReport}
+              onManualImport={() => applyManualRosterImport("manual")}
+              onLensChange={setTeamLens}
+              onOpponentTeamChange={setOpponentFantasyTeamId}
+              onProviderBridgeFile={handleProviderBridgeFile}
+              onProviderBridgeImport={() => applyProviderBridgeImport(providerBridgeText)}
+              onProviderBridgeTextChange={setProviderBridgeText}
+              onScoringChange={setScoringFormat}
+              onScreenshotFile={handleScreenshotFile}
+              onScreenshotImport={requestScreenshotRosterImport}
+              onSleeperImport={requestSleeperImport}
+              onSleeperQueryChange={setSleeperQuery}
+              onSleeperRefresh={() => requestSleeperRefresh()}
+              onTeamChange={setActiveFantasyTeamId}
+              onManualRosterTextChange={setManualRosterText}
+              opponentTeamId={opponentFantasyTeam.id}
+              scoringFormat={scoringFormat}
+              screenshotFileName={screenshotFileName}
+              screenshotImportMessage={screenshotImportMessage}
+              screenshotImportStatus={screenshotImportStatus}
+              sleeperImportMessage={sleeperImportMessage}
+              sleeperImportStatus={sleeperImportStatus}
+              sleeperLastRefreshedAt={sleeperLastRefreshedAt}
+              sleeperLeagueOptions={sleeperLeagueOptions}
+              sleeperSelectedLeagueId={sleeperSelectedLeagueId}
+              sleeperQuery={sleeperQuery}
+              sleeperUseAutoWeek={sleeperUseAutoWeek}
+              sleeperWeek={sleeperWeek}
+              onSleeperLeagueImport={requestSleeperLeagueImport}
+              teamLens={teamLens}
+              teams={fantasyTeams}
+              onSleeperUseAutoWeekChange={updateSleeperAutoWeek}
+              onSleeperWeekChange={updateSleeperWeek}
+            />
+          ) : null}
+
+          {fantasyView === "rookies" ? (
+            <FantasyRookieBoard
+              rows={rookieWatchRows}
+              scoringFormat={scoringFormat}
+            />
+          ) : null}
+
+          {fantasyView === "compare" ? (
+            <FantasyPlayerCompareSection
+              fantasyPlayers={fantasyPlayers}
+              leftPlayer={leftScoutingPlayer}
+              leftPlayerId={leftPlayerId}
+              onLeftPlayerChange={setLeftPlayerId}
+              onRightPlayerChange={setRightPlayerId}
+              rightPlayer={rightScoutingPlayer}
+              rightPlayerId={rightPlayerId}
+              scoringFormat={scoringFormat}
+              startLean={startLean}
+            />
+          ) : null}
         </>
       )}
     </main>
@@ -2529,6 +2556,483 @@ function TeamCompare({ matchup }: { matchup: NflMatchup }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function FantasyHero({
+  contextStatus,
+  fantasyImport,
+  matchupReport,
+  onAskSeer,
+  onScoringChange,
+  onViewChange,
+  read,
+  report,
+  scoringFormat,
+  scoutStatus,
+  teamLens,
+}: {
+  contextStatus: FantasyContextStatus;
+  fantasyImport: ImportedFantasyLeague | null;
+  matchupReport: FantasyMatchupReport;
+  onAskSeer: () => void;
+  onScoringChange: (format: ScoringFormat) => void;
+  onViewChange: (view: FantasyView) => void;
+  read: NflScoutingAnalysis;
+  report: FantasyTeamReport;
+  scoringFormat: ScoringFormat;
+  scoutStatus: ScoutStatus;
+  teamLens: FantasyTeamLens;
+}) {
+  const opponentReport =
+    matchupReport.left.team.id === report.team.id
+      ? matchupReport.right
+      : matchupReport.left;
+  const sourceLabel = fantasyImport
+    ? fantasyImport.sleeper?.leagueName ?? fantasyImport.label
+    : "Demo roster";
+  const priorityReceipts = report.startSitReceipts.slice(0, 3);
+
+  return (
+    <section className="nfl-fantasy-hero" id="fantasy-seer">
+      <div className="nfl-fantasy-command">
+        <div className="nfl-section-kicker">
+          <BrainCircuit size={17} />
+          Fantasy command room
+        </div>
+        <h1>Fantasy Seer</h1>
+        <p>
+          Import your league, pick the scoring, and let the Seer turn projections,
+          matchup context, health, and chaos into lineup decisions that still feel fun.
+        </p>
+        <div className="nfl-fantasy-hero-actions">
+          <button onClick={() => onViewChange("roster")} type="button">
+            <RefreshCw size={16} />
+            Connect roster
+          </button>
+          <button
+            className="secondary"
+            disabled={scoutStatus === "loading"}
+            onClick={onAskSeer}
+            type="button"
+          >
+            <Sparkles size={16} />
+            {scoutStatus === "loading" ? "Reading" : "Ask AI Scout"}
+          </button>
+        </div>
+        <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
+        <div className="nfl-fantasy-hero-pills">
+          <span>{scoringLabels[scoringFormat]}</span>
+          <span>{teamLensLabels[teamLens]}</span>
+          <span>{contextStatus.status} context</span>
+          <span>{sourceLabel}</span>
+        </div>
+      </div>
+
+      <article className="nfl-fantasy-command-card">
+        <div className="nfl-card-topline">
+          <span>{teamLensLabels[teamLens]} board</span>
+          <strong>{sourceLabel}</strong>
+        </div>
+
+        <div className="nfl-fantasy-scoreboard">
+          <div>
+            <span>{report.team.manager}</span>
+            <strong>{report.team.name}</strong>
+            <em>{report.projection.toFixed(1)} Seer pts</em>
+          </div>
+          <div className="nfl-fantasy-scoreboard-core">
+            <span>Matchup</span>
+            <strong>{matchupReport.edgeLabel}</strong>
+            <em>
+              {matchupReport.confidence}% read · {matchupReport.chaos}% chaos
+            </em>
+          </div>
+          <div>
+            <span>Opponent</span>
+            <strong>{opponentReport.team.name}</strong>
+            <em>{opponentReport.projection.toFixed(1)} Seer pts</em>
+          </div>
+        </div>
+
+        <div className="nfl-fantasy-read-card">
+          <span>
+            <Sparkles size={16} />
+            Seer read
+          </span>
+          <strong>{read.headline}</strong>
+          <p>{read.summary}</p>
+          <div className="nfl-ai-factor-list">
+            {read.factors.slice(0, 3).map((factor) => (
+              <span key={factor}>{factor}</span>
+            ))}
+          </div>
+          <em>{read.watchlist}</em>
+        </div>
+
+        <div className="nfl-fantasy-priority-grid">
+          {priorityReceipts.length > 0 ? (
+            priorityReceipts.map((receipt) => (
+              <article key={`${receipt.label}-${receipt.player.id}`}>
+                <span>{receipt.label}</span>
+                <strong>{receipt.player.name}</strong>
+                <em>
+                  {receipt.player.position} · Seer{" "}
+                  {receipt.seerProjection.toFixed(1)} · {formatFantasyDelta(receipt.delta)}
+                </em>
+              </article>
+            ))
+          ) : (
+            <article>
+              <span>Roster lane</span>
+              <strong>Connect a team</strong>
+              <em>Sleeper, copy paste, or screenshot unlocks start/sit receipts.</em>
+            </article>
+          )}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function FantasyViewTabs({
+  current,
+  matchupReport,
+  onChange,
+  report,
+  rookieCount,
+  totalPlayers,
+}: {
+  current: FantasyView;
+  matchupReport: FantasyMatchupReport;
+  onChange: (view: FantasyView) => void;
+  report: FantasyTeamReport;
+  rookieCount: number;
+  totalPlayers: number;
+}) {
+  const tabs: Array<{
+    id: FantasyView;
+    label: string;
+    meta: string;
+    icon: ReactNode;
+  }> = [
+    {
+      id: "overview",
+      label: "Overview",
+      meta: `${report.projection.toFixed(1)} pts`,
+      icon: <Sparkles size={17} />,
+    },
+    {
+      id: "players",
+      label: "Players",
+      meta: `${totalPlayers} loaded`,
+      icon: <Search size={17} />,
+    },
+    {
+      id: "roster",
+      label: "My roster",
+      meta: `${report.players.length} starters`,
+      icon: <UsersRound size={17} />,
+    },
+    {
+      id: "rookies",
+      label: "Rookies",
+      meta: `${rookieCount} watch`,
+      icon: <Trophy size={17} />,
+    },
+    {
+      id: "compare",
+      label: "Compare",
+      meta: matchupReport.edgeLabel,
+      icon: <Swords size={17} />,
+    },
+  ];
+
+  return (
+    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy rooms">
+      {tabs.map((tab) => (
+        <button
+          aria-pressed={current === tab.id}
+          className={cx(current === tab.id && "active")}
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          type="button"
+        >
+          {tab.icon}
+          <span>{tab.label}</span>
+          <em>{tab.meta}</em>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function FantasyOverview({
+  matchupReport,
+  report,
+  rows,
+  scoringFormat,
+  teamLens,
+}: {
+  matchupReport: FantasyMatchupReport;
+  report: FantasyTeamReport;
+  rows: ScoutingRow[];
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}) {
+  const closeCalls =
+    report.closeCalls.length > 0
+      ? report.closeCalls.map((call) => call.summary)
+      : ["No urgent swap pressure. The recommended lineup has breathing room."];
+
+  return (
+    <section className="nfl-fantasy-overview" id="fantasy-overview">
+      <article className="nfl-fantasy-focus-panel">
+        <div className="nfl-section-kicker">
+          <Sparkles size={17} />
+          This week at a glance
+        </div>
+        <h2>{report.team.name} command read</h2>
+        <p>{teamAdviceSummary(report, teamLens)}</p>
+        <div className="nfl-fantasy-kpi-grid">
+          <div>
+            <span>Projection</span>
+            <strong>{report.projection.toFixed(1)}</strong>
+            <em>{formatFantasyDelta(report.lineupSeerDelta)} vs source</em>
+          </div>
+          <div>
+            <span>Range</span>
+            <strong>
+              {report.floor.toFixed(1)}-{report.ceiling.toFixed(1)}
+            </strong>
+            <em>{scoringLabels[scoringFormat]}</em>
+          </div>
+          <div>
+            <span>Matchup</span>
+            <strong>{matchupReport.edgeLabel}</strong>
+            <em>{matchupReport.winLean}% lean</em>
+          </div>
+          <div>
+            <span>Pressure point</span>
+            <strong>{report.weakestLane.label}</strong>
+            <em>{report.strongestLane.label} carries</em>
+          </div>
+        </div>
+        <div className="nfl-fantasy-action-list">
+          <span>Lineup pressure</span>
+          {report.startSitReceipts.slice(0, 4).map((receipt) => (
+            <p key={`${receipt.label}-${receipt.player.id}`}>
+              <strong>{receipt.label}</strong> {receipt.summary}
+            </p>
+          ))}
+        </div>
+      </article>
+
+      <article className="nfl-fantasy-focus-panel">
+        <div className="nfl-section-kicker">
+          <Search size={17} />
+          Top player pulse
+        </div>
+        <h2>Clean board</h2>
+        <p>
+          A quieter shortlist from the full player room. Open Players when you want
+          the deeper ranking board by position.
+        </p>
+        <div className="nfl-fantasy-spotlight-list">
+          {rows.slice(0, 6).map((player, index) => (
+            <FantasySpotlightRow
+              index={index}
+              key={player.id}
+              player={player}
+              scoringFormat={scoringFormat}
+            />
+          ))}
+        </div>
+        <AdviceList title="Close calls" items={closeCalls} />
+      </article>
+    </section>
+  );
+}
+
+function FantasySpotlightRow({
+  index,
+  player,
+  scoringFormat,
+}: {
+  index: number;
+  player: ScoutingRow;
+  scoringFormat: ScoringFormat;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+
+  return (
+    <article className="nfl-fantasy-spotlight-row">
+      <div className="nfl-rank-stack">
+        <span>#{index + 1}</span>
+        <em>{scoutingRankLabel(position)}</em>
+      </div>
+      <div className="nfl-player-id">
+        <span style={{ background: player.color }}>{player.team}</span>
+        <div>
+          <strong>{player.name}</strong>
+          <em>
+            {player.position} · {player.opponent}
+          </em>
+        </div>
+      </div>
+      <div>
+        <span>{scoringLabels[scoringFormat]}</span>
+        <strong>{player.contextProjection.projection.toFixed(1)}</strong>
+      </div>
+    </article>
+  );
+}
+
+function FantasyRookieBoard({
+  rows,
+  scoringFormat,
+}: {
+  rows: ScoutingRow[];
+  scoringFormat: ScoringFormat;
+}) {
+  return (
+    <section className="nfl-fantasy-rookies" id="fantasy-rookies">
+      <div className="nfl-scouting-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Trophy size={17} />
+            Rookie and dynasty watch
+          </div>
+          <h2>Future value room</h2>
+          <p>
+            A calmer place for rookies, breakouts, taxi stashes, and dynasty-friendly
+            players. When true rookie flags arrive, this room will use them first.
+          </p>
+        </div>
+        <strong className="nfl-fantasy-room-badge">{rows.length} watchlist</strong>
+      </div>
+      <div className="nfl-rookie-list">
+        {rows.map((player, index) => {
+          const position = normalizeScoutingPosition(player.position);
+
+          return (
+            <article className="nfl-rookie-row" key={player.id}>
+              <div className="nfl-rank-stack">
+                <span>#{index + 1}</span>
+                <em>{scoutingRankLabel(position)}</em>
+              </div>
+              <div className="nfl-player-id">
+                <span style={{ background: player.color }}>{player.team}</span>
+                <div>
+                  <strong>{player.name}</strong>
+                  <em>
+                    {player.position} ·{" "}
+                    {player.depthTier ? formatDepthTier(player.depthTier) : "Watchlist"}
+                  </em>
+                </div>
+              </div>
+              <div className="nfl-rookie-metrics">
+                <span>
+                  <em>Seer</em>
+                  <strong>{player.contextProjection.projection.toFixed(1)}</strong>
+                </span>
+                <span>
+                  <em>Dynasty</em>
+                  <strong>{player.dynastyValue ?? player.health}</strong>
+                </span>
+                <span>
+                  <em>{scoringLabels[scoringFormat]}</em>
+                  <strong>{formatRankDelta(player.rankDelta)}</strong>
+                </span>
+              </div>
+              <div className="nfl-trait-list">
+                {fantasySignalTags(player).slice(0, 4).map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FantasyPlayerCompareSection({
+  fantasyPlayers,
+  leftPlayer,
+  leftPlayerId,
+  onLeftPlayerChange,
+  onRightPlayerChange,
+  rightPlayer,
+  rightPlayerId,
+  scoringFormat,
+  startLean,
+}: {
+  fantasyPlayers: FantasyPlayer[];
+  leftPlayer: FantasyPlayer;
+  leftPlayerId: string;
+  onLeftPlayerChange: (id: string) => void;
+  onRightPlayerChange: (id: string) => void;
+  rightPlayer: FantasyPlayer;
+  rightPlayerId: string;
+  scoringFormat: ScoringFormat;
+  startLean: ReturnType<typeof compareFantasyPlayers>;
+}) {
+  return (
+    <section className="nfl-player-compare" id="player-compare">
+      <div className="nfl-player-compare-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <UsersRound size={17} />
+            Player vs player
+          </div>
+          <h2>Who gets the nod?</h2>
+        </div>
+        <strong>{startLean.name}</strong>
+      </div>
+      <div className="nfl-player-selectors">
+        <select
+          value={leftPlayerId}
+          onChange={(event) => onLeftPlayerChange(event.target.value)}
+        >
+          {fantasyPlayers.map((player) => (
+            <option key={player.id} value={player.id}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+        <ChevronRight size={18} />
+        <select
+          value={rightPlayerId}
+          onChange={(event) => onRightPlayerChange(event.target.value)}
+        >
+          {fantasyPlayers.map((player) => (
+            <option key={player.id} value={player.id}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="nfl-player-duel">
+        <FantasyDuelPlayer
+          player={leftPlayer}
+          scoringFormat={scoringFormat}
+          winner={startLean.id === leftPlayer.id}
+        />
+        <div className="nfl-duel-verdict">
+          <Sparkles size={20} />
+          <span>Seer nod</span>
+          <strong>{startLean.name}</strong>
+          <p>{startLean.verdict}</p>
+        </div>
+        <FantasyDuelPlayer
+          player={rightPlayer}
+          scoringFormat={scoringFormat}
+          winner={startLean.id === rightPlayer.id}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -5165,6 +5669,79 @@ function filterScoutingRows(
         );
 
   return laneRows.slice(0, depthOption.limit);
+}
+
+function buildFantasyHeroRead({
+  analysis,
+  matchupReport,
+  report,
+  scoringFormat,
+  teamLens,
+}: {
+  analysis: NflScoutingAnalysis | null;
+  matchupReport: FantasyMatchupReport;
+  report: FantasyTeamReport;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}): NflScoutingAnalysis {
+  if (analysis) {
+    return analysis;
+  }
+
+  const strongestEdge = matchupReport.strongestEdge;
+  const watchlist =
+    report.closeCalls[0]?.summary ??
+    report.benchAlternatives[0]?.summary ??
+    "Watch late injury news, weather movement, and role updates before lineup lock.";
+
+  return {
+    headline: `${report.team.name} projects for ${report.projection.toFixed(1)} with ${report.strongestLane.label} doing the heavy lifting.`,
+    summary: `${scoringLabels[scoringFormat]} · ${teamLensLabels[teamLens]}. ${matchupReport.recommendation}`,
+    factors: [
+      report.strongestLane.summary,
+      `${report.weakestLane.label} is the first pressure point.`,
+      strongestEdge
+        ? `${scoutingRankLabel(strongestEdge.position)} edge: ${strongestEdge.summary}.`
+        : "Position edges are still settling.",
+    ],
+    watchlist,
+    disclaimer: "Fantasy planning only.",
+    source: "seer",
+  };
+}
+
+function buildRookieWatchRows(rows: ScoutingRow[]) {
+  const taggedRows = rows.filter((player) => {
+    const searchableText = [
+      player.depthTier,
+      ...player.traits,
+      ...(player.seerAdjustments ?? []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return /rookie|first-year|breakout|prospect|taxi|stash|dynasty/.test(
+      searchableText,
+    );
+  });
+  const watchPool =
+    taggedRows.length > 0
+      ? taggedRows
+      : rows.filter((player) => (player.dynastyValue ?? player.health) >= 74);
+
+  return [...watchPool]
+    .sort((left, right) => rookieWatchScore(right) - rookieWatchScore(left))
+    .slice(0, 24);
+}
+
+function rookieWatchScore(player: ScoutingRow) {
+  return (
+    player.contextProjection.projection * 1.25 +
+    (player.dynastyValue ?? player.health) * 0.68 +
+    (player.roleSecurity ?? player.health) * 0.18 +
+    (100 - player.nflRank) * 0.1 -
+    player.chaos * 0.08
+  );
 }
 
 function countScoutingPositions(rows: ScoutingRow[]) {
