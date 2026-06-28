@@ -221,6 +221,8 @@ function toFootballDataMatch(
     findScheduledWorldCupVenueForMatch({
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
+      providerId: match.id,
+      startsAt: match.utcDate,
     });
 
   const score = readMatchScore(match);

@@ -285,6 +285,55 @@ const groupStageVenueByFixture = new Map<string, WorldCupVenue["slug"]>([
   [fixtureKey("cod", "uzb"), "atlanta-stadium"],
 ]);
 
+type KnockoutVenueSlot = {
+  matchNumber: number;
+  kickoffUtc: string;
+  venueSlug: WorldCupVenue["slug"];
+};
+
+const knockoutVenueSlots: KnockoutVenueSlot[] = [
+  { matchNumber: 73, kickoffUtc: "2026-06-28T19:00", venueSlug: "los-angeles-stadium" },
+  { matchNumber: 74, kickoffUtc: "2026-06-29T20:30", venueSlug: "boston-stadium" },
+  { matchNumber: 75, kickoffUtc: "2026-06-30T01:00", venueSlug: "monterrey-stadium" },
+  { matchNumber: 76, kickoffUtc: "2026-06-29T17:00", venueSlug: "houston-stadium" },
+  { matchNumber: 77, kickoffUtc: "2026-06-30T21:00", venueSlug: "new-york-new-jersey-stadium" },
+  { matchNumber: 78, kickoffUtc: "2026-06-30T17:00", venueSlug: "dallas-stadium" },
+  { matchNumber: 79, kickoffUtc: "2026-07-01T01:00", venueSlug: "mexico-city-stadium" },
+  { matchNumber: 80, kickoffUtc: "2026-07-01T16:00", venueSlug: "atlanta-stadium" },
+  { matchNumber: 81, kickoffUtc: "2026-07-02T00:00", venueSlug: "san-francisco-bay-area-stadium" },
+  { matchNumber: 82, kickoffUtc: "2026-07-01T20:00", venueSlug: "seattle-stadium" },
+  { matchNumber: 83, kickoffUtc: "2026-07-02T23:00", venueSlug: "toronto-stadium" },
+  { matchNumber: 84, kickoffUtc: "2026-07-02T19:00", venueSlug: "los-angeles-stadium" },
+  { matchNumber: 85, kickoffUtc: "2026-07-03T03:00", venueSlug: "vancouver-stadium" },
+  { matchNumber: 86, kickoffUtc: "2026-07-03T22:00", venueSlug: "miami-stadium" },
+  { matchNumber: 87, kickoffUtc: "2026-07-04T01:30", venueSlug: "kansas-city-stadium" },
+  { matchNumber: 88, kickoffUtc: "2026-07-03T18:00", venueSlug: "dallas-stadium" },
+  { matchNumber: 89, kickoffUtc: "2026-07-04T21:00", venueSlug: "philadelphia-stadium" },
+  { matchNumber: 90, kickoffUtc: "2026-07-04T17:00", venueSlug: "houston-stadium" },
+  { matchNumber: 91, kickoffUtc: "2026-07-05T20:00", venueSlug: "new-york-new-jersey-stadium" },
+  { matchNumber: 92, kickoffUtc: "2026-07-06T00:00", venueSlug: "mexico-city-stadium" },
+  { matchNumber: 93, kickoffUtc: "2026-07-06T19:00", venueSlug: "dallas-stadium" },
+  { matchNumber: 94, kickoffUtc: "2026-07-07T00:00", venueSlug: "seattle-stadium" },
+  { matchNumber: 95, kickoffUtc: "2026-07-07T16:00", venueSlug: "atlanta-stadium" },
+  { matchNumber: 96, kickoffUtc: "2026-07-07T20:00", venueSlug: "vancouver-stadium" },
+  { matchNumber: 97, kickoffUtc: "2026-07-09T20:00", venueSlug: "boston-stadium" },
+  { matchNumber: 98, kickoffUtc: "2026-07-10T19:00", venueSlug: "los-angeles-stadium" },
+  { matchNumber: 99, kickoffUtc: "2026-07-11T21:00", venueSlug: "miami-stadium" },
+  { matchNumber: 100, kickoffUtc: "2026-07-12T01:00", venueSlug: "kansas-city-stadium" },
+  { matchNumber: 101, kickoffUtc: "2026-07-14T19:00", venueSlug: "dallas-stadium" },
+  { matchNumber: 102, kickoffUtc: "2026-07-15T19:00", venueSlug: "atlanta-stadium" },
+  { matchNumber: 103, kickoffUtc: "2026-07-18T21:00", venueSlug: "miami-stadium" },
+  { matchNumber: 104, kickoffUtc: "2026-07-19T19:00", venueSlug: "new-york-new-jersey-stadium" },
+];
+
+const knockoutVenueByKickoffUtc = new Map(
+  knockoutVenueSlots.map((slot) => [slot.kickoffUtc, slot.venueSlug]),
+);
+
+const knockoutVenueByMatchNumber = new Map(
+  knockoutVenueSlots.map((slot) => [slot.matchNumber, slot.venueSlug]),
+);
+
 export function findWorldCupVenue(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -304,9 +353,13 @@ export function findWorldCupVenue(value: string | null | undefined) {
 export function findScheduledWorldCupVenueForMatch({
   homeTeam,
   awayTeam,
+  providerId,
+  startsAt,
 }: {
   homeTeam: WorldCupFixtureTeam | null | undefined;
   awayTeam: WorldCupFixtureTeam | null | undefined;
+  providerId?: number | string | null;
+  startsAt?: string | null;
 }) {
   const homeKeys = teamKeys(homeTeam);
   const awayKeys = teamKeys(awayTeam);
@@ -321,7 +374,65 @@ export function findScheduledWorldCupVenueForMatch({
     }
   }
 
+  const knockoutSlot =
+    scheduledVenueByMatchNumber(providerId) ??
+    scheduledVenueByKickoff(startsAt);
+
+  if (knockoutSlot) {
+    return knockoutSlot;
+  }
+
   return null;
+}
+
+function scheduledVenueByMatchNumber(providerId: number | string | null | undefined) {
+  if (providerId === null || providerId === undefined) {
+    return null;
+  }
+
+  const value = Number(providerId);
+
+  if (!Number.isInteger(value)) {
+    return null;
+  }
+
+  const slug = knockoutVenueByMatchNumber.get(value);
+
+  if (!slug) {
+    return null;
+  }
+
+  return worldCupVenues.find((venue) => venue.slug === slug) ?? null;
+}
+
+function scheduledVenueByKickoff(startsAt: string | null | undefined) {
+  const key = kickoffUtcMinuteKey(startsAt);
+
+  if (!key) {
+    return null;
+  }
+
+  const slug = knockoutVenueByKickoffUtc.get(key);
+
+  if (!slug) {
+    return null;
+  }
+
+  return worldCupVenues.find((venue) => venue.slug === slug) ?? null;
+}
+
+function kickoffUtcMinuteKey(startsAt: string | null | undefined) {
+  if (!startsAt) {
+    return null;
+  }
+
+  const date = new Date(startsAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString().slice(0, 16);
 }
 
 function teamKeys(team: WorldCupFixtureTeam | null | undefined) {
