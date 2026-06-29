@@ -4013,29 +4013,25 @@ function fantasyPortfolioOpponentTradeRead(
 
 function FantasyPlayerArtwork({
   className,
-  playerName,
   position,
-  tone,
 }: {
   className?: string;
   playerName?: string;
   position?: string;
-  tone?: "brass" | "blue" | "slate";
 }) {
   const normalizedPosition = position ? normalizeScoutingPosition(position) : undefined;
-  const toneClass =
-    tone ??
-    (normalizedPosition === "QB"
-      ? "brass"
-      : normalizedPosition === "RB" || normalizedPosition === "WR"
-        ? "blue"
-        : "slate");
+  const poseClass = normalizedPosition
+    ? `pos-${normalizedPosition.toLowerCase()}`
+    : "pos-flex";
 
   return (
-    <span className={cx("nfl-generic-player-art", toneClass, className)} aria-hidden="true">
-      <i />
-      <b>{playerName ? fantasyPlayerInitials(playerName) : "MS"}</b>
-      <small>{normalizedPosition ? scoutingRankLabel(normalizedPosition) : "Seer"}</small>
+    <span className={cx("nfl-generic-player-art", poseClass, className)} aria-hidden="true">
+      <i className="nfl-generic-player-shadow" />
+      <span className="nfl-generic-player-helmet" />
+      <span className="nfl-generic-player-visor" />
+      <span className="nfl-generic-player-shoulders" />
+      <span className="nfl-generic-player-body" />
+      <span className="nfl-generic-player-ball" />
     </span>
   );
 }
