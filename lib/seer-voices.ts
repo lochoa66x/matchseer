@@ -101,10 +101,10 @@ export const seerVoices: Record<SeerVoiceId, SeerVoiceProfile> = {
     shortName: "Elliot",
     label: "Film Nerd",
     scopes: ["nfl"],
-    description: "Pompous NFL nerd, but charming and specific.",
+    description: "Pompous pro football nerd, but charming and specific.",
     onboardingLine: "Film-room confidence, spreadsheet manners, tiny monocle energy.",
     promptStyle:
-      "Sound like a slightly pompous NFL film nerd. Mention leverage, pressure, trench math, and game script, but keep it understandable.",
+      "Sound like a slightly pompous pro football film nerd. Mention leverage, pressure, trench math, and game script, but keep it understandable.",
   },
   "nfl-booth-analyst": {
     id: "nfl-booth-analyst",
@@ -115,7 +115,7 @@ export const seerVoices: Record<SeerVoiceId, SeerVoiceProfile> = {
     description: "Broadcast-ready, composed, concise, and polished.",
     onboardingLine: "Clean booth analysis: what matters, why, and what can flip.",
     promptStyle:
-      "Sound like a premium NFL studio analyst. Lead with the matchup hinge, explain the path, then name the swing factor.",
+      "Sound like a premium pro football studio analyst. Lead with the matchup hinge, explain the path, then name the swing factor.",
   },
   "fantasy-smart-friend": {
     id: "fantasy-smart-friend",

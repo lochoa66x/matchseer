@@ -24,6 +24,23 @@ describe("World Cup venue schedule fallback", () => {
     expect(venue?.name).toBe("MetLife Stadium");
   });
 
+  it.each([
+    [73, "los-angeles-stadium"],
+    [89, "philadelphia-stadium"],
+    [97, "boston-stadium"],
+    [101, "dallas-stadium"],
+    [103, "miami-stadium"],
+    [104, "new-york-new-jersey-stadium"],
+  ])("keeps knockout match %s away from the TBD fallback", (providerId, venueSlug) => {
+    const venue = findScheduledWorldCupVenueForMatch({
+      homeTeam: { name: `Knockout home slot ${providerId}` },
+      awayTeam: { name: `Knockout away slot ${providerId}` },
+      providerId,
+    });
+
+    expect(venue?.slug).toBe(venueSlug);
+  });
+
   it("keeps group-stage team mapping working ahead of the slot fallback", () => {
     const venue = findScheduledWorldCupVenueForMatch({
       homeTeam: { name: "Mexico", tla: "MEX" },

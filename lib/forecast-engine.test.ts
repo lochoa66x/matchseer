@@ -554,6 +554,9 @@ describe("travel and body-cost modifier", () => {
 
     expect(modifier.awayPenalty).toBeGreaterThan(modifier.homePenalty);
     expect(modifier.payload.away.travelDistanceKm).toBeGreaterThan(4000);
+    expect(modifier.payload.away.notes).toEqual(
+      expect.arrayContaining([expect.stringContaining("venue jump")]),
+    );
     expect(modifier.payload.heatStress).toBeGreaterThan(1);
   });
 
@@ -599,6 +602,9 @@ describe("travel and body-cost modifier", () => {
 
     expect(penalties.homePenalty).toBeGreaterThan(regular.homePenalty);
     expect(penalties.payload.home.extraTimeStress).toBeGreaterThan(0);
+    expect(penalties.payload.home.notes).toEqual(
+      expect.arrayContaining(["penalty shootout hangover follows the knockout win"]),
+    );
   });
 });
 
@@ -857,14 +863,25 @@ describe("public Seer trail", () => {
           bodyCost: {
             status: "active",
             home: { totalStress: 0.2 },
-            away: { totalStress: 1.8 },
+            away: {
+              totalStress: 1.8,
+              notes: [
+                "4300km venue jump",
+                "extra-time hangover follows the knockout win",
+              ],
+            },
           },
           referee: { chaosDelta: 3 },
           venue: { home: 3, away: 0 },
         },
       },
     });
+    const bodyTrail = trail.find((signal) => signal.id === "body-cost");
 
+    expect(bodyTrail?.text.en).toContain("Canada: 4300km venue jump");
+    expect(bodyTrail?.text.en).toContain(
+      "extra-time hangover follows the knockout win",
+    );
     expectSeerifiedPublicCopy([
       market.summary.en,
       live.summary.en,
@@ -908,7 +925,13 @@ describe("forecast waterfall", () => {
           },
           bodyCost: {
             home: { xgPenalty: 0.02 },
-            away: { xgPenalty: 0.14 },
+            away: {
+              xgPenalty: 0.14,
+              notes: [
+                "4100km venue jump",
+                "extra-time hangover follows the knockout win",
+              ],
+            },
           },
           availability: {
             homeXgPenalty: 0.03,
@@ -939,6 +962,9 @@ describe("forecast waterfall", () => {
     expect(waterfall[0]?.id).toBe("chance-map");
     expect(waterfall.some((step) => step.id === "crowd-breeze")).toBe(true);
     expect(waterfall.some((step) => step.id === "body-cost")).toBe(true);
+    expect(waterfall.find((step) => step.id === "body-cost")?.text.en).toContain(
+      "4100km venue jump",
+    );
     expect(waterfall.some((step) => step.id === "knockout-pressure")).toBe(true);
     expectSeerifiedPublicCopy(waterfall.map((step) => step.text.en));
   });

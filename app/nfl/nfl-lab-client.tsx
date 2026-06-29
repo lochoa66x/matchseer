@@ -475,6 +475,17 @@ type FantasyMoveTarget = {
   value: string;
 };
 
+type FantasyDeepResearchRow = {
+  action: string;
+  available: boolean;
+  fit: string;
+  player: ScoutingRow;
+  reason: string;
+  risk: string;
+  score: number;
+  tags: string[];
+};
+
 type FantasyLeaguePowerMap = {
   teams: FantasyLeaguePowerTeam[];
   active: FantasyLeaguePowerTeam;
@@ -801,10 +812,18 @@ const receptionPoints: Record<ScoringFormat, number> = {
   fullPpr: 1,
 };
 
+const independentSportsDisclaimer =
+  "MatchSeer is an independent fantasy and sports analysis tool. It is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association.";
+const experimentalUseDisclaimer =
+  "Built for entertainment, learning, and real-world algorithm testing only. We do not support betting or gambling. Reads are MatchSeer's own interpretations based on available data, assumptions, and experimental models, and some signals may be speculative, incomplete, inaccurate, or unrelated to real outcomes.";
+const proFootballShortDisclaimer =
+  `${independentSportsDisclaimer} Pro Football Seer is for fun analysis and algorithm testing, not betting or professional advice.`;
+const proFootballFullDisclaimer =
+  `Pro Football Seer is an independent, experimental pro football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun game companion, not as professional advice.`;
 const fantasySeerShortDisclaimer =
-  "Independent fantasy analysis. Experimental, for fun, no betting. Not affiliated with any league, team, player, or player association.";
+  `${independentSportsDisclaimer} Fantasy Seer is for fun lineup analysis and algorithm testing, not betting or professional advice.`;
 const fantasySeerFullDisclaimer =
-  "Fantasy Seer is an independent, experimental fantasy football analysis tool by MatchSeer. It is built for entertainment, learning, and real-world algorithm testing only. MatchSeer is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association. We do not support betting or gambling. All reads, projections, rankings, and suggestions are MatchSeer's own interpretations based on available data, assumptions, and experimental models. Some signals may be speculative, incomplete, inaccurate, or unrelated to real outcomes. Use it as a fun decision companion, not as professional advice.";
+  `Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun decision companion, not as professional advice.`;
 
 const teams = {
   bal: {
@@ -1074,7 +1093,7 @@ const seededNflDataset: NflSeerDataset = {
     schedule: "fallback",
     fantasy: "fallback",
     market: "fallback",
-    notes: ["Using seeded lab data until the NFL feed responds."],
+    notes: ["Using seeded lab data until the pro football feed responds."],
   },
 };
 
@@ -1445,7 +1464,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         const payload = (await response.json()) as Partial<NflSeerDataset>;
 
         if (!response.ok) {
-          throw new Error("NFL data feed failed");
+          throw new Error("Pro football data feed failed");
         }
 
         const nextDataset = mergeNflDataset(payload);
@@ -2142,11 +2161,11 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             src="/brand/matchseer-app-icon.svg"
           />
           <strong>MatchSeer</strong>
-          <em>{isFantasyMode ? "Fantasy Seer" : "Gridiron Seer"}</em>
+          <em>{isFantasyMode ? "Fantasy Seer" : "Pro Football Seer"}</em>
         </a>
-        <nav aria-label="Gridiron navigation">
+        <nav aria-label="MatchSeer sport navigation">
           <a className={!isFantasyMode ? "active" : undefined} href="/profootball">
-            Gridiron Seer
+            Pro Football Seer
           </a>
           <a className={isFantasyMode ? "active" : undefined} href="/fantasyseer">
             Fantasy Seer
@@ -2193,18 +2212,20 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         </nav>
       </header>
 
+      {!isFantasyMode ? <ProFootballDisclaimer /> : null}
+
       {!isFantasyMode ? (
         isNflSlateBooting ? (
           <NflSeerLoading />
         ) : (
         <>
           <section className="nfl-hero" id="team-seer">
-            <div className="nfl-matchup-rail" aria-label="NFL matchup list">
+            <div className="nfl-matchup-rail" aria-label="Pro football matchup list">
               <div className="nfl-section-kicker">
                 <Trophy size={17} />
                 Team vs team
               </div>
-              <h1>Gridiron Seer</h1>
+              <h1>Pro Football Seer</h1>
               <p>
                 Pro football matchup reads without official-league noise. One matchup
                 card, plain-English lean, underdog path, and the few signals that can move the read.
@@ -2270,7 +2291,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 {activeGameCard.isPreseason ? <span>Preseason model</span> : null}
               </div>
 
-              <div className="nfl-game-stage" aria-label="NFL hero matchup">
+              <div className="nfl-game-stage" aria-label="Pro Football Seer hero matchup">
                 <HeroTeamCard
                   role="Road"
                   team={activeMatchup.away}
@@ -2464,6 +2485,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               <TeamCompare matchup={activeMatchup} />
             </div>
           </section>
+          <ProFootballFooterDisclaimer />
         </>
         )
       ) : (
@@ -2480,6 +2502,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             report={activeTeamReport}
             scoringFormat={scoringFormat}
             scoutStatus={scoutStatus}
+            teamLens={teamLens}
+          />
+
+          <FantasyTeamPortfolio
+            leagueMap={fantasyLeaguePowerMap}
+            opponentTeamId={opponentFantasyTeam.id}
+            onOpponentTeamChange={setOpponentFantasyTeamId}
+            onTeamChange={setActiveFantasyTeamId}
+            onViewChange={setFantasyView}
             teamLens={teamLens}
           />
 
@@ -2520,6 +2551,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               rows={visibleScoutingRows}
               scoringFormat={scoringFormat}
               status={scoutStatus}
+              teamLens={teamLens}
               weakestPosition={activeTeamReport.weakestLane.position}
             />
           ) : null}
@@ -2640,7 +2672,7 @@ function NflDataRibbon({
   );
 
   return (
-    <section className="nfl-data-ribbon" aria-label="NFL data status">
+    <section className="nfl-data-ribbon" aria-label="Pro football data status">
       <div>
         <span className={cx("nfl-live-dot", status === "ready" && "live")} />
         <strong>{dataSourceLabel(dataset.source, status)}</strong>
@@ -2769,7 +2801,7 @@ function NflSlateControls({
   week: number;
 }) {
   return (
-    <div className="nfl-slate-controls" aria-label="NFL slate controls">
+    <div className="nfl-slate-controls" aria-label="Pro football slate controls">
       <div className="nfl-phase-toggle" aria-label="Season phase">
         {(Object.keys(nflPhaseLabels) as NflSeasonPhase[]).map((option) => (
           <button
@@ -2783,7 +2815,7 @@ function NflSlateControls({
           </button>
         ))}
       </div>
-      <div className="nfl-week-strip" aria-label="NFL week">
+      <div className="nfl-week-strip" aria-label="Pro football week">
         {nflWeeksByPhase[phase].map((option) => (
           <button
             aria-pressed={week === option}
@@ -2804,7 +2836,7 @@ function NflSlateControls({
         >
           {nflSlateGroups.map((option) => (
             <option key={option} value={option}>
-              {option === "all" ? "All NFL" : option}
+              {option === "all" ? "All pro football" : option}
             </option>
           ))}
         </select>
@@ -2827,11 +2859,11 @@ function NflStandingsPanel({
   rows: NflStandingRow[];
   selection: NflSlateSelection;
 }) {
-  const title = group === "all" ? "NFL standings lens" : `${group} standings`;
+  const title = group === "all" ? "Pro football standings lens" : `${group} standings`;
   const visibleRows = rows.slice(0, 8);
 
   return (
-    <section className="nfl-standings-panel" aria-label="NFL standings">
+    <section className="nfl-standings-panel" aria-label="Pro football standings">
       <div className="nfl-standings-head">
         <div>
           <div className="nfl-section-kicker">
@@ -3030,12 +3062,12 @@ function ScoringToggle({
 function NflSeerLoading() {
   return (
     <section className="nfl-hero nfl-hero-loading" id="team-seer">
-      <div className="nfl-matchup-rail" aria-label="NFL slate loading">
+      <div className="nfl-matchup-rail" aria-label="Pro football slate loading">
         <div className="nfl-section-kicker">
           <Trophy size={17} />
           Team vs team
         </div>
-        <h1>Gridiron Seer</h1>
+        <h1>Pro Football Seer</h1>
         <p>
           The Seer is finding the actual slate before it speaks. No demo slate
           on the board.
@@ -3577,8 +3609,8 @@ function FantasyHero({
         </div>
         <h1>Fantasy Seer</h1>
         <p>
-          Weekly fantasy decisions, cleaned up. Best move first, close calls second,
-          trade ideas third, and the deep math tucked into the rooms.
+          Weekly fantasy decisions across all your teams, cleaned up. Best move first,
+          close calls second, trade ideas third, and the deep math tucked into the rooms.
         </p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
@@ -3692,6 +3724,134 @@ function FantasyHero({
           </div>
         </details>
       </article>
+    </section>
+  );
+}
+
+function FantasyTeamPortfolio({
+  leagueMap,
+  opponentTeamId,
+  onOpponentTeamChange,
+  onTeamChange,
+  onViewChange,
+  teamLens,
+}: {
+  leagueMap: FantasyLeaguePowerMap;
+  opponentTeamId: string;
+  onOpponentTeamChange: (teamId: string) => void;
+  onTeamChange: (teamId: string) => void;
+  onViewChange: (view: FantasyView) => void;
+  teamLens: FantasyTeamLens;
+}) {
+  const activeId = leagueMap.active.report.team.id;
+  const opponentOptions = leagueMap.teams.filter(
+    (team) => team.report.team.id !== activeId,
+  );
+  const selectedOpponentId =
+    opponentOptions.find((team) => team.report.team.id === opponentTeamId)?.report.team.id ??
+    opponentOptions[0]?.report.team.id ??
+    activeId;
+
+  function handleTeamSelect(teamId: string) {
+    onTeamChange(teamId);
+
+    if (teamId === opponentTeamId) {
+      const nextOpponent =
+        leagueMap.teams.find((team) => team.report.team.id !== teamId)?.report.team.id ??
+        teamId;
+
+      onOpponentTeamChange(nextOpponent);
+    }
+  }
+
+  return (
+    <section className="nfl-team-portfolio" aria-label="Fantasy team portfolio">
+      <div className="nfl-team-portfolio-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <UsersRound size={17} />
+            Team portfolio
+          </div>
+          <h2>Manage every roster from one room</h2>
+          <p>
+            The average fantasy player juggles a few teams. Pick the roster you are managing,
+            compare it against a league mate, then jump into the exact room that needs work.
+          </p>
+        </div>
+        <div className="nfl-team-portfolio-controls">
+          <label>
+            <span>Compare against</span>
+            <select
+              disabled={opponentOptions.length === 0}
+              onChange={(event) => onOpponentTeamChange(event.target.value)}
+              value={selectedOpponentId}
+            >
+              {opponentOptions.length > 0 ? (
+                opponentOptions.map((team) => (
+                  <option key={team.report.team.id} value={team.report.team.id}>
+                    {team.report.team.name}
+                  </option>
+                ))
+              ) : (
+                <option value={activeId}>Add another team</option>
+              )}
+            </select>
+          </label>
+          <div>
+            <button onClick={() => onViewChange("roster")} type="button">
+              <ClipboardList size={16} />
+              Roster room
+            </button>
+            <button className="secondary" onClick={() => onViewChange("players")} type="button">
+              <Search size={16} />
+              Deep research
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="nfl-team-portfolio-grid">
+        {leagueMap.teams.map((team) => {
+          const isActive = team.report.team.id === activeId;
+          const pressure = fantasyPrimaryPressure(team.report);
+
+          return (
+            <button
+              aria-pressed={isActive}
+              className={cx("nfl-team-portfolio-card", isActive && "active")}
+              key={team.report.team.id}
+              onClick={() => handleTeamSelect(team.report.team.id)}
+              type="button"
+            >
+              <span className="nfl-team-portfolio-mark" aria-hidden="true">
+                {fantasyPlayerInitials(team.report.team.name)}
+              </span>
+              <div className="nfl-team-portfolio-main">
+                <span>{team.report.team.manager}</span>
+                <strong>{team.report.team.name}</strong>
+                <em>
+                  {team.rank === 1 ? "Top roster" : `Rank #${team.rank}`} · {teamLensLabels[teamLens]}
+                </em>
+              </div>
+              <div className="nfl-team-portfolio-metrics" aria-label={`${team.report.team.name} snapshot`}>
+                <span>
+                  Projection
+                  <strong>{team.report.projection.toFixed(1)}</strong>
+                </span>
+                <span>
+                  Trust
+                  <strong>{fantasyTrustBand(team.report.score)}</strong>
+                </span>
+                <span>
+                  Fix next
+                  <strong>{scoutingRankLabel(team.weakestPosition.position)}</strong>
+                </span>
+              </div>
+              <p>{pressure.summary}</p>
+            </button>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -3841,6 +4001,27 @@ function fantasyActionReceiptRows(action: FantasyActionItem) {
   ];
 }
 
+function ProFootballDisclaimer() {
+  return (
+    <aside className="nfl-disclaimer" aria-label="Pro Football Seer disclaimer">
+      <ShieldCheck size={17} />
+      <span>{proFootballShortDisclaimer}</span>
+    </aside>
+  );
+}
+
+function ProFootballFooterDisclaimer() {
+  return (
+    <section className="nfl-fantasy-footer-note" aria-label="Pro Football Seer disclaimer">
+      <div>
+        <ShieldCheck size={18} />
+        <strong>Independent playground, not official league gospel.</strong>
+      </div>
+      <p>{proFootballFullDisclaimer}</p>
+    </section>
+  );
+}
+
 function FantasySeerSafetyNote() {
   return (
     <aside className="nfl-fantasy-safety-note" aria-label="Fantasy Seer note">
@@ -3905,9 +4086,15 @@ function FantasyViewTabs({
     },
     {
       id: "players",
-      label: "Player Board",
-      meta: `${totalPlayers} loaded`,
+      label: "Player Research",
+      meta: `${totalPlayers} pool`,
       icon: <Search size={17} />,
+    },
+    {
+      id: "rookies",
+      label: "Rookies",
+      meta: `${rookieCount} watch`,
+      icon: <Zap size={17} />,
     },
     {
       id: "trades",
@@ -5250,6 +5437,7 @@ function ScoutingBoard({
   rows,
   scoringFormat,
   status,
+  teamLens,
   weakestPosition,
 }: {
   analysis: NflScoutingAnalysis | null;
@@ -5266,12 +5454,19 @@ function ScoutingBoard({
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   status: ScoutStatus;
+  teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
 }) {
   const depthOption =
     scoutingDepthOptions.find((option) => option.value === depth) ??
     scoutingDepthOptions[0];
   const modeOption = scoutingBoardModeOptions.find((option) => option.value === mode);
+  const deepResearchRows = buildDeepResearchRows({
+    rosteredIds,
+    rows: allRows,
+    teamLens,
+    weakestPosition,
+  });
   const laneTotal =
     position === "ALL"
       ? scoutingRowsForMode(allRows, mode, rosteredIds, weakestPosition).length
@@ -5400,6 +5595,12 @@ function ScoutingBoard({
           )}
         </article>
       ) : null}
+      <DeepResearchPanel
+        rows={deepResearchRows}
+        scoringFormat={scoringFormat}
+        teamLens={teamLens}
+        weakestPosition={weakestPosition}
+      />
       {rows.length ? (
         <div className="nfl-scouting-list">
           {rows.map((player, index) => (
@@ -5467,6 +5668,83 @@ function ScoutingBoard({
         </article>
       )}
     </section>
+  );
+}
+
+function DeepResearchPanel({
+  rows,
+  scoringFormat,
+  teamLens,
+  weakestPosition,
+}: {
+  rows: FantasyDeepResearchRow[];
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <article className="nfl-deep-research-panel">
+      <div className="nfl-deep-research-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <Search size={17} />
+            Deep player research
+          </div>
+          <h3>Stashes, waivers, and weird-league value</h3>
+          <p>
+            Built for deep leagues and dynasty benches. The Seer looks past the obvious names and
+            asks who can actually help your weakest {scoutingRankLabel(weakestPosition)} lane.
+          </p>
+        </div>
+        <span>
+          {scoringLabels[scoringFormat]} · {teamLensLabels[teamLens]}
+        </span>
+      </div>
+      <div className="nfl-deep-research-grid">
+        {rows.map((row) => (
+          <article className="nfl-deep-research-card" key={row.player.id}>
+            <div className="nfl-player-id">
+              <span className="nfl-player-avatar compact research-avatar" aria-hidden="true">
+                <b>{fantasyPlayerInitials(row.player.name)}</b>
+                <small>{normalizeScoutingPosition(row.player.position)}</small>
+              </span>
+              <div>
+                <strong>{row.player.name}</strong>
+                <em>
+                  {normalizeScoutingPosition(row.player.position)} · {row.player.team} · {row.player.opponent}
+                </em>
+              </div>
+            </div>
+            <strong>{row.action}</strong>
+            <p>{row.reason}</p>
+            <div className="nfl-deep-research-metrics">
+              <span>
+                Projection
+                <strong>{row.player.contextProjection.projection.toFixed(1)}</strong>
+              </span>
+              <span>
+                Ceiling
+                <strong>{row.player.contextProjection.ceiling.toFixed(1)}</strong>
+              </span>
+              <span>
+                Role
+                <strong>{row.fit}</strong>
+              </span>
+            </div>
+            <em>{row.risk}</em>
+            <div className="nfl-deep-research-tags">
+              {row.tags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -8448,6 +8726,232 @@ function fantasyUltraDeepScore(
   );
 }
 
+function buildDeepResearchRows({
+  rosteredIds,
+  rows,
+  teamLens,
+  weakestPosition,
+}: {
+  rosteredIds: Set<string>;
+  rows: ScoutingRow[];
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}): FantasyDeepResearchRow[] {
+  const availableRows =
+    rosteredIds.size > 0 ? rows.filter((row) => !rosteredIds.has(row.id)) : rows;
+  const deepPool = availableRows.filter(
+    (player) =>
+      fantasyUltraDeepCandidate(player) ||
+      normalizeScoutingPosition(player.position) === weakestPosition,
+  );
+  const candidates = deepPool.length >= 4 ? deepPool : availableRows;
+
+  return [...candidates]
+    .map((player) => {
+      const available = rosteredIds.size === 0 || !rosteredIds.has(player.id);
+      const score = fantasyDeepResearchScore({
+        available,
+        player,
+        teamLens,
+        weakestPosition,
+      });
+
+      return {
+        action: fantasyDeepResearchAction({
+          available,
+          player,
+          teamLens,
+          weakestPosition,
+        }),
+        available,
+        fit: fantasyDeepResearchFit(player),
+        player,
+        reason: fantasyDeepResearchReason({
+          player,
+          teamLens,
+          weakestPosition,
+        }),
+        risk: fantasyDeepResearchRisk(player),
+        score,
+        tags: fantasyDeepResearchTags({
+          available,
+          player,
+          teamLens,
+          weakestPosition,
+        }),
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4);
+}
+
+function fantasyDeepResearchScore({
+  available,
+  player,
+  teamLens,
+  weakestPosition,
+}: {
+  available: boolean;
+  player: ScoutingRow;
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const upsideGap =
+    player.contextProjection.ceiling - player.contextProjection.projection;
+  const dynastyValue = player.dynastyValue ?? player.health;
+  const roleSecurity = player.roleSecurity ?? player.health;
+  const needBoost = position === weakestPosition ? 7 : 0;
+  const availabilityBoost = available ? 11 : -6;
+  const dynastyBoost =
+    teamLens === "dynasty" ? dynastyValue * 0.32 : dynastyValue * 0.12;
+
+  return (
+    player.contextProjection.projection * 1.05 +
+    player.contextProjection.floor * 0.38 +
+    upsideGap * 1.28 +
+    roleSecurity * 0.1 +
+    dynastyBoost +
+    needBoost +
+    availabilityBoost -
+    player.chaos * 0.04
+  );
+}
+
+function fantasyDeepResearchAction({
+  available,
+  player,
+  teamLens,
+  weakestPosition,
+}: {
+  available: boolean;
+  player: ScoutingRow;
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const dynastyValue = player.dynastyValue ?? player.health;
+  const projection = player.contextProjection.projection;
+
+  if (!available) {
+    return "Trade-watch only";
+  }
+
+  if (position === weakestPosition && projection >= 9) {
+    return `Shortlist as ${scoutingRankLabel(position)} help`;
+  }
+
+  if (teamLens === "dynasty" && dynastyValue >= 74) {
+    return "Dynasty stash watch";
+  }
+
+  if (projection >= 12) {
+    return "Waiver shortlist";
+  }
+
+  if (fantasyUltraDeepCandidate(player)) {
+    return "Deep bench stash";
+  }
+
+  return "Watchlist only";
+}
+
+function fantasyDeepResearchReason({
+  player,
+  teamLens,
+  weakestPosition,
+}: {
+  player: ScoutingRow;
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const upsideGap =
+    player.contextProjection.ceiling - player.contextProjection.projection;
+  const roleSecurity = player.roleSecurity ?? player.health;
+
+  if (position === weakestPosition) {
+    return `Your roster needs ${scoutingRankLabel(position)} help, and this profile has enough role or matchup signal to be worth a closer look.`;
+  }
+
+  if (teamLens === "dynasty" && (player.dynastyValue ?? 0) >= 74) {
+    return "The weekly number is not the whole story. Future value, role growth, and bench patience make this worth tracking.";
+  }
+
+  if (upsideGap >= 7) {
+    return "The ceiling is meaningfully higher than the median projection, which is exactly where deep benches can create value.";
+  }
+
+  if (roleSecurity >= 76) {
+    return "The role looks steady enough that this is more than a random name at the bottom of a list.";
+  }
+
+  return "This is a small-edge player: useful when injuries, bye weeks, or late news open the door.";
+}
+
+function fantasyDeepResearchRisk(player: ScoutingRow) {
+  const roleSecurity = player.roleSecurity ?? player.health;
+
+  if (player.health < 70) {
+    return "Risk: health needs a clean news check before you spend a real roster spot.";
+  }
+
+  if (roleSecurity < 66) {
+    return "Risk: role is still fragile, so this is a watchlist move before it is a lineup move.";
+  }
+
+  if (player.chaos >= 68) {
+    return "Risk: wide weekly range. Good stash, but do not force him into a tight lineup.";
+  }
+
+  return "Risk: normal deep-league uncertainty. Price matters more than hype.";
+}
+
+function fantasyDeepResearchFit(player: ScoutingRow) {
+  const roleSecurity = player.roleSecurity ?? player.health;
+
+  if (roleSecurity >= 82) {
+    return "Stable";
+  }
+
+  if ((player.dynastyValue ?? 0) >= 76) {
+    return "Future";
+  }
+
+  if (player.contextProjection.ceiling - player.contextProjection.projection >= 7) {
+    return "Upside";
+  }
+
+  if (player.contextProjection.projection >= 11) {
+    return "Playable";
+  }
+
+  return "Stash";
+}
+
+function fantasyDeepResearchTags({
+  available,
+  player,
+  teamLens,
+  weakestPosition,
+}: {
+  available: boolean;
+  player: ScoutingRow;
+  teamLens: FantasyTeamLens;
+  weakestPosition: ScoutingPlayerPosition;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const tags = [
+    available ? "Available pool" : "Rostered elsewhere",
+    position === weakestPosition ? `${scoutingRankLabel(position)} need` : null,
+    teamLens === "dynasty" ? `Dynasty ${player.dynastyValue ?? player.health}` : null,
+    player.depthTier ? formatDepthTier(player.depthTier) : null,
+    `${fantasyDeepResearchFit(player)} fit`,
+  ];
+
+  return tags.filter((tag): tag is string => Boolean(tag)).slice(0, 4);
+}
+
 function buildFantasyWeeklyCoach({
   matchupReport,
   report,
@@ -10828,7 +11332,7 @@ function buildFantasySourceLanes({
       label: "Game context",
       message: contextStatus.message,
       positions: contextPositionCounts(contextStatus.coveredTeams),
-      providerName: "NFL matchup layer",
+      providerName: "Pro football matchup layer",
       rows: { ...emptyFantasySourceRows(), context: contextStatus.coveredTeams },
       source: "schedule, venue, weather, defense",
       status: contextStatusValue,
@@ -11298,15 +11802,15 @@ function isNflDatasetSource(value: unknown): value is NflSeerDataset["source"] {
 
 function dataSourceLabel(source: NflSeerDataset["source"], status: NflDataStatus) {
   if (status === "loading") {
-    return "Syncing NFL data";
+    return "Syncing pro football data";
   }
 
   if (source === "espn-scoreboard") {
-    return "NFL slate live";
+    return "Pro football slate live";
   }
 
   if (source === "configured-feed") {
-    return "NFL feed live";
+    return "Pro football feed live";
   }
 
   return "Seeded lab mode";

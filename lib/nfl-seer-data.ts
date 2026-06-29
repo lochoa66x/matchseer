@@ -210,7 +210,7 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
     });
 
     if (!response.ok) {
-      throw new Error(`NFL schedule feed failed: ${response.status}`);
+      throw new Error(`Pro football schedule feed failed: ${response.status}`);
     }
 
     const payload = (await response.json()) as unknown;
@@ -255,7 +255,7 @@ export async function fetchNflSeerDataset(): Promise<NflSeerDataset> {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "NFL schedule feed failed";
+      error instanceof Error ? error.message : "Pro football schedule feed failed";
 
     return {
       source: "seeded-fallback",
@@ -367,7 +367,7 @@ function fromEspnScoreboard(
   return {
     source,
     season: String(season),
-    weekLabel: weekNumber ? `Week ${weekNumber}` : "NFL slate",
+    weekLabel: weekNumber ? `Week ${weekNumber}` : "Pro football slate",
     updatedAt: fetchedAt,
     matchups,
     fantasyPlayers,
@@ -400,7 +400,7 @@ function espnEventToMatchup(
   const awayTeam = espnCompetitorToTeam(away);
   const weekNumber =
     event.week?.number ?? scoreboardWeek ?? event.season?.year ?? "NFL";
-  const venueName = competition?.venue?.fullName ?? "NFL venue";
+  const venueName = competition?.venue?.fullName ?? "pro football venue";
   const weather = competition?.venue?.indoor ? "Dome" : "Weather watch";
   const homeWin = projectedHomeWin(homeTeam, awayTeam, venueName);
   const awayWin = 100 - homeWin;
@@ -498,7 +498,7 @@ async function applyNflMarketPulses(
     return {
       dataset,
       status: "fallback",
-      notes: [`No usable Polymarket NFL crowd signal yet${skipSummary(skipped)}.`],
+      notes: [`No usable Polymarket pro football crowd signal yet${skipSummary(skipped)}.`],
     };
   }
 
@@ -669,7 +669,7 @@ function espnCompetitorToTeam(competitor: EspnCompetitor): NflTeamFeed {
 function projectedHomeWin(home: NflTeamFeed, away: NflTeamFeed, venueName: string) {
   const homeStrength = teamStrength(home);
   const awayStrength = teamStrength(away);
-  const venueEdge = venueName === "NFL venue" ? 1.5 : 2.8;
+  const venueEdge = venueName === "pro football venue" ? 1.5 : 2.8;
 
   return clampProbability(Math.round(50 + (homeStrength - awayStrength) * 0.38 + venueEdge));
 }
@@ -726,7 +726,7 @@ function matchupEdges({
     weather === "Dome" ? "Clean track" : "Weather watch",
   ];
 
-  if (venueName !== "NFL venue") {
+  if (venueName !== "pro football venue") {
     edges.push("Home noise");
   }
 
@@ -835,7 +835,7 @@ async function loadFantasyPlayersAdapter({
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "NFL fantasy player feed failed.";
+      error instanceof Error ? error.message : "Pro football fantasy player feed failed.";
     notes.push(message);
 
     return {
@@ -1483,7 +1483,7 @@ function seededRating(seed: string, min: number, max: number) {
 }
 
 function normalizeCode(value: string) {
-  return value.replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "NFL";
+  return value.replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "PRO";
 }
 
 function normalizeColor(value: string | null | undefined, fallbackSeed: string) {

@@ -216,14 +216,13 @@ function toFootballDataMatch(
   const homeTeam = toSnapshotTeamFromMatch(match, "home");
   const awayTeam = toSnapshotTeamFromMatch(match, "away");
   const venueName = readVenueName(match);
-  const venue =
-    findWorldCupVenue(venueName) ??
-    findScheduledWorldCupVenueForMatch({
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-      providerId: match.id,
-      startsAt: match.utcDate,
-    });
+  const scheduledVenue = findScheduledWorldCupVenueForMatch({
+    homeTeam: match.homeTeam,
+    awayTeam: match.awayTeam,
+    providerId: match.id,
+    startsAt: match.utcDate,
+  });
+  const venue = findWorldCupVenue(venueName) ?? scheduledVenue;
 
   const score = readMatchScore(match);
 
@@ -245,7 +244,10 @@ function toFootballDataMatch(
     homeTeamIsPlaceholder: Boolean(homeTeam.isPlaceholder),
     awayTeamIsPlaceholder: Boolean(awayTeam.isPlaceholder),
     venueSlug: venue?.slug ?? null,
-    venueName: venueName ?? venue?.name ?? null,
+    venueName:
+      venueName && !isPlaceholderVenueName(venueName)
+        ? venueName
+        : venue?.name ?? null,
   };
 }
 
@@ -351,6 +353,17 @@ function readVenueName(
   }
 
   return null;
+}
+
+function isPlaceholderVenueName(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  return (
+    normalized === "tbd" ||
+    normalized.includes("venue tbd") ||
+    normalized.includes("to be determined") ||
+    normalized.includes("to be confirmed")
+  );
 }
 
 function readMatchDuration(duration: string | null | undefined): FootballDataMatch["duration"] {

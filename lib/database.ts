@@ -16,7 +16,10 @@ import type {
   FootballDataTeam,
 } from "./providers/football-data";
 import { fetchCurrentVenueWeather } from "./providers/open-meteo";
-import { worldCupVenues } from "./providers/world-cup-venues";
+import {
+  findScheduledWorldCupVenueForMatch,
+  worldCupVenues,
+} from "./providers/world-cup-venues";
 import { keyPlayerWatchlist } from "./data/key-players";
 import { publishedProjectedScoreCorrections } from "./data/score-corrections";
 import { teamRatingProfiles } from "./data/team-ratings";
@@ -33,6 +36,7 @@ import {
   DEFAULT_TEAM_DEPENDENCY,
   teamDependencyProfiles,
 } from "./data/team-dependency";
+import { sortMatchesForExplorer, toMatchDateKey } from "./match-schedule";
 import {
   buildCupCandidates,
   toCupSnapshotCandidates,
@@ -750,7 +754,10 @@ export async function listMatches(
   if (connection.sql) {
     try {
       const rows = await fetchMatchRows(connection.sql, options);
-      const matches = dedupeMatches(filterDemoRows(rows.map(toMatchSummary)));
+      const matches = sortMatchesForExplorer(
+        dedupeMatches(filterDemoRows(rows.map(toMatchSummary))),
+        toMatchDateKey(new Date()),
+      );
 
       if (matches.length > 0) {
         return {
@@ -3349,22 +3356,61 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
   const prioritizeUpcoming = Boolean(options.prioritizeUpcoming);
 
   return (await sql`
-    with target_matches as (
-      select matches.id
-      from matches
-      order by
+    with ranked_matches as (
+      select
+        matches.id,
+        matches.external_id,
         case
-          when ${prioritizeUpcoming}
-            and lower(matches.status) <> 'final'
+          when not ${prioritizeUpcoming} then 0
+          when lower(matches.status) = 'live' then 0
+          when lower(matches.status) <> 'final'
             and (
               matches.starts_at is null
               or matches.starts_at >= now() - interval '2 hours'
             )
-          then 0
-          else 1
-        end,
-        matches.starts_at nulls last,
-        matches.external_id
+            and matches.starts_at is not null
+            and (matches.starts_at at time zone 'America/Toronto')::date =
+              (now() at time zone 'America/Toronto')::date
+          then 1
+          when lower(matches.status) <> 'final'
+            and (
+              matches.starts_at is null
+              or matches.starts_at >= now() - interval '2 hours'
+            )
+          then 2
+          when lower(matches.status) = 'final'
+            and (
+              replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%round of 32%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%round of 16%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%last 32%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%last 16%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%quarter%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%semi%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') like '%third place%'
+              or replace(replace(lower(coalesce(matches.stage, matches.group_name, '')), '_', ' '), '-', ' ') = 'final'
+            )
+          then 3
+          else 4
+        end as explorer_rank,
+        case
+          when not ${prioritizeUpcoming} then matches.starts_at
+          when lower(matches.status) = 'final' then null
+          else matches.starts_at
+        end as live_or_future_at,
+        case
+          when ${prioritizeUpcoming} and lower(matches.status) = 'final' then matches.starts_at
+          else null
+        end as finished_at
+      from matches
+    ),
+    target_matches as (
+      select ranked_matches.id
+      from ranked_matches
+      order by
+        ranked_matches.explorer_rank,
+        ranked_matches.live_or_future_at nulls last,
+        ranked_matches.finished_at desc nulls last,
+        ranked_matches.external_id
       limit ${rowLimit}
     ),
     latest_weather as (
@@ -3475,6 +3521,7 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       '[]'::jsonb as players
     from matches
     join target_matches on target_matches.id = matches.id
+    join ranked_matches on ranked_matches.id = matches.id
     join teams home_team on home_team.id = matches.home_team_id
     join teams away_team on away_team.id = matches.away_team_id
     join venues on venues.id = matches.venue_id
@@ -3485,18 +3532,10 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
     left join forecast_reason_groups on forecast_reason_groups.forecast_id = latest_forecast.id
     left join interpretation_groups on interpretation_groups.forecast_id = latest_forecast.id
     order by
-      case
-        when ${prioritizeUpcoming}
-          and lower(matches.status) <> 'final'
-          and (
-            matches.starts_at is null
-            or matches.starts_at >= now() - interval '2 hours'
-          )
-        then 0
-        else 1
-      end,
-      matches.starts_at nulls last,
-      matches.external_id
+      ranked_matches.explorer_rank,
+      ranked_matches.live_or_future_at nulls last,
+      ranked_matches.finished_at desc nulls last,
+      ranked_matches.external_id
     limit ${rowLimit};
   `) as unknown as DatabaseMatchRow[];
 }
@@ -3704,6 +3743,12 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
   const forecastIsPending =
     homeIsPlaceholder || awayIsPlaceholder || row.forecast_version === null;
   const phase = normalizeMatchPhase(row.stage, row.group_name);
+  const scheduledVenue =
+    isPlaceholderVenueLabel(row.venue_name)
+      ? scheduledVenueForMatchRow(row)
+      : null;
+  const displayVenueName = scheduledVenue?.name ?? row.venue_name;
+  const displayVenueCity = scheduledVenue?.city ?? row.venue_city;
 
   return {
     id: row.id,
@@ -3712,8 +3757,8 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
     stage: row.stage,
     group: phase,
     time: toMatchTime(status, row.starts_at),
-    venue: row.venue_name,
-    city: row.venue_city,
+    venue: displayVenueName,
+    city: displayVenueCity,
     score:
       row.home_score !== null && row.away_score !== null
         ? `${row.home_score} - ${row.away_score}`
@@ -3802,6 +3847,40 @@ function toMatchSummary(row: DatabaseMatchRow): MatchSummary {
         }))
       : [],
   };
+}
+
+function scheduledVenueForMatchRow(row: DatabaseMatchRow) {
+  return findScheduledWorldCupVenueForMatch({
+    homeTeam: {
+      name: row.home_name,
+      shortName: row.home_name,
+      tla: row.home_code,
+      code: row.home_code,
+    },
+    awayTeam: {
+      name: row.away_name,
+      shortName: row.away_name,
+      tla: row.away_code,
+      code: row.away_code,
+    },
+    providerId: providerIdFromExternalId(row.id),
+    startsAt: row.starts_at ? new Date(row.starts_at).toISOString() : null,
+  });
+}
+
+function providerIdFromExternalId(externalId: string) {
+  return externalId.replace(/^fd-/, "");
+}
+
+function isPlaceholderVenueLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  return (
+    normalized === "tbd" ||
+    normalized.includes("venue tbd") ||
+    normalized.includes("to be determined") ||
+    normalized.includes("to be confirmed")
+  );
 }
 
 export function sourcePayloadWithRecoveredMarketPulse(
@@ -4879,12 +4958,17 @@ export function buildPublicSeerTrail({
     );
 
     if (bodyStatus === "active" && maxBodyStress >= 0.5) {
+      const bodyNotes = bodyCostNoteLines(bodyCost, homeName, awayName);
+
       signals.push({
         id: "body-cost",
         label: "Body cost",
         tone: maxBodyStress >= 1.6 ? "chaos" : "drag",
         text: {
-          en: "Altitude, travel, heat, or short rest leaves fingerprints on the legs.",
+          en:
+            bodyNotes.length > 0
+              ? `Body-cost check: ${sentenceList(bodyNotes)}.`
+              : "Altitude, travel, heat, or short rest leaves fingerprints on the legs.",
           es: "La altura, el viaje, el calor o el poco descanso dejan huellas en las piernas.",
           fr: "Altitude, voyage, chaleur ou repos court laissent des traces dans les jambes.",
         },
@@ -5146,6 +5230,10 @@ export function buildForecastWaterfall({
 
   if (bodySide && bodySide.magnitude >= 0.04) {
     const teamName = bodySide.side === "home" ? homeName : awayName;
+    const bodySidePayload = readPayloadRecord(
+      bodySide.side === "home" ? bodyCost?.home : bodyCost?.away,
+    );
+    const sideNotes = bodyCostSideNotes(bodySidePayload).slice(0, 2);
 
     pushStep({
       id: "body-cost",
@@ -5155,7 +5243,10 @@ export function buildForecastWaterfall({
       impact: clampNumber(bodySide.magnitude * 10, 0.25, 3),
       impactLabel: `-${formatWaterfallXg(bodySide.magnitude)} xG`,
       text: {
-        en: `${teamName}'s legs carried the louder tax from travel, heat, altitude, or rest.`,
+        en:
+          sideNotes.length > 0
+            ? `${teamName}'s body ledger is carrying ${sentenceList(sideNotes)}.`
+            : `${teamName}'s legs carried the louder tax from travel, heat, altitude, or rest.`,
         es: `Las piernas de ${teamName} cargaron el impuesto mas fuerte de viaje, calor, altura o descanso.`,
         fr: `Les jambes de ${teamName} portaient la taxe la plus forte du voyage, de la chaleur, de l'altitude ou du repos.`,
       },
@@ -5503,6 +5594,28 @@ function uniqueTrailSignals(signals: TrailSignal[]) {
     seen.add(signal.id);
     return true;
   });
+}
+
+function bodyCostNoteLines(
+  bodyCost: Record<string, unknown> | null,
+  homeName: string,
+  awayName: string,
+) {
+  const homeNotes = bodyCostSideNotes(readPayloadRecord(bodyCost?.home)).map(
+    (note) => `${homeName}: ${note}`,
+  );
+  const awayNotes = bodyCostSideNotes(readPayloadRecord(bodyCost?.away)).map(
+    (note) => `${awayName}: ${note}`,
+  );
+
+  return [...homeNotes, ...awayNotes].slice(0, 4);
+}
+
+function bodyCostSideNotes(bodySide: Record<string, unknown> | null) {
+  return readPayloadArray(bodySide?.notes)
+    .map(readPayloadString)
+    .filter((note): note is string => Boolean(note))
+    .slice(0, 4);
 }
 
 function readPayloadArray(value: unknown) {

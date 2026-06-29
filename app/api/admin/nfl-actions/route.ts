@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "NFL action failed.",
+        error: error instanceof Error ? error.message : "Pro football action failed.",
       },
       { status: 500 },
     );
@@ -84,7 +84,7 @@ function readAction(payload: unknown): NflAdminAction {
 
 function actionReceipt(action: NflAdminAction, dataset: NflSeerDataset) {
   if (action === "schedule") {
-    return `Schedule lane ${dataset.providerStatus.schedule}: ${dataset.matchups.length} NFL matchup${dataset.matchups.length === 1 ? "" : "s"} loaded for ${dataset.weekLabel}.`;
+    return `Schedule lane ${dataset.providerStatus.schedule}: ${dataset.matchups.length} pro football matchup${dataset.matchups.length === 1 ? "" : "s"} loaded for ${dataset.weekLabel}.`;
   }
 
   if (action === "polymarket") {
@@ -99,7 +99,7 @@ function actionReceipt(action: NflAdminAction, dataset: NflSeerDataset) {
         (provider) => provider.status === "live",
       ).length ?? 0;
 
-    return `NFL admin refresh complete: schedule ${dataset.providerStatus.schedule}, fantasy ${dataset.providerStatus.fantasy}, crowd ${dataset.providerStatus.market}, ${liveProviders} provider lane${liveProviders === 1 ? "" : "s"} live.`;
+    return `Pro football admin refresh complete: schedule ${dataset.providerStatus.schedule}, fantasy ${dataset.providerStatus.fantasy}, crowd ${dataset.providerStatus.market}, ${liveProviders} provider lane${liveProviders === 1 ? "" : "s"} live.`;
   }
 
   const provider = providerForAction(action, dataset.providerStatus.fantasyProviders ?? []);

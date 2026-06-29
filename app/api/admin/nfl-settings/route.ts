@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "NFL settings save failed.",
+          error instanceof Error ? error.message : "Pro football settings save failed.",
       },
       { status: 500 },
     );

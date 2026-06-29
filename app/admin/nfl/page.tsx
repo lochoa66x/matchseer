@@ -145,7 +145,7 @@ export default function NflAdminPage() {
   const [settingsStatus, setSettingsStatus] = useState<ActionStatus>("idle");
   const [activeAction, setActiveAction] = useState<NflAdminAction | null>(null);
   const [messageStatus, setMessageStatus] = useState<ActionStatus>("idle");
-  const [message, setMessage] = useState("NFL data console is ready.");
+  const [message, setMessage] = useState("Pro football data console is ready.");
 
   useEffect(() => {
     const storedSecret = window.sessionStorage.getItem("matchseer-admin-secret");
@@ -186,7 +186,7 @@ export default function NflAdminPage() {
   async function refreshDashboard() {
     setLoadStatus("loading");
     setMessageStatus("loading");
-    setMessage("Refreshing NFL source health...");
+    setMessage("Refreshing pro football source health...");
 
     try {
       const nextDataset = await fetchJson<NflSeerDataset>("/api/nfl/seer");
@@ -195,12 +195,12 @@ export default function NflAdminPage() {
       setLoadStatus("success");
       setMessageStatus("success");
       setMessage(
-        `NFL dashboard refreshed: ${nextDataset.matchups.length} matchup${nextDataset.matchups.length === 1 ? "" : "s"}, ${nextDataset.providerStatus.fantasyProviders?.length ?? 0} fantasy provider lane${nextDataset.providerStatus.fantasyProviders?.length === 1 ? "" : "s"}.`,
+        `Pro football dashboard refreshed: ${nextDataset.matchups.length} matchup${nextDataset.matchups.length === 1 ? "" : "s"}, ${nextDataset.providerStatus.fantasyProviders?.length ?? 0} fantasy provider lane${nextDataset.providerStatus.fantasyProviders?.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       setLoadStatus("error");
       setMessageStatus("error");
-      setMessage(error instanceof Error ? error.message : "NFL dashboard refresh failed.");
+      setMessage(error instanceof Error ? error.message : "Pro football dashboard refresh failed.");
     }
   }
 
@@ -229,20 +229,20 @@ export default function NflAdminPage() {
     } catch (error) {
       setSettingsStatus("error");
       setMessageStatus("error");
-      setMessage(error instanceof Error ? error.message : "NFL settings failed.");
+      setMessage(error instanceof Error ? error.message : "Pro football settings failed.");
     }
   }
 
   async function saveSettings() {
     if (!secret) {
       setMessageStatus("error");
-      setMessage("Add the admin secret before saving NFL settings.");
+      setMessage("Add the admin secret before saving pro football settings.");
       return;
     }
 
     setSettingsStatus("loading");
     setMessageStatus("loading");
-    setMessage("Saving NFL runtime settings...");
+    setMessage("Saving pro football runtime settings...");
 
     try {
       const dashboard = await fetchJson<NflAdminSettingsDashboard>(
@@ -261,19 +261,19 @@ export default function NflAdminPage() {
       setSettingsDraft(dashboard.settings);
       setSettingsStatus("success");
       setMessageStatus("success");
-      setMessage("NFL runtime settings saved. Run a lane to refresh receipts.");
+      setMessage("Pro football runtime settings saved. Run a lane to refresh receipts.");
       await refreshDashboard();
     } catch (error) {
       setSettingsStatus("error");
       setMessageStatus("error");
-      setMessage(error instanceof Error ? error.message : "NFL settings save failed.");
+      setMessage(error instanceof Error ? error.message : "Pro football settings save failed.");
     }
   }
 
   async function runNflAction(action: NflAdminAction) {
     if (!secret) {
       setMessageStatus("error");
-      setMessage("Add the admin secret before running NFL admin actions.");
+      setMessage("Add the admin secret before running pro football admin actions.");
       return;
     }
 
@@ -297,7 +297,7 @@ export default function NflAdminPage() {
       await refreshSettings(secret);
     } catch (error) {
       setMessageStatus("error");
-      setMessage(error instanceof Error ? error.message : "NFL action failed.");
+      setMessage(error instanceof Error ? error.message : "Pro football action failed.");
     } finally {
       setActiveAction(null);
     }
@@ -318,7 +318,7 @@ export default function NflAdminPage() {
       <section className="admin-topbar">
         <div>
           <p className="eyebrow">MatchSeer admin</p>
-          <h1>NFL data console</h1>
+          <h1>Pro football data console</h1>
         </div>
         <div className="admin-topbar-actions">
           <a className="admin-command" href="/admin">
@@ -328,7 +328,7 @@ export default function NflAdminPage() {
           <button
             className="icon-button"
             onClick={() => void refreshDashboard()}
-            title="Refresh NFL dashboard"
+            title="Refresh pro football dashboard"
             type="button"
           >
             {loadStatus === "loading" ? (
@@ -354,7 +354,7 @@ export default function NflAdminPage() {
             value={secret}
           />
           <p className="admin-muted">
-            Kept in this browser session. NFL lane actions use this as the bearer
+            Kept in this browser session. Pro football lane actions use this as the bearer
             token.
           </p>
           <button
@@ -430,7 +430,7 @@ export default function NflAdminPage() {
             ))
           ) : (
             <p className="admin-muted nfl-admin-empty">
-              Provider status will appear after the NFL feed responds.
+              Provider status will appear after the pro football feed responds.
             </p>
           )}
         </div>
@@ -536,7 +536,7 @@ export default function NflAdminPage() {
               ) : (
                 <Save size={18} />
               )}
-              Save NFL settings
+              Save pro football settings
             </button>
             <button
               className="admin-command"
@@ -553,7 +553,7 @@ export default function NflAdminPage() {
         <div className="admin-table-header">
           <div>
             <p className="eyebrow">Game feed</p>
-            <h2>NFL matchup rail</h2>
+            <h2>Pro football matchup rail</h2>
           </div>
           <strong>{matchupRows.length} games</strong>
         </div>
@@ -622,7 +622,7 @@ export default function NflAdminPage() {
               ) : (
                 <tr>
                   <td colSpan={6}>
-                    <strong>No NFL matchups loaded yet.</strong>
+                    <strong>No pro football matchups loaded yet.</strong>
                     <span>Refresh the dashboard or check the schedule feed.</span>
                   </td>
                 </tr>
@@ -706,7 +706,7 @@ async function fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 function actionLabel(action: NflAdminAction) {
   if (action === "all") {
-    return "all NFL lanes";
+    return "all pro football lanes";
   }
 
   if (action === "polymarket") {
