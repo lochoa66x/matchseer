@@ -2145,10 +2145,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           {isFantasyMode && <em>Fantasy Seer</em>}
         </a>
         <nav aria-label="Gridiron navigation">
-          <a className={!isFantasyMode ? "active" : undefined} href="/nfl">
+          <a className={!isFantasyMode ? "active" : undefined} href="/profootball">
             Gridiron Seer
           </a>
-          <a className={isFantasyMode ? "active" : undefined} href="/nfl/fantasy">
+          <a className={isFantasyMode ? "active" : undefined} href="/fantasyseer">
             Fantasy Seer
           </a>
           {isFantasyMode ? (

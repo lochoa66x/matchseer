@@ -1,7 +1,7 @@
-import NflLabClient from "../nfl-lab-client";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function NflFantasyPage() {
-  return <NflLabClient mode="fantasy" />;
+  redirect("/fantasyseer");
 }

@@ -9,7 +9,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: "https://matchseer.com/nfl",
+      url: "https://matchseer.com/profootball",
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: "https://matchseer.com/fantasyseer",
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.8,

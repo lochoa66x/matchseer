@@ -1,5 +1,5 @@
-import NflLabClient from "./nfl-lab-client";
+import { redirect } from "next/navigation";
 
 export default function NflPage() {
-  return <NflLabClient mode="nfl" />;
+  redirect("/profootball");
 }
