@@ -16547,3 +16547,207 @@ body {
   }
 }
 /* === End Fantasy League Rooms Pass === */
+
+/* === Pro Football Data Density Polish === */
+.nfl-standings-panel {
+  max-width: 1080px;
+  margin: 8px auto 16px;
+  padding: 10px 12px;
+  gap: 9px;
+  background:
+    linear-gradient(135deg, rgba(215, 180, 90, 0.045), transparent 38%),
+    rgba(7, 12, 13, 0.78);
+  border-color: rgba(218, 205, 168, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.nfl-standings-head {
+  align-items: center;
+  gap: 10px;
+}
+
+.nfl-standings-head .nfl-section-kicker {
+  gap: 6px;
+  font-size: 0.62rem;
+}
+
+.nfl-standings-head .nfl-section-kicker svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nfl-standings-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.02rem;
+  line-height: 1.08;
+}
+
+.nfl-standings-head p {
+  max-width: 500px;
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.nfl-standings-head strong {
+  min-height: 24px;
+  padding: 5px 8px;
+  background: rgba(157, 183, 232, 0.18);
+  border: 1px solid rgba(157, 183, 232, 0.18);
+  border-radius: 8px;
+  font-size: 0.6rem;
+}
+
+.nfl-standings-table {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-standings-row {
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  min-height: 42px;
+  padding: 7px 8px;
+  background: rgba(247, 244, 234, 0.032);
+  border-color: rgba(218, 205, 168, 0.09);
+}
+
+.nfl-standings-row > span,
+.nfl-standings-row b {
+  font-size: 0.7rem;
+}
+
+.nfl-standings-row strong {
+  font-size: 0.74rem;
+}
+
+.nfl-standings-row em {
+  font-size: 0.5rem;
+}
+
+.nfl-standings-row small,
+.nfl-standings-row i {
+  display: none;
+}
+
+.nfl-grid-section.game-only {
+  max-width: 1040px;
+  margin: 0 auto 18px;
+}
+
+.nfl-team-compare {
+  padding: 12px;
+  background:
+    linear-gradient(145deg, rgba(157, 183, 232, 0.035), transparent 42%),
+    rgba(7, 12, 13, 0.78);
+  border-color: rgba(218, 205, 168, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.nfl-team-compare > .nfl-section-kicker {
+  gap: 6px;
+  font-size: 0.68rem;
+}
+
+.nfl-team-compare > .nfl-section-kicker svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nfl-compare-card.compact {
+  margin-top: 9px;
+  padding: 10px;
+  background: rgba(247, 244, 234, 0.025);
+  border-color: rgba(218, 205, 168, 0.08);
+}
+
+.nfl-compare-card.compact .nfl-compare-head {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.nfl-compare-card.compact .nfl-team-pill > span {
+  min-width: 34px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.68rem;
+}
+
+.nfl-compare-card.compact .nfl-team-pill strong {
+  font-size: 1rem;
+  line-height: 1.05;
+}
+
+.nfl-compare-card.compact .nfl-team-pill em {
+  margin-top: 1px;
+  font-size: 0.62rem;
+}
+
+.nfl-compare-card.compact .nfl-compare-rows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-compare-card.compact .nfl-compare-row {
+  grid-template-columns: 32px minmax(0, 1fr) 32px auto;
+  min-height: 38px;
+  gap: 7px;
+  padding: 7px 8px;
+  background: rgba(247, 244, 234, 0.03);
+  border: 1px solid rgba(218, 205, 168, 0.07);
+  border-radius: 9px;
+}
+
+.nfl-compare-card.compact .nfl-compare-row > strong {
+  font-size: 0.75rem;
+}
+
+.nfl-compare-card.compact .nfl-compare-row span {
+  margin-bottom: 3px;
+  font-size: 0.62rem;
+}
+
+.nfl-compare-card.compact .nfl-compare-row i {
+  height: 6px;
+  gap: 4px;
+}
+
+.nfl-compare-card.compact .nfl-compare-row em {
+  min-width: 52px;
+  color: var(--nfl-subtle);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 950;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .nfl-standings-table,
+  .nfl-compare-card.compact .nfl-compare-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .nfl-standings-head {
+    align-items: flex-start;
+  }
+
+  .nfl-standings-table,
+  .nfl-compare-card.compact .nfl-compare-rows {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-compare-card.compact .nfl-compare-row {
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+  }
+
+  .nfl-compare-card.compact .nfl-compare-row em {
+    grid-column: 1 / -1;
+    min-width: 0;
+    text-align: left;
+  }
+}
+/* === End Pro Football Data Density Polish === */

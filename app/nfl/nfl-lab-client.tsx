@@ -2860,8 +2860,8 @@ function NflStandingsPanel({
   rows: NflStandingRow[];
   selection: NflSlateSelection;
 }) {
-  const title = group === "all" ? "Standings lens" : `${group} standings`;
-  const visibleRows = rows.slice(0, 8);
+  const title = group === "all" ? "Standings pulse" : `${group} pulse`;
+  const visibleRows = rows.slice(0, 4);
 
   return (
     <section className="nfl-standings-panel" aria-label="Pro football standings">
@@ -2869,15 +2869,15 @@ function NflStandingsPanel({
         <div>
           <div className="nfl-section-kicker">
             <Trophy size={17} />
-            Groups + standings
+            Slate table
           </div>
           <h2>{title}</h2>
           <p>
-            {nflPhaseLabels[selection.phase]} Week {selection.week} from the loaded
-            slate. Fresh weeks update this lens as the season moves.
+            {nflPhaseLabels[selection.phase]} Week {selection.week}. Top slate shapes,
+            kept compact until the full table matters.
           </p>
         </div>
-        <strong>{visibleRows.length} teams</strong>
+        <strong>{rows.length} teams tracked</strong>
       </div>
       <div className="nfl-standings-table">
         {visibleRows.map((row, index) => (
@@ -3315,38 +3315,51 @@ function MiniMeter({
 function TeamCompare({ matchup }: { matchup: NflMatchup }) {
   const palette = readableMatchupPalette(matchup.away.color, matchup.home.color);
   const rows = [
-    ["Offense", matchup.away.offense, matchup.home.offense],
-    ["Defense", matchup.away.defense, matchup.home.defense],
-    ["QB", matchup.away.qb, matchup.home.qb],
-    ["Trenches", matchup.away.trenches, matchup.home.trenches],
-    ["Coaching", matchup.away.coaching, matchup.home.coaching],
-    ["Health", matchup.away.injuries, matchup.home.injuries],
-  ] as const;
+    { label: "Offense", away: matchup.away.offense, home: matchup.home.offense },
+    { label: "Defense", away: matchup.away.defense, home: matchup.home.defense },
+    { label: "QB", away: matchup.away.qb, home: matchup.home.qb },
+    { label: "Trenches", away: matchup.away.trenches, home: matchup.home.trenches },
+    { label: "Coaching", away: matchup.away.coaching, home: matchup.home.coaching },
+    { label: "Health", away: matchup.away.injuries, home: matchup.home.injuries },
+  ]
+    .map((row) => ({
+      ...row,
+      diff: Math.abs(row.away - row.home),
+      leader:
+        row.away === row.home
+          ? "Even"
+          : row.away > row.home
+            ? matchup.away.code
+            : matchup.home.code,
+    }))
+    .sort((left, right) => right.diff - left.diff)
+    .slice(0, 4);
 
   return (
-    <div className="nfl-compare-card">
+    <div className="nfl-compare-card compact">
       <div className="nfl-compare-head">
         <TeamPill team={matchup.away} />
         <TeamPill team={matchup.home} align="right" />
       </div>
       <div className="nfl-compare-rows">
-        {rows.map(([label, away, home]) => (
-          <div className="nfl-compare-row" key={label}>
-            <strong>{away}</strong>
+        {rows.map((row) => (
+          <div className="nfl-compare-row" key={row.label}>
+            <strong>{row.away}</strong>
             <div>
-              <span>{label}</span>
+              <span>{row.label}</span>
               <i>
                 <b
                   className="away"
-                  style={{ width: `${away}%`, background: palette.away }}
+                  style={{ width: `${row.away}%`, background: palette.away }}
                 />
                 <b
                   className="home"
-                  style={{ width: `${home}%`, background: palette.home }}
+                  style={{ width: `${row.home}%`, background: palette.home }}
                 />
               </i>
             </div>
-            <strong>{home}</strong>
+            <strong>{row.home}</strong>
+            <em>{row.diff === 0 ? "Even" : `${row.leader} +${row.diff}`}</em>
           </div>
         ))}
       </div>
