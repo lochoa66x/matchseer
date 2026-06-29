@@ -104,12 +104,83 @@ type NflSlateGroup = "all" | "AFC" | "NFC" | NflDivision;
 
 type FantasyActionItem = {
   kind: FantasyActionKind;
+  state: FantasyDecisionState;
   title: string;
   playerName?: string;
   label: string;
   detail: string;
   meta: string;
+  confidence: string;
+  edge: string;
+  why: string;
+  risk: string;
+  fallback: string;
   strength: FantasyActionStrength;
+};
+
+type FantasyDecisionState =
+  | "Start now"
+  | "Conditional start"
+  | "True coin flip"
+  | "Risk alert"
+  | "Waiver/trade idea";
+
+type FantasyPressureLane = {
+  label: string;
+  priority: string;
+  positionLabel: string;
+  summary: string;
+};
+
+type FantasyCoachMove = {
+  call: string;
+  confidence: string;
+  edge: string;
+  fallback: string;
+  playerName?: string;
+  risk: string;
+  state: FantasyDecisionState;
+  tone: FantasyActionKind;
+  why: string;
+};
+
+type FantasyRosterMapItem = {
+  band: string;
+  detail: string;
+  label: string;
+  tone: "strong" | "steady" | "watch";
+};
+
+type FantasyWeeklyCoachRead = {
+  bestMove: FantasyCoachMove;
+  pressure: FantasyPressureLane;
+  receipts: string[];
+  rosterMap: FantasyRosterMapItem[];
+};
+
+type NflGameCardRead = {
+  confidenceLabel: string;
+  favorite: NflTeam;
+  favoritePath: string;
+  flipFactors: string[];
+  gameTypeLabel: string;
+  isPreseason: boolean;
+  leanLabel: string;
+  leanStrengthLabel: string;
+  metricNotes: Array<{
+    detail: string;
+    label: string;
+    value: string;
+  }>;
+  scorePathLabel: string;
+  timeline: Array<{
+    detail: string;
+    label: string;
+  }>;
+  underdog: NflTeam;
+  underdogPath: string;
+  verdictHeadline: string;
+  verdictSummary: string;
 };
 
 type NflOracleAngle = "close" | "weather" | "quarterback" | "trenches" | "clean";
@@ -730,8 +801,10 @@ const receptionPoints: Record<ScoringFormat, number> = {
   fullPpr: 1,
 };
 
-const nflIndependenceDisclaimer =
-  "Not affiliated with or endorsed by the NFL, NFLPA, or any team. For entertainment and analysis only.";
+const fantasySeerShortDisclaimer =
+  "Independent fantasy analysis. Experimental, for fun, no betting. Not affiliated with any league, team, player, or player association.";
+const fantasySeerFullDisclaimer =
+  "Fantasy Seer is an independent, experimental fantasy football analysis tool by MatchSeer. It is built for entertainment, learning, and real-world algorithm testing only. MatchSeer is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association. We do not support betting or gambling. All reads, projections, rankings, and suggestions are MatchSeer's own interpretations based on available data, assumptions, and experimental models. Some signals may be speculative, incomplete, inaccurate, or unrelated to real outcomes. Use it as a fun decision companion, not as professional advice.";
 
 const teams = {
   bal: {
@@ -808,7 +881,7 @@ const teams = {
   },
 } satisfies Record<string, NflTeam>;
 
-const seededMatchups: NflMatchup[] = [
+const seededRegularMatchups: NflMatchup[] = [
   {
     id: "bal-buf",
     week: "Week 1 lab",
@@ -863,6 +936,122 @@ const seededMatchups: NflMatchup[] = [
       "San Francisco has the deeper roster pulse, but Kansas City has the late-drive wizardry. The Seer gives KC the final possession glow.",
     edges: ["QB closeout", "Home noise", "Coaching counterpunch"],
   },
+];
+
+const seededPreseasonMatchups: NflMatchup[] = [
+  {
+    id: "pre-w1-det-phi",
+    week: "Preseason Week 1 lab",
+    slot: "QB depth check",
+    venue: "Lincoln Financial Field",
+    weather: "Warm night",
+    home: teams.phi,
+    away: teams.det,
+    homeWin: 51,
+    awayWin: 49,
+    projected: "PHI 20-19",
+    confidence: 47,
+    chaos: 73,
+    pace: 59,
+    read:
+      "Preseason Week 1 is a thin read: QB depth, rotation plans, and roster-bubble urgency matter more than full-team strength.",
+    edges: ["QB depth", "Roster bubble snaps", "Vanilla playbook"],
+  },
+  {
+    id: "pre-w1-kc-sf",
+    week: "Preseason Week 1 lab",
+    slot: "Rotation watch",
+    venue: "Levi's Stadium",
+    weather: "Clean air",
+    home: teams.sf,
+    away: teams.kc,
+    homeWin: 53,
+    awayWin: 47,
+    projected: "SF 21-18",
+    confidence: 49,
+    chaos: 70,
+    pace: 58,
+    read:
+      "San Francisco gets the lean through defensive depth and line continuity, but preseason usage can flip this quickly.",
+    edges: ["Defensive depth", "Line continuity", "Starter rest risk"],
+  },
+  {
+    id: "pre-w2-bal-buf",
+    week: "Preseason Week 2 lab",
+    slot: "Dress rehearsal pulse",
+    venue: "Highmark Stadium",
+    weather: "Wind watch",
+    home: teams.buf,
+    away: teams.bal,
+    homeWin: 52,
+    awayWin: 48,
+    projected: "BUF 22-20",
+    confidence: 52,
+    chaos: 66,
+    pace: 63,
+    read:
+      "Preseason Week 2 can show a little more starter rhythm, but the read still lives with QB depth and coaching intent.",
+    edges: ["QB room", "Home rotation", "Kick game"],
+  },
+  {
+    id: "pre-w2-det-kc",
+    week: "Preseason Week 2 lab",
+    slot: "Depth chart night",
+    venue: "Arrowhead Stadium",
+    weather: "Clear",
+    home: teams.kc,
+    away: teams.det,
+    homeWin: 50,
+    awayWin: 50,
+    projected: "KC 23-22",
+    confidence: 45,
+    chaos: 76,
+    pace: 66,
+    read:
+      "This is the chaos lane: Detroit's line depth versus Kansas City's QB-room comfort, with backups deciding the shape.",
+    edges: ["Backup QB value", "Trench depth", "Two-minute reps"],
+  },
+  {
+    id: "pre-w3-sf-bal",
+    week: "Preseason Week 3 lab",
+    slot: "Roster bubble final",
+    venue: "M&T Bank Stadium",
+    weather: "Humid watch",
+    home: teams.bal,
+    away: teams.sf,
+    homeWin: 54,
+    awayWin: 46,
+    projected: "BAL 20-17",
+    confidence: 50,
+    chaos: 74,
+    pace: 57,
+    read:
+      "Preseason Week 3 is about jobs. Baltimore gets the urgency edge, but late-game depth can hijack the score path.",
+    edges: ["Roster urgency", "Mobile QB depth", "Late-game variance"],
+  },
+  {
+    id: "pre-w3-phi-buf",
+    week: "Preseason Week 3 lab",
+    slot: "Final tune-up",
+    venue: "Highmark Stadium",
+    weather: "Weather watch",
+    home: teams.buf,
+    away: teams.phi,
+    homeWin: 51,
+    awayWin: 49,
+    projected: "BUF 19-18",
+    confidence: 48,
+    chaos: 72,
+    pace: 55,
+    read:
+      "The final preseason room is cautious: depth, special teams, and injury avoidance are louder than the full-strength roster read.",
+    edges: ["Special teams", "Depth safety", "Injury avoidance"],
+  },
+];
+
+const seededMatchups: NflMatchup[] = [
+  ...seededRegularMatchups,
+  ...seededPreseasonMatchups,
 ];
 
 const seededFantasyPlayers: FantasyPlayer[] = createSeededFantasyPlayerPool();
@@ -971,7 +1160,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     !isFantasyMode &&
     nflDataStatus === "fallback" &&
     nflDataset.source === "seeded-fallback";
-  const matchups = nflDataset.matchups.length > 0 ? nflDataset.matchups : seededMatchups;
+  const matchups = useMemo(
+    () => withSeededNflSlateRooms(nflDataset.matchups),
+    [nflDataset.matchups],
+  );
   const visibleNflMatchups = useMemo(
     () =>
       matchups.filter(
@@ -982,7 +1174,11 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     [matchups, nflPhase, nflSlateGroup, nflWeek],
   );
   const nflStandings = useMemo(
-    () => buildNflStandings(matchups, nflSlateGroup),
+    () =>
+      buildNflStandings(
+        matchups.filter((matchup) => !isPreseasonMatchup(matchup)),
+        nflSlateGroup,
+      ),
     [matchups, nflSlateGroup],
   );
   const slateLabel = `${nflPhaseLabels[nflPhase]} Week ${nflWeek}`;
@@ -1064,6 +1260,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const activeScenario = useMemo(
     () => buildScenarioImpact(activeMatchup, activeScenarioLevers),
     [activeMatchup, activeScenarioLevers],
+  );
+  const activeGameCard = useMemo(
+    () => buildNflGameCardRead(activeMatchup, activeScenario),
+    [activeMatchup, activeScenario],
   );
   const activeMatchupPalette = useMemo(
     () => readableMatchupPalette(activeMatchup.away.color, activeMatchup.home.color),
@@ -1942,14 +2142,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             src="/brand/matchseer-app-icon.svg"
           />
           <strong>MatchSeer</strong>
-          <em>{isFantasyMode ? "Fantasy Lab" : "NFL Lab"}</em>
+          {isFantasyMode && <em>Fantasy Seer</em>}
         </a>
-        <nav aria-label="NFL navigation">
+        <nav aria-label="Gridiron navigation">
           <a className={!isFantasyMode ? "active" : undefined} href="/nfl">
-            NFL Seer
+            Gridiron Seer
           </a>
           <a className={isFantasyMode ? "active" : undefined} href="/nfl/fantasy">
-            Fantasy Lab
+            Fantasy Seer
           </a>
           {isFantasyMode ? (
             <>
@@ -2008,7 +2208,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               <a href="#team-seer">Team Seer</a>
               <a href="#ask-seer">Ask the Seer</a>
               <a href="#scenario-lab">What-if Lab</a>
-              <a href="#matchup-tissue">Matchup tissue</a>
+              <a href="#matchup-dna">Matchup DNA</a>
             </>
           )}
         </nav>
@@ -2027,8 +2227,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               </div>
               <h1>Gridiron Seer</h1>
               <p>
-                Same Seer brain, new field: team pulse, game script, live pressure,
-                and chaos without pretending the future is a spreadsheet.
+                Pro football matchup reads without the betting noise. Team pulse, game
+                script, pressure, and chaos translated into one clean game card.
               </p>
               <div className="nfl-slate-meta">
                 <span>{slateLabel}</span>
@@ -2084,6 +2284,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <span>{activeMatchup.slot}</span>
                 <strong>{activeMatchup.venue}</strong>
               </div>
+              <div className="nfl-game-context-pills">
+                <span>{activeGameCard.leanStrengthLabel}</span>
+                <span>{activeGameCard.gameTypeLabel}</span>
+                <span>{activeGameCard.confidenceLabel}</span>
+                {activeGameCard.isPreseason ? <span>Preseason model</span> : null}
+              </div>
 
               <div className="nfl-game-stage" aria-label="NFL hero matchup">
                 <HeroTeamCard
@@ -2093,10 +2299,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 />
                 <div className="nfl-stage-core">
                   <span>{activeMatchup.week}</span>
-                  <strong>
-                    {activeScenario.leanCode} {activeScenario.leanProbability}%
-                  </strong>
-                  <em>{activeScenario.projected}</em>
+                  <strong>{activeGameCard.leanLabel}</strong>
+                  <em>{activeGameCard.scorePathLabel}</em>
                 </div>
                 <HeroTeamCard
                   role="Home"
@@ -2109,32 +2313,67 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <div className="nfl-seer-verdict">
                   <span>
                     <Sparkles size={16} />
-                    Seer read
+                    MatchSeer Game Card
                   </span>
-                  <strong>{activeScenario.read}</strong>
+                  <strong>{activeGameCard.verdictHeadline}</strong>
+                  <p>{activeGameCard.verdictSummary}</p>
                 </div>
                 <div className="nfl-signal-stack" aria-label="Seer signal summary">
                   <div>
-                    <span>Projected</span>
+                    <span>Projected score</span>
                     <strong>{activeScenario.projected}</strong>
-                    <em>score path</em>
+                    <em>{activeGameCard.scorePathLabel}</em>
                   </div>
                   <div>
-                    <span>Script</span>
+                    <span>Game script</span>
                     <strong>{activeScenario.pace}%</strong>
-                    <em>pace lane</em>
-                  </div>
-                  <div>
-                    <span>Confidence</span>
-                    <strong>{activeScenario.confidence}%</strong>
-                    <em>signal hold</em>
-                  </div>
-                  <div>
-                    <span>Weather</span>
-                    <strong>{activeScenario.weatherDrag}%</strong>
-                    <em>drag factor</em>
+                    <em>
+                      {activeGameCard.isPreseason
+                        ? "rotation pace, not regular rhythm"
+                        : "snap volume and catch-up pressure"}
+                    </em>
                   </div>
                 </div>
+              </div>
+
+              <div className="nfl-game-card-grid" aria-label="MatchSeer Game Card details">
+                <article className="nfl-game-path-card favorite">
+                  <span>Favorite edge</span>
+                  <strong>{activeGameCard.favorite.code} path</strong>
+                  <p>{activeGameCard.favoritePath}</p>
+                </article>
+                <article className="nfl-game-path-card">
+                  <span>Underdog path</span>
+                  <strong>{activeGameCard.underdog.code} path</strong>
+                  <p>{activeGameCard.underdogPath}</p>
+                </article>
+                <article className="nfl-game-path-card">
+                  <span>What flips it</span>
+                  <strong>Levers to watch</strong>
+                  <ul className="nfl-flip-list">
+                    {activeGameCard.flipFactors.map((factor) => (
+                      <li key={factor}>{factor}</li>
+                    ))}
+                  </ul>
+                  <div className="nfl-timeline-list">
+                    {activeGameCard.timeline.map((item) => (
+                      <p key={item.label}>
+                        <strong>{item.label}</strong>
+                        {item.detail}
+                      </p>
+                    ))}
+                  </div>
+                </article>
+              </div>
+
+              <div className="nfl-seer-receipts" aria-label="Metric label guide">
+                {activeGameCard.metricNotes.map((note) => (
+                  <div key={note.label}>
+                    <span>{note.label}</span>
+                    <strong>{note.value}</strong>
+                    <em>{note.detail}</em>
+                  </div>
+                ))}
               </div>
 
               <div className="nfl-ask-seer" id="ask-seer">
@@ -2166,6 +2405,29 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     <Sparkles size={16} />
                     Ask the Seer
                   </button>
+                </div>
+                <div className="nfl-question-chips" aria-label="Ask the Seer presets">
+                  {[
+                    `Why ${activeGameCard.favorite.name}?`,
+                    `How does ${activeGameCard.underdog.code} win?`,
+                    "What flips it?",
+                    "Explain the score path",
+                    "Explain like a friend",
+                    activeGameCard.isPreseason ? "Preseason risk?" : "",
+                  ]
+                    .filter((question): question is string => Boolean(question))
+                    .map((question) => (
+                      <button
+                        key={question}
+                        onClick={() => {
+                          setSeerQuestion(question);
+                          setSeerQuestionAsked(true);
+                        }}
+                        type="button"
+                      >
+                        {question}
+                      </button>
+                    ))}
                 </div>
                 <textarea
                   aria-label="Ask the Seer"
@@ -2214,11 +2476,11 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             selection={{ phase: nflPhase, week: nflWeek }}
           />
 
-          <section className="nfl-grid-section game-only" id="matchup-tissue">
+          <section className="nfl-grid-section game-only" id="matchup-dna">
             <div className="nfl-team-compare">
               <div className="nfl-section-kicker">
                 <Swords size={17} />
-                Matchup tissue
+                Matchup DNA
               </div>
               <TeamCompare matchup={activeMatchup} />
             </div>
@@ -2368,6 +2630,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               startLean={startLean}
             />
           ) : null}
+          <FantasySeerFooterDisclaimer />
         </>
       )}
     </main>
@@ -2566,7 +2829,11 @@ function NflSlateControls({
           ))}
         </select>
       </label>
-      <p>Current week follows the live feed; future rooms stay ready for the next sync.</p>
+      <p>
+        {phase === "preseason"
+          ? "Preseason reads weight QB depth, rotation hints, and roster-bubble chaos."
+          : "Current week follows the live feed; future rooms stay ready for the next sync."}
+      </p>
     </div>
   );
 }
@@ -3109,6 +3376,35 @@ function parseNflSlateSelection(value: string | null | undefined): NflSlateSelec
   };
 }
 
+function isPreseasonMatchup(matchup: NflMatchup) {
+  return parseNflSlateSelection(matchup.week)?.phase === "preseason";
+}
+
+function withSeededNflSlateRooms(matchups: NflMatchup[]) {
+  const baseMatchups = matchups.length > 0 ? matchups : seededMatchups;
+  const seenIds = new Set(baseMatchups.map((matchup) => matchup.id));
+  const seenSlateKeys = new Set(
+    baseMatchups
+      .map((matchup) => parseNflSlateSelection(matchup.week))
+      .filter((selection): selection is NflSlateSelection => Boolean(selection))
+      .map((selection) => `${selection.phase}:${selection.week}`),
+  );
+  const preseasonRooms = seededPreseasonMatchups.filter((matchup) => {
+    const selection = parseNflSlateSelection(matchup.week);
+
+    if (!selection) {
+      return false;
+    }
+
+    return (
+      !seenIds.has(matchup.id) &&
+      !seenSlateKeys.has(`${selection.phase}:${selection.week}`)
+    );
+  });
+
+  return [...baseMatchups, ...preseasonRooms];
+}
+
 function matchupMatchesSlate(matchup: NflMatchup, selection: NflSlateSelection) {
   const matchupSelection = parseNflSlateSelection(matchup.week);
 
@@ -3277,19 +3573,24 @@ function FantasyHero({
   const sourceLabel = fantasyImport
     ? fantasyImport.sleeper?.leagueName ?? fantasyImport.label
     : "Demo roster";
-  const priorityReceipts = report.startSitReceipts.slice(0, 3);
+  const weeklyCoach = buildFantasyWeeklyCoach({
+    matchupReport,
+    report,
+    scoringFormat,
+    teamLens,
+  });
 
   return (
     <section className="nfl-fantasy-hero" id="fantasy-seer">
       <div className="nfl-fantasy-command">
         <div className="nfl-section-kicker">
           <BrainCircuit size={17} />
-          Fantasy command room
+          Fantasy football experiments
         </div>
-        <h1>Fantasy Lab</h1>
+        <h1>Fantasy Seer</h1>
         <p>
-          Import your league, pick the scoring, and get clear start/sit advice:
-          who to trust, why it matters, and what to watch before kickoff.
+          A weird little algorithm playground for lineup calls, roster reads,
+          and trade ideas. Useful friend energy, not gospel.
         </p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
@@ -3307,7 +3608,7 @@ function FantasyHero({
             type="button"
           >
             <Sparkles size={16} />
-            {scoutStatus === "loading" ? "Reading" : "Ask AI Scout"}
+            {scoutStatus === "loading" ? "Reading" : "Ask Fantasy Seer"}
           </button>
         </div>
         <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
@@ -3317,12 +3618,65 @@ function FantasyHero({
           <span>{contextStatus.status} context</span>
           <span>{sourceLabel}</span>
         </div>
+        <FantasySeerSafetyNote />
       </div>
 
       <article className="nfl-fantasy-command-card">
         <div className="nfl-card-topline">
           <span>{teamLensLabels[teamLens]} board</span>
           <strong>{sourceLabel}</strong>
+        </div>
+
+        <div className="nfl-weekly-coach-card">
+          <div className="nfl-weekly-coach-head">
+            <div>
+              <span>
+                <ShieldCheck size={16} />
+                Your best move
+              </span>
+              <strong>{weeklyCoach.bestMove.call}</strong>
+            </div>
+            <em>{weeklyCoach.bestMove.state}</em>
+          </div>
+          <div className="nfl-coach-call-grid">
+            <div>
+              <span>Confidence</span>
+              <strong>{weeklyCoach.bestMove.confidence}</strong>
+            </div>
+            <div>
+              <span>Edge</span>
+              <strong>{weeklyCoach.bestMove.edge}</strong>
+            </div>
+            <div>
+              <span>Why</span>
+              <p>{weeklyCoach.bestMove.why}</p>
+            </div>
+            <div>
+              <span>Risk</span>
+              <p>{weeklyCoach.bestMove.risk}</p>
+            </div>
+            <div>
+              <span>Fallback</span>
+              <p>{weeklyCoach.bestMove.fallback}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="nfl-roster-map" aria-label="Roster map">
+          <div className="nfl-roster-map-head">
+            <span>Roster map</span>
+            <strong>{weeklyCoach.pressure.label}</strong>
+            <em>{weeklyCoach.pressure.summary}</em>
+          </div>
+          <div className="nfl-roster-map-grid">
+            {weeklyCoach.rosterMap.map((item) => (
+              <article className={cx("nfl-roster-map-card", item.tone)} key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.band}</strong>
+                <em>{item.detail}</em>
+              </article>
+            ))}
+          </div>
         </div>
 
         <div className="nfl-fantasy-scoreboard">
@@ -3345,42 +3699,43 @@ function FantasyHero({
           </div>
         </div>
 
-        <div className="nfl-fantasy-read-card">
+        <div className="nfl-fantasy-read-card nfl-model-receipts">
           <span>
             <Sparkles size={16} />
-            Lineup read
+            Model Lab / Receipts
           </span>
           <strong>{read.headline}</strong>
           <p>{read.summary}</p>
           <div className="nfl-ai-factor-list">
-            {read.factors.slice(0, 3).map((factor) => (
+            {[...weeklyCoach.receipts, ...read.factors].slice(0, 5).map((factor) => (
               <span key={factor}>{factor}</span>
             ))}
           </div>
           <em>{read.watchlist}</em>
-        </div>
-
-        <div className="nfl-fantasy-priority-grid">
-          {priorityReceipts.length > 0 ? (
-            priorityReceipts.map((receipt) => (
-              <article key={`${receipt.label}-${receipt.player.id}`}>
-                <span>{receipt.label}</span>
-                <strong>{receipt.player.name}</strong>
-                <em>
-                  {receipt.player.position} · Proj{" "}
-                  {receipt.seerProjection.toFixed(1)} · {formatFantasyDelta(receipt.delta)}
-                </em>
-              </article>
-            ))
-          ) : (
-            <article>
-              <span>Roster setup</span>
-              <strong>Connect a team</strong>
-              <em>Sleeper, copy paste, or screenshot unlocks start/sit receipts.</em>
-            </article>
-          )}
+          <small className="nfl-fantasy-card-disclaimer">{read.disclaimer}</small>
         </div>
       </article>
+    </section>
+  );
+}
+
+function FantasySeerSafetyNote() {
+  return (
+    <aside className="nfl-fantasy-safety-note" aria-label="Fantasy Seer note">
+      <ShieldCheck size={17} />
+      <p>{fantasySeerShortDisclaimer}</p>
+    </aside>
+  );
+}
+
+function FantasySeerFooterDisclaimer() {
+  return (
+    <section className="nfl-fantasy-footer-note" aria-label="Fantasy Seer disclaimer">
+      <div>
+        <ShieldCheck size={18} />
+        <strong>Weird little algorithm playground, not gospel.</strong>
+      </div>
+      <p>{fantasySeerFullDisclaimer}</p>
     </section>
   );
 }
@@ -3486,6 +3841,12 @@ function FantasyOverview({
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
 }) {
+  const weeklyCoach = buildFantasyWeeklyCoach({
+    matchupReport,
+    report,
+    scoringFormat,
+    teamLens,
+  });
   const closeCalls =
     report.closeCalls.length > 0
       ? report.closeCalls.map((call) => call.summary)
@@ -3522,7 +3883,7 @@ function FantasyOverview({
           </div>
           <div>
             <span>Pressure point</span>
-            <strong>{report.weakestLane.label}</strong>
+            <strong>{weeklyCoach.pressure.label}</strong>
             <em>{report.strongestLane.label} carries</em>
           </div>
         </div>
@@ -3585,7 +3946,31 @@ function FantasyActionQueue({ actions }: { actions: FantasyActionItem[] }) {
             <div>
               <span>{action.title}</span>
               <strong>{action.playerName ?? action.label}</strong>
-              <p>{action.detail}</p>
+              <p>
+                <b>{action.state}:</b> {action.detail}
+              </p>
+              <div className="nfl-action-receipts">
+                <span>
+                  <b>Confidence</b>
+                  {action.confidence}
+                </span>
+                <span>
+                  <b>Edge</b>
+                  {action.edge}
+                </span>
+                <span>
+                  <b>Why</b>
+                  {action.why}
+                </span>
+                <span>
+                  <b>Risk</b>
+                  {action.risk}
+                </span>
+                <span>
+                  <b>Fallback</b>
+                  {action.fallback}
+                </span>
+              </div>
               <em>{action.meta}</em>
             </div>
           </article>
@@ -4980,7 +5365,7 @@ function FantasyTeamLab({
               <strong>{activeReport.team.name}</strong>
               <em>{activeReport.team.identity}</em>
             </div>
-            <b>{activeReport.score}</b>
+            <b>{fantasyTrustBand(activeReport.score)}</b>
           </div>
           <div className="nfl-team-score-strip">
             <div>
@@ -5491,9 +5876,9 @@ function FantasyImportPanel({
     <div className="nfl-fantasy-import-panel">
       <div className="nfl-import-panel-head">
         <div>
-          <span>Roster + provider source</span>
+          <span>League connection</span>
           <strong>{importLabel}</strong>
-          <small>{providerLabel}</small>
+          <small>Projection source: {providerLabel}</small>
         </div>
         <em>{providerBridgeImport ? "provider bridge" : fantasyImport?.source ?? "demo"}</em>
       </div>
@@ -5502,7 +5887,7 @@ function FantasyImportPanel({
         <article className="nfl-import-card wide provider">
           <div>
             <LineChart size={18} />
-            <strong>Provider bridge</strong>
+            <strong>Projection file</strong>
           </div>
           <label className="nfl-file-drop">
             <LineChart size={16} />
@@ -5524,7 +5909,7 @@ function FantasyImportPanel({
             type="button"
           >
             <LineChart size={16} />
-            {providerBridgeStatus === "loading" ? "Loading" : "Load provider"}
+            {providerBridgeStatus === "loading" ? "Loading" : "Load projections"}
           </button>
           <p className={cx("nfl-import-status", providerBridgeStatus)}>
             {providerBridgeMessage}
@@ -5648,7 +6033,7 @@ function FantasyImportPanel({
         <article className="nfl-import-card wide">
           <div>
             <ClipboardList size={18} />
-            <strong>Copy paste</strong>
+            <strong>Paste rosters</strong>
           </div>
           <textarea
             onChange={(event) => onManualRosterTextChange(event.target.value)}
@@ -5671,7 +6056,7 @@ function FantasyImportPanel({
         <article className="nfl-import-card">
           <div>
             <FileImage size={18} />
-            <strong>Screenshot</strong>
+            <strong>Roster screenshot</strong>
           </div>
           <label className="nfl-file-drop">
             <FileImage size={16} />
@@ -7432,11 +7817,14 @@ function fantasyTradeIdeas({
 }
 
 function teamAdviceSummary(report: FantasyTeamReport, lens: FantasyTeamLens) {
+  const grade = fantasyTrustBand(report.score);
+  const pressure = fantasyPrimaryPressure(report);
+
   if (lens === "dynasty") {
-    return `${report.team.name} grades ${report.score}/100 with a ${report.dynastyCore}% dynasty core. The smart move is adding durable role growth without weakening this week's lineup.`;
+    return `${report.team.name} looks ${grade.toLowerCase()} with a ${report.dynastyCore}% dynasty core. The smart move is adding durable role growth while protecting this week's usable starters.`;
   }
 
-  return `${report.team.name} grades ${report.score}/100 this week. The cleanest path is simple: protect your floor, then keep one real ceiling play in the lineup.`;
+  return `${report.team.name} looks ${grade.toLowerCase()} this week. The cleanest path is simple: protect the floor, keep one real ceiling play, and watch ${pressure.label.toLowerCase()} before kickoff.`;
 }
 
 function fantasySwingFactors(
@@ -7736,6 +8124,277 @@ function fantasyUltraDeepScore(
   );
 }
 
+function buildFantasyWeeklyCoach({
+  matchupReport,
+  report,
+  scoringFormat,
+  teamLens,
+}: {
+  matchupReport: FantasyMatchupReport;
+  report: FantasyTeamReport;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}): FantasyWeeklyCoachRead {
+  const pressure = fantasyPrimaryPressure(report);
+  const action = buildFantasyActionQueue({ matchupReport, report })[0];
+  const bestMove: FantasyCoachMove = {
+    call: action
+      ? `${action.state}: ${action.playerName ?? action.label}`
+      : `Start from ${report.strongestLane.label}`,
+    confidence: action?.confidence ?? fantasyBandFromPercent(matchupReport.confidence),
+    edge: action?.edge ?? `${report.projection.toFixed(1)} projected points`,
+    fallback: action?.fallback ?? "Reconnect the roster before making a close call.",
+    playerName: action?.playerName,
+    risk: action?.risk ?? pressure.summary,
+    state: action?.state ?? "Start now",
+    tone: action?.kind ?? "start",
+    why: action?.why ?? report.strongestLane.summary,
+  };
+
+  return {
+    bestMove,
+    pressure,
+    receipts: [
+      `${scoringLabels[scoringFormat]} · ${teamLensLabels[teamLens]} settings are active.`,
+      `Team range: ${report.floor.toFixed(1)}-${report.ceiling.toFixed(1)} points.`,
+      `Source vs Seer: ${formatFantasyDelta(report.lineupSeerDelta)} after context.`,
+      `Pressure watch: ${pressure.summary}`,
+    ],
+    rosterMap: buildFantasyRosterMap(report),
+  };
+}
+
+function fantasyPrimaryPressure(report: FantasyTeamReport): FantasyPressureLane {
+  const weakest = report.weakestLane;
+  const closeCall = report.closeCalls[0];
+  const benchLift = report.benchAlternatives.find((alternative) => alternative.lift >= 0);
+
+  if (closeCall) {
+    return {
+      label: "Lineup coin flip",
+      positionLabel: closeCall.slotLabel,
+      priority: "Re-check before kickoff",
+      summary: closeCall.summary,
+    };
+  }
+
+  if (benchLift) {
+    return {
+      label: "Bench pressure",
+      positionLabel: benchLift.slotLabel,
+      priority: "Conditional start",
+      summary: benchLift.summary,
+    };
+  }
+
+  if (report.risk >= 64) {
+    return {
+      label: "Volatility control",
+      positionLabel: "Lineup",
+      priority: "Risk alert",
+      summary:
+        "The lineup has enough weekly variance that role news matters more than chasing upside.",
+    };
+  }
+
+  if (report.depth < 64) {
+    return {
+      label: "Bench depth",
+      positionLabel: "Bench",
+      priority: "Waiver/trade idea",
+      summary:
+        "Your starters can compete, but the bench needs one more playable role before bye weeks or injuries bite.",
+    };
+  }
+
+  if (weakest.position === "K" || weakest.position === "DST") {
+    return {
+      label: "Streamable spot",
+      positionLabel: weakest.position,
+      priority: "Do not overpay",
+      summary:
+        "Kicker and defense can be streamed. Treat this as a small weekly tune-up, not the main roster problem.",
+    };
+  }
+
+  return {
+    label: weakest.label,
+    positionLabel: scoutingRankLabel(weakest.position),
+    priority: "Waiver/trade idea",
+    summary: weakest.summary,
+  };
+}
+
+function buildFantasyRosterMap(report: FantasyTeamReport): FantasyRosterMapItem[] {
+  const positionCards: Array<{ label: string; position: FantasyPosition }> = [
+    { label: "QB", position: "QB" },
+    { label: "RB", position: "RB" },
+    { label: "WR", position: "WR" },
+    { label: "TE", position: "TE" },
+    { label: "K", position: "K" },
+    { label: "DST", position: "DST" },
+  ];
+  const cards = positionCards.map(({ label, position }) => {
+    const value = fantasyTeamPositionProjection(report, position);
+    const band = fantasyPositionBand(position, value);
+
+    return {
+      band,
+      detail:
+        position === "K" || position === "DST"
+          ? `${value.toFixed(1)} pts · stream weekly`
+          : `${value.toFixed(1)} projected pts`,
+      label,
+      tone: fantasyBandTone(band),
+    };
+  });
+  const flexPool = report.players
+    .filter((player) => ["RB", "WR", "TE"].includes(normalizeScoutingPosition(player.position)))
+    .sort(
+      (left, right) =>
+        right.contextProjection.projection - left.contextProjection.projection,
+    );
+  const flexValue = round1(average(flexPool.slice(2, 5).map((player) => player.contextProjection.projection)));
+  const flexBand =
+    report.closeCalls.length > 0
+      ? "Competitive"
+      : flexValue >= 14
+        ? "Strong"
+        : flexValue >= 9
+          ? "Competitive"
+          : "Needs work";
+  const benchBand = fantasyTrustBand(report.depth);
+
+  return [
+    ...cards.slice(0, 4),
+    {
+      band: flexBand,
+      detail:
+        report.closeCalls.length > 0
+          ? "Close call needs one news check"
+          : `${flexValue.toFixed(1)} flexible pts`,
+      label: "FLEX",
+      tone: fantasyBandTone(flexBand),
+    },
+    ...cards.slice(4),
+    {
+      band: benchBand,
+      detail: `${report.benchPlayers.length} bench players · ${report.depth}% depth`,
+      label: "Bench",
+      tone: fantasyBandTone(benchBand),
+    },
+  ];
+}
+
+function fantasyPositionBand(position: FantasyPosition, value: number) {
+  const benchmarks: Record<FantasyPosition, [number, number, number]> = {
+    QB: [24, 19, 15],
+    RB: [32, 24, 16],
+    WR: [36, 26, 18],
+    TE: [17, 12, 8],
+    K: [10, 8, 6],
+    DST: [10, 8, 6],
+  };
+  const [elite, strong, competitive] = benchmarks[position];
+
+  if (value >= elite) {
+    return "Elite";
+  }
+
+  if (value >= strong) {
+    return "Strong";
+  }
+
+  if (value >= competitive) {
+    return "Competitive";
+  }
+
+  return "Needs work";
+}
+
+function fantasyTrustBand(value: number) {
+  if (value >= 86) {
+    return "Elite";
+  }
+
+  if (value >= 74) {
+    return "Strong";
+  }
+
+  if (value >= 58) {
+    return "Competitive";
+  }
+
+  return "Needs work";
+}
+
+function fantasyBandTone(band: string): FantasyRosterMapItem["tone"] {
+  if (band === "Elite" || band === "Strong") {
+    return "strong";
+  }
+
+  if (band === "Competitive") {
+    return "steady";
+  }
+
+  return "watch";
+}
+
+function fantasyBandFromPercent(value: number) {
+  if (value >= 72) {
+    return "High";
+  }
+
+  if (value >= 62) {
+    return "Medium-high";
+  }
+
+  if (value >= 52) {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function fantasyDecisionConfidence(player: ScoutingRow, modelConfidence: number) {
+  const roleSecurity = player.roleSecurity ?? player.health;
+  const adjusted = clampMeter(
+    Math.round(modelConfidence - Math.max(0, 72 - player.health) * 0.18 - Math.max(0, 68 - roleSecurity) * 0.16 - Math.max(0, player.chaos - 62) * 0.14),
+  );
+
+  return fantasyBandFromPercent(adjusted);
+}
+
+function fantasyReceiptWhy(receipt: FantasyDecisionReceipt) {
+  return (
+    receipt.adjustmentReceipts[0]?.summary ??
+    receipt.tags[0] ??
+    "The adjusted projection and role profile both support the call."
+  );
+}
+
+function fantasyPlayerRiskText(player: ScoutingRow) {
+  const roleSecurity = player.roleSecurity ?? player.health;
+
+  if (player.health < 70) {
+    return "Health is the first check before kickoff.";
+  }
+
+  if (roleSecurity < 66) {
+    return "Role is not fully locked, so watch beat reports and inactive news.";
+  }
+
+  if (player.chaos >= 68) {
+    return "High-variance profile. Great for ceiling, shakier for floor.";
+  }
+
+  if (player.context.weather.includes("snow") || player.context.weather.includes("wind")) {
+    return "Weather can trim efficiency, especially on deeper plays and kicks.";
+  }
+
+  return "Normal weekly risk. Do not over-manage it unless news changes.";
+}
+
 function buildFantasyHeroRead({
   analysis,
   matchupReport,
@@ -7754,23 +8413,24 @@ function buildFantasyHeroRead({
   }
 
   const strongestEdge = matchupReport.strongestEdge;
+  const pressure = fantasyPrimaryPressure(report);
   const watchlist =
     report.closeCalls[0]?.summary ??
     report.benchAlternatives[0]?.summary ??
     "Watch late injury news, weather movement, and role updates before lineup lock.";
 
   return {
-    headline: `${report.team.name}: start from the steady roles, then solve ${report.weakestLane.label}.`,
+    headline: `${report.team.name}: start from the steady roles, then watch ${pressure.label}.`,
     summary: `${scoringLabels[scoringFormat]} · ${teamLensLabels[teamLens]}. ${matchupReport.recommendation}`,
     factors: [
       `Trust the strength: ${report.strongestLane.summary}`,
-      `Fix first: ${report.weakestLane.label} is the pressure point.`,
+      `Fix first: ${pressure.summary}`,
       strongestEdge
         ? `Matchup edge: ${scoutingRankLabel(strongestEdge.position)} is ${strongestEdge.summary}.`
         : "Matchup edges are still settling.",
     ],
     watchlist,
-    disclaimer: "Fantasy planning only.",
+    disclaimer: fantasySeerShortDisclaimer,
     source: "seer",
   };
 }
@@ -7782,6 +8442,7 @@ function buildFantasyActionQueue({
   matchupReport: FantasyMatchupReport;
   report: FantasyTeamReport;
 }): FantasyActionItem[] {
+  const pressure = fantasyPrimaryPressure(report);
   const topStart =
     [...report.startSitReceipts]
       .filter((receipt) => receipt.label.startsWith("Start "))
@@ -7802,22 +8463,41 @@ function buildFantasyActionQueue({
     topStart
       ? {
           detail: topStart.summary,
+          confidence: fantasyDecisionConfidence(topStart.player, matchupReport.confidence),
+          edge: `${topStart.seerProjection.toFixed(1)} pts · ${formatFantasyDelta(
+            topStart.delta,
+          )} vs source`,
+          fallback: closeCall
+            ? `If late news turns, compare again with ${closeCall.challenger.name}.`
+            : "Hold unless injury or role news changes the touch path.",
           kind: "start",
           label: topStart.label,
           meta: `${topStart.seerProjection.toFixed(1)} pts · ${formatFantasyDelta(
             topStart.delta,
           )} vs source`,
           playerName: topStart.player.name,
+          risk: fantasyPlayerRiskText(topStart.player),
+          state:
+            topStart.player.health < 74 || topStart.player.chaos > 64
+              ? "Conditional start"
+              : "Start now",
           strength: "high",
           title: "Start with confidence",
+          why: fantasyReceiptWhy(topStart),
         }
       : {
           detail: report.strongestLane.summary,
+          confidence: fantasyBandFromPercent(matchupReport.confidence),
+          edge: `${report.projection.toFixed(1)} projected team points`,
+          fallback: "If your imported roster is incomplete, connect Sleeper before locking this in.",
           kind: "start",
           label: report.strongestLane.label,
           meta: `${report.projection.toFixed(1)} projected team points`,
+          risk: "No single player is forcing a start/sit change yet.",
+          state: "Start now",
           strength: "high",
           title: "Start with confidence",
+          why: "The strongest lane is carrying the weekly floor.",
         },
   );
 
@@ -7825,20 +8505,33 @@ function buildFantasyActionQueue({
     closeCall
       ? {
           detail: closeCall.summary,
+          confidence: "Medium",
+          edge: `${Math.abs(closeCall.gap).toFixed(1)} pts apart`,
+          fallback: `If news is neutral, keep the safer role and do not chase a tiny projection gap.`,
           kind: "watch",
           label: closeCall.slotLabel,
           meta: `${Math.abs(closeCall.gap).toFixed(1)} pts apart`,
           playerName: closeCall.challenger.name,
+          risk: "This is close enough that one injury note or weather shift can flip the call.",
+          state:
+            Math.abs(closeCall.gap) < 1.2 ? "True coin flip" : "Conditional start",
           strength: "medium",
           title: "Re-check before kickoff",
+          why: `${closeCall.starter.name} and ${closeCall.challenger.name} are close in the same lineup slot.`,
         }
       : {
-          detail: `${report.weakestLane.label} is the pressure point. Re-check injury reports, weather, and role notes before lineup lock.`,
+          detail: `${pressure.label} is the pressure point. Re-check injury reports, weather, and role notes before lineup lock.`,
+          confidence: fantasyBandFromPercent(matchupReport.confidence),
+          edge: `${matchupReport.confidence}% confidence · ${matchupReport.chaos}% variance`,
+          fallback: "No news is good news here: keep the recommended lineup if roles hold.",
           kind: "watch",
           label: "News watch",
           meta: `${matchupReport.confidence}% confidence · ${matchupReport.chaos}% variance`,
+          risk: pressure.summary,
+          state: matchupReport.chaos >= 64 ? "Risk alert" : "Conditional start",
           strength: "medium",
           title: "Re-check before kickoff",
+          why: "This is the spot most likely to move after practice reports and active/inactive news.",
         },
   );
 
@@ -7846,6 +8539,15 @@ function buildFantasyActionQueue({
     benchSwap
       ? {
           detail: benchSwap.summary,
+          confidence: benchSwap.lift >= 1.5 ? "Medium-high" : "Medium",
+          edge:
+            benchSwap.lift >= 0
+              ? `+${benchSwap.lift.toFixed(1)} if news holds`
+              : `${Math.abs(benchSwap.lift).toFixed(1)} behind starter`,
+          fallback:
+            benchSwap.lift >= 0
+              ? "Only make the swap if the role news confirms the extra work."
+              : "Keep the starter unless the bench player gets a confirmed workload bump.",
           kind: "swap",
           label: benchSwap.slotLabel,
           meta:
@@ -7853,27 +8555,42 @@ function buildFantasyActionQueue({
               ? `+${benchSwap.lift.toFixed(1)} if news holds`
               : `${Math.abs(benchSwap.lift).toFixed(1)} behind starter`,
           playerName: benchSwap.player.name,
+          risk: fantasyPlayerRiskText(benchSwap.player),
+          state: benchSwap.lift >= 1.5 ? "Conditional start" : "Risk alert",
           strength: benchSwap.lift >= 0 ? "high" : "medium",
           title: "Bench if news holds",
+          why: benchSwap.summary,
         }
       : {
           detail:
             "No bench player is forcing a move right now. Hold the starters unless late role or injury news changes the room.",
+          confidence: "Medium",
+          edge: "No clear bench lift",
+          fallback: "Use waivers for depth instead of forcing a same-roster swap.",
           kind: "swap",
           label: "Bench watch",
           meta: "Hold current lineup",
+          risk: "A forced swap can lower your floor when the bench does not have a real role edge.",
+          state: "Conditional start",
           strength: "low",
           title: "Bench if news holds",
+          why: "The current starters are not being challenged by the bench yet.",
         },
   );
 
   actions.push({
     detail: marketIdea,
+    confidence: "Medium",
+    edge: pressure.priority,
+    fallback: "Do not overpay for a name. Solve the position need with the cheapest credible role.",
     kind: "market",
-    label: report.weakestLane.label,
-    meta: `Patch priority: ${report.weakestLane.label}`,
+    label: pressure.label,
+    meta: `Patch priority: ${pressure.label}`,
+    risk: "Trade ideas are only useful if they improve the weekly lineup without draining your bench.",
+    state: "Waiver/trade idea",
     strength: "low",
     title: "Trade/waiver idea",
+    why: pressure.summary,
   });
 
   return actions;
@@ -8678,6 +9395,7 @@ function buildScenarioImpact(
   matchup: NflMatchup,
   levers: ScenarioLevers,
 ): ScenarioImpact {
+  const preseason = isPreseasonMatchup(matchup);
   const baseline = defaultScenarioLevers(matchup);
   const windDelta = levers.wind - baseline.wind;
   const healthDelta = levers.healthSwing - baseline.healthSwing;
@@ -8697,7 +9415,7 @@ function buildScenarioImpact(
     healthLeanToHome + noiseLeanToHome + tempoLeanToHome - weatherLeanToAway;
   const homeWin = clampProbability(Math.round(matchup.homeWin + homeShift));
   const awayWin = 100 - homeWin;
-  const confidence = clampMeter(
+  const rawConfidence = clampMeter(
     Math.round(
       matchup.confidence +
         Math.abs(homeWin - matchup.homeWin) * 1.2 -
@@ -8705,7 +9423,8 @@ function buildScenarioImpact(
         Math.abs(tempoDelta) * 0.04,
     ),
   );
-  const chaos = clampMeter(
+  const confidence = preseason ? clampMeter(rawConfidence - 8) : rawConfidence;
+  const rawChaos = clampMeter(
     Math.round(
       matchup.chaos +
         Math.abs(windDelta) * 0.18 +
@@ -8714,6 +9433,7 @@ function buildScenarioImpact(
         Math.max(0, 64 - levers.tempo) * 0.08,
     ),
   );
+  const chaos = preseason ? clampMeter(rawChaos + 9) : rawChaos;
   const projected = projectScenarioScore(matchup, homeWin, levers, baseline);
   const leanCode = homeWin >= awayWin ? matchup.home.code : matchup.away.code;
   const leanProbability = Math.max(homeWin, awayWin);
@@ -8843,6 +9563,189 @@ function scenarioRead({
   }
 
   return `${leader.code} owns the ${leanProbability}% lane after ${driver.copy}. ${projected} is the scratchpad score.`;
+}
+
+function buildNflGameCardRead(
+  matchup: NflMatchup,
+  scenario: ScenarioImpact,
+): NflGameCardRead {
+  const isPreseason = isPreseasonMatchup(matchup);
+  const favorite = scenario.homeWin >= scenario.awayWin ? matchup.home : matchup.away;
+  const underdog = favorite.code === matchup.home.code ? matchup.away : matchup.home;
+  const probabilityGap = Math.abs(scenario.homeWin - scenario.awayWin);
+  const scoreMargin = projectedScoreMargin(scenario.projected);
+  const favoriteTrait = topNflTrait(favorite);
+  const underdogTrait = topNflTrait(underdog);
+  const favoriteDefensiveEdge =
+    favorite.defense + favorite.trenches >= underdog.defense + underdog.trenches;
+  const weatherProfile =
+    favorite.trenches * 0.46 + favorite.qb * 0.34 + favorite.offense * 0.2;
+  const underdogWeatherProfile =
+    underdog.trenches * 0.46 + underdog.qb * 0.34 + underdog.offense * 0.2;
+  const leanStrengthLabel =
+    probabilityGap >= 18
+      ? "Clear lean, still football"
+      : probabilityGap >= 10
+        ? "Useful lean"
+        : "Thin edge";
+  const confidenceLabel =
+    scenario.confidence >= 72
+      ? "High-trust read"
+      : scenario.confidence >= 58
+        ? "Stable read"
+        : "Light signal";
+  const gameTypeLabel = isPreseason
+    ? "Preseason volatility"
+    : scoreMargin <= 2
+      ? "One-score swing game"
+      : scenario.weatherDrag >= 62
+        ? "Weather squeeze"
+        : scenario.pace >= 70
+          ? "Pace-up ceiling"
+          : "Controlled script";
+  const scorePathLabel = isPreseason
+    ? `${scenario.projected} rotation read`
+    : `${scenario.projected} win read`;
+  const verdictHeadline = `${favorite.name} are the lean, not a lock.`;
+  const verdictSummary = isPreseason
+    ? `${favorite.code} has the cleaner ${scenario.leanProbability}% path, but preseason is a usage puzzle: QB depth, starter rest, special teams, and roster-bubble snaps can move the room fast.`
+    : `${favorite.code} has the cleaner ${scenario.leanProbability}% path because the strongest lanes line up first. ${underdog.code} stays live if it drags the game into hidden possessions and red-zone pressure.`;
+  const favoritePath = favoriteDefensiveEdge
+    ? isPreseason
+      ? `${favorite.code} gets there by pairing the ${favoriteTrait.label.toLowerCase()} with the sturdier depth profile. This is less about stars and more about whose second unit keeps drives alive.`
+      : `${favorite.code} gets there by pairing the ${favoriteTrait.label.toLowerCase()} with enough defensive resistance to keep the game on script. The read is not blowout energy; it is cleaner possession math.`
+    : isPreseason
+      ? `${favorite.code} gets the lean because the ${favoriteTrait.label.toLowerCase()} is the best available preseason lane. If the rotation plan holds, the score path stays manageable.`
+      : `${favorite.code} gets the lean because the ${favoriteTrait.label.toLowerCase()} is the best single lane on the card. If that holds, the projected score stays in their preferred shape.`;
+  const underdogPath =
+    isPreseason
+      ? `${underdog.code} flips it if the depth chart gets the better late-game reps: backup QB rhythm, special teams field position, and one roster-bubble touchdown.`
+      : scenario.chaos >= 64
+        ? `${underdog.code} is live if the game gets noisy: short fields, one coverage bust, or a late two-minute drive. Their ${underdogTrait.label.toLowerCase()} has to turn variance into points.`
+        : `${underdog.code} needs patience more than fireworks. Keep the score within one drive, win red-zone snaps, and force ${favorite.code} to finish long fields instead of gifting rhythm.`;
+  const flipFactors = [
+    isPreseason
+      ? "Starter usage: one surprise series can change the whole read."
+      : scenario.weatherDrag >= 56
+        ? "Weather drag: throws, kicks, and ball security matter more than usual."
+        : "Clean possessions: turnovers matter more than the weather lane.",
+    isPreseason
+      ? "QB depth: backup timing matters more than the usual starter rating."
+      : Math.abs(matchup.home.trenches - matchup.away.trenches) <= 4
+        ? "Pressure timing: the line battle is close enough to swing drives."
+        : "Trench leverage: one side can change the play menu if it shows up early.",
+    isPreseason
+      ? "Roster-bubble urgency: fourth-quarter reps can be louder than the first quarter."
+      : scenario.pace >= 70
+        ? "Tempo control: extra snaps raise both ceiling and mistake risk."
+        : "Tempo squeeze: fewer drives make each red-zone trip heavier.",
+    isPreseason
+      ? "Special teams: field position and kicking reps are real preseason levers."
+      : weatherProfile >= underdogWeatherProfile
+        ? `${favorite.code} handles the rough-stuff profile a little cleaner.`
+        : `${underdog.code} has a real path if the field conditions get awkward.`,
+  ];
+  const timeline = [
+    {
+      label: isPreseason ? "Starter hint" : "Opening script",
+      detail: isPreseason
+        ? "If starters sit early, downgrade the normal roster-strength read."
+        : `${favorite.code} wants the first clean scoring chance so the lean does not become a coin flip by halftime.`,
+    },
+    {
+      label: isPreseason ? "Depth window" : "Middle quarters",
+      detail: isPreseason
+        ? `${underdog.code} needs the second unit to win timing and field position.`
+        : `${underdog.code} needs a drive extender: third down, penalty leverage, or a field-position steal.`,
+    },
+    {
+      label: isPreseason ? "Bubble finish" : "Closing lane",
+      detail:
+        isPreseason
+          ? "The final quarter is where one job-winning drive can flip the card."
+          : probabilityGap <= 10
+            ? "If this is within one score late, the model trims confidence and chaos gets louder."
+            : `${favorite.code} can end the argument by avoiding the hidden-possession mistake.`,
+    },
+  ];
+
+  return {
+    confidenceLabel,
+    favorite,
+    favoritePath,
+    flipFactors,
+    gameTypeLabel,
+    isPreseason,
+    leanLabel: `${favorite.code} ${scenario.leanProbability}%`,
+    leanStrengthLabel,
+    metricNotes: [
+      {
+        detail:
+          favorite.qb >= underdog.qb
+            ? `${favorite.code} has the cleaner QB lane.`
+            : `${underdog.code} owns the QB lane, keeping the upset door open.`,
+        label: isPreseason ? "QB depth" : "QB edge",
+        value: `${Math.abs(favorite.qb - underdog.qb)}`,
+      },
+      {
+        detail:
+          favorite.defense + favorite.trenches >= underdog.defense + underdog.trenches
+            ? `${favorite.code} has the sturdier resistance profile.`
+            : `${underdog.code} can stress the line/defense math.`,
+        label: "Def + trenches",
+        value: `${Math.abs(
+          favorite.defense + favorite.trenches - underdog.defense - underdog.trenches,
+        )}`,
+      },
+      {
+        detail: isPreseason
+          ? "Venue matters less than rotation and special teams."
+          : `${matchup.venue} plus ${matchup.weather.toLowerCase()} shapes the style.`,
+        label: "Venue/weather",
+        value: `${scenario.weatherDrag}%`,
+      },
+      {
+        detail: isPreseason
+          ? "Preseason reads are easier to flip late."
+          : "Turnovers, tempo spikes, and weird-game pressure.",
+        label: "Chaos",
+        value: `${scenario.chaos}%`,
+      },
+      {
+        detail: isPreseason
+          ? "Confidence is capped because rotations are not fully knowable."
+          : "How much the inputs agree with each other.",
+        label: "Confidence",
+        value: `${scenario.confidence}%`,
+      },
+    ],
+    scorePathLabel,
+    timeline,
+    underdog,
+    underdogPath,
+    verdictHeadline,
+    verdictSummary,
+  };
+}
+
+function topNflTrait(team: NflTeam) {
+  return [
+    { label: "QB lane", value: team.qb },
+    { label: "offensive shape", value: team.offense },
+    { label: "defensive floor", value: team.defense },
+    { label: "line play", value: team.trenches },
+    { label: "coaching edge", value: team.coaching },
+  ].sort((left, right) => right.value - left.value)[0];
+}
+
+function projectedScoreMargin(projected: string) {
+  const scores = projected.match(/\b(\d+)-(\d+)\b/);
+
+  if (!scores) {
+    return 1;
+  }
+
+  return Math.abs(Number(scores[1]) - Number(scores[2]));
 }
 
 function buildNflSeerOracleRead({

@@ -350,6 +350,29 @@ Future NFL-ready objects:
 - WaiverCandidate
 - StartSitDecision
 
+## NFL Fantasy Utility Pipeline
+
+Product principle:
+- Fantasy Seer should feel like a smart friend helping a user win their league, not a glowing sports-trading terminal.
+- Fantasy advice should be calm, original, trustworthy, and actionable.
+- The best experience starts with the next useful move, then lets deeper users open the receipts.
+
+Pipeline order:
+- Redesign Fantasy Seer around Your Best Move as the default hero.
+- Add Close Call as the second most important module.
+- Add Trade/Waiver Idea as the third decision module.
+- Move deeper analytics into Receipts / Model Lab.
+- Add Roster Map with trust bands.
+- Add League Strength Compare: my roster versus league, position by position.
+- Add Pre-kickoff Checklist: injuries, weather, role, and opponent defense.
+- Add Sleeper refresh loop so advice feels alive.
+
+Design guardrails:
+- Use the ChatGPT fantasy redesign as product-architecture inspiration, not final art direction.
+- Keep the hierarchy: recommendation first, reason second, receipts third.
+- Avoid fantasy-casino energy, heavy glow, stale player-photo theater, and overdecorated official-looking sports branding.
+- Use player and team names as analysis references only, with MatchSeer remaining clearly independent.
+
 ## Definition Of Ready
 
 A task is ready when:

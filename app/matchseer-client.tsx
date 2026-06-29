@@ -35,6 +35,14 @@ import type {
   TeamRating as Team,
   TrailSignal,
 } from "../lib/domain";
+import {
+  isDateOnlySchedulePlaceholder,
+  isMatchOnDate,
+  rawScheduleDateKey,
+  sortMatchesForExplorer,
+  sortRoundLabelsForExplorer,
+  toMatchDateKey,
+} from "../lib/match-schedule";
 
 type MatchFilter = "next" | "today" | "upcoming" | "completed" | "all";
 type OracleStatus = "idle" | "loading" | "error";
@@ -1126,21 +1134,25 @@ export default function MatchSeerHome({
     return () => window.clearTimeout(slowTimer);
   }, [matchFeedStatus]);
 
+  const todayKey = useMemo(() => toMatchDateKey(new Date()), []);
+  const sortedMatches = useMemo(
+    () => sortMatchesForExplorer(matches, todayKey),
+    [matches, todayKey],
+  );
   const activeMatch = useMemo(
-    () => matches.find((match) => match.id === activeMatchId) ?? matches[0] ?? null,
-    [activeMatchId, matches],
+    () => sortedMatches.find((match) => match.id === activeMatchId) ?? sortedMatches[0] ?? null,
+    [activeMatchId, sortedMatches],
   );
   const t = copy[language];
   const oracleKey = activeMatch ? oracleReadKey(activeMatch, language) : "";
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
-  const todayKey = useMemo(() => toDateKey(new Date()), []);
   const groups = useMemo(
-    () => Array.from(new Set(matches.map((match) => match.group))).sort(),
-    [matches],
+    () => sortRoundLabelsForExplorer(matches, todayKey),
+    [matches, todayKey],
   );
   const visibleMatches = useMemo(() => {
-    const groupMatches = matches.filter(
+    const groupMatches = sortedMatches.filter(
       (match) => groupFilter === "all" || match.group === groupFilter,
     );
 
@@ -1168,7 +1180,7 @@ export default function MatchSeerHome({
     return groupMatches.filter(
       (match) => match.status === "Upcoming" || match.status === "Live",
     );
-  }, [groupFilter, matchFilter, matches, todayKey]);
+  }, [groupFilter, matchFilter, sortedMatches, todayKey]);
   const cupCandidates = useMemo(
     () => buildCupSeerCandidates(matches, language),
     [matches, language],
@@ -1398,7 +1410,7 @@ export default function MatchSeerHome({
           <a href="#forecast-board">{t.navForecasts}</a>
           <a href="#ask-seer">{t.navSeer}</a>
           <a href="#cup-seer">{t.navCup}</a>
-          <a href="/nfl">NFL Lab</a>
+          <a href="/nfl">Gridiron Seer</a>
         </nav>
         <div className="language-switcher" aria-label="Language selector">
           <Languages size={17} />
@@ -3087,21 +3099,8 @@ function SeerLensStrip({ t }: { t: Record<string, string> }) {
   );
 }
 
-function toDateKey(date: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "America/Toronto",
-    year: "numeric",
-  }).format(date);
-}
-
 function isTodayMatch(match: Match, todayKey: string) {
-  if (!match.startsAt) {
-    return match.status !== "Upcoming";
-  }
-
-  return toDateKey(new Date(match.startsAt)) === todayKey;
+  return isMatchOnDate(match, todayKey);
 }
 
 function formatMatchSchedule(match: Match) {
@@ -3113,6 +3112,14 @@ function formatMatchSchedule(match: Match) {
     return match.minute ?? match.time;
   }
 
+  if (isDateOnlySchedulePlaceholder(match)) {
+    const rawKey = rawScheduleDateKey(match.startsAt);
+
+    if (rawKey) {
+      return `${formatRawDateKey(rawKey)}, TBD`;
+    }
+  }
+
   return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     hour: "numeric",
@@ -3120,6 +3127,20 @@ function formatMatchSchedule(match: Match) {
     month: "short",
     timeZone: "America/Toronto",
   }).format(new Date(match.startsAt));
+}
+
+function formatRawDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return dateKey;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function TeamBadge({ team, accentColor }: { team: Team; accentColor?: string }) {
