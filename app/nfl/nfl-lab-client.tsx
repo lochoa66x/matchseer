@@ -2142,7 +2142,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             src="/brand/matchseer-app-icon.svg"
           />
           <strong>MatchSeer</strong>
-          {isFantasyMode && <em>Fantasy Seer</em>}
+          <em>{isFantasyMode ? "Fantasy Seer" : "Gridiron Seer"}</em>
         </a>
         <nav aria-label="Gridiron navigation">
           <a className={!isFantasyMode ? "active" : undefined} href="/profootball">
@@ -2158,57 +2158,36 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 href="#fantasy-seer"
                 onClick={() => setFantasyView("overview")}
               >
-                Overview
-              </a>
-              <a
-                className={fantasyView === "players" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("players")}
-              >
-                Players
+                Best Move
               </a>
               <a
                 className={fantasyView === "roster" ? "active" : undefined}
                 href="#fantasy-rooms"
                 onClick={() => setFantasyView("roster")}
               >
-                My roster
+                Roster
               </a>
               <a
                 className={fantasyView === "league" ? "active" : undefined}
                 href="#fantasy-rooms"
                 onClick={() => setFantasyView("league")}
               >
-                League Map
+                League
               </a>
               <a
                 className={fantasyView === "trades" ? "active" : undefined}
                 href="#fantasy-rooms"
                 onClick={() => setFantasyView("trades")}
               >
-                Trade Builder
-              </a>
-              <a
-                className={fantasyView === "rookies" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("rookies")}
-              >
-                Rookies
-              </a>
-              <a
-                className={fantasyView === "compare" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("compare")}
-              >
-                Compare
+                Trades
               </a>
             </>
           ) : (
             <>
-              <a href="#team-seer">Team Seer</a>
-              <a href="#ask-seer">Ask the Seer</a>
+              <a href="#team-seer">Game Card</a>
               <a href="#scenario-lab">What-if Lab</a>
               <a href="#matchup-dna">Matchup DNA</a>
+              <a href="#ask-seer">Ask the Seer</a>
             </>
           )}
         </nav>
@@ -2227,8 +2206,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               </div>
               <h1>Gridiron Seer</h1>
               <p>
-                Pro football matchup reads without the betting noise. Team pulse, game
-                script, pressure, and chaos translated into one clean game card.
+                Pro football matchup reads without official-league noise. One matchup
+                card, plain-English lean, underdog path, and the few signals that can move the read.
               </p>
               <div className="nfl-slate-meta">
                 <span>{slateLabel}</span>
@@ -2490,6 +2469,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       ) : (
         <>
           <FantasyHero
+            actions={fantasyActionQueue}
             contextStatus={fantasyContextLayer.status}
             fantasyImport={fantasyImport}
             matchupReport={fantasyMatchupReport}
@@ -3542,6 +3522,7 @@ function parseProjectedScore(projected: string) {
 }
 
 function FantasyHero({
+  actions,
   contextStatus,
   fantasyImport,
   matchupReport,
@@ -3554,6 +3535,7 @@ function FantasyHero({
   scoutStatus,
   teamLens,
 }: {
+  actions: FantasyActionItem[];
   contextStatus: FantasyContextStatus;
   fantasyImport: ImportedFantasyLeague | null;
   matchupReport: FantasyMatchupReport;
@@ -3579,6 +3561,12 @@ function FantasyHero({
     scoringFormat,
     teamLens,
   });
+  const closeAction =
+    actions.find((action) => action.kind === "watch") ?? actions[1];
+  const marketAction =
+    actions.find((action) => action.kind === "market") ??
+    actions.find((action) => action.kind === "swap") ??
+    actions[2];
 
   return (
     <section className="nfl-fantasy-hero" id="fantasy-seer">
@@ -3589,8 +3577,8 @@ function FantasyHero({
         </div>
         <h1>Fantasy Seer</h1>
         <p>
-          A weird little algorithm playground for lineup calls, roster reads,
-          and trade ideas. Useful friend energy, not gospel.
+          Weekly fantasy decisions, cleaned up. Best move first, close calls second,
+          trade ideas third, and the deep math tucked into the rooms.
         </p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
@@ -3662,6 +3650,18 @@ function FantasyHero({
           </div>
         </div>
 
+        <div className="nfl-fantasy-decision-lanes" aria-label="Key fantasy decisions">
+          <FantasyHeroDecisionCard action={closeAction} eyebrow="Close call" />
+          <FantasyHeroDecisionCard action={marketAction} eyebrow="Trade / waiver idea" />
+        </div>
+
+        <div className="nfl-prekick-note">
+          <Timer size={16} />
+          <span>
+            Re-check before kickoff: {closeAction?.risk ?? "confirm injuries, role, weather, and opponent defense before lineup lock."}
+          </span>
+        </div>
+
         <div className="nfl-roster-map" aria-label="Roster map">
           <div className="nfl-roster-map-head">
             <span>Roster map</span>
@@ -3719,6 +3719,32 @@ function FantasyHero({
   );
 }
 
+function FantasyHeroDecisionCard({
+  action,
+  eyebrow,
+}: {
+  action?: FantasyActionItem;
+  eyebrow: string;
+}) {
+  const icon = action ? fantasyActionIcon(action.kind) : <Sparkles size={18} />;
+
+  return (
+    <article className={cx("nfl-hero-decision-card", action?.kind, action?.strength)}>
+      <div className="nfl-hero-decision-icon">{icon}</div>
+      <div>
+        <span>{eyebrow}</span>
+        <strong>{action?.playerName ?? action?.label ?? "No urgent move"}</strong>
+        <p>{action?.detail ?? "The lineup has breathing room. Hold the current plan unless news changes."}</p>
+        <em>
+          {action
+            ? `${action.confidence} confidence · ${action.edge}`
+            : "No pressure flag"}
+        </em>
+      </div>
+    </article>
+  );
+}
+
 function FantasySeerSafetyNote() {
   return (
     <aside className="nfl-fantasy-safety-note" aria-label="Fantasy Seer note">
@@ -3766,8 +3792,20 @@ function FantasyViewTabs({
     {
       id: "overview",
       label: "Overview",
-      meta: `${report.projection.toFixed(1)} pts`,
+      meta: "best move",
       icon: <Sparkles size={17} />,
+    },
+    {
+      id: "roster",
+      label: "My Roster",
+      meta: `${report.players.length} starters`,
+      icon: <UsersRound size={17} />,
+    },
+    {
+      id: "league",
+      label: "League Strength",
+      meta: leagueMap.rankLabel,
+      icon: <Trophy size={17} />,
     },
     {
       id: "players",
@@ -3776,39 +3814,21 @@ function FantasyViewTabs({
       icon: <Search size={17} />,
     },
     {
-      id: "roster",
-      label: "My roster",
-      meta: `${report.players.length} starters`,
-      icon: <UsersRound size={17} />,
-    },
-    {
-      id: "league",
-      label: "League Map",
-      meta: leagueMap.rankLabel,
-      icon: <Trophy size={17} />,
-    },
-    {
       id: "trades",
-      label: "Trade Builder",
-      meta: "packages",
+      label: "Trades",
+      meta: "builder",
       icon: <LineChart size={17} />,
     },
     {
-      id: "rookies",
-      label: "Rookies",
-      meta: `${rookieCount} watch`,
-      icon: <ShieldCheck size={17} />,
-    },
-    {
       id: "compare",
-      label: "Compare",
+      label: "Receipts",
       meta: matchupReport.edgeLabel,
-      icon: <Swords size={17} />,
+      icon: <Gauge size={17} />,
     },
   ];
 
   return (
-    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy rooms">
+    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy decision rooms">
       {tabs.map((tab) => (
         <button
           aria-pressed={current === tab.id}
@@ -5254,10 +5274,10 @@ function FantasyTeamLab({
             <Trophy size={17} />
             Fantasy team lab
           </div>
-          <h2>Analyze my squad</h2>
+          <h2>My roster room</h2>
           <p>
-            Roster shape, matchup pressure, trade paths, and start/sit texture.
-            Pure fantasy fun, with the math staying quietly in the background.
+            Set the roster once, then use this room for the practical stuff: lineup
+            weak spots, matchup pressure, and clean trade paths.
           </p>
         </div>
         <div className="nfl-fantasy-team-controls">
@@ -5277,7 +5297,13 @@ function FantasyTeamLab({
         </div>
       </div>
 
-      <FantasyImportPanel
+      <details className="nfl-fantasy-setup-details">
+        <summary>
+          <span>Roster setup and sources</span>
+          <em>Sleeper, paste, screenshot, projections</em>
+        </summary>
+
+        <FantasyImportPanel
         fantasyImport={fantasyImport}
         providerBridgeFileName={providerBridgeFileName}
         providerBridgeImport={providerBridgeImport}
@@ -5312,6 +5338,7 @@ function FantasyTeamLab({
         sleeperUseAutoWeek={sleeperUseAutoWeek}
         sleeperWeek={sleeperWeek}
       />
+      </details>
 
       <div className="nfl-team-lab-selectors">
         <label>
