@@ -16227,3 +16227,259 @@ body {
   }
 }
 /* === End Fantasy Seer UX Hierarchy Pass === */
+
+/* === Pro Football Compact Standings Pass === */
+.nfl-standings-panel {
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.nfl-standings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.nfl-standings-head .nfl-section-kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+}
+
+.nfl-standings-head h2 {
+  margin-top: 4px;
+  font-size: clamp(1.08rem, 1.7vw, 1.42rem);
+  line-height: 1.08;
+}
+
+.nfl-standings-head p {
+  max-width: 560px;
+  margin-top: 4px;
+  font-size: 0.74rem;
+  line-height: 1.34;
+}
+
+.nfl-standings-head strong {
+  min-height: 28px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.nfl-standings-table {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-standings-row {
+  grid-template-columns: 34px minmax(0, 1fr) auto auto minmax(72px, 0.28fr);
+  gap: 8px;
+  min-height: 50px;
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+
+.nfl-standings-row > span,
+.nfl-standings-row b {
+  font-size: 0.78rem;
+}
+
+.nfl-standings-row strong {
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.nfl-standings-row em {
+  margin-top: 2px;
+  font-size: 0.56rem;
+  line-height: 1.15;
+}
+
+.nfl-standings-row small {
+  font-size: 0.58rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.nfl-standings-row i {
+  height: 6px;
+}
+
+@media (max-width: 980px) {
+  .nfl-standings-table {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-standings-row {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+  }
+
+  .nfl-standings-row small,
+  .nfl-standings-row i {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .nfl-standings-panel {
+    padding: 12px;
+  }
+
+  .nfl-standings-head {
+    flex-direction: column;
+  }
+}
+/* === End Pro Football Compact Standings Pass === */
+
+/* === Fantasy League Rooms Pass === */
+.nfl-team-league-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.nfl-team-league-room {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(157, 183, 232, 0.045), transparent 42%),
+    rgba(3, 7, 7, 0.36);
+  border: 1px solid rgba(218, 205, 168, 0.1);
+  border-radius: 16px;
+}
+
+.nfl-team-league-head,
+.nfl-team-portfolio-subhead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nfl-team-league-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nfl-team-league-head span,
+.nfl-team-portfolio-subhead span {
+  color: var(--nfl-live);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-team-league-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 1.02rem;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-team-league-head em,
+.nfl-team-portfolio-subhead em {
+  color: var(--nfl-subtle);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.3;
+}
+
+.nfl-team-league-head b {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  color: var(--nfl-on-accent);
+  background: var(--nfl-live);
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 980;
+}
+
+.nfl-team-portfolio-subhead {
+  padding-top: 4px;
+}
+
+.nfl-team-portfolio-grid.mine {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.nfl-team-portfolio-grid.opponents {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.nfl-team-portfolio-card {
+  cursor: default;
+}
+
+.nfl-team-portfolio-card.is-mine {
+  border-color: rgba(215, 180, 90, 0.36);
+}
+
+.nfl-team-portfolio-card.is-opponent {
+  padding: 12px;
+}
+
+.nfl-team-portfolio-card.selected-opponent {
+  border-color: rgba(157, 183, 232, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(157, 183, 232, 0.12);
+}
+
+.nfl-team-portfolio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.nfl-team-portfolio-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--nfl-on-accent);
+  background: var(--nfl-fantasy-gradient);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.nfl-team-portfolio-actions button.secondary {
+  color: var(--nfl-ink);
+  background: rgba(247, 244, 234, 0.07);
+  border: 1px solid rgba(218, 223, 208, 0.12);
+}
+
+.nfl-team-portfolio-actions button:hover {
+  filter: brightness(1.04);
+}
+
+@media (max-width: 640px) {
+  .nfl-team-league-head,
+  .nfl-team-portfolio-subhead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nfl-team-portfolio-grid.opponents {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-team-portfolio-actions button {
+    flex: 1 1 100%;
+  }
+}
+/* === End Fantasy League Rooms Pass === */

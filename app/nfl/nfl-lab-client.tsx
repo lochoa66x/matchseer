@@ -2506,6 +2506,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           />
 
           <FantasyTeamPortfolio
+            fantasyImport={fantasyImport}
             leagueMap={fantasyLeaguePowerMap}
             opponentTeamId={opponentFantasyTeam.id}
             onOpponentTeamChange={setOpponentFantasyTeamId}
@@ -2859,7 +2860,7 @@ function NflStandingsPanel({
   rows: NflStandingRow[];
   selection: NflSlateSelection;
 }) {
-  const title = group === "all" ? "Pro football standings lens" : `${group} standings`;
+  const title = group === "all" ? "Standings lens" : `${group} standings`;
   const visibleRows = rows.slice(0, 8);
 
   return (
@@ -2872,8 +2873,8 @@ function NflStandingsPanel({
           </div>
           <h2>{title}</h2>
           <p>
-            {nflPhaseLabels[selection.phase]} Week {selection.week} uses the loaded
-            slate first. As fresh weeks arrive, this becomes the weekly division lens.
+            {nflPhaseLabels[selection.phase]} Week {selection.week} from the loaded
+            slate. Fresh weeks update this lens as the season moves.
           </p>
         </div>
         <strong>{visibleRows.length} teams</strong>
@@ -3729,6 +3730,7 @@ function FantasyHero({
 }
 
 function FantasyTeamPortfolio({
+  fantasyImport,
   leagueMap,
   opponentTeamId,
   onOpponentTeamChange,
@@ -3736,6 +3738,7 @@ function FantasyTeamPortfolio({
   onViewChange,
   teamLens,
 }: {
+  fantasyImport: ImportedFantasyLeague | null;
   leagueMap: FantasyLeaguePowerMap;
   opponentTeamId: string;
   onOpponentTeamChange: (teamId: string) => void;
@@ -3744,7 +3747,18 @@ function FantasyTeamPortfolio({
   teamLens: FantasyTeamLens;
 }) {
   const activeId = leagueMap.active.report.team.id;
+  const leagueLabel =
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Demo league room";
+  const leagueMeta = [
+    fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
+    fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
+    `${leagueMap.teamCount} teams`,
+    fantasyImport?.settings?.formatLabel ?? teamLensLabels[teamLens],
+  ].filter(Boolean);
   const opponentOptions = leagueMap.teams.filter(
+    (team) => team.report.team.id !== activeId,
+  );
+  const opponentTeams = leagueMap.teams.filter(
     (team) => team.report.team.id !== activeId,
   );
   const selectedOpponentId =
@@ -3752,7 +3766,7 @@ function FantasyTeamPortfolio({
     opponentOptions[0]?.report.team.id ??
     activeId;
 
-  function handleTeamSelect(teamId: string) {
+  function handleManageTeam(teamId: string) {
     onTeamChange(teamId);
 
     if (teamId === opponentTeamId) {
@@ -3764,6 +3778,18 @@ function FantasyTeamPortfolio({
     }
   }
 
+  function handleOpponentCompare(teamId: string) {
+    onOpponentTeamChange(teamId);
+    onViewChange("compare");
+  }
+
+  function handleOpponentTrades(teamId: string) {
+    onOpponentTeamChange(teamId);
+    onViewChange("trades");
+  }
+
+  const activePressure = fantasyPrimaryPressure(leagueMap.active.report);
+
   return (
     <section className="nfl-team-portfolio" aria-label="Fantasy team portfolio">
       <div className="nfl-team-portfolio-head">
@@ -3772,10 +3798,11 @@ function FantasyTeamPortfolio({
             <UsersRound size={17} />
             Team portfolio
           </div>
-          <h2>Manage every roster from one room</h2>
+          <h2>One league room at a time</h2>
           <p>
-            The average fantasy player juggles a few teams. Pick the roster you are managing,
-            compare it against a league mate, then jump into the exact room that needs work.
+            Your roster gets lineup actions. Other teams become league reads: compare them,
+            find their weak spots, and look for trade targets without turning the whole page
+            into one massive wall of rosters.
           </p>
         </div>
         <div className="nfl-team-portfolio-controls">
@@ -3810,50 +3837,178 @@ function FantasyTeamPortfolio({
         </div>
       </div>
 
-      <div className="nfl-team-portfolio-grid">
-        {leagueMap.teams.map((team) => {
-          const isActive = team.report.team.id === activeId;
-          const pressure = fantasyPrimaryPressure(team.report);
+      <div className="nfl-team-league-stack">
+        <article className="nfl-team-league-room">
+          <div className="nfl-team-league-head">
+            <div>
+              <span>Active league</span>
+              <strong>{leagueLabel}</strong>
+              <em>{leagueMeta.join(" · ")}</em>
+            </div>
+            <b>{leagueMap.rankLabel}</b>
+          </div>
 
-          return (
-            <button
-              aria-pressed={isActive}
-              className={cx("nfl-team-portfolio-card", isActive && "active")}
-              key={team.report.team.id}
-              onClick={() => handleTeamSelect(team.report.team.id)}
-              type="button"
-            >
+          <div className="nfl-team-portfolio-subhead">
+            <span>My roster</span>
+            <em>Lineup actions live here.</em>
+          </div>
+
+          <div className="nfl-team-portfolio-grid mine">
+            <article className="nfl-team-portfolio-card active is-mine">
               <span className="nfl-team-portfolio-mark" aria-hidden="true">
-                {fantasyPlayerInitials(team.report.team.name)}
+                {fantasyPlayerInitials(leagueMap.active.report.team.name)}
               </span>
               <div className="nfl-team-portfolio-main">
-                <span>{team.report.team.manager}</span>
-                <strong>{team.report.team.name}</strong>
+                <span>{leagueMap.active.report.team.manager}</span>
+                <strong>{leagueMap.active.report.team.name}</strong>
                 <em>
-                  {team.rank === 1 ? "Top roster" : `Rank #${team.rank}`} · {teamLensLabels[teamLens]}
+                  {leagueMap.active.rank === 1 ? "Top roster" : `Rank #${leagueMap.active.rank}`} ·{" "}
+                  {teamLensLabels[teamLens]}
                 </em>
               </div>
-              <div className="nfl-team-portfolio-metrics" aria-label={`${team.report.team.name} snapshot`}>
+              <div
+                className="nfl-team-portfolio-metrics"
+                aria-label={`${leagueMap.active.report.team.name} snapshot`}
+              >
                 <span>
                   Projection
-                  <strong>{team.report.projection.toFixed(1)}</strong>
+                  <strong>{leagueMap.active.report.projection.toFixed(1)}</strong>
                 </span>
                 <span>
                   Trust
-                  <strong>{fantasyTrustBand(team.report.score)}</strong>
+                  <strong>{fantasyTrustBand(leagueMap.active.report.score)}</strong>
                 </span>
                 <span>
                   Fix next
-                  <strong>{scoutingRankLabel(team.weakestPosition.position)}</strong>
+                  <strong>{scoutingRankLabel(leagueMap.active.weakestPosition.position)}</strong>
                 </span>
               </div>
-              <p>{pressure.summary}</p>
-            </button>
-          );
-        })}
+              <p>{activePressure.summary}</p>
+              <div className="nfl-team-portfolio-actions">
+                <button onClick={() => handleManageTeam(leagueMap.active.report.team.id)} type="button">
+                  <ClipboardList size={15} />
+                  Manage roster
+                </button>
+                <button className="secondary" onClick={() => onViewChange("compare")} type="button">
+                  <Swords size={15} />
+                  Compare league
+                </button>
+              </div>
+            </article>
+          </div>
+
+          <div className="nfl-team-portfolio-subhead">
+            <span>League opponents</span>
+            <em>Compare strength, identify trade lanes, then pick the next conversation.</em>
+          </div>
+
+          <div className="nfl-team-portfolio-grid opponents">
+            {opponentTeams.map((team) => {
+              const tradeRead = fantasyPortfolioOpponentTradeRead(team, leagueMap.active);
+              const isSelectedOpponent = team.report.team.id === selectedOpponentId;
+
+              return (
+                <article
+                  className={cx(
+                    "nfl-team-portfolio-card",
+                    "is-opponent",
+                    isSelectedOpponent && "selected-opponent",
+                  )}
+                  key={team.report.team.id}
+                >
+                  <span className="nfl-team-portfolio-mark" aria-hidden="true">
+                    {fantasyPlayerInitials(team.report.team.name)}
+                  </span>
+                  <div className="nfl-team-portfolio-main">
+                    <span>{team.report.team.manager}</span>
+                    <strong>{team.report.team.name}</strong>
+                    <em>
+                      Rank #{team.rank} · {teamLensLabels[teamLens]}
+                    </em>
+                  </div>
+                  <div
+                    className="nfl-team-portfolio-metrics"
+                    aria-label={`${team.report.team.name} league snapshot`}
+                  >
+                    <span>
+                      Projection
+                      <strong>{team.report.projection.toFixed(1)}</strong>
+                    </span>
+                    <span>
+                      Weak spot
+                      <strong>{scoutingRankLabel(team.weakestPosition.position)}</strong>
+                    </span>
+                    <span>
+                      Target
+                      <strong>{tradeRead.targetLabel}</strong>
+                    </span>
+                  </div>
+                  <p>{tradeRead.summary}</p>
+                  <div className="nfl-team-portfolio-actions">
+                    <button onClick={() => handleOpponentCompare(team.report.team.id)} type="button">
+                      <Swords size={15} />
+                      Compare
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={() => handleOpponentTrades(team.report.team.id)}
+                      type="button"
+                    >
+                      <Sparkles size={15} />
+                      Trade lane
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </article>
       </div>
     </section>
   );
+}
+
+function fantasyPortfolioOpponentTradeRead(
+  team: FantasyLeaguePowerTeam,
+  active: FantasyLeaguePowerTeam,
+) {
+  const targetLane = active.weakestPosition.position;
+  const opponentPlayers = [...team.report.players, ...team.report.benchPlayers];
+  const activePlayers = [...active.report.benchPlayers, ...active.report.players];
+  const target =
+    opponentPlayers
+      .filter((player) => normalizeScoutingPosition(player.position) === targetLane)
+      .sort(
+        (left, right) =>
+          right.contextProjection.projection - left.contextProjection.projection,
+      )[0] ??
+    [...opponentPlayers].sort(
+      (left, right) =>
+        right.contextProjection.projection - left.contextProjection.projection,
+    )[0];
+  const offer =
+    activePlayers
+      .filter(
+        (player) =>
+          normalizeScoutingPosition(player.position) === team.weakestPosition.position,
+      )
+      .sort(
+        (left, right) =>
+          left.contextProjection.projection - right.contextProjection.projection,
+      )[0] ?? active.report.benchPlayers[0];
+  const targetLabel = target
+    ? `${scoutingRankLabel(normalizeScoutingPosition(target.position))} ${target.name}`
+    : `${scoutingRankLabel(targetLane)} help`;
+  const offerLabel = offer
+    ? `${offer.name} or similar ${scoutingRankLabel(normalizeScoutingPosition(offer.position))} depth`
+    : `${scoutingRankLabel(team.weakestPosition.position)} depth`;
+
+  return {
+    targetLabel,
+    summary: `${team.report.team.name} is thinner at ${scoutingRankLabel(
+      team.weakestPosition.position,
+    )}. If you chase ${target?.name ?? scoutingRankLabel(targetLane)}, start with ${offerLabel} and avoid touching your weekly core.`,
+  };
 }
 
 function FantasyPlayerArtwork({
