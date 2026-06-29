@@ -712,9 +712,9 @@ const scoutingDepthOptions: Array<{
   limit: number;
   summary: string;
 }> = [
-  { value: "top10", label: "Top 10", limit: 10, summary: "starter tier" },
-  { value: "top25", label: "Top 25", limit: 25, summary: "full roster" },
-  { value: "deep", label: "Dynasty deep", limit: 80, summary: "ultra-deep shelf" },
+  { value: "top10", label: "Shortlist", limit: 10, summary: "quick decisions" },
+  { value: "top25", label: "Extended", limit: 25, summary: "bench and waivers" },
+  { value: "deep", label: "Ultra deep", limit: 80, summary: "dynasty shelf" },
 ];
 
 const scoutingBoardModeOptions: Array<{
@@ -724,23 +724,23 @@ const scoutingBoardModeOptions: Array<{
 }> = [
   {
     value: "general",
-    label: "General",
-    summary: "Draft-style board",
+    label: "All players",
+    summary: "full universe",
   },
   {
     value: "available",
-    label: "Available",
-    summary: "Not rostered",
+    label: "Available now",
+    summary: "waiver pool",
   },
   {
     value: "topPicks",
-    label: "Top adds",
-    summary: "Waiver priority",
+    label: "Top pickups",
+    summary: "next add",
   },
   {
     value: "ultraDeep",
     label: "Ultra deep",
-    summary: "Dynasty stash",
+    summary: "stash lane",
   },
 ];
 
@@ -3615,40 +3615,12 @@ function FantasyHero({
           <strong>{sourceLabel}</strong>
         </div>
 
-        <div className="nfl-weekly-coach-card">
-          <div className="nfl-weekly-coach-head">
-            <div>
-              <span>
-                <ShieldCheck size={16} />
-                Your best move
-              </span>
-              <strong>{weeklyCoach.bestMove.call}</strong>
-            </div>
-            <em>{weeklyCoach.bestMove.state}</em>
-          </div>
-          <div className="nfl-coach-call-grid">
-            <div>
-              <span>Confidence</span>
-              <strong>{weeklyCoach.bestMove.confidence}</strong>
-            </div>
-            <div>
-              <span>Edge</span>
-              <strong>{weeklyCoach.bestMove.edge}</strong>
-            </div>
-            <div>
-              <span>Why</span>
-              <p>{weeklyCoach.bestMove.why}</p>
-            </div>
-            <div>
-              <span>Risk</span>
-              <p>{weeklyCoach.bestMove.risk}</p>
-            </div>
-            <div>
-              <span>Fallback</span>
-              <p>{weeklyCoach.bestMove.fallback}</p>
-            </div>
-          </div>
-        </div>
+        <FantasyBestMovePanel
+          matchupReport={matchupReport}
+          onViewChange={onViewChange}
+          report={report}
+          weeklyCoach={weeklyCoach}
+        />
 
         <div className="nfl-fantasy-decision-lanes" aria-label="Key fantasy decisions">
           <FantasyHeroDecisionCard action={closeAction} eyebrow="Close call" />
@@ -3699,22 +3671,103 @@ function FantasyHero({
           </div>
         </div>
 
-        <div className="nfl-fantasy-read-card nfl-model-receipts">
-          <span>
-            <Sparkles size={16} />
-            Model Lab / Receipts
-          </span>
-          <strong>{read.headline}</strong>
-          <p>{read.summary}</p>
-          <div className="nfl-ai-factor-list">
-            {[...weeklyCoach.receipts, ...read.factors].slice(0, 5).map((factor) => (
-              <span key={factor}>{factor}</span>
-            ))}
+        <details className="nfl-model-lab-drawer">
+          <summary>
+            <span>
+              <Sparkles size={16} />
+              Receipts / Model Lab
+            </span>
+            <em>Open the deeper math</em>
+          </summary>
+          <div className="nfl-fantasy-read-card nfl-model-receipts">
+            <strong>{read.headline}</strong>
+            <p>{read.summary}</p>
+            <div className="nfl-ai-factor-list">
+              {[...weeklyCoach.receipts, ...read.factors].slice(0, 5).map((factor) => (
+                <span key={factor}>{factor}</span>
+              ))}
+            </div>
+            <em>{read.watchlist}</em>
+            <small className="nfl-fantasy-card-disclaimer">{read.disclaimer}</small>
           </div>
-          <em>{read.watchlist}</em>
-          <small className="nfl-fantasy-card-disclaimer">{read.disclaimer}</small>
-        </div>
+        </details>
       </article>
+    </section>
+  );
+}
+
+function FantasyBestMovePanel({
+  matchupReport,
+  onViewChange,
+  report,
+  weeklyCoach,
+}: {
+  matchupReport: FantasyMatchupReport;
+  onViewChange: (view: FantasyView) => void;
+  report: FantasyTeamReport;
+  weeklyCoach: FantasyWeeklyCoachRead;
+}) {
+  const bestMoveRows = [
+    {
+      label: "Why",
+      value: weeklyCoach.bestMove.why,
+    },
+    {
+      label: "What could change it",
+      value: weeklyCoach.bestMove.fallback,
+    },
+    {
+      label: "Risk level",
+      value: weeklyCoach.bestMove.risk,
+    },
+  ];
+
+  return (
+    <section className="nfl-best-move-hero" aria-label="Your best fantasy move">
+      <div className="nfl-best-move-main">
+        <span>
+          <ShieldCheck size={17} />
+          Your best move
+        </span>
+        <h2>{weeklyCoach.bestMove.call}</h2>
+        <p>{weeklyCoach.bestMove.why}</p>
+        <div className="nfl-best-move-actions">
+          <button onClick={() => onViewChange("overview")} type="button">
+            See next moves
+          </button>
+          <button onClick={() => onViewChange("compare")} type="button">
+            View receipts
+          </button>
+        </div>
+      </div>
+      <div className="nfl-best-move-side">
+        <div className="nfl-best-move-status">
+          <strong>{weeklyCoach.bestMove.state}</strong>
+          <em>{weeklyCoach.bestMove.confidence} confidence</em>
+        </div>
+        <div className="nfl-best-move-scorecards">
+          <span>
+            <b>Edge</b>
+            {weeklyCoach.bestMove.edge}
+          </span>
+          <span>
+            <b>Projected</b>
+            {report.projection.toFixed(1)} pts
+          </span>
+          <span>
+            <b>Matchup</b>
+            {matchupReport.edgeLabel}
+          </span>
+        </div>
+        <div className="nfl-best-move-plain-rows">
+          {bestMoveRows.map((row) => (
+            <span key={row.label}>
+              <b>{row.label}</b>
+              {row.value}
+            </span>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -3834,8 +3887,8 @@ function FantasyViewTabs({
   }> = [
     {
       id: "overview",
-      label: "Overview",
-      meta: "best move",
+      label: "Best Move",
+      meta: "next step",
       icon: <Sparkles size={17} />,
     },
     {
@@ -3846,20 +3899,20 @@ function FantasyViewTabs({
     },
     {
       id: "league",
-      label: "League Strength",
+      label: "League Compare",
       meta: leagueMap.rankLabel,
       icon: <Trophy size={17} />,
     },
     {
       id: "players",
-      label: "Players",
+      label: "Player Board",
       meta: `${totalPlayers} loaded`,
       icon: <Search size={17} />,
     },
     {
       id: "trades",
-      label: "Trades",
-      meta: "builder",
+      label: "Trade Builder",
+      meta: "offers",
       icon: <LineChart size={17} />,
     },
     {
@@ -3995,12 +4048,12 @@ function FantasyActionQueue({ actions }: { actions: FantasyActionItem[] }) {
             <ClipboardList size={17} />
             Fantasy action queue
           </div>
-          <h2>Your next moves</h2>
+          <h2>Action queue</h2>
         </div>
-        <span>{actions.length} live reads</span>
+        <span>best 4 moves</span>
       </div>
       <div className="nfl-fantasy-action-grid">
-        {actions.map((action) => (
+        {actions.slice(0, 4).map((action) => (
           <article
             className={cx("nfl-action-card", action.kind, action.strength)}
             key={`${action.kind}-${action.title}-${action.playerName ?? action.label}`}
@@ -5238,6 +5291,10 @@ function ScoutingBoard({
           <p>
             {scoutingBoardModeCopy(mode, hasLiveOrImportedSourceRankings)}
           </p>
+          <div className="nfl-board-mode-note">
+            <strong>{scoutingBoardModeUtility(mode)}</strong>
+            <span>{scoutingBoardModeDetail(mode)}</span>
+          </div>
         </div>
         <div className="nfl-scouting-actions">
           <span className="nfl-scouting-summary">
@@ -5353,11 +5410,14 @@ function ScoutingBoard({
               </div>
               <div className="nfl-scout-player">
                 <div className="nfl-player-id">
-                  <span style={{ background: player.color }}>{player.team}</span>
+                  <span className="nfl-player-avatar compact" style={{ background: player.color }} aria-hidden="true">
+                    <b>{fantasyPlayerInitials(player.name)}</b>
+                    <small>{normalizeScoutingPosition(player.position)}</small>
+                  </span>
                   <div>
                     <strong>{player.name}</strong>
                     <em>
-                      {player.position} · {player.opponent}
+                      {player.position} · {player.team} · {player.opponent}
                     </em>
                   </div>
                 </div>
@@ -8952,7 +9012,7 @@ function scoutingBoardModeCopy(
   hasLiveOrImportedSourceRankings: boolean,
 ) {
   if (mode === "available") {
-    return "In-season waiver view: filters out rostered players when a Sleeper, copy-paste, or screenshot league is connected.";
+    return "In-season waiver view: unrostered options first when a Sleeper, paste, or screenshot league is connected.";
   }
 
   if (mode === "topPicks") {
@@ -8964,8 +9024,40 @@ function scoutingBoardModeCopy(
   }
 
   return hasLiveOrImportedSourceRankings
-    ? "Draft-style full board with provider ranking, projection, role pulse, matchup, health, and variance."
-    : "Draft-style full board. Baseline rank is a placeholder until a live or imported ranking feed is connected.";
+    ? "Full player universe. Useful before drafts, for trade context, and for seeing where source rank disagrees with the Seer."
+    : "Full player universe. In season, Available and Top pickups are usually the higher-utility rooms.";
+}
+
+function scoutingBoardModeUtility(mode: ScoutingBoardMode) {
+  if (mode === "available") {
+    return "Use this for waivers after rosters are loaded.";
+  }
+
+  if (mode === "topPicks") {
+    return "Use this when you want the next add, not a draft board.";
+  }
+
+  if (mode === "ultraDeep") {
+    return "Use this for dynasty benches, stashes, and weird deep leagues.";
+  }
+
+  return "Use this mostly for draft prep or player universe context.";
+}
+
+function scoutingBoardModeDetail(mode: ScoutingBoardMode) {
+  if (mode === "available") {
+    return "It removes rostered players and keeps the best playable pool in front.";
+  }
+
+  if (mode === "topPicks") {
+    return "It tilts toward your weakest lane, floor, role security, and matchup.";
+  }
+
+  if (mode === "ultraDeep") {
+    return "It favors young upside, hidden roles, and players who can matter later.";
+  }
+
+  return "Once your league is live, jump to Available or Top pickups for weekly action.";
 }
 
 function scoutingRankLabel(position: ScoutingPosition) {
