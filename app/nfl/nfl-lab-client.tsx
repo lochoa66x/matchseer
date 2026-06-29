@@ -3727,22 +3727,65 @@ function FantasyHeroDecisionCard({
   eyebrow: string;
 }) {
   const icon = action ? fantasyActionIcon(action.kind) : <Sparkles size={18} />;
+  const rows = action
+    ? fantasyActionReceiptRows(action).filter((row) => row.label !== "What I would do")
+    : [];
 
   return (
     <article className={cx("nfl-hero-decision-card", action?.kind, action?.strength)}>
       <div className="nfl-hero-decision-icon">{icon}</div>
       <div>
         <span>{eyebrow}</span>
-        <strong>{action?.playerName ?? action?.label ?? "No urgent move"}</strong>
+        <strong>
+          {action
+            ? `${action.state}: ${action.playerName ?? action.label}`
+            : "No urgent move"}
+        </strong>
         <p>{action?.detail ?? "The lineup has breathing room. Hold the current plan unless news changes."}</p>
+        {action ? (
+          <div className="nfl-mini-reason-grid">
+            {rows.map((row) => (
+              <span key={row.label}>
+                <b>{row.label}</b>
+                {row.value}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <em>
           {action
-            ? `${action.confidence} confidence · ${action.edge}`
+            ? `${action.confidence} confidence · ${action.meta}`
             : "No pressure flag"}
         </em>
       </div>
     </article>
   );
+}
+
+
+function fantasyActionReceiptRows(action: FantasyActionItem) {
+  return [
+    {
+      label: "What I would do",
+      value: `${action.state}: ${action.detail}`,
+    },
+    {
+      label: "Why",
+      value: action.why,
+    },
+    {
+      label: "What could change it",
+      value: action.fallback,
+    },
+    {
+      label: "Risk level",
+      value: action.risk,
+    },
+    {
+      label: "Source vs Seer",
+      value: action.edge,
+    },
+  ];
 }
 
 function FantasySeerSafetyNote() {
@@ -3970,28 +4013,14 @@ function FantasyActionQueue({ actions }: { actions: FantasyActionItem[] }) {
                 <b>{action.state}:</b> {action.detail}
               </p>
               <div className="nfl-action-receipts">
-                <span>
-                  <b>Confidence</b>
-                  {action.confidence}
-                </span>
-                <span>
-                  <b>Edge</b>
-                  {action.edge}
-                </span>
-                <span>
-                  <b>Why</b>
-                  {action.why}
-                </span>
-                <span>
-                  <b>Risk</b>
-                  {action.risk}
-                </span>
-                <span>
-                  <b>Fallback</b>
-                  {action.fallback}
-                </span>
+                {fantasyActionReceiptRows(action).map((row) => (
+                  <span key={row.label}>
+                    <b>{row.label}</b>
+                    {row.value}
+                  </span>
+                ))}
               </div>
-              <em>{action.meta}</em>
+              <em>{action.confidence} confidence · {action.meta}</em>
             </div>
           </article>
         ))}
@@ -4537,10 +4566,66 @@ function TradePlayerInline({ player }: { player: FantasyTradePlayer }) {
       <strong>{player.name}</strong>
       <span>
         {scoutingRankLabel(normalizeScoutingPosition(player.position))} ·{" "}
-        {player.nflTeam ?? "NFL"} · {player.projection.toFixed(1)} proj
+        {player.nflTeam ?? "Pro football"} · {player.projection.toFixed(1)} proj
       </span>
     </div>
   );
+}
+
+function fantasyPlayerReceiptRoomRows({
+  leftPlayer,
+  rightPlayer,
+  scoringFormat,
+  startLean,
+}: {
+  leftPlayer: FantasyPlayer;
+  rightPlayer: FantasyPlayer;
+  scoringFormat: ScoringFormat;
+  startLean: ReturnType<typeof compareFantasyPlayers>;
+}) {
+  const leftProjection = fantasyProjectionForDisplay(leftPlayer, scoringFormat);
+  const rightProjection = fantasyProjectionForDisplay(rightPlayer, scoringFormat);
+  const winner = startLean.id === leftPlayer.id ? leftPlayer : rightPlayer;
+  const winnerProjection =
+    winner.id === leftPlayer.id ? leftProjection : rightProjection;
+
+  return [
+    {
+      label: "Projection source",
+      value: scoringLabels[scoringFormat],
+      detail:
+        "The outside/source number starts the conversation, then the Seer adjusts it instead of replacing it.",
+    },
+    {
+      label: "Matchup context",
+      value: `${leftPlayer.opponent} vs ${rightPlayer.opponent}`,
+      detail:
+        "Opponent strength, game script, and position fit decide whether the projection deserves a small lift or haircut.",
+    },
+    {
+      label: "Role/security",
+      value: `${fantasyPlayerRoleBand(leftPlayer)} / ${fantasyPlayerRoleBand(rightPlayer)}`,
+      detail:
+        "Stable touches matter more than a flashy ceiling when two players are close.",
+    },
+    {
+      label: "Health and weather",
+      value: `${leftPlayer.health}% / ${rightPlayer.health}%`,
+      detail:
+        "Late injury news, wind, snow, and messy conditions can turn a good idea into a pre-kickoff re-check.",
+    },
+    {
+      label: "Opponent defense",
+      value: `${leftPlayer.matchup} / ${rightPlayer.matchup}`,
+      detail:
+        "Higher is friendlier for fantasy. Lower means the player needs volume or touchdowns to bail out the week.",
+    },
+    {
+      label: "Variance",
+      value: `${leftPlayer.chaos}% / ${rightPlayer.chaos}%`,
+      detail: `The lean is ${startLean.name} at ${winnerProjection.projection.toFixed(1)} projected points, but chaos controls how wide the range gets.`,
+    },
+  ];
 }
 
 function FantasyPlayerCompareSection({
@@ -4570,11 +4655,25 @@ function FantasyPlayerCompareSection({
         <div>
           <div className="nfl-section-kicker">
             <UsersRound size={17} />
-            Player vs player
+            Receipts room
           </div>
-          <h2>Who should I start?</h2>
+          <h2>Why the model is saying this</h2>
         </div>
         <strong>{startLean.name}</strong>
+      </div>
+      <div className="nfl-receipts-room-grid" aria-label="Fantasy model receipts">
+        {fantasyPlayerReceiptRoomRows({
+          leftPlayer,
+          rightPlayer,
+          scoringFormat,
+          startLean,
+        }).map((row) => (
+          <article key={row.label}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+            <p>{row.detail}</p>
+          </article>
+        ))}
       </div>
       <div className="nfl-player-selectors">
         <select
@@ -4629,16 +4728,21 @@ function FantasyCard({
   scoringFormat: ScoringFormat;
 }) {
   const fantasy = fantasyProjectionForDisplay(player, scoringFormat);
+  const adviceRows = fantasyPlayerAdviceRows(player, fantasy);
 
   return (
     <article className="nfl-fantasy-card">
       <div className="nfl-player-id">
-        <span style={{ background: player.color }}>{player.team}</span>
+        <span className="nfl-player-avatar" style={{ background: player.color }} aria-hidden="true">
+          <b>{fantasyPlayerInitials(player.name)}</b>
+          <small>{normalizeScoutingPosition(player.position)}</small>
+        </span>
         <div>
           <strong>{player.name}</strong>
           <em>
-            {player.position} · {player.opponent}
+            {player.position} · {player.team} · {player.opponent}
           </em>
+          <small>{fantasyPlayerRoleBand(player)}</small>
         </div>
       </div>
       <div className="nfl-fantasy-score">
@@ -4655,9 +4759,142 @@ function FantasyCard({
         ))}
       </div>
       <ProjectionReceipt player={player} projection={fantasy} />
-      <p>{player.read}</p>
+      <div className="nfl-player-advice-grid">
+        {adviceRows.map((row) => (
+          <span key={row.label}>
+            <b>{row.label}</b>
+            {row.value}
+          </span>
+        ))}
+      </div>
     </article>
   );
+}
+
+function fantasyPlayerAdviceRows(
+  player: FantasyPlayer,
+  projection: FantasyProjection,
+) {
+  const receipt = fantasyProjectionReceipt(player, projection, true);
+  const firstReason = receipt.reasons[0] ?? player.read;
+
+  return [
+    {
+      label: "What I would do",
+      value: fantasyPlayerActionAdvice(player, projection),
+    },
+    {
+      label: "Why",
+      value: firstReason,
+    },
+    {
+      label: "What could change it",
+      value: fantasyPlayerChangeTrigger(player),
+    },
+    {
+      label: "Risk level",
+      value: fantasyPlayerRiskForCard(player),
+    },
+    {
+      label: "Source vs Seer",
+      value: `${receipt.sourceLabel} ${receipt.sourceProjection.toFixed(1)} -> ${receipt.finalLabel} ${receipt.finalProjection.toFixed(1)} (${formatFantasyDelta(receipt.delta)})`,
+    },
+  ];
+}
+
+function fantasyPlayerInitials(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return "MS";
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function fantasyPlayerRoleBand(player: FantasyPlayer) {
+  const role = player.roleSecurity ?? Math.round((player.health + player.matchup) / 2);
+
+  if (role >= 82) {
+    return "Locked role";
+  }
+
+  if (role >= 72) {
+    return "Stable role";
+  }
+
+  if (role >= 62) {
+    return "Role watch";
+  }
+
+  return "News dependent";
+}
+
+function fantasyPlayerActionAdvice(
+  player: FantasyPlayer,
+  projection: FantasyProjection,
+) {
+  const rankLabel = scoutingRankLabel(normalizeScoutingPosition(player.position));
+
+  if (projection.projection >= 18) {
+    return `Start as a strong ${rankLabel} option unless late news breaks against the role.`;
+  }
+
+  if (projection.projection >= 12) {
+    return `Start or flex if your alternatives do not have clearer volume.`;
+  }
+
+  if (projection.projection >= 8) {
+    return `Use as depth only; fine as cover, not a priority start.`;
+  }
+
+  return "Bench for now unless the role report changes before kickoff.";
+}
+
+function fantasyPlayerChangeTrigger(player: FantasyPlayer) {
+  if (player.health < 72) {
+    return "A clean injury report or inactive surprise is the thing to re-check.";
+  }
+
+  if ((player.roleSecurity ?? player.health) < 68) {
+    return "Usage news matters most: snaps, route rate, carries, or red-zone role.";
+  }
+
+  if (player.matchup < 66) {
+    return "The defense is the drag. Volume or touchdown role needs to offset it.";
+  }
+
+  if (player.chaos >= 66) {
+    return "Early touch split and game script can swing this profile quickly.";
+  }
+
+  return "Only meaningful role, injury, or weather news should move this much.";
+}
+
+function fantasyPlayerRiskForCard(player: FantasyPlayer) {
+  const role = player.roleSecurity ?? player.health;
+
+  if (player.health < 70) {
+    return "High: health needs the final check.";
+  }
+
+  if (role < 66) {
+    return "Medium-high: role is not fully locked.";
+  }
+
+  if (player.chaos >= 68) {
+    return "Medium: good ceiling, wider range.";
+  }
+
+  if (player.matchup < 64) {
+    return "Medium: matchup is doing real resistance.";
+  }
+
+  return "Normal: trust the read unless news changes.";
 }
 
 function ProjectionReceipt({
@@ -4679,7 +4916,7 @@ function ProjectionReceipt({
           <strong>{receipt.sourceProjection.toFixed(1)}</strong>
         </span>
         <span>
-          <em>Adjustment</em>
+          <em>Seer shift</em>
           <strong className={cx(receipt.delta > 0 && "plus", receipt.delta < 0 && "minus")}>
             {formatFantasyDelta(receipt.delta)}
           </strong>

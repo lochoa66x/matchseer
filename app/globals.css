@@ -15339,3 +15339,138 @@ body {
   }
 }
 /* === End Fantasy Seer Decision-First Pass === */
+
+
+/* === Fantasy Seer Receipts Polish === */
+.nfl-mini-reason-grid,
+.nfl-player-advice-grid {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nfl-mini-reason-grid span,
+.nfl-player-advice-grid span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 9px;
+  color: var(--nfl-subtle);
+  background: rgba(3, 7, 7, 0.42);
+  border: 1px solid rgba(197, 207, 195, 0.1);
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.32;
+}
+
+.nfl-mini-reason-grid b,
+.nfl-player-advice-grid b {
+  color: var(--nfl-muted);
+  font-size: 0.6rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-player-advice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nfl-player-advice-grid span:first-child,
+.nfl-player-advice-grid span:last-child {
+  grid-column: 1 / -1;
+}
+
+.nfl-player-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 5px;
+  color: #06100d;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(3, 7, 7, 0.16);
+}
+
+.nfl-player-avatar b {
+  color: currentColor;
+  font-size: 0.92rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.nfl-player-avatar small {
+  display: block;
+  margin: 0;
+  color: currentColor;
+  font-size: 0.54rem;
+  font-weight: 950;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.nfl-receipts-room-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.nfl-receipts-room-grid article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  background: rgba(3, 7, 7, 0.38);
+  border: 1px solid rgba(197, 207, 195, 0.11);
+  border-radius: 10px;
+}
+
+.nfl-receipts-room-grid span {
+  color: var(--nfl-muted);
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-receipts-room-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 0.98rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-receipts-room-grid p {
+  margin: 0;
+  color: var(--nfl-subtle);
+  font-size: 0.76rem;
+  font-weight: 740;
+  line-height: 1.35;
+}
+
+.nfl-action-receipts span {
+  grid-template-columns: minmax(116px, 0.45fr) minmax(0, 1fr);
+}
+
+.nfl-hero-decision-card em {
+  color: var(--nfl-fantasy);
+  font-style: normal;
+  font-weight: 900;
+}
+
+@media (max-width: 920px) {
+  .nfl-receipts-room-grid,
+  .nfl-player-advice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .nfl-action-receipts span {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Fantasy Seer Receipts Polish === */
