@@ -3856,6 +3856,35 @@ function FantasyTeamPortfolio({
   );
 }
 
+function FantasyPlayerArtwork({
+  className,
+  playerName,
+  position,
+  tone,
+}: {
+  className?: string;
+  playerName?: string;
+  position?: string;
+  tone?: "brass" | "blue" | "slate";
+}) {
+  const normalizedPosition = position ? normalizeScoutingPosition(position) : undefined;
+  const toneClass =
+    tone ??
+    (normalizedPosition === "QB"
+      ? "brass"
+      : normalizedPosition === "RB" || normalizedPosition === "WR"
+        ? "blue"
+        : "slate");
+
+  return (
+    <span className={cx("nfl-generic-player-art", toneClass, className)} aria-hidden="true">
+      <i />
+      <b>{playerName ? fantasyPlayerInitials(playerName) : "MS"}</b>
+      <small>{normalizedPosition ? scoutingRankLabel(normalizedPosition) : "Seer"}</small>
+    </span>
+  );
+}
+
 function FantasyBestMovePanel({
   matchupReport,
   onViewChange,
@@ -3881,6 +3910,11 @@ function FantasyBestMovePanel({
       value: weeklyCoach.bestMove.risk,
     },
   ];
+  const featuredPlayer = weeklyCoach.bestMove.playerName
+    ? [...report.players, ...report.benchPlayers].find(
+        (player) => player.name === weeklyCoach.bestMove.playerName,
+      )
+    : report.players[0] ?? report.benchPlayers[0];
 
   return (
     <section className="nfl-best-move-hero" aria-label="Your best fantasy move">
@@ -3889,6 +3923,14 @@ function FantasyBestMovePanel({
           <ShieldCheck size={17} />
           Your best move
         </span>
+        <div className="nfl-best-move-visual-row">
+          <FantasyPlayerArtwork
+            className="hero"
+            playerName={featuredPlayer?.name ?? weeklyCoach.bestMove.playerName ?? report.team.name}
+            position={featuredPlayer?.position ?? report.strongestLane.position}
+          />
+          <em>Generic MatchSeer art - no official player or team imagery</em>
+        </div>
         <h2>{weeklyCoach.bestMove.call}</h2>
         <p>{weeklyCoach.bestMove.why}</p>
         <div className="nfl-best-move-actions">
@@ -4303,7 +4345,11 @@ function FantasySpotlightRow({
         <em>{scoutingRankLabel(position)}</em>
       </div>
       <div className="nfl-player-id">
-        <span style={{ background: player.color }}>{player.team}</span>
+        <FantasyPlayerArtwork
+          className="compact"
+          playerName={player.name}
+          position={player.position}
+        />
         <div>
           <strong>{player.name}</strong>
           <em>
@@ -4353,7 +4399,11 @@ function FantasyRookieBoard({
                 <em>{scoutingRankLabel(position)}</em>
               </div>
               <div className="nfl-player-id">
-                <span style={{ background: player.color }}>{player.team}</span>
+                <FantasyPlayerArtwork
+          className="compact"
+          playerName={player.name}
+          position={player.position}
+        />
                 <div>
                   <strong>{player.name}</strong>
                   <em>
@@ -4973,10 +5023,7 @@ function FantasyCard({
   return (
     <article className="nfl-fantasy-card">
       <div className="nfl-player-id">
-        <span className="nfl-player-avatar" style={{ background: player.color }} aria-hidden="true">
-          <b>{fantasyPlayerInitials(player.name)}</b>
-          <small>{normalizeScoutingPosition(player.position)}</small>
-        </span>
+        <FantasyPlayerArtwork playerName={player.name} position={player.position} />
         <div>
           <strong>{player.name}</strong>
           <em>
@@ -5391,7 +5438,11 @@ function FantasyDuelPlayer({
   return (
     <article className={cx("nfl-duel-player", winner && "winner")}>
       <div className="nfl-player-id">
-        <span style={{ background: player.color }}>{player.team}</span>
+        <FantasyPlayerArtwork
+          className="compact"
+          playerName={player.name}
+          position={player.position}
+        />
         <div>
           <strong>{player.name}</strong>
           <em>
@@ -5611,10 +5662,11 @@ function ScoutingBoard({
               </div>
               <div className="nfl-scout-player">
                 <div className="nfl-player-id">
-                  <span className="nfl-player-avatar compact" style={{ background: player.color }} aria-hidden="true">
-                    <b>{fantasyPlayerInitials(player.name)}</b>
-                    <small>{normalizeScoutingPosition(player.position)}</small>
-                  </span>
+                  <FantasyPlayerArtwork
+                    className="compact"
+                    playerName={player.name}
+                    position={player.position}
+                  />
                   <div>
                     <strong>{player.name}</strong>
                     <em>
@@ -5708,10 +5760,11 @@ function DeepResearchPanel({
         {rows.map((row) => (
           <article className="nfl-deep-research-card" key={row.player.id}>
             <div className="nfl-player-id">
-              <span className="nfl-player-avatar compact research-avatar" aria-hidden="true">
-                <b>{fantasyPlayerInitials(row.player.name)}</b>
-                <small>{normalizeScoutingPosition(row.player.position)}</small>
-              </span>
+              <FantasyPlayerArtwork
+                className="compact research-avatar"
+                playerName={row.player.name}
+                position={row.player.position}
+              />
               <div>
                 <strong>{row.player.name}</strong>
                 <em>
@@ -5993,7 +6046,11 @@ function FantasyTeamLab({
             {activeReport.players.map((player) => (
               <div key={player.id}>
                 <div className="nfl-player-id">
-                  <span style={{ background: player.color }}>{player.team}</span>
+                  <FantasyPlayerArtwork
+          className="compact"
+          playerName={player.name}
+          position={player.position}
+        />
                   <div>
                     <strong>{player.name}</strong>
                     <em>

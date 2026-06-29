@@ -9094,10 +9094,10 @@ body {
   --nfl-subtle: #d7ddd4;
   --nfl-brass: #d6ad4b;
   --nfl-brass-soft: rgba(214, 173, 75, 0.14);
-  --nfl-live: #79e2a8;
-  --nfl-live-soft: rgba(121, 226, 168, 0.14);
-  --nfl-data: #8fb7ff;
-  --nfl-data-soft: rgba(143, 183, 255, 0.13);
+  --nfl-live: #9db7e8;
+  --nfl-live-soft: rgba(157, 183, 232, 0.14);
+  --nfl-data: #b9d7ea;
+  --nfl-data-soft: rgba(185, 215, 234, 0.13);
   --nfl-risk: #e8734f;
   --nfl-risk-soft: rgba(232, 115, 79, 0.15);
   --nfl-fantasy: #d2b06a;
@@ -9109,7 +9109,7 @@ body {
   --nfl-line: rgba(197, 207, 195, 0.14);
   --nfl-line-strong: rgba(197, 207, 195, 0.22);
   --nfl-primary-gradient: linear-gradient(105deg, var(--nfl-brass), var(--nfl-live));
-  --nfl-fantasy-gradient: linear-gradient(105deg, #d2b06a, #6eb6b0);
+  --nfl-fantasy-gradient: linear-gradient(105deg, #d2b06a, #9db7e8);
   --nfl-gold: var(--nfl-brass);
   --nfl-mint: var(--nfl-live);
   min-height: 100vh;
@@ -9117,8 +9117,8 @@ body {
   color: var(--nfl-ink);
   background:
     linear-gradient(115deg, rgba(214, 173, 75, 0.065), transparent 25%),
-    linear-gradient(245deg, rgba(121, 226, 168, 0.07), transparent 30%),
-    linear-gradient(8deg, rgba(143, 183, 255, 0.035), transparent 34%),
+    linear-gradient(245deg, rgba(157, 183, 232, 0.07), transparent 30%),
+    linear-gradient(8deg, rgba(185, 215, 234, 0.035), transparent 34%),
     repeating-linear-gradient(
       90deg,
       rgba(255, 255, 255, 0.018) 0,
@@ -9335,7 +9335,7 @@ body {
   padding: 7px 9px;
   color: var(--nfl-muted);
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.2);
+  border: 1px solid rgba(185, 215, 234, 0.2);
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 950;
@@ -9372,7 +9372,7 @@ body {
 }
 
 .nfl-provider-strip.live {
-  border-color: rgba(121, 226, 168, 0.34);
+  border-color: rgba(157, 183, 232, 0.34);
 }
 
 .nfl-provider-strip.error,
@@ -9449,8 +9449,8 @@ body {
   min-width: 0;
   padding: 5px 6px;
   color: rgba(245, 244, 238, 0.72);
-  background: rgba(143, 183, 255, 0.09);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  background: rgba(185, 215, 234, 0.09);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 999px;
   font-size: 0.64rem;
   font-weight: 950;
@@ -9464,7 +9464,7 @@ body {
   align-items: center;
   padding: 10px;
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
 }
 
@@ -9662,7 +9662,7 @@ body {
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
-  scrollbar-color: rgba(143, 183, 255, 0.42) rgba(143, 183, 255, 0.08);
+  scrollbar-color: rgba(185, 215, 234, 0.42) rgba(185, 215, 234, 0.08);
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
@@ -9760,9 +9760,9 @@ body {
   background:
     linear-gradient(
       90deg,
-      rgba(143, 183, 255, 0.08),
-      rgba(121, 226, 168, 0.16),
-      rgba(143, 183, 255, 0.08)
+      rgba(185, 215, 234, 0.08),
+      rgba(157, 183, 232, 0.16),
+      rgba(185, 215, 234, 0.08)
     );
   background-size: 180% 100%;
   border: 1px solid var(--nfl-line);
@@ -9791,7 +9791,7 @@ body {
 
 .nfl-matchup-button.active {
   background:
-    linear-gradient(120deg, rgba(214, 173, 75, 0.18), rgba(121, 226, 168, 0.065)),
+    linear-gradient(120deg, rgba(214, 173, 75, 0.18), rgba(157, 183, 232, 0.065)),
     rgba(245, 244, 238, 0.052);
   border-color: rgba(214, 173, 75, 0.44);
   box-shadow: 0 0 0 1px rgba(214, 173, 75, 0.12) inset;
@@ -9936,7 +9936,7 @@ body {
   padding: 14px 8px;
   text-align: center;
   background:
-    linear-gradient(180deg, rgba(214, 173, 75, 0.11), rgba(121, 226, 168, 0.04)),
+    linear-gradient(180deg, rgba(214, 173, 75, 0.11), rgba(157, 183, 232, 0.04)),
     rgba(6, 13, 12, 0.64);
   border: 1px solid rgba(214, 173, 75, 0.22);
   border-radius: 8px;
@@ -10133,7 +10133,7 @@ body {
   min-width: 0;
   padding: 10px;
   background: rgba(17, 39, 33, 0.32);
-  border: 1px solid rgba(121, 226, 168, 0.13);
+  border: 1px solid rgba(157, 183, 232, 0.13);
   border-radius: 8px;
 }
 
@@ -10262,7 +10262,7 @@ body {
   padding: 6px 9px;
   color: var(--nfl-subtle);
   background: rgba(17, 39, 33, 0.36);
-  border: 1px solid rgba(121, 226, 168, 0.13);
+  border: 1px solid rgba(157, 183, 232, 0.13);
   border-radius: 999px;
   font-size: 0.74rem;
   font-weight: 850;
@@ -10462,9 +10462,9 @@ body {
   margin-bottom: 16px;
   padding: 13px;
   background:
-    linear-gradient(100deg, rgba(214, 173, 75, 0.08), rgba(121, 226, 168, 0.028)),
+    linear-gradient(100deg, rgba(214, 173, 75, 0.08), rgba(157, 183, 232, 0.028)),
     rgba(5, 8, 8, 0.52);
-  border: 1px solid rgba(121, 226, 168, 0.18);
+  border: 1px solid rgba(157, 183, 232, 0.18);
   border-radius: 8px;
 }
 
@@ -10690,7 +10690,7 @@ body {
   display: block;
   height: 8px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.16);
+  background: rgba(185, 215, 234, 0.16);
   border-radius: 999px;
 }
 
@@ -10937,7 +10937,7 @@ body {
 .nfl-fantasy-hero-actions button.secondary {
   color: var(--nfl-subtle);
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.22);
+  border: 1px solid rgba(185, 215, 234, 0.22);
 }
 
 .nfl-fantasy-hero-actions button:disabled {
@@ -10986,9 +10986,9 @@ body {
   padding: 11px;
   color: var(--nfl-subtle);
   background:
-    linear-gradient(135deg, rgba(143, 183, 255, 0.08), transparent 52%),
+    linear-gradient(135deg, rgba(185, 215, 234, 0.08), transparent 52%),
     rgba(5, 8, 8, 0.42);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
 }
 
@@ -11021,7 +11021,7 @@ body {
   right: 18px;
   left: 18px;
   height: 3px;
-  background: linear-gradient(90deg, transparent, var(--nfl-fantasy), rgba(121, 226, 168, 0.42), transparent);
+  background: linear-gradient(90deg, transparent, var(--nfl-fantasy), rgba(157, 183, 232, 0.42), transparent);
   content: "";
 }
 
@@ -11173,7 +11173,7 @@ body {
 
 .nfl-model-receipts {
   background:
-    linear-gradient(135deg, rgba(143, 183, 255, 0.08), transparent 50%),
+    linear-gradient(135deg, rgba(185, 215, 234, 0.08), transparent 50%),
     rgba(5, 8, 8, 0.48);
 }
 
@@ -11221,7 +11221,7 @@ body {
 
 .nfl-fantasy-scoreboard-core {
   background:
-    linear-gradient(180deg, rgba(183, 243, 107, 0.12), rgba(121, 226, 168, 0.05)),
+    linear-gradient(180deg, rgba(183, 243, 107, 0.12), rgba(157, 183, 232, 0.05)),
     rgba(6, 13, 12, 0.62) !important;
   border-color: rgba(183, 243, 107, 0.24) !important;
 }
@@ -11759,7 +11759,7 @@ body {
   gap: 6px;
   height: 9px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.16);
+  background: rgba(185, 215, 234, 0.16);
   border-radius: 999px;
 }
 
@@ -11915,7 +11915,7 @@ body {
   min-width: 0;
   padding: 9px;
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
 }
 
@@ -11995,7 +11995,7 @@ body {
 
 .nfl-receipt-reasons span {
   background: var(--nfl-data-soft);
-  border-color: rgba(143, 183, 255, 0.22);
+  border-color: rgba(185, 215, 234, 0.22);
   color: var(--nfl-subtle);
   white-space: normal;
 }
@@ -12064,7 +12064,7 @@ body {
 .nfl-scouting-summary {
   padding: 9px 11px;
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.16);
+  border: 1px solid rgba(185, 215, 234, 0.16);
   border-radius: 8px;
   white-space: nowrap;
 }
@@ -12093,7 +12093,7 @@ body {
   padding: 8px 10px;
   color: var(--nfl-subtle);
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
@@ -12332,12 +12332,12 @@ body {
   min-width: 0;
   padding: 12px;
   background: rgba(7, 12, 13, 0.62);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
 }
 
 .nfl-source-lane-card.live {
-  border-color: rgba(121, 226, 168, 0.32);
+  border-color: rgba(157, 183, 232, 0.32);
 }
 
 .nfl-source-lane-card.stale {
@@ -12362,7 +12362,7 @@ body {
   height: 30px;
   color: var(--nfl-live);
   background: var(--nfl-live-soft);
-  border: 1px solid rgba(121, 226, 168, 0.18);
+  border: 1px solid rgba(157, 183, 232, 0.18);
   border-radius: 8px;
 }
 
@@ -12401,7 +12401,7 @@ body {
 
 .nfl-source-lane-card:not(.live) .nfl-source-lane-top b {
   color: var(--nfl-subtle);
-  background: rgba(143, 183, 255, 0.16);
+  background: rgba(185, 215, 234, 0.16);
 }
 
 .nfl-source-lane-card p {
@@ -12422,8 +12422,8 @@ body {
 .nfl-source-position-strip span {
   padding: 5px 7px;
   color: var(--nfl-subtle);
-  background: rgba(143, 183, 255, 0.1);
-  border: 1px solid rgba(143, 183, 255, 0.14);
+  background: rgba(185, 215, 234, 0.1);
+  border: 1px solid rgba(185, 215, 234, 0.14);
   border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 900;
@@ -12457,7 +12457,7 @@ body {
   display: block;
   height: 7px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.16);
+  background: rgba(185, 215, 234, 0.16);
   border-radius: 999px;
 }
 
@@ -12661,7 +12661,7 @@ body {
 .nfl-import-card button.secondary {
   color: var(--nfl-ink);
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.2);
+  border: 1px solid rgba(185, 215, 234, 0.2);
 }
 
 .nfl-file-drop {
@@ -12738,7 +12738,7 @@ body {
 
 .nfl-sleeper-row input:disabled {
   color: var(--nfl-muted);
-  background: rgba(143, 183, 255, 0.08);
+  background: rgba(185, 215, 234, 0.08);
 }
 
 .nfl-sleeper-auto {
@@ -12780,7 +12780,7 @@ body {
   padding: 10px;
   color: var(--nfl-ink);
   background: var(--nfl-data-soft);
-  border: 1px solid rgba(143, 183, 255, 0.16);
+  border: 1px solid rgba(185, 215, 234, 0.16);
   border-radius: 8px;
   text-align: left;
 }
@@ -12873,7 +12873,7 @@ body {
   min-width: min(100%, 230px);
   padding: 5px;
   background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 183, 255, 0.18);
+  border: 1px solid rgba(185, 215, 234, 0.18);
   border-radius: 8px;
 }
 
@@ -12910,7 +12910,7 @@ body {
   min-height: 42px;
   color: var(--nfl-ink);
   background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(143, 183, 255, 0.2);
+  border: 1px solid rgba(185, 215, 234, 0.2);
   border-radius: 8px;
   font: inherit;
   font-weight: 850;
@@ -12937,7 +12937,7 @@ body {
   background:
     linear-gradient(135deg, var(--nfl-live-soft), transparent 40%),
     rgba(245, 244, 238, 0.035);
-  border: 1px solid rgba(121, 226, 168, 0.2);
+  border: 1px solid rgba(157, 183, 232, 0.2);
   border-radius: 8px;
 }
 
@@ -13137,7 +13137,7 @@ body {
 .nfl-lineup-slot {
   display: grid;
   gap: 9px;
-  border-color: rgba(121, 226, 168, 0.2);
+  border-color: rgba(157, 183, 232, 0.2);
 }
 
 .nfl-lineup-slot.missing {
@@ -13190,8 +13190,8 @@ body {
 .nfl-context-chips span {
   padding: 5px 7px;
   color: var(--nfl-subtle);
-  background: rgba(143, 183, 255, 0.12);
-  border: 1px solid rgba(143, 183, 255, 0.14);
+  background: rgba(185, 215, 234, 0.12);
+  border: 1px solid rgba(185, 215, 234, 0.14);
   border-radius: 999px;
   font-size: 0.64rem;
   text-transform: none;
@@ -13465,7 +13465,7 @@ body {
   display: block;
   height: 8px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.18);
+  background: rgba(185, 215, 234, 0.18);
   border-radius: 999px;
 }
 
@@ -13636,7 +13636,7 @@ body {
   min-width: 0;
   padding: 11px;
   background: rgba(5, 12, 28, 0.34);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -13672,7 +13672,7 @@ body {
   min-width: 0;
   padding: 12px;
   background: rgba(5, 12, 28, 0.38);
-  border: 1px solid rgba(143, 183, 255, 0.15);
+  border: 1px solid rgba(185, 215, 234, 0.15);
   border-radius: 8px;
 }
 
@@ -13741,7 +13741,7 @@ body {
   min-width: 0;
   padding: 12px;
   background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -13812,7 +13812,7 @@ body {
   min-height: 210px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -13894,7 +13894,7 @@ body {
   align-self: end;
   margin-top: 2px;
   padding-top: 8px;
-  border-top: 1px solid rgba(143, 183, 255, 0.13);
+  border-top: 1px solid rgba(185, 215, 234, 0.13);
 }
 
 .nfl-target-action b {
@@ -13948,7 +13948,7 @@ body {
   min-width: 0;
   padding: 12px;
   background: rgba(5, 12, 28, 0.45);
-  border: 1px solid rgba(143, 183, 255, 0.15);
+  border: 1px solid rgba(185, 215, 234, 0.15);
   border-radius: 8px;
 }
 
@@ -14022,7 +14022,7 @@ body {
   min-height: 430px;
   padding: 13px;
   background: rgba(255, 255, 255, 0.048);
-  border: 1px solid rgba(143, 183, 255, 0.16);
+  border: 1px solid rgba(185, 215, 234, 0.16);
   border-radius: 8px;
 }
 
@@ -14064,7 +14064,7 @@ body {
   min-width: 0;
   padding: 10px;
   background: rgba(5, 12, 28, 0.42);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -14099,7 +14099,7 @@ body {
   align-items: center;
   padding: 8px;
   background: rgba(5, 12, 28, 0.35);
-  border: 1px solid rgba(143, 183, 255, 0.12);
+  border: 1px solid rgba(185, 215, 234, 0.12);
   border-radius: 8px;
 }
 
@@ -14154,7 +14154,7 @@ body {
   min-width: 0;
   padding: 8px;
   background: rgba(5, 12, 28, 0.42);
-  border: 1px solid rgba(143, 183, 255, 0.12);
+  border: 1px solid rgba(185, 215, 234, 0.12);
   border-radius: 7px;
 }
 
@@ -14176,7 +14176,7 @@ body {
   min-width: 0;
   padding: 7px 8px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(143, 183, 255, 0.11);
+  border: 1px solid rgba(185, 215, 234, 0.11);
   border-radius: 7px;
 }
 
@@ -14206,7 +14206,7 @@ body {
   display: grid;
   gap: 5px;
   padding-top: 9px;
-  border-top: 1px solid rgba(143, 183, 255, 0.14);
+  border-top: 1px solid rgba(185, 215, 234, 0.14);
 }
 
 .nfl-trade-walkaway strong,
@@ -14253,7 +14253,7 @@ body {
   min-width: 0;
   padding: 10px;
   background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -14276,7 +14276,7 @@ body {
   display: block;
   height: 8px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.18);
+  background: rgba(185, 215, 234, 0.18);
   border-radius: 999px;
 }
 
@@ -14298,7 +14298,7 @@ body {
   min-width: 0;
   padding: 10px;
   background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(143, 183, 255, 0.13);
+  border: 1px solid rgba(185, 215, 234, 0.13);
   border-radius: 8px;
 }
 
@@ -14342,7 +14342,7 @@ body {
   display: block;
   height: 8px;
   overflow: hidden;
-  background: rgba(143, 183, 255, 0.16);
+  background: rgba(185, 215, 234, 0.16);
   border-radius: 999px;
 }
 
@@ -14361,8 +14361,8 @@ body {
   overflow: hidden;
   padding: 6px 8px;
   color: #dce8f7;
-  background: rgba(143, 183, 255, 0.1);
-  border: 1px solid rgba(143, 183, 255, 0.12);
+  background: rgba(185, 215, 234, 0.1);
+  border: 1px solid rgba(185, 215, 234, 0.12);
   border-radius: 999px;
   text-align: center;
   text-overflow: ellipsis;
@@ -14397,7 +14397,7 @@ body {
   min-height: 42px;
   color: var(--nfl-ink);
   background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(143, 183, 255, 0.2);
+  border: 1px solid rgba(185, 215, 234, 0.2);
   border-radius: 8px;
   font: inherit;
   font-weight: 850;
@@ -14418,8 +14418,8 @@ body {
 }
 
 .nfl-duel-player.winner {
-  border-color: rgba(121, 226, 168, 0.42);
-  box-shadow: 0 0 0 1px rgba(121, 226, 168, 0.16) inset;
+  border-color: rgba(157, 183, 232, 0.42);
+  box-shadow: 0 0 0 1px rgba(157, 183, 232, 0.16) inset;
 }
 
 .nfl-duel-verdict {
@@ -14917,18 +14917,18 @@ body {
   --nfl-muted: #a7b1a6;
   --nfl-subtle: #d9dfd3;
   --nfl-brass: #d7b45a;
-  --nfl-live: #67d49a;
-  --nfl-data: #94b8e8;
+  --nfl-live: #9db7e8;
+  --nfl-data: #b9d7ea;
   --nfl-risk: #e87954;
   --nfl-fantasy: #d2b06a;
   --nfl-line: rgba(218, 223, 208, 0.13);
   --nfl-line-strong: rgba(218, 223, 208, 0.22);
-  --nfl-primary-gradient: linear-gradient(105deg, #e7c95e, #73d29e);
-  --nfl-fantasy-gradient: linear-gradient(105deg, #d7b45a, #6eb6b0);
+  --nfl-primary-gradient: linear-gradient(105deg, #e7c95e, #9db7e8);
+  --nfl-fantasy-gradient: linear-gradient(105deg, #d7b45a, #9db7e8);
   padding: 24px;
   background:
     radial-gradient(circle at 18% 8%, rgba(215, 180, 90, 0.12), transparent 28%),
-    radial-gradient(circle at 88% 12%, rgba(103, 212, 154, 0.11), transparent 26%),
+    radial-gradient(circle at 88% 12%, rgba(157, 183, 232, 0.11), transparent 26%),
     linear-gradient(180deg, #050706 0%, #08100e 52%, #050706 100%);
 }
 
@@ -15022,7 +15022,7 @@ body {
 .nfl-seer-card,
 .nfl-fantasy-command-card {
   background:
-    linear-gradient(140deg, rgba(103, 212, 154, 0.08), transparent 34%),
+    linear-gradient(140deg, rgba(157, 183, 232, 0.08), transparent 34%),
     linear-gradient(180deg, rgba(247, 244, 234, 0.052), rgba(247, 244, 234, 0.024)),
     rgba(12, 18, 18, 0.9);
 }
@@ -15103,7 +15103,7 @@ body {
 }
 
 .nfl-fantasy-tabs button.active {
-  box-shadow: 0 12px 28px rgba(131, 223, 173, 0.16);
+  box-shadow: 0 12px 28px rgba(157, 183, 232, 0.16);
 }
 
 .nfl-fantasy-overview {
@@ -15188,7 +15188,7 @@ body {
 }
 
 .nfl-hero-decision-card.watch {
-  border-color: rgba(148, 184, 232, 0.26);
+  border-color: rgba(185, 215, 234, 0.26);
 }
 
 .nfl-hero-decision-card.market {
@@ -15197,7 +15197,7 @@ body {
 
 .nfl-hero-decision-card.high {
   background:
-    linear-gradient(135deg, rgba(131, 223, 173, 0.09), transparent 54%),
+    linear-gradient(135deg, rgba(157, 183, 232, 0.09), transparent 54%),
     rgba(3, 7, 7, 0.5);
 }
 
@@ -15254,8 +15254,8 @@ body {
   align-items: center;
   padding: 10px 12px;
   color: rgba(217, 223, 211, 0.82);
-  background: rgba(148, 184, 232, 0.075);
-  border: 1px solid rgba(148, 184, 232, 0.16);
+  background: rgba(185, 215, 234, 0.075);
+  border: 1px solid rgba(185, 215, 234, 0.16);
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 820;
@@ -15490,14 +15490,13 @@ body {
   transform: translateY(-1px);
 }
 
-.nfl-team-portfolio-mark,
-.nfl-player-avatar.research-avatar {
+.nfl-team-portfolio-mark {
   display: grid;
   place-items: center;
   color: var(--nfl-on-accent);
   background:
     radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.28), transparent 30%),
-    linear-gradient(135deg, #d7b45a, #6eb6b0);
+    linear-gradient(135deg, #d7b45a, #9db7e8);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
@@ -15708,6 +15707,166 @@ body {
 .nfl-player-advice-grid span:first-child,
 .nfl-player-advice-grid span:last-child {
   grid-column: 1 / -1;
+}
+
+.nfl-best-move-visual-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: 100%;
+  padding: 9px 11px;
+  background:
+    linear-gradient(135deg, rgba(215, 180, 90, 0.11), transparent 56%),
+    rgba(3, 7, 7, 0.38);
+  border: 1px solid rgba(215, 180, 90, 0.18);
+  border-radius: 18px;
+}
+
+.nfl-best-move-visual-row em {
+  max-width: 220px;
+  color: rgba(217, 223, 211, 0.72);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 820;
+  line-height: 1.3;
+}
+
+.nfl-generic-player-art {
+  position: relative;
+  display: grid;
+  align-content: end;
+  justify-items: center;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 62px;
+  padding: 8px 7px 6px;
+  overflow: hidden;
+  color: #07100e;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 34% 18%, rgba(255, 255, 255, 0.22), transparent 28%),
+    linear-gradient(145deg, #d7b45a, #9db7e8);
+  border: 1px solid rgba(218, 205, 168, 0.22);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+.nfl-generic-player-art::before {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 17px;
+  height: 17px;
+  background: rgba(5, 10, 9, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  content: "";
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.nfl-generic-player-art i {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  width: 42px;
+  height: 25px;
+  background:
+    linear-gradient(135deg, rgba(5, 10, 9, 0.88), rgba(5, 10, 9, 0.48));
+  border-radius: 18px 18px 10px 10px;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.nfl-generic-player-art b,
+.nfl-generic-player-art small {
+  position: relative;
+  z-index: 2;
+  color: rgba(247, 244, 234, 0.92);
+  line-height: 1;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.34);
+}
+
+.nfl-generic-player-art b {
+  font-size: 0.84rem;
+  font-weight: 980;
+}
+
+.nfl-generic-player-art small {
+  margin-top: 3px;
+  font-size: 0.48rem;
+  font-weight: 950;
+  opacity: 0.78;
+}
+
+.nfl-generic-player-art.blue {
+  background:
+    radial-gradient(circle at 34% 18%, rgba(255, 255, 255, 0.2), transparent 28%),
+    linear-gradient(145deg, #9db7e8, #b9d7ea);
+}
+
+.nfl-generic-player-art.slate {
+  background:
+    radial-gradient(circle at 34% 18%, rgba(255, 255, 255, 0.18), transparent 28%),
+    linear-gradient(145deg, #87958e, #9db7e8);
+}
+
+.nfl-generic-player-art.compact {
+  width: 42px;
+  height: 46px;
+  padding: 6px 5px 5px;
+  border-radius: 14px;
+}
+
+.nfl-generic-player-art.compact::before {
+  top: 7px;
+  width: 13px;
+  height: 13px;
+}
+
+.nfl-generic-player-art.compact i {
+  bottom: 9px;
+  width: 32px;
+  height: 19px;
+  border-radius: 13px 13px 8px 8px;
+}
+
+.nfl-generic-player-art.compact b {
+  font-size: 0.68rem;
+}
+
+.nfl-generic-player-art.compact small {
+  font-size: 0.42rem;
+}
+
+.nfl-generic-player-art.hero {
+  width: 82px;
+  height: 94px;
+  border-radius: 24px;
+}
+
+.nfl-generic-player-art.hero::before {
+  top: 14px;
+  width: 25px;
+  height: 25px;
+}
+
+.nfl-generic-player-art.hero i {
+  bottom: 20px;
+  width: 60px;
+  height: 34px;
+  border-radius: 24px 24px 13px 13px;
+}
+
+.nfl-generic-player-art.hero b {
+  font-size: 1.05rem;
+}
+
+.nfl-generic-player-art.hero small {
+  font-size: 0.56rem;
 }
 
 .nfl-player-avatar {
@@ -15973,7 +16132,7 @@ body {
   gap: 10px;
   padding: 11px 12px;
   background: rgba(5, 8, 8, 0.38);
-  border: 1px solid rgba(143, 183, 255, 0.14);
+  border: 1px solid rgba(185, 215, 234, 0.14);
   border-radius: 12px;
 }
 
