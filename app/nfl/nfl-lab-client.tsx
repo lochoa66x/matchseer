@@ -2483,6 +2483,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         </>
       ) : (
         <>
+          <FantasyCommandCenter
+            fantasyImport={fantasyImport}
+            leagueMap={fantasyLeaguePowerMap}
+            onOpponentTeamChange={setOpponentFantasyTeamId}
+            onTeamChange={setActiveFantasyTeamId}
+            onViewChange={setFantasyView}
+            opponentTeamId={opponentFantasyTeam.id}
+            sourceLanes={fantasySourceLanes}
+            teamLens={teamLens}
+          />
+
           <FantasyHero
             actions={fantasyActionQueue}
             contextStatus={fantasyContextLayer.status}
@@ -2495,16 +2506,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             report={activeTeamReport}
             scoringFormat={scoringFormat}
             scoutStatus={scoutStatus}
-            teamLens={teamLens}
-          />
-
-          <FantasyTeamPortfolio
-            fantasyImport={fantasyImport}
-            leagueMap={fantasyLeaguePowerMap}
-            opponentTeamId={opponentFantasyTeam.id}
-            onOpponentTeamChange={setOpponentFantasyTeamId}
-            onTeamChange={setActiveFantasyTeamId}
-            onViewChange={setFantasyView}
             teamLens={teamLens}
           />
 
@@ -3689,6 +3690,240 @@ function FantasyHero({
       </article>
     </section>
   );
+}
+
+function FantasyCommandCenter({
+  fantasyImport,
+  leagueMap,
+  opponentTeamId,
+  onOpponentTeamChange,
+  onTeamChange,
+  onViewChange,
+  sourceLanes,
+  teamLens,
+}: {
+  fantasyImport: ImportedFantasyLeague | null;
+  leagueMap: FantasyLeaguePowerMap;
+  opponentTeamId: string;
+  onOpponentTeamChange: (teamId: string) => void;
+  onTeamChange: (teamId: string) => void;
+  onViewChange: (view: FantasyView) => void;
+  sourceLanes: FantasySourceLane[];
+  teamLens: FantasyTeamLens;
+}) {
+  const active = leagueMap.active;
+  const opponentOptions = leagueMap.teams.filter(
+    (team) => team.report.team.id !== active.report.team.id,
+  );
+  const selectedOpponent =
+    opponentOptions.find((team) => team.report.team.id === opponentTeamId) ??
+    opponentOptions[0] ??
+    null;
+  const selectedOpponentId = selectedOpponent?.report.team.id ?? active.report.team.id;
+  const leagueLabel =
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Demo league room";
+  const leagueMeta = [
+    fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
+    fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
+    `${leagueMap.teamCount} teams`,
+    fantasyImport?.settings?.formatLabel ?? teamLensLabels[teamLens],
+  ].filter(Boolean);
+  const activePressure = fantasyPrimaryPressure(active.report);
+  const opponentTradeRead = selectedOpponent
+    ? fantasyPortfolioOpponentTradeRead(selectedOpponent, active)
+    : null;
+  const liveSourceCount = sourceLanes.filter((lane) => lane.status === "live").length;
+
+  function handleTeamChange(teamId: string) {
+    onTeamChange(teamId);
+
+    if (teamId === selectedOpponentId) {
+      const nextOpponent =
+        leagueMap.teams.find((team) => team.report.team.id !== teamId)?.report.team.id ??
+        teamId;
+
+      onOpponentTeamChange(nextOpponent);
+    }
+  }
+
+  function handleOpponentChange(teamId: string) {
+    onOpponentTeamChange(teamId);
+  }
+
+  return (
+    <section className="nfl-fantasy-command-center" aria-label="Fantasy Command Center">
+      <div className="nfl-fantasy-command-center-top">
+        <div>
+          <div className="nfl-section-kicker">
+            <UsersRound size={17} />
+            Fantasy Command Center
+          </div>
+          <h1>{leagueLabel}</h1>
+          <p>
+            One league, one team, one decision room at a time. Your roster gets
+            lineup advice; every other roster becomes a compare and trade target.
+          </p>
+        </div>
+        <div className="nfl-fantasy-command-center-controls">
+          <label>
+            <span>My team</span>
+            <select
+              onChange={(event) => handleTeamChange(event.target.value)}
+              value={active.report.team.id}
+            >
+              {leagueMap.teams.map((team) => (
+                <option key={team.report.team.id} value={team.report.team.id}>
+                  {team.report.team.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Compare with</span>
+            <select
+              disabled={opponentOptions.length === 0}
+              onChange={(event) => handleOpponentChange(event.target.value)}
+              value={selectedOpponentId}
+            >
+              {opponentOptions.length > 0 ? (
+                opponentOptions.map((team) => (
+                  <option key={team.report.team.id} value={team.report.team.id}>
+                    {team.report.team.name}
+                  </option>
+                ))
+              ) : (
+                <option value={active.report.team.id}>Add another team</option>
+              )}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="nfl-fantasy-command-center-body">
+        <article className="nfl-fantasy-selected-team-card">
+          <span className="nfl-team-portfolio-mark" aria-hidden="true">
+            {fantasyPlayerInitials(active.report.team.name)}
+          </span>
+          <div className="nfl-fantasy-selected-team-main">
+            <span>{active.report.team.manager}</span>
+            <strong>{active.report.team.name}</strong>
+            <em>
+              {leagueMap.rankLabel} · {leagueMeta.join(" · ")}
+            </em>
+          </div>
+          <div className="nfl-fantasy-selected-team-metrics">
+            <span>
+              Projection
+              <strong>{active.report.projection.toFixed(1)}</strong>
+            </span>
+            <span>
+              Fix next
+              <strong>{scoutingRankLabel(active.weakestPosition.position)}</strong>
+            </span>
+            <span>
+              Trust
+              <strong>{fantasyTrustBand(active.report.score)}</strong>
+            </span>
+          </div>
+          <p>{activePressure.summary}</p>
+        </article>
+
+        <article className="nfl-fantasy-selected-team-card compare">
+          <span className="nfl-team-portfolio-mark" aria-hidden="true">
+            {selectedOpponent
+              ? fantasyPlayerInitials(selectedOpponent.report.team.name)
+              : "VS"}
+          </span>
+          <div className="nfl-fantasy-selected-team-main">
+            <span>Selected compare target</span>
+            <strong>{selectedOpponent?.report.team.name ?? "Add another team"}</strong>
+            <em>
+              {selectedOpponent
+                ? `Rank #${selectedOpponent.rank} · weak at ${scoutingRankLabel(
+                    selectedOpponent.weakestPosition.position,
+                  )}`
+                : "Connect a league to compare strength"}
+            </em>
+          </div>
+          <div className="nfl-fantasy-trade-lane-preview">
+            <b>Trade lane</b>
+            <strong>{opponentTradeRead?.targetLabel ?? leagueMap.easiestUpgrade}</strong>
+            <p>
+              {opponentTradeRead?.summary ??
+                "Once another roster is connected, this turns into a target, offer lane, and walk-away check."}
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div className="nfl-fantasy-command-center-actions" aria-label="Fantasy room shortcuts">
+        <button onClick={() => onViewChange("overview")} type="button">
+          <Sparkles size={16} />
+          Best Move
+        </button>
+        <button className="secondary" onClick={() => onViewChange("league")} type="button">
+          <Trophy size={16} />
+          League Compare
+        </button>
+        <button className="secondary" onClick={() => onViewChange("trades")} type="button">
+          <LineChart size={16} />
+          Trade Builder
+        </button>
+        <button className="secondary" onClick={() => onViewChange("roster")} type="button">
+          <RefreshCw size={16} />
+          Connect / refresh
+        </button>
+      </div>
+
+      <FantasySourceTruthStrip
+        liveSourceCount={liveSourceCount}
+        sourceLanes={sourceLanes}
+      />
+    </section>
+  );
+}
+
+function FantasySourceTruthStrip({
+  liveSourceCount,
+  sourceLanes,
+}: {
+  liveSourceCount: number;
+  sourceLanes: FantasySourceLane[];
+}) {
+  return (
+    <div className="nfl-fantasy-source-truth" aria-label="Fantasy source truth">
+      <div>
+        <ShieldCheck size={16} />
+        <span>Source truth</span>
+        <strong>
+          {liveSourceCount}/{sourceLanes.length} live
+        </strong>
+      </div>
+      <div className="nfl-fantasy-source-truth-grid">
+        {sourceLanes.map((lane) => (
+          <span
+            className={cx(
+              "nfl-fantasy-source-pill",
+              lane.status,
+              lane.freshness === "stale" && "stale",
+            )}
+            key={lane.id}
+            title={lane.message}
+          >
+            {sourceLaneIcon(lane.kind)}
+            <b>{lane.label}</b>
+            <em>
+              {sourceLaneStatusCopy(lane)} · {fantasySourceLaneTotalRows(lane)} rows
+            </em>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function fantasySourceLaneTotalRows(lane: FantasySourceLane) {
+  return Object.values(lane.rows).reduce((total, count) => total + count, 0);
 }
 
 function FantasyTeamPortfolio({

@@ -16548,6 +16548,344 @@ body {
 }
 /* === End Fantasy League Rooms Pass === */
 
+/* === Fantasy League-First Command Center === */
+.nfl-fantasy-command-center {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto 14px;
+  padding: 16px;
+  max-width: 1120px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(215, 180, 90, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(157, 183, 232, 0.05), transparent 42%),
+    rgba(6, 9, 9, 0.92);
+  border: 1px solid rgba(218, 205, 168, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.nfl-fantasy-command-center-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.46fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.nfl-fantasy-command-center-top > div:first-child {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.nfl-fantasy-command-center h1 {
+  max-width: 760px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--nfl-ink);
+  font-size: clamp(1.35rem, 3vw, 2.25rem);
+  line-height: 1.02;
+}
+
+.nfl-fantasy-command-center p {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(217, 223, 211, 0.78);
+  font-size: 0.86rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.nfl-fantasy-command-center-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.nfl-fantasy-command-center-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nfl-fantasy-command-center-controls span {
+  color: var(--nfl-muted);
+  font-size: 0.66rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-command-center-controls select {
+  width: 100%;
+  min-height: 42px;
+  min-width: 0;
+  padding: 9px 10px;
+  color: var(--nfl-ink);
+  background: rgba(3, 7, 7, 0.64);
+  border: 1px solid rgba(218, 205, 168, 0.16);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.nfl-fantasy-command-center-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  gap: 10px;
+}
+
+.nfl-fantasy-selected-team-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  background:
+    linear-gradient(180deg, rgba(247, 244, 234, 0.045), rgba(247, 244, 234, 0.012)),
+    rgba(3, 7, 7, 0.45);
+  border: 1px solid rgba(218, 205, 168, 0.14);
+  border-radius: 14px;
+}
+
+.nfl-fantasy-selected-team-card.compare {
+  border-color: rgba(157, 183, 232, 0.2);
+}
+
+.nfl-fantasy-selected-team-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nfl-fantasy-selected-team-main span,
+.nfl-fantasy-selected-team-main em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-selected-team-main strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 1.03rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-selected-team-metrics {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-fantasy-selected-team-metrics span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  color: var(--nfl-muted);
+  background: rgba(247, 244, 234, 0.035);
+  border: 1px solid rgba(218, 205, 168, 0.1);
+  border-radius: 10px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-selected-team-metrics strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-selected-team-card > p,
+.nfl-fantasy-trade-lane-preview {
+  grid-column: 1 / -1;
+}
+
+.nfl-fantasy-trade-lane-preview {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  background: rgba(157, 183, 232, 0.055);
+  border: 1px solid rgba(157, 183, 232, 0.14);
+  border-radius: 12px;
+}
+
+.nfl-fantasy-trade-lane-preview b {
+  color: var(--nfl-live);
+  font-size: 0.66rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-trade-lane-preview strong {
+  color: var(--nfl-ink);
+  font-size: 0.95rem;
+  line-height: 1.16;
+}
+
+.nfl-fantasy-command-center-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nfl-fantasy-command-center-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 11px;
+  color: var(--nfl-on-accent);
+  background: var(--nfl-fantasy-gradient);
+  border: 0;
+  border-radius: 11px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.nfl-fantasy-command-center-actions button.secondary {
+  color: var(--nfl-ink);
+  background: rgba(247, 244, 234, 0.065);
+  border: 1px solid rgba(218, 205, 168, 0.12);
+}
+
+.nfl-fantasy-source-truth {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(247, 244, 234, 0.032);
+  border: 1px solid rgba(218, 205, 168, 0.11);
+  border-radius: 14px;
+}
+
+.nfl-fantasy-source-truth > div:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--nfl-muted);
+  font-size: 0.7rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-source-truth > div:first-child svg {
+  color: var(--nfl-live);
+}
+
+.nfl-fantasy-source-truth > div:first-child strong {
+  color: var(--nfl-ink);
+  white-space: nowrap;
+}
+
+.nfl-fantasy-source-truth-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.nfl-fantasy-source-pill {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1px 7px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 8px;
+  color: var(--nfl-subtle);
+  background: rgba(3, 7, 7, 0.36);
+  border: 1px solid rgba(218, 205, 168, 0.1);
+  border-radius: 10px;
+}
+
+.nfl-fantasy-source-pill.live {
+  border-color: rgba(115, 211, 164, 0.28);
+}
+
+.nfl-fantasy-source-pill.error {
+  border-color: rgba(255, 118, 99, 0.28);
+}
+
+.nfl-fantasy-source-pill.stale {
+  border-color: rgba(215, 180, 90, 0.26);
+}
+
+.nfl-fantasy-source-pill svg {
+  grid-row: span 2;
+  color: var(--nfl-live);
+}
+
+.nfl-fantasy-source-pill b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-source-pill em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nfl-muted);
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .nfl-fantasy-command-center-top,
+  .nfl-fantasy-command-center-body,
+  .nfl-fantasy-source-truth {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-fantasy-source-truth-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .nfl-fantasy-command-center {
+    padding: 12px;
+  }
+
+  .nfl-fantasy-command-center-controls,
+  .nfl-fantasy-selected-team-metrics,
+  .nfl-fantasy-source-truth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-fantasy-command-center-actions button {
+    flex: 1 1 100%;
+  }
+}
+/* === End Fantasy League-First Command Center === */
+
 /* === Pro Football Data Density Polish === */
 .nfl-standings-panel {
   max-width: 1080px;
