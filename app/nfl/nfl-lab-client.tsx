@@ -3805,7 +3805,7 @@ function FantasyCommandCenter({
             {fantasyPlayerInitials(active.report.team.name)}
           </span>
           <div className="nfl-fantasy-selected-team-main">
-            <span>{active.report.team.manager}</span>
+            <span>My roster · {active.report.team.manager}</span>
             <strong>{active.report.team.name}</strong>
             <em>
               {leagueMap.rankLabel} · {leagueMeta.join(" · ")}
@@ -3844,6 +3844,24 @@ function FantasyCommandCenter({
                   )}`
                 : "Connect a league to compare strength"}
             </em>
+          </div>
+          <div className="nfl-fantasy-selected-team-metrics">
+            <span>
+              Projection
+              <strong>{selectedOpponent?.report.projection.toFixed(1) ?? "--"}</strong>
+            </span>
+            <span>
+              Weak spot
+              <strong>
+                {selectedOpponent
+                  ? scoutingRankLabel(selectedOpponent.weakestPosition.position)
+                  : "TBD"}
+              </strong>
+            </span>
+            <span>
+              Trade target
+              <strong>{opponentTradeRead?.targetLabel ?? leagueMap.easiestUpgrade}</strong>
+            </span>
           </div>
           <div className="nfl-fantasy-trade-lane-preview">
             <b>Trade lane</b>
@@ -3898,6 +3916,7 @@ function FantasySourceTruthStrip({
         <strong>
           {liveSourceCount}/{sourceLanes.length} live
         </strong>
+        <em>model nudges stay capped</em>
       </div>
       <div className="nfl-fantasy-source-truth-grid">
         {sourceLanes.map((lane) => (
