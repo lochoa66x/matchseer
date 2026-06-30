@@ -121,6 +121,7 @@ type FantasyActionItem = {
 type FantasyDecisionState =
   | "Start now"
   | "Conditional start"
+  | "Conditional move"
   | "True coin flip"
   | "Risk alert"
   | "Waiver/trade idea";
@@ -1171,10 +1172,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     Record<string, ScenarioLevers>
   >({});
   const isFantasyMode = mode === "fantasy";
-  const isNflSlateBooting =
-    !isFantasyMode &&
-    nflDataStatus === "loading" &&
-    nflDataset.source === "seeded-fallback";
   const isSeededLabMode =
     !isFantasyMode &&
     nflDataStatus === "fallback" &&
@@ -2215,9 +2212,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       {!isFantasyMode ? <ProFootballDisclaimer /> : null}
 
       {!isFantasyMode ? (
-        isNflSlateBooting ? (
-          <NflSeerLoading />
-        ) : (
         <>
           <section className="nfl-hero" id="team-seer">
             <div className="nfl-matchup-rail" aria-label="Pro football matchup list">
@@ -2269,10 +2263,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   ))
                 ) : (
                   <article className="nfl-empty-slate-card">
-                    <strong>No games loaded here yet</strong>
+                    <strong>This room is between slates</strong>
                     <p>
-                      This slate room is ready for real data. Switch weeks or divisions
-                      while the feed catches up.
+                      Switch weeks or divisions, or use the active season room while
+                      the next real slate, preseason notes, and schedule signals refresh.
                     </p>
                   </article>
                 )}
@@ -2487,7 +2481,6 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           </section>
           <ProFootballFooterDisclaimer />
         </>
-        )
       ) : (
         <>
           <FantasyHero
@@ -3057,50 +3050,6 @@ function ScoringToggle({
         </button>
       ))}
     </div>
-  );
-}
-
-function NflSeerLoading() {
-  return (
-    <section className="nfl-hero nfl-hero-loading" id="team-seer">
-      <div className="nfl-matchup-rail" aria-label="Pro football slate loading">
-        <div className="nfl-section-kicker">
-          <Trophy size={17} />
-          Team vs team
-        </div>
-        <h1>Pro Football Seer</h1>
-        <p>
-          The Seer is finding the actual slate before it speaks. No demo slate
-          on the board.
-        </p>
-        <div className="nfl-loading-list" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-
-      <article className="nfl-seer-card nfl-seer-loading-card" id="ask-seer">
-        <div className="nfl-card-topline">
-          <span>Warming the slate</span>
-          <strong>MatchSeer</strong>
-        </div>
-        <div className="nfl-loading-faceoff" aria-hidden="true">
-          <span />
-          <i>AT</i>
-          <span />
-        </div>
-        <div className="nfl-loading-strip" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-        <p className="nfl-loading-read">
-          Pulling the matchup into focus before the first read lands.
-        </p>
-      </article>
-    </section>
   );
 }
 
@@ -9498,6 +9447,10 @@ function buildFantasyActionQueue({
       .sort((left, right) => right.seerProjection - left.seerProjection)[0] ??
     report.startSitReceipts[0];
   const closeCall = report.closeCalls[0];
+  const topStartCloseCall =
+    topStart && closeCall && fantasyDecisionSlotLabel(topStart.label) === closeCall.slotLabel
+      ? closeCall
+      : null;
   const benchSwap =
     report.benchAlternatives.find((alternative) => alternative.lift >= 0) ??
     report.benchAlternatives[0];
@@ -9516,9 +9469,9 @@ function buildFantasyActionQueue({
           edge: `${topStart.seerProjection.toFixed(1)} pts · ${formatFantasyDelta(
             topStart.delta,
           )} vs source`,
-          fallback: closeCall
-            ? `If late news turns, compare again with ${closeCall.challenger.name}.`
-            : "Hold unless injury or role news changes the touch path.",
+          fallback: topStartCloseCall
+            ? `If late news changes the ${topStartCloseCall.slotLabel} room, re-check ${topStartCloseCall.starter.name} vs ${topStartCloseCall.challenger.name}.`
+            : `Keep ${topStart.player.name} in unless injury, weather, or role news changes the workload.`,
           kind: "start",
           label: topStart.label,
           meta: `${topStart.seerProjection.toFixed(1)} pts · ${formatFantasyDelta(
@@ -9558,15 +9511,15 @@ function buildFantasyActionQueue({
           edge: `${Math.abs(closeCall.gap).toFixed(1)} pts apart`,
           fallback: `If news is neutral, keep the safer role and do not chase a tiny projection gap.`,
           kind: "watch",
-          label: closeCall.slotLabel,
+          label: `${closeCall.slotLabel}: ${fantasyCloseCallLeader(closeCall).name} vs ${fantasyCloseCallTrailer(closeCall).name}`,
           meta: `${Math.abs(closeCall.gap).toFixed(1)} pts apart`,
-          playerName: closeCall.challenger.name,
+          playerName: fantasyCloseCallLeader(closeCall).name,
           risk: "This is close enough that one injury note or weather shift can flip the call.",
           state:
             Math.abs(closeCall.gap) < 1.2 ? "True coin flip" : "Conditional start",
           strength: "medium",
           title: "Re-check before kickoff",
-          why: `${closeCall.starter.name} and ${closeCall.challenger.name} are close in the same lineup slot.`,
+          why: `${closeCall.starter.name} and ${closeCall.challenger.name} are close in the ${closeCall.slotLabel} slot.`,
         }
       : {
           detail: `${pressure.label} is the pressure point. Re-check injury reports, weather, and role notes before lineup lock.`,
@@ -9605,9 +9558,9 @@ function buildFantasyActionQueue({
               : `${Math.abs(benchSwap.lift).toFixed(1)} behind starter`,
           playerName: benchSwap.player.name,
           risk: fantasyPlayerRiskText(benchSwap.player),
-          state: benchSwap.lift >= 1.5 ? "Conditional start" : "Risk alert",
+          state: benchSwap.lift >= 0 ? "Conditional move" : "Risk alert",
           strength: benchSwap.lift >= 0 ? "high" : "medium",
-          title: "Bench if news holds",
+          title: benchSwap.lift >= 0 ? "Move only if news holds" : "Bench watch",
           why: benchSwap.summary,
         }
       : {
@@ -9620,9 +9573,9 @@ function buildFantasyActionQueue({
           label: "Bench watch",
           meta: "Hold current lineup",
           risk: "A forced swap can lower your floor when the bench does not have a real role edge.",
-          state: "Conditional start",
+          state: "Conditional move",
           strength: "low",
-          title: "Bench if news holds",
+          title: "Bench watch",
           why: "The current starters are not being challenged by the bench yet.",
         },
   );
@@ -9643,6 +9596,18 @@ function buildFantasyActionQueue({
   });
 
   return actions;
+}
+
+function fantasyDecisionSlotLabel(label: string) {
+  return label.replace(/^Start\s+/i, "").trim();
+}
+
+function fantasyCloseCallLeader(closeCall: FantasyCloseCall) {
+  return closeCall.gap <= 0 ? closeCall.challenger : closeCall.starter;
+}
+
+function fantasyCloseCallTrailer(closeCall: FantasyCloseCall) {
+  return closeCall.gap <= 0 ? closeCall.starter : closeCall.challenger;
 }
 
 function buildRookieWatchRows(rows: ScoutingRow[]) {
