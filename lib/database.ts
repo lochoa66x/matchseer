@@ -9,6 +9,8 @@ import type {
   MatchForecast,
   MatchStatus,
   MatchSummary,
+  PenaltyRoomForecast,
+  PenaltyRoomReceipt,
   TrailSignal,
 } from "./domain";
 import type {
@@ -4010,6 +4012,7 @@ function toKnockoutForecast(
   const penalties = clampInteger(readPayloadNumber(rawKnockout.penalties), 0, 100);
   const homeAdvance = clampInteger(readPayloadNumber(rawKnockout.homeAdvance), 0, 100);
   const awayAdvance = clampInteger(readPayloadNumber(rawKnockout.awayAdvance), 0, 100);
+  const penaltyRoom = toPenaltyRoomForecast(rawKnockout.penaltyRoom);
   const summary = readPayloadRecord(rawKnockout.summary);
   const fallbackSummary = `${phase} cannot end level; the draw lane means deadlocked after 90 minutes.`;
 
@@ -4021,12 +4024,96 @@ function toKnockoutForecast(
     homeAdvance,
     awayAdvance,
     projectedAdvancer,
+    penaltyRoom,
     summary: {
       en: readPayloadString(summary?.en) ?? fallbackSummary,
       es: readPayloadString(summary?.es) ?? readPayloadString(summary?.en) ?? fallbackSummary,
       fr: readPayloadString(summary?.fr) ?? readPayloadString(summary?.en) ?? fallbackSummary,
     },
   };
+}
+
+function toPenaltyRoomForecast(value: unknown): PenaltyRoomForecast | null {
+  const rawPenaltyRoom = readPayloadRecord(value);
+
+  if (!rawPenaltyRoom) {
+    return null;
+  }
+
+  const projectedEdge = readPayloadString(rawPenaltyRoom.projectedEdge);
+
+  if (projectedEdge !== "home" && projectedEdge !== "away") {
+    return null;
+  }
+
+  const edgeProbability = clampInteger(
+    readPayloadNumber(rawPenaltyRoom.edgeProbability),
+    0,
+    100,
+  );
+  const fallbackHeadline = "Shootout edge stays narrow.";
+  const fallbackSummary = "If this reaches penalties, the receipts stay close.";
+
+  return {
+    chance: clampInteger(readPayloadNumber(rawPenaltyRoom.chance), 0, 100),
+    homeShootout: clampInteger(readPayloadNumber(rawPenaltyRoom.homeShootout), 0, 100),
+    awayShootout: clampInteger(readPayloadNumber(rawPenaltyRoom.awayShootout), 0, 100),
+    projectedEdge,
+    edgeProbability,
+    confidenceLabel: readTranslatedPayload(
+      rawPenaltyRoom.confidenceLabel,
+      "thin lean",
+    ),
+    headline: readTranslatedPayload(rawPenaltyRoom.headline, fallbackHeadline),
+    summary: readTranslatedPayload(rawPenaltyRoom.summary, fallbackSummary),
+    receipts: Array.isArray(rawPenaltyRoom.receipts)
+      ? rawPenaltyRoom.receipts
+          .map(toPenaltyRoomReceipt)
+          .filter((receipt): receipt is PenaltyRoomReceipt => receipt !== null)
+          .slice(0, 5)
+      : [],
+  };
+}
+
+function toPenaltyRoomReceipt(value: unknown): PenaltyRoomReceipt | null {
+  const rawReceipt = readPayloadRecord(value);
+
+  if (!rawReceipt) {
+    return null;
+  }
+
+  const id = readPayloadString(rawReceipt.id);
+  const valueText = readPayloadString(rawReceipt.value);
+  const tone = readPayloadString(rawReceipt.tone);
+
+  if (!id || !valueText || !isPenaltyRoomReceiptTone(tone)) {
+    return null;
+  }
+
+  return {
+    id,
+    label: readTranslatedPayload(rawReceipt.label, id),
+    value: valueText,
+    tone,
+    text: readTranslatedPayload(rawReceipt.text, ""),
+  };
+}
+
+function readTranslatedPayload(value: unknown, fallback: string) {
+  const record = readPayloadRecord(value);
+  const english = readPayloadString(record?.en) ?? fallback;
+
+  return {
+    en: english,
+    es: readPayloadString(record?.es) ?? english,
+    fr: readPayloadString(record?.fr) ?? english,
+  };
+}
+
+function isPenaltyRoomReceiptTone(
+  value: string | null,
+): value is PenaltyRoomReceipt["tone"] {
+  return value === "edge" || value === "risk" || value === "steady";
 }
 
 function toMarketPulse(
@@ -7058,6 +7145,10 @@ function matchseerV3Forecast({
         awayProbability: away,
         powerGap,
         chaos: finalChaos,
+        confidence,
+        homeRatings,
+        awayRatings,
+        bodyCost: bodyCost.payload,
       })
     : null;
   const favorite =
@@ -7272,6 +7363,10 @@ export function buildKnockoutResolutionLane({
   awayProbability,
   powerGap,
   chaos,
+  confidence = 55,
+  homeRatings,
+  awayRatings,
+  bodyCost = null,
 }: {
   phase: string;
   homeTeam: FootballDataTeam;
@@ -7281,6 +7376,10 @@ export function buildKnockoutResolutionLane({
   awayProbability: number;
   powerGap: number;
   chaos: number;
+  confidence?: number;
+  homeRatings?: TeamRatings;
+  awayRatings?: TeamRatings;
+  bodyCost?: Record<string, unknown> | null;
 }): KnockoutForecast {
   const penaltyRate = clampNumber(
     0.42 + (chaos - 58) * 0.006 - Math.abs(powerGap) * 0.009,
@@ -7308,6 +7407,19 @@ export function buildKnockoutResolutionLane({
     projectedAdvancer === "home" ? homeTeam.name : awayTeam.name;
   const advancerProbability =
     projectedAdvancer === "home" ? homeAdvance : awayAdvance;
+  const penaltyRoom = buildPenaltyRoomForecast({
+    chance: penalties,
+    homeTeam,
+    awayTeam,
+    homeRatings: homeRatings ?? teamRatings(homeTeam),
+    awayRatings: awayRatings ?? teamRatings(awayTeam),
+    homeProbability,
+    awayProbability,
+    powerGap,
+    chaos,
+    confidence,
+    bodyCost,
+  });
 
   return {
     phase,
@@ -7317,12 +7429,274 @@ export function buildKnockoutResolutionLane({
     homeAdvance,
     awayAdvance,
     projectedAdvancer,
+    penaltyRoom,
     summary: {
       en: `${phase} cannot end level, so ${drawProbability}% becomes the 90-minute deadlock omen. ${advancerName} hold the stronger path through extra time and penalties at ${advancerProbability}%.`,
       es: `${phase} no puede terminar empatado, asi que ${drawProbability}% se vuelve el presagio de bloqueo a 90 minutos. ${advancerName} tiene la ruta mas fuerte por prorroga y penales con ${advancerProbability}%.`,
       fr: `${phase} ne peut pas finir a egalite, donc ${drawProbability}% devient le presage du blocage apres 90 minutes. ${advancerName} garde la meilleure route avec prolongation et tirs au but a ${advancerProbability}%.`,
     },
   };
+}
+
+type PenaltyRoomProfile = {
+  keeper: number;
+  takers: number;
+  pressure: number;
+  history: number;
+};
+
+const SEEDED_PENALTY_ROOM_PROFILES: Record<string, Partial<PenaltyRoomProfile>> = {
+  ARG: { keeper: 82, takers: 88, pressure: 87, history: 86 },
+  BRA: { keeper: 84, takers: 89, pressure: 82, history: 80 },
+  CAN: { keeper: 72, takers: 70, pressure: 70, history: 58 },
+  CRO: { keeper: 83, takers: 81, pressure: 91, history: 94 },
+  ENG: { keeper: 78, takers: 86, pressure: 75, history: 69 },
+  ESP: { keeper: 79, takers: 84, pressure: 78, history: 72 },
+  FRA: { keeper: 83, takers: 88, pressure: 84, history: 81 },
+  GER: { keeper: 84, takers: 85, pressure: 87, history: 90 },
+  MEX: { keeper: 77, takers: 76, pressure: 79, history: 73 },
+  NED: { keeper: 81, takers: 82, pressure: 80, history: 76 },
+  POR: { keeper: 78, takers: 87, pressure: 82, history: 78 },
+  RSA: { keeper: 70, takers: 68, pressure: 71, history: 63 },
+  USA: { keeper: 75, takers: 73, pressure: 73, history: 66 },
+};
+
+function buildPenaltyRoomForecast({
+  chance,
+  homeTeam,
+  awayTeam,
+  homeRatings,
+  awayRatings,
+  homeProbability,
+  awayProbability,
+  powerGap,
+  chaos,
+  confidence,
+  bodyCost,
+}: {
+  chance: number;
+  homeTeam: FootballDataTeam;
+  awayTeam: FootballDataTeam;
+  homeRatings: TeamRatings;
+  awayRatings: TeamRatings;
+  homeProbability: number;
+  awayProbability: number;
+  powerGap: number;
+  chaos: number;
+  confidence: number;
+  bodyCost: Record<string, unknown> | null;
+}): PenaltyRoomForecast {
+  const homeProfile = penaltyRoomProfile(homeTeam, homeRatings);
+  const awayProfile = penaltyRoomProfile(awayTeam, awayRatings);
+  const homeStress = penaltyRoomBodyStress(bodyCost, "home");
+  const awayStress = penaltyRoomBodyStress(bodyCost, "away");
+  const favoriteSide =
+    homeProbability === awayProbability
+      ? null
+      : homeProbability > awayProbability
+        ? "home"
+        : "away";
+  const underdogChaosLean =
+    favoriteSide === "home" ? -1 : favoriteSide === "away" ? 1 : 0;
+  const keeperEdge = homeProfile.keeper - awayProfile.keeper;
+  const takerEdge = homeProfile.takers - awayProfile.takers;
+  const pressureEdge = homeProfile.pressure - awayProfile.pressure;
+  const historyEdge = homeProfile.history - awayProfile.history;
+  const fatigueEdge = clampNumber((awayStress - homeStress) * 2.8, -7, 7);
+  const chaosEdge = clampNumber((chaos - 62) * 0.035 * underdogChaosLean, -2, 2);
+  const homeShootoutRaw =
+    50 +
+    keeperEdge * 0.16 +
+    takerEdge * 0.13 +
+    pressureEdge * 0.11 +
+    historyEdge * 0.08 +
+    powerGap * 0.14 +
+    fatigueEdge +
+    chaosEdge;
+  const homeShootout = clamp(Math.round(homeShootoutRaw), 38, 62);
+  const awayShootout = 100 - homeShootout;
+  const projectedEdge = homeShootout >= awayShootout ? "home" : "away";
+  const edgeProbability =
+    projectedEdge === "home" ? homeShootout : awayShootout;
+  const edgeTeam = projectedEdge === "home" ? homeTeam : awayTeam;
+  const otherTeam = projectedEdge === "home" ? awayTeam : homeTeam;
+  const edgeGap = Math.abs(homeShootout - awayShootout);
+  const confidenceLabel = penaltyRoomConfidence(edgeGap, confidence, chance);
+  const receipts: PenaltyRoomReceipt[] = [
+    penaltyRoomReceipt({
+      id: "keeper",
+      label: { en: "Keeper lane", es: "Portero", fr: "Gardien" },
+      value: penaltyRoomEdgeValue(homeTeam, awayTeam, keeperEdge),
+      tone: Math.abs(keeperEdge) >= 4 ? "edge" : "steady",
+      text: {
+        en: penaltyRoomEdgeText("keeper", homeTeam, awayTeam, keeperEdge),
+        es: penaltyRoomEdgeText("keeper", homeTeam, awayTeam, keeperEdge),
+        fr: penaltyRoomEdgeText("keeper", homeTeam, awayTeam, keeperEdge),
+      },
+    }),
+    penaltyRoomReceipt({
+      id: "takers",
+      label: { en: "Taker depth", es: "Cobradores", fr: "Tireurs" },
+      value: penaltyRoomEdgeValue(homeTeam, awayTeam, takerEdge),
+      tone: Math.abs(takerEdge) >= 4 ? "edge" : "steady",
+      text: {
+        en: penaltyRoomEdgeText("takers", homeTeam, awayTeam, takerEdge),
+        es: penaltyRoomEdgeText("takers", homeTeam, awayTeam, takerEdge),
+        fr: penaltyRoomEdgeText("takers", homeTeam, awayTeam, takerEdge),
+      },
+    }),
+    penaltyRoomReceipt({
+      id: "pressure",
+      label: { en: "Pressure", es: "Presion", fr: "Pression" },
+      value: penaltyRoomEdgeValue(homeTeam, awayTeam, pressureEdge),
+      tone: Math.abs(pressureEdge) >= 5 ? "edge" : "steady",
+      text: {
+        en: penaltyRoomEdgeText("pressure", homeTeam, awayTeam, pressureEdge),
+        es: penaltyRoomEdgeText("pressure", homeTeam, awayTeam, pressureEdge),
+        fr: penaltyRoomEdgeText("pressure", homeTeam, awayTeam, pressureEdge),
+      },
+    }),
+    penaltyRoomReceipt({
+      id: "legs-120",
+      label: { en: "Legs at 120'", es: "Piernas 120'", fr: "Jambes 120'" },
+      value: penaltyRoomEdgeValue(homeTeam, awayTeam, fatigueEdge),
+      tone: Math.abs(fatigueEdge) >= 2 ? "risk" : "steady",
+      text: {
+        en:
+          Math.abs(fatigueEdge) >= 2
+            ? `${fatigueEdge > 0 ? awayTeam.name : homeTeam.name} carry the heavier body ledger if it runs long.`
+            : "The late legs look close enough that fatigue stays a small receipt.",
+        es:
+          Math.abs(fatigueEdge) >= 2
+            ? `${fatigueEdge > 0 ? awayTeam.name : homeTeam.name} carga mas desgaste si esto se alarga.`
+            : "Las piernas llegan parejas; la fatiga queda como recibo pequeno.",
+        fr:
+          Math.abs(fatigueEdge) >= 2
+            ? `${fatigueEdge > 0 ? awayTeam.name : homeTeam.name} porte le plus gros cout physique si cela dure.`
+            : "Les jambes restent assez proches; la fatigue reste un petit signal.",
+      },
+    }),
+  ];
+
+  return {
+    chance,
+    homeShootout,
+    awayShootout,
+    projectedEdge,
+    edgeProbability,
+    confidenceLabel,
+    headline: {
+      en: `${edgeTeam.name} get the shootout edge, not a promise.`,
+      es: `${edgeTeam.name} tiene ventaja en penales, no una promesa.`,
+      fr: `${edgeTeam.name} prend l'avantage aux tirs, pas une promesse.`,
+    },
+    summary: {
+      en: `${edgeTeam.code} sit at ${edgeProbability}% if it reaches pens. ${otherTeam.code} still live because shootouts are narrow, but the receipts lean ${edgeTeam.code}.`,
+      es: `${edgeTeam.code} queda en ${edgeProbability}% si llega a penales. ${otherTeam.code} sigue vivo porque los penales son finos, pero los recibos inclinan a ${edgeTeam.code}.`,
+      fr: `${edgeTeam.code} monte a ${edgeProbability}% si cela va aux tirs. ${otherTeam.code} reste vivant car les tirs sont fins, mais les recus penchent ${edgeTeam.code}.`,
+    },
+    receipts,
+  };
+}
+
+function penaltyRoomProfile(
+  team: FootballDataTeam,
+  ratings: TeamRatings,
+): PenaltyRoomProfile {
+  const seeded = SEEDED_PENALTY_ROOM_PROFILES[team.code.toUpperCase()] ?? {};
+  const standing = worldStandingPrior(team);
+  const fallbackKeeper =
+    ratings.defense * 0.56 + ratings.control * 0.12 + standing * 0.2 + ratings.setPieces * 0.12;
+  const fallbackTakers =
+    ratings.attack * 0.42 + ratings.setPieces * 0.28 + ratings.control * 0.2 + standing * 0.1;
+  const fallbackPressure =
+    ratings.control * 0.42 + standing * 0.24 + ratings.defense * 0.16 + ratings.setPieces * 0.18;
+  const fallbackHistory = standing * 0.72 + ratings.control * 0.18 + ratings.defense * 0.1;
+
+  return {
+    keeper: clampNumber(seeded.keeper ?? fallbackKeeper, 45, 92),
+    takers: clampNumber(seeded.takers ?? fallbackTakers, 45, 92),
+    pressure: clampNumber(seeded.pressure ?? fallbackPressure, 45, 94),
+    history: clampNumber(seeded.history ?? fallbackHistory, 42, 95),
+  };
+}
+
+function penaltyRoomBodyStress(
+  bodyCost: Record<string, unknown> | null,
+  side: "home" | "away",
+) {
+  const sidePayload = readPayloadRecord(bodyCost?.[side]);
+  return clampNumber(readPayloadNumber(sidePayload?.totalStress) ?? 0, 0, 5);
+}
+
+function penaltyRoomConfidence(edgeGap: number, confidence: number, chance: number) {
+  if (edgeGap >= 10 && confidence >= 60 && chance >= 8) {
+    return { en: "strong lean", es: "inclinacion fuerte", fr: "penchant fort" };
+  }
+
+  if (edgeGap >= 6 && confidence >= 54) {
+    return { en: "medium lean", es: "inclinacion media", fr: "penchant moyen" };
+  }
+
+  return { en: "thin lean", es: "inclinacion fina", fr: "penchant fin" };
+}
+
+function penaltyRoomReceipt({
+  id,
+  label,
+  value,
+  tone,
+  text,
+}: PenaltyRoomReceipt): PenaltyRoomReceipt {
+  return { id, label, value, tone, text };
+}
+
+function penaltyRoomEdgeValue(
+  homeTeam: FootballDataTeam,
+  awayTeam: FootballDataTeam,
+  edge: number,
+) {
+  const rounded = Math.round(Math.abs(edge));
+
+  if (rounded < 2) {
+    return "even";
+  }
+
+  return edge > 0
+    ? `${homeTeam.code} +${rounded}`
+    : `${awayTeam.code} +${rounded}`;
+}
+
+function penaltyRoomEdgeText(
+  kind: "keeper" | "takers" | "pressure",
+  homeTeam: FootballDataTeam,
+  awayTeam: FootballDataTeam,
+  edge: number,
+) {
+  const leader = edge >= 0 ? homeTeam : awayTeam;
+  const other = edge >= 0 ? awayTeam : homeTeam;
+
+  if (Math.abs(edge) < 2) {
+    if (kind === "keeper") {
+      return "Keeper profiles are close enough that this stays nearly level.";
+    }
+
+    if (kind === "takers") {
+      return "The taker depth read is close; no clean separation shows yet.";
+    }
+
+    return "The pressure profile is balanced enough to stay cautious.";
+  }
+
+  if (kind === "keeper") {
+    return `${leader.name} carry the cleaner keeper proxy if the match reaches the spot.`;
+  }
+
+  if (kind === "takers") {
+    return `${leader.name} show the deeper taker lane, while ${other.code} need nerve from the first five.`;
+  }
+
+  return `${leader.name} look a little calmer in the pressure profile than ${other.code}.`;
 }
 
 function teamPower(ratings: TeamRatings) {

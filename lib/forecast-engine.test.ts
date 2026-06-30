@@ -627,13 +627,16 @@ describe("knockout-round forecast logic", () => {
   };
 
   it("keeps group matches on normal draw logic", () => {
-    expect(knockoutRoundForecastModifier("Group A")).toMatchObject({
+    const modifier = knockoutRoundForecastModifier("Group A");
+
+    expect(modifier).toMatchObject({
       isKnockout: false,
       gapMultiplier: 1,
       drawDelta: 0,
       drawFloor: 15,
       drawCeiling: 34,
     });
+    expect(modifier.factor).toBeNull();
   });
 
   it("makes knockout matches tighter and more cautious", () => {
@@ -667,7 +670,63 @@ describe("knockout-round forecast logic", () => {
     expect(lane.penalties).toBeLessThan(lane.extraTime);
     expect(lane.homeAdvance + lane.awayAdvance).toBe(100);
     expect(lane.projectedAdvancer).toBe("home");
+    expect(lane.penaltyRoom).toMatchObject({
+      chance: lane.penalties,
+      projectedEdge: expect.stringMatching(/home|away/),
+    });
+    expect(lane.penaltyRoom?.receipts.map((receipt) => receipt.id)).toEqual(
+      expect.arrayContaining(["keeper", "takers", "pressure", "legs-120"]),
+    );
     expect(lane.summary.en).toContain("cannot end level");
+  });
+
+  it("lets 120-minute fatigue move the shootout edge without overclaiming", () => {
+    const balancedRatings = {
+      attack: 76,
+      control: 76,
+      defense: 76,
+      setPieces: 76,
+    };
+    const homeTired = buildKnockoutResolutionLane({
+      phase: "Quarter-finals",
+      homeTeam,
+      awayTeam,
+      homeProbability: 36,
+      drawProbability: 32,
+      awayProbability: 32,
+      powerGap: 0,
+      chaos: 66,
+      confidence: 62,
+      homeRatings: balancedRatings,
+      awayRatings: balancedRatings,
+      bodyCost: {
+        home: { totalStress: 4.2 },
+        away: { totalStress: 0.4 },
+      },
+    });
+    const awayTired = buildKnockoutResolutionLane({
+      phase: "Quarter-finals",
+      homeTeam,
+      awayTeam,
+      homeProbability: 36,
+      drawProbability: 32,
+      awayProbability: 32,
+      powerGap: 0,
+      chaos: 66,
+      confidence: 62,
+      homeRatings: balancedRatings,
+      awayRatings: balancedRatings,
+      bodyCost: {
+        home: { totalStress: 0.4 },
+        away: { totalStress: 4.2 },
+      },
+    });
+
+    expect(awayTired.penaltyRoom?.homeShootout).toBeGreaterThan(
+      homeTired.penaltyRoom?.homeShootout ?? 0,
+    );
+    expect(awayTired.penaltyRoom?.homeShootout).toBeLessThanOrEqual(62);
+    expect(homeTired.penaltyRoom?.homeShootout).toBeGreaterThanOrEqual(38);
   });
 });
 

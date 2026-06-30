@@ -181,6 +181,9 @@ const copy = {
     deadlock90: "90' deadlock",
     extraTime: "Extra time",
     penalties: "Penalties",
+    penaltyRoom: "Penalty room",
+    ifPens: "If it reaches pens",
+    shootoutEdge: "Shootout edge",
     advancePath: "Advance path",
     advances: "advances",
     teamEdge: "Team edge",
@@ -344,6 +347,9 @@ const copy = {
     deadlock90: "Empate 90'",
     extraTime: "Prórroga",
     penalties: "Penales",
+    penaltyRoom: "Sala de penales",
+    ifPens: "Si llega a penales",
+    shootoutEdge: "Ventaja en penales",
     advancePath: "Ruta para avanzar",
     advances: "avanza",
     teamEdge: "Ventaja",
@@ -507,6 +513,9 @@ const copy = {
     deadlock90: "Blocage 90'",
     extraTime: "Prolongation",
     penalties: "Tirs au but",
+    penaltyRoom: "Salle des tirs",
+    ifPens: "Si cela va aux tirs",
+    shootoutEdge: "Avantage tirs",
     advancePath: "Voie de qualification",
     advances: "se qualifie",
     teamEdge: "Avantage",
@@ -3626,6 +3635,11 @@ function KnockoutLanePanel({
     lane.projectedAdvancer === "home"
       ? match.home.color
       : match.away.color;
+  const penaltyRoom = lane.penaltyRoom;
+  const penaltyEdgeTeam =
+    penaltyRoom?.projectedEdge === "home" ? match.home : match.away;
+  const penaltyEdgeColor =
+    penaltyRoom?.projectedEdge === "home" ? match.home.color : match.away.color;
 
   return (
     <section className="knockout-lane-panel">
@@ -3657,6 +3671,48 @@ function KnockoutLanePanel({
           <strong>{advancerProbability}%</strong>
         </span>
       </div>
+      {penaltyRoom ? (
+        <div className="penalty-room-panel">
+          <div className="penalty-room-head">
+            <span>
+              <ShieldCheck size={14} />
+              {t.ifPens}
+            </span>
+            <strong>
+              <TeamFlag
+                accentColor={penaltyEdgeColor}
+                team={penaltyEdgeTeam}
+                compact
+              />
+              {penaltyEdgeTeam.code} {penaltyRoom.edgeProbability}%
+            </strong>
+          </div>
+          <div className="penalty-room-main">
+            <div>
+              <small>{t.shootoutEdge}</small>
+              <strong>{penaltyRoom.headline[language] ?? penaltyRoom.headline.en}</strong>
+              <em>{penaltyRoom.confidenceLabel[language] ?? penaltyRoom.confidenceLabel.en}</em>
+            </div>
+            <div className="penalty-room-meter" aria-label={t.penaltyRoom}>
+              <span>{match.home.code}</span>
+              <div>
+                <i style={{ width: `${penaltyRoom.homeShootout}%` }} />
+              </div>
+              <span>{match.away.code}</span>
+            </div>
+          </div>
+          <div className="penalty-room-receipts">
+            {penaltyRoom.receipts.slice(0, 4).map((receipt) => (
+              <span className={receipt.tone} key={receipt.id}>
+                <b>{receipt.label[language] ?? receipt.label.en}</b>
+                <strong>{receipt.value}</strong>
+                <small>{receipt.text[language] ?? receipt.text.en}</small>
+              </span>
+            ))}
+          </div>
+          <p>{penaltyRoom.summary[language] ?? penaltyRoom.summary.en}</p>
+        </div>
+      ) : null}
       <p>{lane.summary[language] ?? lane.summary.en}</p>
     </section>
   );

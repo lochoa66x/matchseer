@@ -104,7 +104,28 @@ export type KnockoutForecast = {
   homeAdvance: number;
   awayAdvance: number;
   projectedAdvancer: "home" | "away";
+  penaltyRoom?: PenaltyRoomForecast | null;
   summary: Record<Language, string>;
+};
+
+export type PenaltyRoomReceipt = {
+  id: string;
+  label: Record<Language, string>;
+  value: string;
+  tone: "edge" | "risk" | "steady";
+  text: Record<Language, string>;
+};
+
+export type PenaltyRoomForecast = {
+  chance: number;
+  homeShootout: number;
+  awayShootout: number;
+  projectedEdge: "home" | "away";
+  edgeProbability: number;
+  confidenceLabel: Record<Language, string>;
+  headline: Record<Language, string>;
+  summary: Record<Language, string>;
+  receipts: PenaltyRoomReceipt[];
 };
 
 export type MarketPulse = {
