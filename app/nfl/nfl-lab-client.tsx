@@ -3550,7 +3550,7 @@ function FantasyHero({
       : matchupReport.left;
   const sourceLabel = fantasyImport
     ? fantasyImport.sleeper?.leagueName ?? fantasyImport.label
-    : "Demo roster";
+    : "Sample roster";
   const weeklyCoach = buildFantasyWeeklyCoach({
     matchupReport,
     report,
@@ -3721,7 +3721,7 @@ function FantasyCommandCenter({
     null;
   const selectedOpponentId = selectedOpponent?.report.team.id ?? active.report.team.id;
   const leagueLabel =
-    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Demo league room";
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league room";
   const leagueMeta = [
     fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
     fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
@@ -3964,7 +3964,7 @@ function FantasyTeamPortfolio({
 }) {
   const activeId = leagueMap.active.report.team.id;
   const leagueLabel =
-    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Demo league room";
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league room";
   const leagueMeta = [
     fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
     fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
@@ -4300,7 +4300,7 @@ function FantasyBestMovePanel({
             playerName={featuredPlayer?.name ?? weeklyCoach.bestMove.playerName ?? report.team.name}
             position={featuredPlayer?.position ?? report.strongestLane.position}
           />
-          <em>Generic MatchSeer art - no official player or team imagery</em>
+          <em>Sample player card - made-up avatar, real lineup context.</em>
         </div>
         <h2>{weeklyCoach.bestMove.call}</h2>
         <p>{weeklyCoach.bestMove.why}</p>
@@ -6897,7 +6897,7 @@ function FantasyImportPanel({
 }) {
   const importLabel = fantasyImport
     ? `${fantasyImport.label} · ${fantasyImport.teams.length} team${fantasyImport.teams.length === 1 ? "" : "s"}`
-    : "Seeded lab rosters";
+    : "Sample lab rosters";
   const providerLabel = providerBridgeImport
     ? `${providerBridgeImport.providerLabel} · ${providerBridgeImport.projections.length} rows`
     : "Seeded projection spine";
@@ -11715,11 +11715,11 @@ function buildFantasySourceLanes({
       label: "Roster source",
       message: fantasyImport
         ? "Imported teams drive team analysis, lineup checks, and comparisons."
-        : "Demo rosters are carrying the lab until a league or roster lands.",
+        : "Sample rosters are carrying the lab until a league or roster lands.",
       positions: fantasyPositionCountsFromPlayers(
         fantasyImport?.players.length ? fantasyImport.players : players,
       ),
-      providerName: fantasyImport?.label ?? "Seeded lab rosters",
+      providerName: fantasyImport?.label ?? "Sample lab rosters",
       rows: { ...emptyFantasySourceRows(), roster: rosterRows },
       source: fantasyImport?.source ?? "demo",
       status: fantasyImport ? "live" : "fallback",
