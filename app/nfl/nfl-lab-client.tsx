@@ -822,9 +822,9 @@ const proFootballShortDisclaimer =
 const proFootballFullDisclaimer =
   `Pro Football Seer is an independent, experimental pro football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun game companion, not as professional advice.`;
 const fantasySeerShortDisclaimer =
-  `${independentSportsDisclaimer} Fantasy Seer is for fun lineup analysis and algorithm testing, not betting or professional advice.`;
+  `${independentSportsDisclaimer} Fantasy Seer is for fun lineup analysis and algorithm testing, not betting or professional advice. Player visuals are generic MatchSeer avatars, never official photos, logos, helmets, or team marks.`;
 const fantasySeerFullDisclaimer =
-  `Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun decision companion, not as professional advice.`;
+  `Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. ${independentSportsDisclaimer} Player visuals are generic MatchSeer-created placeholders and do not represent official player photos, team logos, helmets, uniforms, or league marks. ${experimentalUseDisclaimer} Use it as a fun decision companion, not as professional advice.`;
 
 const teams = {
   bal: {
@@ -4300,7 +4300,7 @@ function FantasyBestMovePanel({
             playerName={featuredPlayer?.name ?? weeklyCoach.bestMove.playerName ?? report.team.name}
             position={featuredPlayer?.position ?? report.strongestLane.position}
           />
-          <em>Sample player card - made-up avatar, real lineup context.</em>
+          <em>Role lens - projection, range, and matchup context.</em>
         </div>
         <h2>{weeklyCoach.bestMove.call}</h2>
         <p>{weeklyCoach.bestMove.why}</p>
@@ -11721,7 +11721,7 @@ function buildFantasySourceLanes({
       ),
       providerName: fantasyImport?.label ?? "Sample lab rosters",
       rows: { ...emptyFantasySourceRows(), roster: rosterRows },
-      source: fantasyImport?.source ?? "demo",
+      source: fantasyImport?.source ?? "sample",
       status: fantasyImport ? "live" : "fallback",
       trustWeight: fantasyRosterTrust(fantasyImport),
     },
