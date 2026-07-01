@@ -15893,204 +15893,237 @@ body {
 }
 
 .nfl-generic-player-art {
-  --player-helmet-top: 10px;
-  --player-helmet-size: 19px;
-  --player-visor-top: 17px;
-  --player-visor-width: 16px;
-  --player-body-bottom: 6px;
-  --player-body-width: 42px;
-  --player-body-height: 35px;
+  --player-accent: var(--nfl-live);
+  --player-accent-soft: rgba(157, 183, 232, 0.14);
   position: relative;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
   width: 54px;
   height: 62px;
   overflow: hidden;
   isolation: isolate;
+  color: var(--nfl-ink);
   background:
-    radial-gradient(circle at 34% 18%, rgba(247, 244, 234, 0.16), transparent 27%),
-    radial-gradient(circle at 78% 68%, rgba(157, 183, 232, 0.1), transparent 32%),
-    linear-gradient(145deg, #28302e, #111819 58%, #060a0b);
-  border: 1px solid rgba(218, 205, 168, 0.16);
-  border-radius: 18px;
+    radial-gradient(circle at 50% 16%, rgba(247, 244, 234, 0.1), transparent 27%),
+    linear-gradient(145deg, rgba(40, 48, 46, 0.82), rgba(9, 14, 15, 0.96) 58%, rgba(4, 7, 8, 0.98));
+  border: 1px solid rgba(218, 205, 168, 0.14);
+  border-radius: 16px;
   box-shadow:
-    inset 0 0 0 1px rgba(247, 244, 234, 0.06),
-    0 14px 30px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px rgba(247, 244, 234, 0.045),
+    0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
-.nfl-generic-player-art::before {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(115deg, transparent 0 36%, rgba(247, 244, 234, 0.12) 37% 38%, transparent 39%),
-    linear-gradient(90deg, transparent 0 14%, rgba(247, 244, 234, 0.09) 15% 16%, transparent 17% 82%, rgba(247, 244, 234, 0.07) 83% 84%, transparent 85%);
-  content: "";
-  opacity: 0.58;
-  z-index: 4;
-}
-
-.nfl-generic-player-art::after {
-  position: absolute;
-  top: var(--player-helmet-top);
-  left: 50%;
-  width: var(--player-helmet-size);
-  height: var(--player-helmet-size);
-  background:
-    radial-gradient(circle at 34% 22%, rgba(247, 244, 234, 0.18), transparent 34%),
-    linear-gradient(145deg, #3a4340, #141b1c 62%, #050909);
-  border: 1px solid rgba(247, 244, 234, 0.18);
-  border-radius: 43% 43% 48% 48%;
-  content: "";
-  transform: translateX(-50%);
-  z-index: 6;
-}
-
-.nfl-generic-player-shadow {
-  position: absolute;
-  right: 7px;
-  bottom: 4px;
-  left: 7px;
-  height: 11px;
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.34), transparent 70%);
-  z-index: 0;
-}
-
-.nfl-generic-player-helmet,
-.nfl-generic-player-visor,
-.nfl-generic-player-shoulders,
-.nfl-generic-player-body,
-.nfl-generic-player-ball {
+.nfl-generic-player-art::before,
+.nfl-generic-player-art::after,
+.nfl-generic-player-field,
+.nfl-generic-player-ring,
+.nfl-generic-player-initials,
+.nfl-generic-player-position,
+.nfl-generic-player-role {
   position: absolute;
   display: block;
 }
 
-.nfl-generic-player-helmet {
-  top: calc(var(--player-helmet-top) + 3px);
-  left: 50%;
-  width: calc(var(--player-helmet-size) + 9px);
-  height: calc(var(--player-helmet-size) + 3px);
-  border: 1px solid rgba(157, 183, 232, 0.16);
-  border-top: 0;
-  border-radius: 42% 42% 48% 48%;
-  transform: translateX(-50%);
+.nfl-generic-player-art::before {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0 48%, rgba(247, 244, 234, 0.08) 49% 51%, transparent 52%),
+    linear-gradient(0deg, transparent 0 30%, rgba(247, 244, 234, 0.06) 31% 32%, transparent 33% 66%, rgba(247, 244, 234, 0.05) 67% 68%, transparent 69%);
+  content: "";
+  opacity: 0.62;
+  z-index: 1;
+}
+
+.nfl-generic-player-art::after {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--player-accent), transparent);
+  content: "";
+  opacity: 0.82;
   z-index: 5;
 }
 
-.nfl-generic-player-visor {
-  top: var(--player-visor-top);
-  left: 50%;
-  width: var(--player-visor-width);
-  height: 4px;
-  background: linear-gradient(90deg, rgba(5, 8, 9, 0.98), rgba(38, 48, 48, 0.88));
-  border: 1px solid rgba(247, 244, 234, 0.1);
-  border-radius: 999px;
-  transform: translateX(-50%);
-  z-index: 7;
-}
-
-.nfl-generic-player-shoulders {
-  right: 6px;
-  bottom: 15px;
-  left: 6px;
-  height: 20px;
+.nfl-generic-player-field {
+  inset: 7px;
   background:
-    radial-gradient(circle at 16% 62%, rgba(247, 244, 234, 0.12), transparent 24%),
-    radial-gradient(circle at 84% 62%, rgba(247, 244, 234, 0.12), transparent 24%),
-    linear-gradient(145deg, rgba(55, 64, 61, 0.96), rgba(12, 17, 18, 0.9));
-  border: 1px solid rgba(247, 244, 234, 0.08);
-  border-radius: 18px 18px 9px 9px;
+    radial-gradient(circle at 50% 50%, transparent 0 35%, rgba(247, 244, 234, 0.055) 36% 37%, transparent 38%),
+    linear-gradient(90deg, transparent 0 18%, rgba(247, 244, 234, 0.055) 19% 20%, transparent 21% 79%, rgba(247, 244, 234, 0.05) 80% 81%, transparent 82%);
+  border: 1px solid rgba(247, 244, 234, 0.055);
+  border-radius: 12px;
+  opacity: 0.72;
   z-index: 2;
 }
 
-.nfl-generic-player-body {
-  bottom: var(--player-body-bottom);
+.nfl-generic-player-ring {
+  top: 11px;
   left: 50%;
-  width: var(--player-body-width);
-  height: var(--player-body-height);
+  width: 30px;
+  height: 30px;
   background:
-    linear-gradient(115deg, transparent 0 26%, rgba(247, 244, 234, 0.12) 27% 29%, transparent 30%),
-    linear-gradient(245deg, transparent 0 26%, rgba(157, 183, 232, 0.08) 27% 29%, transparent 30%),
-    linear-gradient(160deg, #303936, #141b1b 62%, #070b0c);
-  border: 1px solid rgba(247, 244, 234, 0.1);
-  border-radius: 20px 20px 10px 10px;
-  clip-path: polygon(18% 0, 82% 0, 100% 50%, 82% 100%, 18% 100%, 0 50%);
+    radial-gradient(circle, rgba(6, 10, 10, 0.84) 0 46%, transparent 47%),
+    conic-gradient(from 210deg, rgba(247, 244, 234, 0.14), var(--player-accent), rgba(247, 244, 234, 0.08));
+  border-radius: 999px;
   transform: translateX(-50%);
   z-index: 3;
 }
 
-.nfl-generic-player-ball {
-  right: 7px;
-  bottom: 25px;
-  width: 12px;
-  height: 16px;
-  background:
-    linear-gradient(90deg, rgba(247, 244, 234, 0.13), transparent 44%),
-    linear-gradient(145deg, #514437, #1d1713);
-  border: 1px solid rgba(247, 244, 234, 0.16);
-  border-radius: 50%;
-  opacity: 0;
-  transform: rotate(-28deg);
-  z-index: 8;
+.nfl-generic-player-initials {
+  top: 15px;
+  left: 50%;
+  width: 30px;
+  overflow: hidden;
+  color: #f7f4ea;
+  font-size: 0.72rem;
+  font-weight: 980;
+  line-height: 1;
+  text-align: center;
+  text-overflow: clip;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 4;
 }
 
-.nfl-generic-player-art.pos-qb .nfl-generic-player-ball {
-  opacity: 1;
+.nfl-generic-player-position {
+  right: 6px;
+  bottom: 8px;
+  left: 6px;
+  min-height: 16px;
+  padding: 3px 5px;
+  overflow: hidden;
+  color: rgba(247, 244, 234, 0.88);
+  background: rgba(3, 7, 7, 0.54);
+  border: 1px solid rgba(247, 244, 234, 0.08);
+  border-radius: 999px;
+  font-size: 0.52rem;
+  font-weight: 950;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  z-index: 4;
 }
 
-.nfl-generic-player-art.pos-rb .nfl-generic-player-body,
-.nfl-generic-player-art.pos-wr .nfl-generic-player-body {
-  transform: translateX(-50%) skewX(-5deg);
+.nfl-generic-player-role {
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background: var(--player-accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px var(--player-accent-soft);
+  z-index: 4;
 }
 
-.nfl-generic-player-art.pos-te .nfl-generic-player-body,
-.nfl-generic-player-art.pos-dst .nfl-generic-player-body {
-  width: calc(var(--player-body-width) + 4px);
+.nfl-generic-player-art.pos-qb {
+  --player-accent: #d7b45a;
+  --player-accent-soft: rgba(215, 180, 90, 0.16);
+}
+
+.nfl-generic-player-art.pos-rb {
+  --player-accent: #cfa88f;
+  --player-accent-soft: rgba(207, 168, 143, 0.15);
+}
+
+.nfl-generic-player-art.pos-wr {
+  --player-accent: #9db7e8;
+  --player-accent-soft: rgba(157, 183, 232, 0.16);
+}
+
+.nfl-generic-player-art.pos-te {
+  --player-accent: #b8c7a2;
+  --player-accent-soft: rgba(184, 199, 162, 0.15);
+}
+
+.nfl-generic-player-art.pos-k {
+  --player-accent: #d9dfd3;
+  --player-accent-soft: rgba(217, 223, 211, 0.13);
+}
+
+.nfl-generic-player-art.pos-dst {
+  --player-accent: #e87954;
+  --player-accent-soft: rgba(232, 121, 84, 0.15);
 }
 
 .nfl-generic-player-art.compact {
-  --player-helmet-top: 7px;
-  --player-helmet-size: 14px;
-  --player-visor-top: 12px;
-  --player-visor-width: 12px;
-  --player-body-bottom: 4px;
-  --player-body-width: 32px;
-  --player-body-height: 26px;
   width: 42px;
   height: 46px;
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
-.nfl-generic-player-art.compact .nfl-generic-player-shoulders {
+.nfl-generic-player-art.compact .nfl-generic-player-field {
+  inset: 5px;
+  border-radius: 9px;
+}
+
+.nfl-generic-player-art.compact .nfl-generic-player-ring {
+  top: 7px;
+  width: 24px;
+  height: 24px;
+}
+
+.nfl-generic-player-art.compact .nfl-generic-player-initials {
+  top: 11px;
+  width: 24px;
+  font-size: 0.6rem;
+}
+
+.nfl-generic-player-art.compact .nfl-generic-player-position {
   right: 5px;
-  bottom: 11px;
+  bottom: 5px;
   left: 5px;
-  height: 15px;
+  min-height: 13px;
+  padding: 2px 4px;
+  font-size: 0.44rem;
+}
+
+.nfl-generic-player-art.compact .nfl-generic-player-role {
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
 }
 
 .nfl-generic-player-art.hero {
-  --player-helmet-top: 15px;
-  --player-helmet-size: 27px;
-  --player-visor-top: 25px;
-  --player-visor-width: 23px;
-  --player-body-bottom: 10px;
-  --player-body-width: 64px;
-  --player-body-height: 51px;
-  width: 82px;
+  width: 84px;
   height: 94px;
-  border-radius: 24px;
+  border-radius: 20px;
 }
 
-.nfl-generic-player-art.hero .nfl-generic-player-shoulders {
+.nfl-generic-player-art.hero .nfl-generic-player-field {
+  inset: 10px;
+  border-radius: 16px;
+}
+
+.nfl-generic-player-art.hero .nfl-generic-player-ring {
+  top: 17px;
+  width: 43px;
+  height: 43px;
+}
+
+.nfl-generic-player-art.hero .nfl-generic-player-initials {
+  top: 25px;
+  width: 43px;
+  font-size: 0.95rem;
+}
+
+.nfl-generic-player-art.hero .nfl-generic-player-position {
   right: 9px;
-  bottom: 22px;
+  bottom: 11px;
   left: 9px;
-  height: 28px;
+  min-height: 20px;
+  padding: 4px 7px;
+  font-size: 0.62rem;
 }
 
-.nfl-generic-player-art.hero .nfl-generic-player-ball {
-  right: 12px;
-  bottom: 39px;
-  width: 17px;
-  height: 22px;
+.nfl-generic-player-art.hero .nfl-generic-player-role {
+  top: 13px;
+  right: 13px;
+  width: 10px;
+  height: 10px;
 }
 
 .nfl-player-avatar {

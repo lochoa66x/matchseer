@@ -4229,6 +4229,7 @@ function fantasyPortfolioOpponentTradeRead(
 
 function FantasyPlayerArtwork({
   className,
+  playerName,
   position,
 }: {
   className?: string;
@@ -4236,18 +4237,21 @@ function FantasyPlayerArtwork({
   position?: string;
 }) {
   const normalizedPosition = position ? normalizeScoutingPosition(position) : undefined;
+  const positionLabel = normalizedPosition ? scoutingRankLabel(normalizedPosition) : "Flex";
+  const initials = playerName
+    ? fantasyPlayerInitials(playerName)
+    : positionLabel.slice(0, 2).toUpperCase();
   const poseClass = normalizedPosition
     ? `pos-${normalizedPosition.toLowerCase()}`
     : "pos-flex";
 
   return (
     <span className={cx("nfl-generic-player-art", poseClass, className)} aria-hidden="true">
-      <i className="nfl-generic-player-shadow" />
-      <span className="nfl-generic-player-helmet" />
-      <span className="nfl-generic-player-visor" />
-      <span className="nfl-generic-player-shoulders" />
-      <span className="nfl-generic-player-body" />
-      <span className="nfl-generic-player-ball" />
+      <span className="nfl-generic-player-field" />
+      <span className="nfl-generic-player-ring" />
+      <span className="nfl-generic-player-initials">{initials}</span>
+      <span className="nfl-generic-player-position">{positionLabel}</span>
+      <span className="nfl-generic-player-role" />
     </span>
   );
 }
