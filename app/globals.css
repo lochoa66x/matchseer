@@ -16804,6 +16804,11 @@ body {
   min-width: 0;
 }
 
+.nfl-fantasy-command-center-controls label.room,
+.nfl-fantasy-room-meta {
+  grid-column: 1 / -1;
+}
+
 .nfl-fantasy-command-center-controls span {
   color: var(--nfl-muted);
   font-size: 0.66rem;
@@ -16824,6 +16829,62 @@ body {
   font: inherit;
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.nfl-fantasy-room-meta {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.nfl-fantasy-room-meta span {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: rgba(247, 244, 234, 0.035);
+  border: 1px solid rgba(218, 205, 168, 0.09);
+  border-radius: 10px;
+  text-transform: none;
+}
+
+.nfl-fantasy-room-meta b {
+  color: var(--nfl-muted);
+  font-size: 0.58rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-room-meta strong {
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-room-meta button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 10px;
+  color: rgba(217, 223, 211, 0.8);
+  background: rgba(247, 244, 234, 0.045);
+  border: 1px solid rgba(218, 205, 168, 0.12);
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.nfl-fantasy-room-meta button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .nfl-fantasy-command-center-body {
@@ -17129,6 +17190,14 @@ body {
 
   .nfl-fantasy-command-center-controls {
     padding: 8px;
+  }
+
+  .nfl-fantasy-room-meta {
+    flex-direction: column;
+  }
+
+  .nfl-fantasy-room-meta button {
+    width: 100%;
   }
 
   .nfl-fantasy-selected-team-card {

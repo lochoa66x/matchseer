@@ -606,6 +606,29 @@ type SleeperSavedConnection = {
   week: string;
 };
 
+type FantasySavedRoom = {
+  id: string;
+  importedLeague: ImportedFantasyLeague;
+  activeTeamId?: string;
+  opponentTeamId?: string;
+  scoringFormat?: ScoringFormat;
+  teamLens?: FantasyTeamLens;
+  fantasyView?: FantasyView;
+  refreshedAt?: string;
+  savedAt: string;
+};
+
+type FantasySavedRoomState = {
+  activeRoomId?: string;
+  activeTeamId?: string;
+  opponentTeamId?: string;
+  scoringFormat?: ScoringFormat;
+  teamLens?: FantasyTeamLens;
+  fantasyView?: FantasyView;
+  updatedAt: string;
+  rooms: FantasySavedRoom[];
+};
+
 type NflSeerDataset = {
   source: "espn-scoreboard" | "configured-feed" | "seeded-fallback";
   season: string;
@@ -1099,6 +1122,7 @@ const seededNflDataset: NflSeerDataset = {
 };
 
 const sleeperStorageKey = "matchseer:nfl-fantasy:sleeper-connection:v1";
+const fantasyRoomStorageKey = "matchseer:fantasy-seer:rooms:v1";
 
 export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
@@ -1117,6 +1141,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [activeFantasyTeamId, setActiveFantasyTeamId] = useState("seer-house");
   const [opponentFantasyTeamId, setOpponentFantasyTeamId] = useState("rival-house");
   const [fantasyImport, setFantasyImport] = useState<ImportedFantasyLeague | null>(null);
+  const [savedFantasyRooms, setSavedFantasyRooms] = useState<FantasySavedRoom[]>([]);
+  const [activeFantasyRoomId, setActiveFantasyRoomId] = useState<string | null>(null);
+  const [fantasyRoomsHydrated, setFantasyRoomsHydrated] = useState(false);
   const [providerBridgeImport, setProviderBridgeImport] =
     useState<FantasyProviderBridgeImport | null>(null);
   const [providerBridgeText, setProviderBridgeText] = useState(sampleProviderBridgeText);
@@ -1414,6 +1441,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       teamLens,
     ],
   );
+  const activeFantasySavedRoom = useMemo(
+    () =>
+      savedFantasyRooms.find((room) => room.id === activeFantasyRoomId) ??
+      (fantasyImport
+        ? savedFantasyRooms.find(
+            (room) => room.id === fantasyRoomIdForLeague(fantasyImport),
+          )
+        : null) ??
+      null,
+    [activeFantasyRoomId, fantasyImport, savedFantasyRooms],
+  );
   const fantasyTradeBuilder = useMemo(
     () =>
       buildFantasyTradePackages({
@@ -1496,10 +1534,48 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   }, [matchups, nflDataset.weekLabel]);
 
   useEffect(() => {
+    const savedRoomState = readFantasySavedRoomState();
+    const savedRoom =
+      savedRoomState?.rooms.find((room) => room.id === savedRoomState.activeRoomId) ??
+      savedRoomState?.rooms[0] ??
+      null;
+
+    if (savedRoomState) {
+      setSavedFantasyRooms(savedRoomState.rooms);
+
+      if (isScoringFormat(savedRoomState.scoringFormat)) {
+        setScoringFormat(savedRoomState.scoringFormat);
+      }
+
+      if (isFantasyTeamLens(savedRoomState.teamLens)) {
+        setTeamLens(savedRoomState.teamLens);
+      }
+
+      if (isFantasyView(savedRoomState.fantasyView)) {
+        setFantasyView(savedRoomState.fantasyView);
+      }
+
+      if (typeof savedRoomState.activeTeamId === "string") {
+        setActiveFantasyTeamId(savedRoomState.activeTeamId);
+      }
+
+      if (typeof savedRoomState.opponentTeamId === "string") {
+        setOpponentFantasyTeamId(savedRoomState.opponentTeamId);
+      }
+    }
+
+    if (savedRoom) {
+      restoreFantasySavedRoom(savedRoom);
+      setFantasyRoomsHydrated(true);
+      setSleeperRestoreComplete(true);
+      return;
+    }
+
     const savedConnection = readSleeperSavedConnection();
 
     if (savedConnection) {
       setFantasyImport(savedConnection.importedLeague);
+      setActiveFantasyRoomId(fantasyRoomIdForLeague(savedConnection.importedLeague));
       setSleeperQuery(savedConnection.query);
       setSleeperLookupUserId(savedConnection.userId);
       setSleeperSelectedLeagueId(savedConnection.leagueId);
@@ -1531,8 +1607,59 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       setSleeperPendingRestoreRefresh(true);
     }
 
+    setFantasyRoomsHydrated(true);
     setSleeperRestoreComplete(true);
   }, []);
+
+  useEffect(() => {
+    if (!fantasyRoomsHydrated) {
+      return;
+    }
+
+    const nextActiveRoomId = fantasyImport
+      ? fantasyRoomIdForLeague(fantasyImport)
+      : activeFantasyRoomId ?? undefined;
+
+    setSavedFantasyRooms((currentRooms) => {
+      const nextRooms = fantasyImport
+        ? upsertFantasySavedRoom(
+            currentRooms,
+            buildFantasySavedRoom({
+              activeTeamId: activeFantasyTeamId,
+              fantasyView,
+              importedLeague: fantasyImport,
+              opponentTeamId: opponentFantasyTeamId,
+              refreshedAt: sleeperLastRefreshedAt || undefined,
+              scoringFormat,
+              teamLens,
+            }),
+          )
+        : currentRooms;
+
+      writeFantasySavedRoomState({
+        activeRoomId: nextActiveRoomId,
+        activeTeamId: activeFantasyTeamId,
+        fantasyView,
+        opponentTeamId: opponentFantasyTeamId,
+        rooms: nextRooms,
+        scoringFormat,
+        teamLens,
+        updatedAt: new Date().toISOString(),
+      });
+
+      return sameFantasySavedRooms(currentRooms, nextRooms) ? currentRooms : nextRooms;
+    });
+  }, [
+    activeFantasyRoomId,
+    activeFantasyTeamId,
+    fantasyImport,
+    fantasyRoomsHydrated,
+    fantasyView,
+    opponentFantasyTeamId,
+    scoringFormat,
+    sleeperLastRefreshedAt,
+    teamLens,
+  ]);
 
   useEffect(() => {
     if (
@@ -1605,21 +1732,34 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       return;
     }
 
+    const activeIsValid = fantasyImport.teams.some(
+      (team) => team.id === activeFantasyTeamId,
+    );
+    const opponentIsValid =
+      fantasyImport.teams.some((team) => team.id === opponentFantasyTeamId) &&
+      (opponentFantasyTeamId !== activeFantasyTeamId || fantasyImport.teams.length === 1);
+
+    if (activeIsValid && opponentIsValid) {
+      return;
+    }
+
     const suggestedTeam =
+      (activeIsValid
+        ? fantasyImport.teams.find((team) => team.id === activeFantasyTeamId)
+        : undefined) ??
       fantasyImport.teams.find((team) => team.id === fantasyImport.suggestedTeamId) ??
       fantasyImport.teams[0];
     const suggestedOpponent =
-      fantasyImport.teams.find(
-        (team) => team.id === fantasyImport.suggestedOpponentTeamId,
-      ) ??
+      (opponentIsValid
+        ? fantasyImport.teams.find((team) => team.id === opponentFantasyTeamId)
+        : undefined) ??
+      fantasyImport.teams.find((team) => team.id === fantasyImport.suggestedOpponentTeamId) ??
       fantasyImport.teams.find((team) => team.id !== suggestedTeam.id) ??
       suggestedTeam;
 
     setActiveFantasyTeamId(suggestedTeam.id);
-    setOpponentFantasyTeamId(
-      suggestedOpponent.id,
-    );
-  }, [fantasyImport]);
+    setOpponentFantasyTeamId(suggestedOpponent.id);
+  }, [activeFantasyTeamId, fantasyImport, opponentFantasyTeamId]);
 
   useEffect(() => {
     if (!fantasyTeams.some((team) => team.id === activeFantasyTeamId)) {
@@ -1654,6 +1794,116 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       const next = { ...current };
       delete next[activeMatchup.id];
       return next;
+    });
+  }
+
+  function restoreFantasySavedRoom(room: FantasySavedRoom) {
+    const importedLeague = room.importedLeague;
+    const restoredTeam =
+      importedLeague.teams.find((team) => team.id === room.activeTeamId) ??
+      importedLeague.teams.find((team) => team.id === importedLeague.suggestedTeamId) ??
+      importedLeague.teams[0];
+    const restoredOpponent =
+      importedLeague.teams.find(
+        (team) => team.id === room.opponentTeamId && team.id !== restoredTeam?.id,
+      ) ??
+      importedLeague.teams.find(
+        (team) => team.id === importedLeague.suggestedOpponentTeamId,
+      ) ??
+      importedLeague.teams.find((team) => team.id !== restoredTeam?.id) ??
+      restoredTeam;
+
+    setActiveFantasyRoomId(room.id);
+    setFantasyImport(importedLeague);
+
+    if (restoredTeam) {
+      setActiveFantasyTeamId(restoredTeam.id);
+    }
+
+    if (restoredOpponent) {
+      setOpponentFantasyTeamId(restoredOpponent.id);
+    }
+
+    if (isScoringFormat(room.scoringFormat)) {
+      setScoringFormat(room.scoringFormat);
+    } else if (importedLeague.suggestedScoringFormat) {
+      setScoringFormat(importedLeague.suggestedScoringFormat);
+    }
+
+    if (isFantasyTeamLens(room.teamLens)) {
+      setTeamLens(room.teamLens);
+    } else if ((importedLeague.settings?.taxiSlots ?? 0) > 0) {
+      setTeamLens("dynasty");
+    }
+
+    if (isFantasyView(room.fantasyView)) {
+      setFantasyView(room.fantasyView);
+    }
+
+    if (importedLeague.sleeper) {
+      const refreshedAt = room.refreshedAt ?? room.savedAt;
+
+      setSleeperLookupUserId(importedLeague.sleeper.userId ?? "");
+      setSleeperSelectedLeagueId(importedLeague.sleeper.leagueId);
+      setSleeperLastRefreshedAt(refreshedAt);
+      setSleeperWeek(String(importedLeague.sleeper.week ?? ""));
+      setSleeperImportStatus(
+        importedLeague.sleeper.status === "no-matchup" ? "no-matchup" : "imported",
+      );
+      setSleeperImportMessage(
+        `${sleeperImportSuccessMessage(importedLeague)} Last refreshed ${formatDataUpdated(refreshedAt)}.`,
+      );
+      setSleeperPendingRestoreRefresh(true);
+    } else {
+      setSleeperSelectedLeagueId("");
+      setSleeperLastRefreshedAt("");
+      setSleeperImportStatus("idle");
+    }
+  }
+
+  function handleSavedFantasyRoomChange(roomId: string) {
+    const room = savedFantasyRooms.find((savedRoom) => savedRoom.id === roomId);
+
+    if (room) {
+      restoreFantasySavedRoom(room);
+    }
+  }
+
+  function handleRemoveSavedFantasyRoom(roomId: string) {
+    const nextRooms = savedFantasyRooms.filter((room) => room.id !== roomId);
+    const removedActiveRoom = activeFantasyRoomId === roomId;
+    const nextActiveRoom = removedActiveRoom ? nextRooms[0] ?? null : activeFantasySavedRoom;
+
+    setSavedFantasyRooms(nextRooms);
+
+    if (removedActiveRoom) {
+      if (nextActiveRoom) {
+        restoreFantasySavedRoom(nextActiveRoom);
+      } else {
+        setActiveFantasyRoomId(null);
+        setFantasyImport(null);
+        setSleeperSelectedLeagueId("");
+        setSleeperLastRefreshedAt("");
+        setSleeperImportStatus("idle");
+        setSleeperImportMessage(
+          "Saved room removed. Connect Sleeper or paste rosters when you want a fresh read.",
+        );
+      }
+    }
+
+    writeFantasySavedRoomState({
+      activeRoomId: nextActiveRoom?.id,
+      activeTeamId: removedActiveRoom
+        ? nextActiveRoom?.activeTeamId
+        : activeFantasyTeamId,
+      fantasyView,
+      opponentTeamId: removedActiveRoom
+        ? nextActiveRoom?.opponentTeamId
+        : opponentFantasyTeamId,
+      rooms: nextRooms,
+      scoringFormat,
+      teamLens,
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -1735,6 +1985,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     importedLeague: ImportedFantasyLeague,
     message: string,
   ) {
+    setActiveFantasyRoomId(fantasyRoomIdForLeague(importedLeague));
     setFantasyImport(importedLeague);
     setSleeperImportMessage(message);
     setManualImportMessage(message);
@@ -2484,12 +2735,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       ) : (
         <>
           <FantasyCommandCenter
+            activeRoom={activeFantasySavedRoom}
+            activeRoomId={activeFantasyRoomId}
             fantasyImport={fantasyImport}
             leagueMap={fantasyLeaguePowerMap}
             onOpponentTeamChange={setOpponentFantasyTeamId}
+            onRemoveSavedRoom={handleRemoveSavedFantasyRoom}
+            onSavedRoomChange={handleSavedFantasyRoomChange}
             onTeamChange={setActiveFantasyTeamId}
             onViewChange={setFantasyView}
             opponentTeamId={opponentFantasyTeam.id}
+            savedRooms={savedFantasyRooms}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
           />
@@ -3693,21 +3949,31 @@ function FantasyHero({
 }
 
 function FantasyCommandCenter({
+  activeRoom,
+  activeRoomId,
   fantasyImport,
   leagueMap,
   opponentTeamId,
   onOpponentTeamChange,
+  onRemoveSavedRoom,
+  onSavedRoomChange,
   onTeamChange,
   onViewChange,
+  savedRooms,
   sourceLanes,
   teamLens,
 }: {
+  activeRoom: FantasySavedRoom | null;
+  activeRoomId: string | null;
   fantasyImport: ImportedFantasyLeague | null;
   leagueMap: FantasyLeaguePowerMap;
   opponentTeamId: string;
   onOpponentTeamChange: (teamId: string) => void;
+  onRemoveSavedRoom: (roomId: string) => void;
+  onSavedRoomChange: (roomId: string) => void;
   onTeamChange: (teamId: string) => void;
   onViewChange: (view: FantasyView) => void;
+  savedRooms: FantasySavedRoom[];
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
 }) {
@@ -3733,6 +3999,10 @@ function FantasyCommandCenter({
     ? fantasyPortfolioOpponentTradeRead(selectedOpponent, active)
     : null;
   const liveSourceCount = sourceLanes.filter((lane) => lane.status === "live").length;
+  const roomFreshness =
+    activeRoom?.refreshedAt ??
+    activeRoom?.savedAt ??
+    (fantasyImport ? new Date().toISOString() : "");
 
   function handleTeamChange(teamId: string) {
     onTeamChange(teamId);
@@ -3765,8 +4035,26 @@ function FantasyCommandCenter({
           </p>
         </div>
         <div className="nfl-fantasy-command-center-controls">
+          <label className="room">
+            <span>Saved leagues</span>
+            <select
+              disabled={savedRooms.length === 0}
+              onChange={(event) => onSavedRoomChange(event.target.value)}
+              value={activeRoomId ?? savedRooms[0]?.id ?? "sample-room"}
+            >
+              {savedRooms.length > 0 ? (
+                savedRooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {fantasySavedRoomLabel(room)}
+                  </option>
+                ))
+              ) : (
+                <option value="sample-room">Sample room</option>
+              )}
+            </select>
+          </label>
           <label>
-            <span>My team</span>
+            <span>Current team</span>
             <select
               onChange={(event) => handleTeamChange(event.target.value)}
               value={active.report.team.id}
@@ -3796,6 +4084,23 @@ function FantasyCommandCenter({
               )}
             </select>
           </label>
+          <div className="nfl-fantasy-room-meta">
+            <span>
+              <b>Last refreshed</b>
+              <strong>{roomFreshness ? formatDataUpdated(roomFreshness) : "Sample mode"}</strong>
+            </span>
+            <button
+              disabled={!activeRoomId || savedRooms.length === 0}
+              onClick={() => {
+                if (activeRoomId) {
+                  onRemoveSavedRoom(activeRoomId);
+                }
+              }}
+              type="button"
+            >
+              Remove saved league
+            </button>
+          </div>
         </div>
       </div>
 
@@ -11521,6 +11826,206 @@ function sleeperImportUrl({
   }
 
   return `/api/nfl/fantasy/sleeper?${params}`;
+}
+
+function fantasyRoomIdForLeague(importedLeague: ImportedFantasyLeague) {
+  if (importedLeague.sleeper?.leagueId) {
+    return `sleeper:${importedLeague.sleeper.leagueId}`;
+  }
+
+  return [
+    importedLeague.source,
+    importedLeague.id,
+    importedLeague.season ?? "season",
+    importedLeague.week ? `week-${importedLeague.week}` : "room",
+  ].join(":");
+}
+
+function buildFantasySavedRoom({
+  activeTeamId,
+  fantasyView,
+  importedLeague,
+  opponentTeamId,
+  refreshedAt,
+  scoringFormat,
+  teamLens,
+}: {
+  activeTeamId: string;
+  fantasyView: FantasyView;
+  importedLeague: ImportedFantasyLeague;
+  opponentTeamId: string;
+  refreshedAt?: string;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}): FantasySavedRoom {
+  return {
+    activeTeamId,
+    fantasyView,
+    id: fantasyRoomIdForLeague(importedLeague),
+    importedLeague,
+    opponentTeamId,
+    refreshedAt,
+    savedAt: new Date().toISOString(),
+    scoringFormat,
+    teamLens,
+  };
+}
+
+function upsertFantasySavedRoom(
+  rooms: FantasySavedRoom[],
+  nextRoom: FantasySavedRoom,
+) {
+  const existingRoom = rooms.find((room) => room.id === nextRoom.id);
+  const mergedRoom: FantasySavedRoom = {
+    ...existingRoom,
+    ...nextRoom,
+    refreshedAt: nextRoom.refreshedAt ?? existingRoom?.refreshedAt,
+  };
+  const otherRooms = rooms.filter((room) => room.id !== nextRoom.id);
+
+  return [mergedRoom, ...otherRooms].slice(0, 12);
+}
+
+function sameFantasySavedRooms(
+  currentRooms: FantasySavedRoom[],
+  nextRooms: FantasySavedRoom[],
+) {
+  return JSON.stringify(currentRooms) === JSON.stringify(nextRooms);
+}
+
+function fantasySavedRoomLabel(room: FantasySavedRoom) {
+  const league = room.importedLeague;
+  const baseLabel = league.sleeper?.leagueName ?? league.label;
+  const weekLabel = league.week ? `W${league.week}` : "current room";
+  const seasonLabel = league.season ? `${league.season}` : "Fantasy Seer";
+
+  return `${baseLabel} · ${seasonLabel} · ${weekLabel}`;
+}
+
+function readFantasySavedRoomState(): FantasySavedRoomState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawState = window.localStorage.getItem(fantasyRoomStorageKey);
+
+    if (!rawState) {
+      return null;
+    }
+
+    return sanitizeFantasySavedRoomState(JSON.parse(rawState));
+  } catch {
+    return null;
+  }
+}
+
+function writeFantasySavedRoomState(state: FantasySavedRoomState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(fantasyRoomStorageKey, JSON.stringify(state));
+  } catch {
+    // Fantasy Seer still works when local browser storage is unavailable.
+  }
+}
+
+function sanitizeFantasySavedRoomState(
+  value: unknown,
+): FantasySavedRoomState | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const saved = value as Partial<FantasySavedRoomState>;
+  const rooms = Array.isArray(saved.rooms)
+    ? saved.rooms
+        .map((room) => sanitizeFantasySavedRoom(room))
+        .filter((room): room is FantasySavedRoom => room !== null)
+    : [];
+  const activeRoomId =
+    typeof saved.activeRoomId === "string" &&
+    rooms.some((room) => room.id === saved.activeRoomId)
+      ? saved.activeRoomId
+      : rooms[0]?.id;
+
+  return {
+    activeRoomId,
+    activeTeamId:
+      typeof saved.activeTeamId === "string" ? saved.activeTeamId : undefined,
+    fantasyView: isFantasyView(saved.fantasyView) ? saved.fantasyView : undefined,
+    opponentTeamId:
+      typeof saved.opponentTeamId === "string" ? saved.opponentTeamId : undefined,
+    rooms,
+    scoringFormat: isScoringFormat(saved.scoringFormat)
+      ? saved.scoringFormat
+      : undefined,
+    teamLens: isFantasyTeamLens(saved.teamLens) ? saved.teamLens : undefined,
+    updatedAt:
+      typeof saved.updatedAt === "string" && saved.updatedAt
+        ? saved.updatedAt
+        : new Date().toISOString(),
+  };
+}
+
+function sanitizeFantasySavedRoom(value: unknown): FantasySavedRoom | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const saved = value as Partial<FantasySavedRoom>;
+  const importedLeague = sanitizeImportedFantasyLeague(saved.importedLeague);
+
+  if (!importedLeague) {
+    return null;
+  }
+
+  return {
+    activeTeamId:
+      typeof saved.activeTeamId === "string" ? saved.activeTeamId : undefined,
+    fantasyView: isFantasyView(saved.fantasyView) ? saved.fantasyView : undefined,
+    id:
+      typeof saved.id === "string" && saved.id
+        ? saved.id
+        : fantasyRoomIdForLeague(importedLeague),
+    importedLeague,
+    opponentTeamId:
+      typeof saved.opponentTeamId === "string" ? saved.opponentTeamId : undefined,
+    refreshedAt:
+      typeof saved.refreshedAt === "string" && saved.refreshedAt
+        ? saved.refreshedAt
+        : undefined,
+    savedAt:
+      typeof saved.savedAt === "string" && saved.savedAt
+        ? saved.savedAt
+        : new Date().toISOString(),
+    scoringFormat: isScoringFormat(saved.scoringFormat)
+      ? saved.scoringFormat
+      : undefined,
+    teamLens: isFantasyTeamLens(saved.teamLens) ? saved.teamLens : undefined,
+  };
+}
+
+function isScoringFormat(value: unknown): value is ScoringFormat {
+  return value === "standard" || value === "halfPpr" || value === "fullPpr";
+}
+
+function isFantasyTeamLens(value: unknown): value is FantasyTeamLens {
+  return value === "redraft" || value === "dynasty";
+}
+
+function isFantasyView(value: unknown): value is FantasyView {
+  return (
+    value === "overview" ||
+    value === "players" ||
+    value === "roster" ||
+    value === "league" ||
+    value === "trades" ||
+    value === "rookies" ||
+    value === "compare"
+  );
 }
 
 function readSleeperSavedConnection(): SleeperSavedConnection | null {
