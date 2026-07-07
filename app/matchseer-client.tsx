@@ -72,6 +72,32 @@ type SeerScoreboard = {
   survivalRate: number;
   receipts: ForecastReceipt[];
 };
+type WorldCupArchivePodiumSlot = {
+  label: string;
+  team: Team;
+  detail: string;
+};
+type WorldCupArchiveMetric = {
+  label: string;
+  value: string;
+  detail: string;
+};
+type WorldCupArchiveReport = {
+  archiveMode: boolean;
+  title: string;
+  intro: string;
+  status: string;
+  podium: WorldCupArchivePodiumSlot[];
+  metrics: WorldCupArchiveMetric[];
+  championLane: Array<{
+    team: Team;
+    signal: number;
+    detail: string;
+  }>;
+  lessons: string[];
+  improvements: string[];
+  topMisses: ForecastReceipt[];
+};
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
   reason?: string;
@@ -119,6 +145,8 @@ const copy = {
     loadingCountCopy: "match feed",
     featuredCountCopy: "featured reads",
     loadingSlow: "Still reading the feed. The Seer is checking one more signal.",
+    liveFeedSyncing: "Pulling live match feed",
+    liveFeedSyncingCopy: "Featured reads stay visible while the real schedule, venues, and market context sync.",
     feedErrorTitle: "The Seer lost the signal.",
     feedErrorCopy: "Try refreshing in a moment while the fixtures come back into focus.",
     feedEmptyTitle: "No matches loaded yet.",
@@ -166,7 +194,8 @@ const copy = {
     chaos: "Chaos",
     marketPulse: "Market pulse",
     crowdSignal: "Crowd signal",
-    marketPending: "The crowd signal hasn't formed yet — the Seer reads on its own for now.",
+    marketPending: "No clean public crowd read yet — the Seer reads on its own for now.",
+    marketPendingLabel: "No clean crowd read",
     trail: "The trail",
     trailSignals: "signals",
     waterfall: "Why it moved",
@@ -285,6 +314,8 @@ const copy = {
     loadingCountCopy: "fuente de partidos",
     featuredCountCopy: "lecturas destacadas",
     loadingSlow: "Aún leyendo la fuente. El Vidente revisa una señal más.",
+    liveFeedSyncing: "Cargando fuente en vivo",
+    liveFeedSyncingCopy: "Las lecturas destacadas siguen visibles mientras sincronizan calendario, sedes y contexto.",
     feedErrorTitle: "El Vidente perdió la señal.",
     feedErrorCopy: "Intenta refrescar en un momento mientras los partidos vuelven a foco.",
     feedEmptyTitle: "Aún no cargan partidos.",
@@ -332,7 +363,8 @@ const copy = {
     chaos: "Caos",
     marketPulse: "Pulso público",
     crowdSignal: "Señal de la gente",
-    marketPending: "La señal de la gente aún no se forma — por ahora el Vidente lee por su cuenta.",
+    marketPending: "Aún no hay una lectura pública limpia — por ahora el Vidente lee por su cuenta.",
+    marketPendingLabel: "Sin lectura limpia",
     trail: "El rastro",
     trailSignals: "señales",
     waterfall: "Por que se movio",
@@ -451,6 +483,8 @@ const copy = {
     loadingCountCopy: "flux des matchs",
     featuredCountCopy: "lectures phares",
     loadingSlow: "Lecture toujours en cours. Le voyant vérifie un dernier signal.",
+    liveFeedSyncing: "Chargement du flux en direct",
+    liveFeedSyncingCopy: "Les lectures phares restent visibles pendant la synchro du calendrier, des stades et du contexte.",
     feedErrorTitle: "Le voyant a perdu le signal.",
     feedErrorCopy: "Rafraîchis dans un instant pendant que les affiches reviennent au point.",
     feedEmptyTitle: "Aucun match chargé pour le moment.",
@@ -498,7 +532,8 @@ const copy = {
     chaos: "Chaos",
     marketPulse: "Pouls public",
     crowdSignal: "Signal du public",
-    marketPending: "Le signal du public n'a pas encore pris forme — pour l'instant, le voyant lit seul.",
+    marketPending: "Pas encore de signal public propre — pour l'instant, le voyant lit seul.",
+    marketPendingLabel: "Pas de signal propre",
     trail: "La piste",
     trailSignals: "signaux",
     waterfall: "Pourquoi ca bouge",
@@ -800,6 +835,28 @@ function MatchFeedStateCard({
           </>
         )}
         {slow && <em>{t.loadingSlow}</em>}
+      </div>
+    </div>
+  );
+}
+
+function LiveFeedWarmupNotice({
+  compact = false,
+  t,
+}: {
+  compact?: boolean;
+  t: AppCopy;
+}) {
+  return (
+    <div
+      className={cx("live-feed-warmup-notice", compact && "compact")}
+      role="status"
+      aria-live="polite"
+    >
+      <LoaderCircle className="live-feed-warmup-spinner" size={compact ? 15 : 18} />
+      <div>
+        <strong>{t.liveFeedSyncing}</strong>
+        <span>{t.liveFeedSyncingCopy}</span>
       </div>
     </div>
   );
@@ -1199,6 +1256,10 @@ export default function MatchSeerHome({
     () => buildSeerScoreboard(matches, language, t),
     [language, matches, t],
   );
+  const worldCupArchiveReport = useMemo(
+    () => buildWorldCupArchiveReport(matches, cupCandidates, seerScoreboard, language),
+    [cupCandidates, language, matches, seerScoreboard],
+  );
   useEffect(() => {
     if (
       visibleMatches.length > 0 &&
@@ -1492,6 +1553,7 @@ export default function MatchSeerHome({
               ))}
             </div>
           </div>
+          {usingFeaturedFallback && <LiveFeedWarmupNotice t={t} />}
 
           <div className="hero-match-list">
             {visibleMatches.length === 0 && (
@@ -1620,6 +1682,7 @@ export default function MatchSeerHome({
             }}
             showAsk={activeMatchCanAsk}
             compact
+            feedWarming={usingFeaturedFallback}
           />
 
           <div className="seer-share-row">
@@ -1680,6 +1743,13 @@ export default function MatchSeerHome({
           }}
           pulseLabel={cupPulseLabel}
           t={t}
+        />
+      )}
+
+      {!usingFeaturedFallback && (
+        <WorldCupArchiveReportBoard
+          onSelectMatch={(matchId) => setActiveMatchId(matchId)}
+          report={worldCupArchiveReport}
         />
       )}
 
@@ -2341,6 +2411,290 @@ function buildSeerScoreboard(
     survivalRate: reviewed > 0 ? Math.round((winnerHits / reviewed) * 100) : 0,
     receipts: reviewedReceipts,
   };
+}
+
+function buildWorldCupArchiveReport(
+  matches: Match[],
+  candidates: CupCandidate[],
+  scoreboard: SeerScoreboard,
+  language: Language,
+): WorldCupArchiveReport {
+  const finalMatch = matches.find(isWorldCupFinalMatch);
+  const thirdPlaceMatch = matches.find(isThirdPlaceMatch);
+  const finalResult = matchResultTeams(finalMatch);
+  const thirdPlaceResult = matchResultTeams(thirdPlaceMatch);
+  const archiveMode = Boolean(finalResult);
+  const usedTeams = new Set<string>();
+  const podium: WorldCupArchivePodiumSlot[] = [];
+
+  if (finalResult) {
+    podium.push({
+      detail: finalMatch?.score ?? "Final",
+      label: archiveLabel(language, "Champion"),
+      team: finalResult.winner,
+    });
+    podium.push({
+      detail: finalMatch?.score ?? "Final",
+      label: archiveLabel(language, "Runner-up"),
+      team: finalResult.loser,
+    });
+    usedTeams.add(finalResult.winner.name);
+    usedTeams.add(finalResult.loser.name);
+  }
+
+  if (thirdPlaceResult) {
+    podium.push({
+      detail: thirdPlaceMatch?.score ?? "Third-place match",
+      label: archiveLabel(language, "Third place"),
+      team: thirdPlaceResult.winner,
+    });
+    podium.push({
+      detail: thirdPlaceMatch?.score ?? "Third-place match",
+      label: archiveLabel(language, "Fourth place"),
+      team: thirdPlaceResult.loser,
+    });
+    usedTeams.add(thirdPlaceResult.winner.name);
+    usedTeams.add(thirdPlaceResult.loser.name);
+  }
+
+  for (const [index, candidate] of candidates.entries()) {
+    if (podium.length >= 4) {
+      break;
+    }
+
+    if (usedTeams.has(candidate.team.name)) {
+      continue;
+    }
+
+    podium.push({
+      detail: `${candidate.signal}% signal · reconstructed`,
+      label: archiveMode
+        ? archiveLabel(language, `Contender #${index + 1}`)
+        : archiveLabel(language, `Current lane #${index + 1}`),
+      team: candidate.team,
+    });
+    usedTeams.add(candidate.team.name);
+  }
+
+  const drawReceipts = scoreboard.receipts.filter(
+    (receipt) => receipt.predictedSide === "draw",
+  );
+  const drawHits = drawReceipts.filter((receipt) =>
+    receipt.outcome === "exact" || receipt.outcome === "hit",
+  ).length;
+  const knockoutReceipts = scoreboard.receipts.filter((receipt) =>
+    isKnockoutRound(receipt.match),
+  );
+  const knockoutHits = knockoutReceipts.filter((receipt) =>
+    receipt.outcome === "exact" || receipt.outcome === "hit",
+  ).length;
+  const penaltyLaneMatches = matches.filter(
+    (match) => Boolean(match.forecast.knockout?.penaltyRoom),
+  );
+  const upsetReceipts = scoreboard.receipts.filter((receipt) => {
+    if (!receipt.actualSide || receipt.actualSide === "draw") {
+      return false;
+    }
+
+    return forecastProbabilityForSide(receipt.match, receipt.actualSide) <= 45;
+  });
+  const upsetHits = upsetReceipts.filter((receipt) =>
+    receipt.outcome === "exact" || receipt.outcome === "hit",
+  ).length;
+  const topMisses = scoreboard.receipts
+    .filter((receipt) => receipt.outcome === "miss")
+    .slice(0, 3);
+  const metrics = [
+    {
+      detail:
+        scoreboard.reviewed > 0
+          ? `${scoreboard.winnerHits} direction hits from ${scoreboard.reviewed} final receipts.`
+          : "Final receipts will fill this once more games complete.",
+      label: archiveLabel(language, "Direction reads"),
+      value:
+        scoreboard.reviewed > 0
+          ? `${scoreboard.survivalRate}%`
+          : "warming",
+    },
+    {
+      detail:
+        drawReceipts.length > 0
+          ? `${drawHits} of ${drawReceipts.length} draw/deadlock calls survived.`
+          : "Draw and 90-minute deadlock receipts stay separated for review.",
+      label: archiveLabel(language, "Draw lane"),
+      value: `${drawHits}/${drawReceipts.length}`,
+    },
+    {
+      detail:
+        knockoutReceipts.length > 0
+          ? `${knockoutHits} of ${knockoutReceipts.length} knockout-stage directions held.`
+          : "Knockout reads will judge advancement logic once results close.",
+      label: archiveLabel(language, "Knockout lane"),
+      value: `${knockoutHits}/${knockoutReceipts.length}`,
+    },
+    {
+      detail:
+        penaltyLaneMatches.length > 0
+          ? `${penaltyLaneMatches.length} matches carried an extra-time/penalty room.`
+          : "Penalty-room receipts will appear when a knockout read needs them.",
+      label: archiveLabel(language, "Penalty lane"),
+      value: `${penaltyLaneMatches.length}`,
+    },
+    {
+      detail:
+        upsetReceipts.length > 0
+          ? `${upsetHits} underpriced winners were caught from ${upsetReceipts.length} upset paths.`
+          : "Upset reads wake up when a lower-probability side wins.",
+      label: archiveLabel(language, "Upset reads"),
+      value: `${upsetHits}/${upsetReceipts.length}`,
+    },
+  ];
+
+  return {
+    archiveMode,
+    championLane: candidates.slice(0, 4).map((candidate) => ({
+      detail: `${candidate.advanceProbability}% path · ${candidate.matches} fixtures · reconstructed from stored forecasts`,
+      signal: candidate.signal,
+      team: candidate.team,
+    })),
+    improvements: [
+      "Save champion-lane snapshots on every sync so the final chart shows real movement, not only reconstruction.",
+      "Keep travel distance, rest days, and extra-time fatigue as first-class receipts during knockout rounds.",
+      "Separate 90-minute draw reads from advancement reads so cautious knockout games do not look like misses.",
+      "Calibrate crowd signal after every final result, especially for favorites and public-heavy teams.",
+    ],
+    intro: archiveMode
+      ? "Final results are in. This closes the tournament as a readable Seer report: what landed, what missed, and what the next model should learn."
+      : "Archive preview is live. When the final ends, this becomes the closing report with champion, podium, receipts, and lessons.",
+    lessons: [
+      scoreboard.reviewed > 0
+        ? `The model is sitting at ${scoreboard.survivalRate}% direction survival across ${scoreboard.reviewed} reviewed matches.`
+        : "The model needs more final receipts before the success story can be judged honestly.",
+      drawReceipts.length > 0
+        ? `Draw/deadlock calls were noisy: ${drawHits}/${drawReceipts.length} survived, so caution needs calibration.`
+        : "Draw pricing should stay visible, because knockout football can look like a draw for 90 minutes even when someone must advance.",
+      penaltyLaneMatches.length > 0
+        ? "Penalty rooms are already part of the read, but the archive needs shootout-result receipts to judge them cleanly."
+        : "Penalty logic is ready; it should activate only when the regulation-deadlock lane gets loud enough.",
+      "The exercise is a success if users can see both the call and the receipt. The final page should show confidence without pretending certainty.",
+    ],
+    metrics,
+    podium,
+    status: archiveMode ? "Final archive" : "Archive preview",
+    title: archiveMode ? "World Cup closing report" : "World Cup archive warming up",
+    topMisses,
+  };
+}
+
+function archiveLabel(language: Language, english: string) {
+  if (language === "es") {
+    const labels: Record<string, string> = {
+      "Champion": "Campeón",
+      "Runner-up": "Subcampeón",
+      "Third place": "Tercer lugar",
+      "Fourth place": "Cuarto lugar",
+      "Direction reads": "Dirección",
+      "Draw lane": "Empate",
+      "Knockout lane": "Eliminatoria",
+      "Penalty lane": "Penales",
+      "Upset reads": "Sorpresas",
+    };
+
+    return labels[english] ?? english;
+  }
+
+  if (language === "fr") {
+    const labels: Record<string, string> = {
+      "Champion": "Champion",
+      "Runner-up": "Finaliste",
+      "Third place": "Troisième",
+      "Fourth place": "Quatrième",
+      "Direction reads": "Directions",
+      "Draw lane": "Nuls",
+      "Knockout lane": "Élimination",
+      "Penalty lane": "Tirs au but",
+      "Upset reads": "Surprises",
+    };
+
+    return labels[english] ?? english;
+  }
+
+  return english;
+}
+
+function isWorldCupFinalMatch(match: Match) {
+  const label = `${match.stage ?? ""} ${match.group}`.toLowerCase();
+
+  return label.includes("final") && !label.includes("third") && !label.includes("3rd");
+}
+
+function isThirdPlaceMatch(match: Match) {
+  const label = `${match.stage ?? ""} ${match.group}`.toLowerCase();
+
+  return (
+    label.includes("third") ||
+    label.includes("3rd") ||
+    label.includes("bronze")
+  );
+}
+
+function isKnockoutRound(match: Match) {
+  const label = `${match.stage ?? ""} ${match.group}`.toLowerCase();
+
+  return Boolean(match.forecast.knockout) || !label.includes("group");
+}
+
+function matchResultTeams(match?: Match) {
+  if (!match || match.status !== "Final") {
+    return null;
+  }
+
+  const score = parseScoreline(match.score);
+
+  if (!score) {
+    return null;
+  }
+
+  if (score.home === score.away) {
+    const penalties = parsePenaltyScoreline(match.score);
+
+    if (!penalties || penalties.home === penalties.away) {
+      return null;
+    }
+
+    return penalties.home > penalties.away
+      ? { winner: match.home, loser: match.away }
+      : { winner: match.away, loser: match.home };
+  }
+
+  return score.home > score.away
+    ? { winner: match.home, loser: match.away }
+    : { winner: match.away, loser: match.home };
+}
+
+function parsePenaltyScoreline(value?: string) {
+  const match = value?.match(/\((\d+)\s*[-–]\s*(\d+)\s*(?:p|pens?|penalties)?\)/i);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    home: Number(match[1]),
+    away: Number(match[2]),
+  };
+}
+
+function forecastProbabilityForSide(match: Match, side: ForecastSide) {
+  if (side === "home") {
+    return match.forecast.home;
+  }
+
+  if (side === "away") {
+    return match.forecast.away;
+  }
+
+  return match.forecast.draw;
 }
 
 function buildForecastReceipt(
@@ -3044,6 +3398,124 @@ function CupSeerBoard({
   );
 }
 
+function WorldCupArchiveReportBoard({
+  onSelectMatch,
+  report,
+}: {
+  onSelectMatch: (matchId: string) => void;
+  report: WorldCupArchiveReport;
+}) {
+  return (
+    <section
+      className={cx("world-cup-archive-report", !report.archiveMode && "preview")}
+      aria-label="World Cup archive report"
+    >
+      <div className="archive-report-head">
+        <div>
+          <div className="section-heading">
+            <Trophy size={18} />
+            <span>{report.status}</span>
+          </div>
+          <h2>{report.title}</h2>
+          <p>{report.intro}</p>
+        </div>
+        <span className="archive-status-chip">
+          {report.archiveMode ? "final receipts" : "reconstructed preview"}
+        </span>
+      </div>
+
+      <div className="archive-podium-grid" aria-label="Tournament top four">
+        {report.podium.map((slot) => (
+          <div className="archive-podium-card" key={`${slot.label}-${slot.team.name}`}>
+            <span>{slot.label}</span>
+            <div>
+              <TeamFlag team={slot.team} compact />
+              <strong>{slot.team.name}</strong>
+            </div>
+            <em>{slot.detail}</em>
+          </div>
+        ))}
+      </div>
+
+      <div className="archive-metric-grid" aria-label="Seer tournament metrics">
+        {report.metrics.map((metric) => (
+          <div className="archive-metric-card" key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <p>{metric.detail}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="archive-body-grid">
+        <article>
+          <div className="section-heading">
+            <Activity size={17} />
+            <span>Champion lane</span>
+          </div>
+          <div className="archive-champion-lane">
+            {report.championLane.map((lane, index) => (
+              <div className="archive-lane-row" key={lane.team.name}>
+                <span>#{index + 1}</span>
+                <TeamFlag team={lane.team} compact />
+                <strong>{lane.team.name}</strong>
+                <b>{lane.signal}%</b>
+                <em>{lane.detail}</em>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article>
+          <div className="section-heading">
+            <Check size={17} />
+            <span>What the Seer learned</span>
+          </div>
+          <ul className="archive-note-list">
+            {report.lessons.map((lesson) => (
+              <li key={lesson}>{lesson}</li>
+            ))}
+          </ul>
+        </article>
+
+        <article>
+          <div className="section-heading">
+            <RefreshCcw size={17} />
+            <span>What changes next time</span>
+          </div>
+          <ul className="archive-note-list">
+            {report.improvements.map((improvement) => (
+              <li key={improvement}>{improvement}</li>
+            ))}
+          </ul>
+        </article>
+      </div>
+
+      <div className="archive-miss-strip">
+        <div>
+          <span>Top misses</span>
+          <strong>
+            {report.topMisses.length > 0
+              ? "Receipts to study"
+              : "No misses in the reviewed set yet"}
+          </strong>
+        </div>
+        {report.topMisses.map((receipt) => (
+          <button
+            key={receipt.match.id}
+            onClick={() => onSelectMatch(receipt.match.id)}
+            type="button"
+          >
+            <span>{receipt.match.home.code} vs {receipt.match.away.code}</span>
+            <strong>{receipt.finalScore ?? receipt.match.score}</strong>
+            <em>{receipt.summary}</em>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SeerLensStrip({ t }: { t: Record<string, string> }) {
   const [showLenses, setShowLenses] = useState(false);
   const lenses = [
@@ -3348,6 +3820,7 @@ function ForecastView({
   onAskSeer,
   showAsk = true,
   compact = false,
+  feedWarming = false,
 }: {
   match: Match;
   t: Record<string, string>;
@@ -3357,6 +3830,7 @@ function ForecastView({
   onAskSeer: () => void;
   showAsk?: boolean;
   compact?: boolean;
+  feedWarming?: boolean;
 }) {
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [showTrailDetails, setShowTrailDetails] = useState(false);
@@ -3420,6 +3894,7 @@ function ForecastView({
         </div>
         {interpretation?.headline && <p className="oracle-headline">{interpretation.headline}</p>}
         <p className="seer-line">{signalCopy}</p>
+        {feedWarming && !readIsPending && <LiveFeedWarmupNotice compact t={t as AppCopy} />}
         {readIsPending && (
           <div className="final-receipt-panel" role="status">
             <div className="final-receipt-grid">
@@ -3476,7 +3951,7 @@ function ForecastView({
                 <Activity size={15} />
                 {t.crowdSignal}
               </span>
-              {!marketPulse && <strong>{t.pendingMode}</strong>}
+              {!marketPulse && <strong>{t.marketPendingLabel}</strong>}
               <p>
                 {marketPulse
                   ? marketPulse.summary[language] ?? marketPulse.summary.en
