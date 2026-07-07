@@ -18462,3 +18462,496 @@ body {
   }
 }
 /* === End Fantasy Seer Action-First Polish === */
+
+/* === Fantasy Seer Weekly Command Hub === */
+.nfl-weekly-command-hub {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 14px;
+  padding: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(214, 186, 101, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(14, 18, 18, 0.98), rgba(18, 25, 22, 0.96));
+  border: 1px solid rgba(214, 186, 101, 0.2);
+  border-radius: 14px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+}
+
+.nfl-hub-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+
+.nfl-hub-head h2 {
+  max-width: 18ch;
+  margin: 4px 0 0;
+  color: var(--nfl-ink);
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+  letter-spacing: 0;
+  line-height: 0.98;
+}
+
+.nfl-hub-head p {
+  max-width: 46rem;
+  margin: 8px 0 0;
+  color: var(--nfl-subtle);
+  font-size: 0.86rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.nfl-hub-record {
+  display: grid;
+  min-width: 170px;
+  gap: 2px;
+  padding: 11px 12px;
+  color: var(--nfl-subtle);
+  background: rgba(247, 244, 234, 0.045);
+  border: 1px solid rgba(218, 205, 168, 0.12);
+  border-radius: 12px;
+  text-align: right;
+}
+
+.nfl-hub-record span,
+.nfl-hub-label {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nfl-hub-record strong {
+  color: var(--nfl-ink);
+  font-size: 1.2rem;
+  line-height: 1.05;
+}
+
+.nfl-hub-record em {
+  color: var(--nfl-subtle);
+  font-size: 0.73rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-hub-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(260px, 0.78fr) minmax(280px, 0.86fr);
+  gap: 12px;
+}
+
+.nfl-hub-panel,
+.nfl-hub-player-detail,
+.nfl-hub-week-room article {
+  background:
+    linear-gradient(135deg, rgba(247, 244, 234, 0.055), rgba(247, 244, 234, 0.018)),
+    rgba(7, 11, 12, 0.72);
+  border: 1px solid rgba(218, 205, 168, 0.12);
+  border-radius: 12px;
+}
+
+.nfl-hub-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.nfl-hub-matchup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.nfl-hub-matchup-row > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--nfl-muted);
+  background: rgba(247, 244, 234, 0.045);
+  border: 1px solid rgba(218, 205, 168, 0.1);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nfl-hub-matchup-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nfl-hub-matchup-row div:last-child {
+  text-align: right;
+}
+
+.nfl-hub-matchup-row strong {
+  min-width: 0;
+  color: var(--nfl-ink);
+  font-size: 1.05rem;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.nfl-hub-matchup-row em {
+  color: var(--nfl-subtle);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.nfl-hub-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-hub-metrics span,
+.nfl-hub-player-stats span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px;
+  color: var(--nfl-subtle);
+  background: rgba(247, 244, 234, 0.038);
+  border: 1px solid rgba(218, 205, 168, 0.08);
+  border-radius: 10px;
+  font-size: 0.67rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.nfl-hub-metrics b,
+.nfl-hub-player-stats strong {
+  color: var(--nfl-ink);
+  font-size: 1rem;
+  line-height: 1.05;
+  text-transform: none;
+}
+
+.nfl-hub-opportunity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nfl-hub-opportunity-list div {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  background: rgba(247, 244, 234, 0.035);
+  border: 1px solid rgba(218, 205, 168, 0.08);
+  border-radius: 10px;
+}
+
+.nfl-hub-opportunity-list span,
+.nfl-hub-player-advice span {
+  color: var(--nfl-muted);
+  font-size: 0.66rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-hub-opportunity-list strong,
+.nfl-hub-player-advice strong {
+  color: var(--nfl-ink);
+  font-size: 0.95rem;
+}
+
+.nfl-hub-opportunity-list em,
+.nfl-hub-player-advice p {
+  margin: 0;
+  color: var(--nfl-subtle);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.nfl-hub-player-list {
+  display: grid;
+  gap: 7px;
+}
+
+.nfl-hub-player-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 10px;
+  color: inherit;
+  background: rgba(247, 244, 234, 0.04);
+  border: 1px solid rgba(218, 205, 168, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.nfl-hub-player-list button:hover,
+.nfl-hub-player-list button.active {
+  background: rgba(214, 186, 101, 0.09);
+  border-color: rgba(214, 186, 101, 0.38);
+  transform: translateY(-1px);
+}
+
+.nfl-hub-player-list span {
+  min-width: 0;
+  color: var(--nfl-ink);
+  font-size: 0.9rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-hub-player-list em {
+  min-width: 0;
+  color: var(--nfl-subtle);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 820;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-hub-player-list strong {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  padding: 5px 7px;
+  color: var(--nfl-ink);
+  background: rgba(166, 196, 234, 0.12);
+  border: 1px solid rgba(166, 196, 234, 0.16);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 950;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nfl-hub-player-detail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.9fr) minmax(280px, 1.1fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 14px;
+}
+
+.nfl-hub-player-visual {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  min-width: 124px;
+}
+
+.nfl-hub-player-visual span {
+  padding: 6px 9px;
+  color: var(--nfl-ink);
+  background: rgba(214, 186, 101, 0.16);
+  border: 1px solid rgba(214, 186, 101, 0.26);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.nfl-hub-player-copy {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nfl-hub-player-copy h3 {
+  margin: 0;
+  color: var(--nfl-ink);
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.nfl-hub-player-copy p {
+  margin: 0;
+  color: var(--nfl-subtle);
+  font-size: 0.85rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.nfl-hub-player-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-hub-player-stats em {
+  color: var(--nfl-muted);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.nfl-hub-player-advice {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-hub-player-advice div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(247, 244, 234, 0.035);
+  border: 1px solid rgba(218, 205, 168, 0.08);
+  border-radius: 10px;
+}
+
+.nfl-hub-week-room {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-hub-week-room article {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 12px;
+}
+
+.nfl-hub-week-room span {
+  color: var(--nfl-brass);
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.nfl-hub-week-room strong {
+  color: var(--nfl-ink);
+  font-size: 0.95rem;
+}
+
+.nfl-hub-week-room p {
+  margin: 0;
+  color: var(--nfl-subtle);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+@media (max-width: 1120px) {
+  .nfl-hub-grid,
+  .nfl-hub-player-detail,
+  .nfl-hub-week-room {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-hub-player-visual {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .nfl-hub-head {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-hub-record {
+    text-align: left;
+  }
+
+  .nfl-hub-matchup-row,
+  .nfl-hub-metrics,
+  .nfl-hub-player-stats,
+  .nfl-hub-player-advice {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-hub-matchup-row div:last-child {
+    text-align: left;
+  }
+}
+/* === End Fantasy Seer Weekly Command Hub === */
+
+/* === Fantasy Seer Containment Fixes === */
+.nfl-fantasy-hero,
+.nfl-fantasy-command,
+.nfl-fantasy-command-card,
+.nfl-fantasy-team-head,
+.nfl-fantasy-team-controls,
+.nfl-fantasy-context-actions {
+  min-width: 0;
+}
+
+.nfl-fantasy-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.38fr);
+}
+
+.nfl-fantasy-command,
+.nfl-fantasy-command-card {
+  overflow: hidden;
+}
+
+.nfl-format-toggle,
+.nfl-fantasy-command .nfl-format-toggle,
+.nfl-fantasy-team-controls .nfl-format-toggle,
+.nfl-fantasy-context-actions .nfl-format-toggle {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-format-toggle button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions,
+.nfl-fantasy-command .nfl-fantasy-hero-actions button,
+.nfl-fantasy-command .nfl-fantasy-safety-note,
+.nfl-fantasy-command .nfl-fantasy-hero-pills,
+.nfl-fantasy-command .nfl-fantasy-hero-pills span,
+.nfl-fantasy-team-controls,
+.nfl-fantasy-team-controls > * {
+  max-width: 100%;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions button,
+.nfl-fantasy-team-controls > * {
+  min-width: 0;
+}
+
+.nfl-fantasy-command .nfl-fantasy-safety-note,
+.nfl-fantasy-command .nfl-fantasy-hero-pills span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .nfl-fantasy-hero {
+    grid-template-columns: 1fr;
+  }
+}
+/* === End Fantasy Seer Containment Fixes === */

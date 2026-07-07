@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { applyMarketPulseUpdates, listMatches } from "../../../../lib/database";
-import { fetchPolymarketPulseSnapshot } from "../../../../lib/providers/polymarket";
+import {
+  fetchPolymarketPulseSnapshot,
+  type MarketPulseTarget,
+} from "../../../../lib/providers/polymarket";
 
 export const dynamic = "force-dynamic";
 // Polymarket sync does up to ~90 lookups; give it headroom so a slow batch can't
@@ -26,11 +29,12 @@ export async function GET(request: Request) {
 
   try {
     const matchResult = await listMatches();
-    const targets = matchResult.matches
+    const targets: MarketPulseTarget[] = matchResult.matches
       .filter((match) => match.status !== "Final")
       .slice(0, 90)
       .map((match) => ({
         matchId: match.id,
+        marketShape: match.forecast.knockout ? "two-way" : "three-way",
         startsAt: match.startsAt,
         home: {
           name: match.home.name,

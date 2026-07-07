@@ -123,6 +123,7 @@ export type CupSeerSnapshotDashboard = {
 export type MarketPulseUpdate = {
   matchId: string;
   source?: "polymarket" | "manual";
+  marketShape?: "three-way" | "two-way";
   home: number;
   draw: number;
   away: number;
@@ -1698,6 +1699,7 @@ function normalizeMarketPulseUpdate(
   return {
     matchId,
     source,
+    marketShape: update.marketShape === "two-way" ? "two-way" : "three-way",
     home: normalized.home,
     draw: normalized.draw,
     away: normalized.away,
@@ -4147,6 +4149,8 @@ function toMarketPulse(
     return null;
   }
 
+  const marketShape =
+    readPayloadString(rawPulse.marketShape) === "two-way" ? "two-way" : "three-way";
   const normalized = normalizePulseProbabilities(rawHome, rawDraw, rawAway);
 
   if (!hasUsablePulse(normalized)) {
@@ -4163,11 +4167,13 @@ function toMarketPulse(
     1,
   );
   const marketLeader = leadingSide(normalized.home, normalized.draw, normalized.away);
-  const modelLeader = leadingSide(
-    base.homeForecast,
-    base.drawForecast,
-    base.awayForecast,
-  );
+  const knockoutPayload = readPayloadRecord(payload?.knockout);
+  const projectedAdvancer = readPayloadString(knockoutPayload?.projectedAdvancer);
+  const modelLeader =
+    marketShape === "two-way" &&
+    (projectedAdvancer === "home" || projectedAdvancer === "away")
+      ? projectedAdvancer
+      : leadingSide(base.homeForecast, base.drawForecast, base.awayForecast);
   const sortedMarket = [normalized.home, normalized.draw, normalized.away].sort(
     (left, right) => right - left,
   );
@@ -4197,6 +4203,7 @@ function toMarketPulse(
 
   return {
     source,
+    marketShape,
     capturedAt: readPayloadString(rawPulse.capturedAt),
     home: normalized.home,
     draw: normalized.draw,
@@ -4215,6 +4222,7 @@ function toMarketPulse(
         : marketPulseSummary({
             alignment,
             leader: marketLeader,
+            marketShape,
             homeName: base.homeName,
             awayName: base.awayName,
           }),
@@ -4491,6 +4499,13 @@ export function applyMarketPulseProbabilityNudge({
 
   if (rawHome === null || rawDraw === null || rawAway === null) {
     return unchanged("incomplete-market-pulse");
+  }
+
+  if (readPayloadString(rawPulse.marketShape) === "two-way") {
+    return unchanged(
+      "advance-market-pulse",
+      normalizePulseProbabilities(rawHome, rawDraw, rawAway),
+    );
   }
 
   const market = normalizePulseProbabilities(rawHome, rawDraw, rawAway);
@@ -4880,16 +4895,42 @@ function liveProbabilitySummary({
 function marketPulseSummary({
   alignment,
   leader,
+  marketShape,
   homeName,
   awayName,
 }: {
   alignment: MarketPulse["alignment"];
   leader: MarketPulse["leader"];
+  marketShape: MarketPulse["marketShape"];
   homeName: string;
   awayName: string;
 }): Record<Language, string> {
   const leaderLabel =
     leader === "home" ? homeName : leader === "away" ? awayName : "a draw";
+
+  if (marketShape === "two-way") {
+    if (alignment === "thin") {
+      return {
+        en: "The advance crowd is only a murmur, so the Seer keeps it as context, not command.",
+        es: "La gente en la ruta de avanzar apenas murmura, asi que el Vidente la deja como contexto, no mandato.",
+        fr: "Le public de la qualification n'est qu'un murmure; le voyant le garde comme contexte, pas comme ordre.",
+      };
+    }
+
+    if (alignment === "aligned") {
+      return {
+        en: `The crowd leans toward ${leaderLabel} advancing; it supports the knockout path without touching the 90-minute draw lane.`,
+        es: `La gente se inclina por que avance ${leaderLabel}; acompana la ruta eliminatoria sin tocar el empate de 90 minutos.`,
+        fr: `Le public penche vers la qualification de ${leaderLabel}; cela soutient la voie éliminatoire sans toucher au nul apres 90 minutes.`,
+      };
+    }
+
+    return {
+      en: `The crowd leans toward ${leaderLabel} advancing; the Seer hears it, but keeps the match read separate from the bracket path.`,
+      es: `La gente se inclina por que avance ${leaderLabel}; el Vidente la escucha, pero separa la lectura del partido de la ruta del cuadro.`,
+      fr: `Le public penche vers la qualification de ${leaderLabel}; le voyant l'entend, mais sépare la lecture du match de la voie du tableau.`,
+    };
+  }
 
   if (alignment === "thin") {
     return {

@@ -454,6 +454,7 @@ describe("NFL fantasy imports", () => {
     expect(league.suggestedTeamId).toBe("sleeper-roster-1");
     expect(league.suggestedOpponentTeamId).toBe("sleeper-roster-2");
     expect(league.sleeper).toMatchObject({
+      matchupConfidence: "matched",
       matchupId: "9",
       rosterCount: 3,
       selectedRosterId: "1",
@@ -499,12 +500,59 @@ describe("NFL fantasy imports", () => {
     });
 
     expect(league.sleeper).toMatchObject({
+      matchupConfidence: "missing",
       selectedRosterId: "1",
       status: "no-matchup",
       week: 3,
     });
     expect(league.suggestedTeamId).toBe("sleeper-roster-1");
     expect(league.suggestedOpponentTeamId).toBe("sleeper-roster-2");
+    expect(league.sleeper?.matchupSummary).toContain("no head-to-head matchup");
+  });
+
+  it("labels incomplete Sleeper matchup groups as comparison fallback", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Fun League",
+        season: "2026",
+      },
+      matchups: [{ roster_id: 1, matchup_id: 11 }],
+      players: {
+        "111": {
+          full_name: "Amon-Ra St. Brown",
+          position: "WR",
+          team: "DET",
+          search_rank: 9,
+        },
+        "333": {
+          full_name: "Lamar Jackson",
+          position: "QB",
+          team: "BAL",
+          search_rank: 5,
+        },
+      },
+      preferredOwnerId: "u1",
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["111"], starters: ["111"] },
+        { roster_id: 2, owner_id: "u2", players: ["333"], starters: ["333"] },
+      ],
+      users: [
+        { user_id: "u1", display_name: "Luis" },
+        { user_id: "u2", display_name: "Rival" },
+      ],
+      week: 4,
+    });
+
+    expect(league.sleeper).toMatchObject({
+      matchupConfidence: "partial",
+      matchupId: "11",
+      matchupTeamCount: 1,
+      selectedRosterId: "1",
+      status: "no-matchup",
+      week: 4,
+    });
+    expect(league.sleeper?.matchupSummary).toContain("comparison fallback");
   });
 
   it("normalizes projection feeds and matches players by name team position", () => {

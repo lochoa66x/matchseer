@@ -130,6 +130,7 @@ export type PenaltyRoomForecast = {
 
 export type MarketPulse = {
   source: "polymarket" | "manual";
+  marketShape: "three-way" | "two-way";
   capturedAt?: string | null;
   home: number;
   draw: number;

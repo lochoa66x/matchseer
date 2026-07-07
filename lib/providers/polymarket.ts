@@ -376,6 +376,7 @@ async function fetchSportsPagePulseForTarget(
     update: {
       matchId: target.matchId,
       source: "polymarket",
+      marketShape: marketShapeForTarget(target),
       home,
       draw,
       away,
@@ -530,6 +531,7 @@ function classifyEvent(
     update: {
       matchId: target.matchId,
       source: "polymarket",
+      marketShape: "three-way",
       home,
       draw,
       away,
@@ -561,6 +563,15 @@ function classifyTwoWayMarket(
     }
 
     const normalizedOutcomes = outcomes.map(normalizeText);
+
+    if (
+      normalizedOutcomes.some(
+        (outcome) => outcome.includes("draw") || outcome.includes("tie"),
+      )
+    ) {
+      continue;
+    }
+
     const homeIndex = normalizedOutcomes.findIndex((outcome) =>
       homeAliases.some((alias) => outcome.includes(alias)),
     );
@@ -598,6 +609,7 @@ function classifyTwoWayMarket(
       update: {
         matchId: target.matchId,
         source: "polymarket",
+        marketShape: "two-way",
         home,
         draw: 0,
         away,
@@ -623,13 +635,19 @@ function classifyTwoWayYesNoMarkets(
 ): { update: MarketPulseUpdate | null; reason: PulseSkipReason } {
   const homeAliases = teamAliases(target.home);
   const awayAliases = teamAliases(target.away);
+  const hasDrawMarket = markets.some((market) => {
+    const text = normalizeText(market.question);
+
+    return text.includes("draw") || text.includes("tie");
+  });
   let homeMarket: GammaMarket | null = null;
   let awayMarket: GammaMarket | null = null;
 
   for (const market of markets) {
     const text = normalizeText(market.question);
+    const isAdvanceText = isAdvanceMarketText(text);
 
-    if (!text.includes("win")) {
+    if (!isTwoWayResultOrAdvanceMarket(text) || (hasDrawMarket && !isAdvanceText)) {
       continue;
     }
 
@@ -683,6 +701,7 @@ function classifyTwoWayYesNoMarkets(
     update: {
       matchId: target.matchId,
       source: "polymarket",
+      marketShape: "two-way",
       home,
       draw: 0,
       away,
@@ -695,6 +714,27 @@ function classifyTwoWayYesNoMarkets(
     },
     reason: "usable",
   };
+}
+
+function isTwoWayResultOrAdvanceMarket(text: string) {
+  return (
+    text.includes("win") ||
+    isAdvanceMarketText(text)
+  );
+}
+
+function isAdvanceMarketText(text: string) {
+  return (
+    text.includes("advance") ||
+    text.includes("qualify") ||
+    text.includes("progress") ||
+    text.includes("go through") ||
+    text.includes("make the next round")
+  );
+}
+
+function marketShapeForTarget(target: MarketPulseTarget) {
+  return target.marketShape === "two-way" ? "two-way" : "three-way";
 }
 
 function classifyThreeWayMarket(
@@ -755,6 +795,7 @@ function classifyThreeWayMarket(
       update: {
         matchId: target.matchId,
         source: "polymarket",
+        marketShape: "three-way",
         home,
         draw,
         away,

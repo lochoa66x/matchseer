@@ -2734,7 +2734,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         </>
       ) : (
         <>
-          <FantasyCommandCenter
+          <FantasyContextBar
             activeRoom={activeFantasySavedRoom}
             activeRoomId={activeFantasyRoomId}
             fantasyImport={fantasyImport}
@@ -2742,21 +2742,21 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onOpponentTeamChange={setOpponentFantasyTeamId}
             onRemoveSavedRoom={handleRemoveSavedFantasyRoom}
             onSavedRoomChange={handleSavedFantasyRoomChange}
+            onScoringChange={setScoringFormat}
             onTeamChange={setActiveFantasyTeamId}
             onViewChange={setFantasyView}
             opponentTeamId={opponentFantasyTeam.id}
             savedRooms={savedFantasyRooms}
+            scoringFormat={scoringFormat}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
           />
 
           <FantasyHero
             actions={fantasyActionQueue}
-            contextStatus={fantasyContextLayer.status}
             fantasyImport={fantasyImport}
             matchupReport={fantasyMatchupReport}
             onAskSeer={requestScoutingRead}
-            onScoringChange={setScoringFormat}
             onViewChange={setFantasyView}
             read={fantasyHeroRead}
             report={activeTeamReport}
@@ -2780,7 +2780,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               actions={fantasyActionQueue}
               matchupReport={fantasyMatchupReport}
               report={activeTeamReport}
-              rows={scoutingBoard.slice(0, 8)}
+              rosteredIds={rosteredScoutingPlayerIds}
+              rows={scoutingBoard}
               scoringFormat={scoringFormat}
               teamLens={teamLens}
             />
@@ -2893,6 +2894,22 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               startLean={startLean}
             />
           ) : null}
+
+          <FantasyCommandCenter
+            activeRoom={activeFantasySavedRoom}
+            activeRoomId={activeFantasyRoomId}
+            fantasyImport={fantasyImport}
+            leagueMap={fantasyLeaguePowerMap}
+            onOpponentTeamChange={setOpponentFantasyTeamId}
+            onRemoveSavedRoom={handleRemoveSavedFantasyRoom}
+            onSavedRoomChange={handleSavedFantasyRoomChange}
+            onTeamChange={setActiveFantasyTeamId}
+            onViewChange={setFantasyView}
+            opponentTeamId={opponentFantasyTeam.id}
+            savedRooms={savedFantasyRooms}
+            sourceLanes={fantasySourceLanes}
+            teamLens={teamLens}
+          />
           <FantasySeerFooterDisclaimer />
         </>
       )}
@@ -3773,13 +3790,188 @@ function parseProjectedScore(projected: string) {
   };
 }
 
+function FantasyContextBar({
+  activeRoom,
+  activeRoomId,
+  fantasyImport,
+  leagueMap,
+  opponentTeamId,
+  onOpponentTeamChange,
+  onRemoveSavedRoom,
+  onSavedRoomChange,
+  onScoringChange,
+  onTeamChange,
+  onViewChange,
+  savedRooms,
+  scoringFormat,
+  sourceLanes,
+  teamLens,
+}: {
+  activeRoom: FantasySavedRoom | null;
+  activeRoomId: string | null;
+  fantasyImport: ImportedFantasyLeague | null;
+  leagueMap: FantasyLeaguePowerMap;
+  opponentTeamId: string;
+  onOpponentTeamChange: (teamId: string) => void;
+  onRemoveSavedRoom: (roomId: string) => void;
+  onSavedRoomChange: (roomId: string) => void;
+  onScoringChange: (format: ScoringFormat) => void;
+  onTeamChange: (teamId: string) => void;
+  onViewChange: (view: FantasyView) => void;
+  savedRooms: FantasySavedRoom[];
+  scoringFormat: ScoringFormat;
+  sourceLanes: FantasySourceLane[];
+  teamLens: FantasyTeamLens;
+}) {
+  const active = leagueMap.active;
+  const opponentOptions = leagueMap.teams.filter(
+    (team) => team.report.team.id !== active.report.team.id,
+  );
+  const selectedOpponentId =
+    opponentOptions.find((team) => team.report.team.id === opponentTeamId)?.report.team.id ??
+    opponentOptions[0]?.report.team.id ??
+    active.report.team.id;
+  const leagueLabel =
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample room";
+  const roomFreshness =
+    activeRoom?.refreshedAt ??
+    activeRoom?.savedAt ??
+    (fantasyImport ? new Date().toISOString() : "");
+  const liveSourceCount = sourceLanes.filter((lane) => lane.status === "live").length;
+  const matchupAccuracy = fantasyMatchupAccuracyLabel(
+    fantasyImport,
+    selectedOpponentId,
+  );
+  const leagueMeta = [
+    fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
+    fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
+    `${leagueMap.teamCount} teams`,
+    fantasyImport?.settings?.formatLabel ?? teamLensLabels[teamLens],
+  ].filter(Boolean);
+
+  function handleTeamChange(teamId: string) {
+    onTeamChange(teamId);
+
+    if (teamId === selectedOpponentId) {
+      const nextOpponent =
+        leagueMap.teams.find((team) => team.report.team.id !== teamId)?.report.team.id ??
+        teamId;
+
+      onOpponentTeamChange(nextOpponent);
+    }
+  }
+
+  return (
+    <section className="nfl-fantasy-context-bar" aria-label="Fantasy decision room context">
+      <div className="nfl-fantasy-context-summary">
+        <span>
+          <UsersRound size={16} />
+          Decision room
+        </span>
+        <strong>{leagueLabel}</strong>
+        <em>{leagueMeta.join(" · ") || "Sample mode"}</em>
+      </div>
+
+      <div className="nfl-fantasy-context-controls">
+        <label>
+          <span>League</span>
+          <select
+            disabled={savedRooms.length === 0}
+            onChange={(event) => onSavedRoomChange(event.target.value)}
+            value={activeRoomId ?? savedRooms[0]?.id ?? "sample-room"}
+          >
+            {savedRooms.length > 0 ? (
+              savedRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {fantasySavedRoomLabel(room)}
+                </option>
+              ))
+            ) : (
+              <option value="sample-room">Sample room</option>
+            )}
+          </select>
+        </label>
+
+        <label>
+          <span>My team</span>
+          <select
+            onChange={(event) => handleTeamChange(event.target.value)}
+            value={active.report.team.id}
+          >
+            {leagueMap.teams.map((team) => (
+              <option key={team.report.team.id} value={team.report.team.id}>
+                {team.report.team.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Compare</span>
+          <select
+            disabled={opponentOptions.length === 0}
+            onChange={(event) => onOpponentTeamChange(event.target.value)}
+            value={selectedOpponentId}
+          >
+            {opponentOptions.length > 0 ? (
+              opponentOptions.map((team) => (
+                <option key={team.report.team.id} value={team.report.team.id}>
+                  {team.report.team.name}
+                </option>
+              ))
+            ) : (
+              <option value={active.report.team.id}>Add another team</option>
+            )}
+          </select>
+        </label>
+      </div>
+
+      <div className="nfl-fantasy-context-actions">
+        <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
+        <span className="nfl-fantasy-context-sources">
+          <ShieldCheck size={15} />
+          {liveSourceCount}/{sourceLanes.length} live sources
+        </span>
+        <span
+          className={cx("nfl-fantasy-matchup-accuracy", matchupAccuracy.tone)}
+          title={matchupAccuracy.detail}
+        >
+          <Swords size={15} />
+          {matchupAccuracy.label}
+        </span>
+        <span className="nfl-fantasy-context-refresh">
+          Last refresh: {roomFreshness ? formatDataUpdated(roomFreshness) : "Sample mode"}
+        </span>
+        <button className="secondary" onClick={() => onViewChange("roster")} type="button">
+          <RefreshCw size={15} />
+          Connect
+        </button>
+        <button onClick={() => onViewChange("trades")} type="button">
+          <LineChart size={15} />
+          Trades
+        </button>
+        <button
+          className="ghost"
+          disabled={!activeRoomId || savedRooms.length === 0}
+          onClick={() => {
+            if (activeRoomId) {
+              onRemoveSavedRoom(activeRoomId);
+            }
+          }}
+          type="button"
+        >
+          Remove
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function FantasyHero({
   actions,
-  contextStatus,
   fantasyImport,
   matchupReport,
   onAskSeer,
-  onScoringChange,
   onViewChange,
   read,
   report,
@@ -3788,11 +3980,9 @@ function FantasyHero({
   teamLens,
 }: {
   actions: FantasyActionItem[];
-  contextStatus: FantasyContextStatus;
   fantasyImport: ImportedFantasyLeague | null;
   matchupReport: FantasyMatchupReport;
   onAskSeer: () => void;
-  onScoringChange: (format: ScoringFormat) => void;
   onViewChange: (view: FantasyView) => void;
   read: NflScoutingAnalysis;
   report: FantasyTeamReport;
@@ -3850,13 +4040,6 @@ function FantasyHero({
             <Sparkles size={16} />
             {scoutStatus === "loading" ? "Reading" : "Ask Fantasy Seer"}
           </button>
-        </div>
-        <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
-        <div className="nfl-fantasy-hero-pills">
-          <span>{scoringLabels[scoringFormat]}</span>
-          <span>{teamLensLabels[teamLens]}</span>
-          <span>{contextStatus.status} context</span>
-          <span>{sourceLabel}</span>
         </div>
         <FantasySeerSafetyNote />
       </div>
@@ -4851,6 +5034,7 @@ function FantasyOverview({
   actions,
   matchupReport,
   report,
+  rosteredIds,
   rows,
   scoringFormat,
   teamLens,
@@ -4858,6 +5042,7 @@ function FantasyOverview({
   actions: FantasyActionItem[];
   matchupReport: FantasyMatchupReport;
   report: FantasyTeamReport;
+  rosteredIds: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
@@ -4868,13 +5053,202 @@ function FantasyOverview({
     scoringFormat,
     teamLens,
   });
+  const suggestedPlayers = useMemo(
+    () =>
+      scoutingRowsForMode(
+        rows,
+        "topPicks",
+        rosteredIds,
+        report.weakestLane.position,
+      ).slice(0, 5),
+    [report.weakestLane.position, rosteredIds, rows],
+  );
+  const [selectedPlayerId, setSelectedPlayerId] = useState(
+    () => suggestedPlayers[0]?.id ?? "",
+  );
+  const suggestedPlayerKey = suggestedPlayers.map((player) => player.id).join("|");
+
+  useEffect(() => {
+    if (suggestedPlayers.length === 0) {
+      if (selectedPlayerId) {
+        setSelectedPlayerId("");
+      }
+
+      return;
+    }
+
+    if (!suggestedPlayers.some((player) => player.id === selectedPlayerId)) {
+      setSelectedPlayerId(suggestedPlayers[0].id);
+    }
+  }, [selectedPlayerId, suggestedPlayerKey, suggestedPlayers]);
+
+  const selectedPlayer =
+    suggestedPlayers.find((player) => player.id === selectedPlayerId) ??
+    suggestedPlayers[0] ??
+    null;
   const closeCalls =
     report.closeCalls.length > 0
       ? report.closeCalls.map((call) => call.summary)
       : ["No urgent swap pressure. The recommended lineup has breathing room."];
+  const matchupSideLabel =
+    matchupReport.edgeTeam.id === report.team.id ? "You have the lean" : "Chase mode";
+  const weekTimeline = [
+    {
+      label: "Now",
+      title: actions[0]?.state ?? "Set the clean lineup",
+      detail: actions[0]?.detail ?? weeklyCoach.bestMove.why,
+    },
+    {
+      label: "Before kickoff",
+      title: actions[1]?.state ?? "Re-check close calls",
+      detail: actions[1]?.detail ?? weeklyCoach.pressure.summary,
+    },
+    {
+      label: "Waiver/trade window",
+      title: actions[3]?.state ?? "Look for one upgrade",
+      detail:
+        actions[3]?.detail ??
+        report.tradeIdeas[0] ??
+        report.benchUpgrades[0] ??
+        "Use your weakest lane first, then price the move against your bench.",
+    },
+  ];
+  const opportunityCards = [
+    {
+      label: "Biggest need",
+      value: report.weakestLane.label,
+      detail: report.weakestLane.summary,
+    },
+    {
+      label: "Surplus lane",
+      value: report.strongestLane.label,
+      detail: "Use this as trade leverage before sacrificing weekly starters.",
+    },
+    {
+      label: "Close call",
+      value:
+        report.closeCalls[0]?.slotLabel ??
+        (report.closeCalls.length > 0 ? `${report.closeCalls.length} calls` : "None urgent"),
+      detail: report.closeCalls[0]?.summary ?? "No forced swap. Keep checking news.",
+    },
+  ];
 
   return (
     <section className="nfl-fantasy-overview" id="fantasy-overview">
+      <section className="nfl-weekly-command-hub" aria-label="Weekly command hub">
+        <div className="nfl-hub-head">
+          <div>
+            <div className="nfl-section-kicker">
+              <Gauge size={17} />
+              Weekly command hub
+            </div>
+            <h2>Your decision board, cleaned up</h2>
+            <p>
+              Start with the matchup, find the weak lane, then shortlist real moves
+              from the available pool.
+            </p>
+          </div>
+          <div className="nfl-hub-record">
+            <span>{matchupSideLabel}</span>
+            <strong>{matchupReport.edgeLabel}</strong>
+            <em>{matchupReport.winLean}% matchup lean</em>
+          </div>
+        </div>
+
+        <div className="nfl-hub-grid">
+          <article className="nfl-hub-panel nfl-hub-matchup-card">
+            <span className="nfl-hub-label">Current matchup</span>
+            <div className="nfl-hub-matchup-row">
+              <div>
+                <strong>{matchupReport.left.team.name}</strong>
+                <em>{matchupReport.left.projection.toFixed(1)} projected</em>
+              </div>
+              <span>vs</span>
+              <div>
+                <strong>{matchupReport.right.team.name}</strong>
+                <em>{matchupReport.right.projection.toFixed(1)} projected</em>
+              </div>
+            </div>
+            <div className="nfl-hub-metrics">
+              <span>
+                <b>{formatFantasyDelta(report.lineupSeerDelta)}</b>
+                Seer tilt
+              </span>
+              <span>
+                <b>{fantasyBandFromPercent(matchupReport.confidence)}</b>
+                confidence
+              </span>
+              <span>
+                <b>{matchupReport.chaos}%</b>
+                variance
+              </span>
+            </div>
+          </article>
+
+          <article className="nfl-hub-panel nfl-hub-opportunity-panel">
+            <span className="nfl-hub-label">Opportunity lanes</span>
+            <div className="nfl-hub-opportunity-list">
+              {opportunityCards.map((card) => (
+                <div key={card.label}>
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <em>{card.detail}</em>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="nfl-hub-panel nfl-hub-player-picker">
+            <span className="nfl-hub-label">Suggested available players</span>
+            <div className="nfl-hub-player-list">
+              {suggestedPlayers.map((player) => {
+                const isActive = player.id === selectedPlayer?.id;
+                const position = normalizeScoutingPosition(player.position);
+
+                return (
+                  <button
+                    className={cx(isActive && "active")}
+                    key={player.id}
+                    onClick={() => setSelectedPlayerId(player.id)}
+                    type="button"
+                  >
+                    <span>{player.name}</span>
+                    <em>
+                      {position} · {player.contextProjection.projection.toFixed(1)} pts
+                    </em>
+                    <strong>
+                      {position === report.weakestLane.position
+                        ? "fills need"
+                        : fantasyDeepResearchFit(player)}
+                    </strong>
+                  </button>
+                );
+              })}
+            </div>
+          </article>
+        </div>
+
+        {selectedPlayer ? (
+          <FantasySuggestedPlayerPanel
+            player={selectedPlayer}
+            report={report}
+            rosteredIds={rosteredIds}
+            scoringFormat={scoringFormat}
+            teamLens={teamLens}
+          />
+        ) : null}
+
+        <div className="nfl-hub-week-room" aria-label="Weekly check points">
+          {weekTimeline.map((item) => (
+            <article key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <FantasyActionQueue actions={actions} />
 
       <article className="nfl-fantasy-focus-panel">
@@ -4929,7 +5303,7 @@ function FantasyOverview({
           the deeper ranking board by position.
         </p>
         <div className="nfl-fantasy-spotlight-list">
-          {rows.slice(0, 6).map((player, index) => (
+          {suggestedPlayers.slice(0, 6).map((player, index) => (
             <FantasySpotlightRow
               index={index}
               key={player.id}
@@ -4942,6 +5316,104 @@ function FantasyOverview({
       </article>
     </section>
   );
+}
+
+function FantasySuggestedPlayerPanel({
+  player,
+  report,
+  rosteredIds,
+  scoringFormat,
+  teamLens,
+}: {
+  player: ScoutingRow;
+  report: FantasyTeamReport;
+  rosteredIds: Set<string>;
+  scoringFormat: ScoringFormat;
+  teamLens: FantasyTeamLens;
+}) {
+  const position = normalizeScoutingPosition(player.position);
+  const available = rosteredIds.size === 0 || !rosteredIds.has(player.id);
+  const dropCandidate = fantasyDropCandidate(report, player);
+  const action = fantasyDeepResearchAction({
+    available,
+    player,
+    teamLens,
+    weakestPosition: report.weakestLane.position,
+  });
+  const reason = fantasyDeepResearchReason({
+    player,
+    teamLens,
+    weakestPosition: report.weakestLane.position,
+  });
+  const moveShape = dropCandidate
+    ? `If you need a roster spot, compare against ${dropCandidate.name} first. Do not cut a steadier starter just to chase a bench pop.`
+    : "No obvious drop candidate is showing yet. Treat this as a watchlist or trade-chip read.";
+
+  return (
+    <article className="nfl-hub-player-detail">
+      <div className="nfl-hub-player-visual">
+        <FantasyPlayerArtwork
+          className="featured"
+          playerName={player.name}
+          position={player.position}
+        />
+        <span>{action}</span>
+      </div>
+      <div className="nfl-hub-player-copy">
+        <span className="nfl-hub-label">Player fit read</span>
+        <h3>{player.name}</h3>
+        <p>{reason}</p>
+        <div className="nfl-hub-player-stats">
+          <span>
+            <em>{scoringLabels[scoringFormat]}</em>
+            <strong>{player.contextProjection.projection.toFixed(1)}</strong>
+          </span>
+          <span>
+            <em>Range</em>
+            <strong>
+              {player.contextProjection.floor.toFixed(1)}-
+              {player.contextProjection.ceiling.toFixed(1)}
+            </strong>
+          </span>
+          <span>
+            <em>Role</em>
+            <strong>{player.roleSecurity ?? player.health}%</strong>
+          </span>
+        </div>
+      </div>
+      <div className="nfl-hub-player-advice">
+        <div>
+          <span>What you lack</span>
+          <strong>{report.weakestLane.label}</strong>
+          <p>{report.weakestLane.summary}</p>
+        </div>
+        <div>
+          <span>Move shape</span>
+          <strong>
+            {position === report.weakestLane.position ? "Need fit" : "Bench value"}
+          </strong>
+          <p>{moveShape}</p>
+        </div>
+        <div>
+          <span>Risk check</span>
+          <strong>{fantasyDeepResearchFit(player)}</strong>
+          <p>{fantasyDeepResearchRisk(player)}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function fantasyDropCandidate(report: FantasyTeamReport, target: ScoutingRow) {
+  const benchCandidates = report.benchPlayers
+    .filter((player) => player.id !== target.id)
+    .sort(
+      (left, right) =>
+        left.contextProjection.projection - right.contextProjection.projection ||
+        (left.roleSecurity ?? left.health) - (right.roleSecurity ?? right.health),
+    );
+
+  return benchCandidates[0] ?? null;
 }
 
 function FantasyActionQueue({ actions }: { actions: FantasyActionItem[] }) {
@@ -7334,14 +7806,15 @@ function FantasyImportPanel({
               <span>{fantasyImport.sleeper.leagueName}</span>
               <strong>
                 Week {fantasyImport.sleeper.week ?? "?"} ·{" "}
-                {fantasyImport.sleeper.matchupId
-                  ? `matchup ${fantasyImport.sleeper.matchupId}`
-                  : "no matchup"}
+                {sleeperReceiptMatchupCopy(fantasyImport.sleeper)}
               </strong>
               <em>
                 {fantasyImport.sleeper.rosterCount} rosters ·{" "}
                 {fantasyImport.sleeper.status.replace(/-/g, " ")}
               </em>
+              {fantasyImport.sleeper.matchupSummary ? (
+                <small>{fantasyImport.sleeper.matchupSummary}</small>
+              ) : null}
               {sleeperLastRefreshedAt ? (
                 <small>Last refreshed {formatDataUpdated(sleeperLastRefreshedAt)}</small>
               ) : null}
@@ -12160,16 +12633,103 @@ function sleeperImportSuccessMessage(importedLeague: ImportedFantasyLeague) {
   }
 
   const matchupCopy =
-    receipt.status === "matched"
-      ? `matchup ${receipt.matchupId}`
-      : receipt.status === "no-matchup"
-        ? "no matchup found"
-        : "no user roster matched";
+    receipt.matchupConfidence === "matched"
+      ? `matched matchup ${receipt.matchupId}`
+      : receipt.matchupConfidence === "partial"
+        ? "partial matchup feed"
+        : receipt.status === "no-matchup"
+          ? "no matchup found"
+          : "no user roster matched";
   const settingsCopy = importedLeague.settings
     ? ` · ${importedLeague.settings.formatLabel}, ${importedLeague.settings.lineupSlotCount} starters`
     : "";
 
   return `${receipt.leagueName} loaded · season ${receipt.season ?? importedLeague.season ?? "?"} · week ${receipt.week ?? importedLeague.week ?? "?"} · ${importedLeague.teams.length} teams · ${matchupCopy} · ${receipt.rosterCount} rosters${settingsCopy}.`;
+}
+
+function sleeperReceiptMatchupCopy(receipt: NonNullable<ImportedFantasyLeague["sleeper"]>) {
+  if (receipt.matchupConfidence === "matched") {
+    return receipt.matchupId ? `matched matchup ${receipt.matchupId}` : "matched matchup";
+  }
+
+  if (receipt.matchupConfidence === "partial") {
+    return receipt.matchupId ? `partial matchup ${receipt.matchupId}` : "partial matchup";
+  }
+
+  if (receipt.matchupConfidence === "missing" || receipt.status === "no-matchup") {
+    return "compare fallback";
+  }
+
+  return "pick my team";
+}
+
+function fantasyMatchupAccuracyLabel(
+  fantasyImport: ImportedFantasyLeague | null,
+  selectedOpponentId: string,
+) {
+  const receipt = fantasyImport?.sleeper;
+
+  if (!fantasyImport) {
+    return {
+      detail: "Sample teams are useful for exploring the tool, not real league advice.",
+      label: "Sample compare",
+      tone: "sample" as const,
+    };
+  }
+
+  if (!receipt) {
+    return {
+      detail: "This comparison came from pasted/uploaded roster data, not a live Sleeper matchup feed.",
+      label: "Manual compare",
+      tone: "fallback" as const,
+    };
+  }
+
+  if (receipt.matchupConfidence === "matched") {
+    if (receipt.opponentTeamId && receipt.opponentTeamId !== selectedOpponentId) {
+      return {
+        detail: "Sleeper found the real opponent, but you are comparing against a different league team.",
+        label: "League compare",
+        tone: "fallback" as const,
+      };
+    }
+
+    return {
+      detail:
+        receipt.matchupSummary ??
+        `Sleeper matched this Week ${receipt.week ?? "?"} opponent from the live matchup endpoint.`,
+      label: "Sleeper matchup",
+      tone: "live" as const,
+    };
+  }
+
+  if (receipt.matchupConfidence === "partial") {
+    return {
+      detail:
+        receipt.matchupSummary ??
+        "Sleeper returned a matchup id, but not a clean two-team matchup. Treat this as a comparison target.",
+      label: "Partial matchup",
+      tone: "warn" as const,
+    };
+  }
+
+  if (receipt.status === "no-user-match") {
+    return {
+      detail:
+        receipt.matchupSummary ??
+        "Sleeper loaded the league, but your roster was not detected automatically.",
+      label: "Pick my team",
+      tone: "warn" as const,
+    };
+  }
+
+  return {
+    detail:
+      receipt.matchupSummary ??
+      "Sleeper has not published a head-to-head matchup for this roster/week yet. This is a league comparison fallback.",
+    label: "Compare fallback",
+    tone: "fallback" as const,
+  };
 }
 
 function weekFromDatasetLabel(weekLabel: string) {

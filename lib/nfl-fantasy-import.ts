@@ -330,12 +330,22 @@ export type SleeperMatchup = {
   matchup_id?: string | number | null;
 };
 
+export type SleeperMatchupConfidence =
+  | "matched"
+  | "partial"
+  | "missing"
+  | "no-user-roster";
+
 export type SleeperImportReceipt = {
   leagueId: string;
   leagueName: string;
   season?: string;
   week?: number;
   matchupId?: string;
+  matchupConfidence?: SleeperMatchupConfidence;
+  matchupSource?: string;
+  matchupSummary?: string;
+  matchupTeamCount?: number;
   rosterCount: number;
   selectedRosterId?: string;
   opponentRosterId?: string;
@@ -767,24 +777,47 @@ export function buildSleeperFantasyLeague({
       .map((matchup) => [stringId(matchup.roster_id), stringId(matchup.matchup_id)] as const)
       .filter(([rosterId, matchupId]) => rosterId.length > 0 && matchupId.length > 0),
   );
+  const rosterIdsByMatchupId = new Map<string, string[]>();
+
+  matchupByRosterId.forEach((matchupId, rosterId) => {
+    const group = rosterIdsByMatchupId.get(matchupId) ?? [];
+
+    group.push(rosterId);
+    rosterIdsByMatchupId.set(matchupId, group);
+  });
   const preferredRoster =
     rosters.find((roster) => stringId(roster.roster_id) === stringId(preferredRosterId)) ??
     rosters.find((roster) => stringId(roster.owner_id) === stringId(preferredOwnerId)) ??
     null;
   const preferredSleeperRosterId = stringId(preferredRoster?.roster_id);
   const preferredMatchupId = matchupByRosterId.get(preferredSleeperRosterId);
+  const preferredMatchupRosterIds = preferredMatchupId
+    ? rosterIdsByMatchupId.get(preferredMatchupId) ?? []
+    : [];
+  const opponentSleeperRosterIdFromMatchup =
+    preferredMatchupRosterIds.find(
+      (rosterId) => rosterId.length > 0 && rosterId !== preferredSleeperRosterId,
+    ) ?? "";
   const opponentRoster =
-    preferredMatchupId
-      ? rosters.find((roster) => {
-          const rosterId = stringId(roster.roster_id);
-
-          return (
-            rosterId !== preferredSleeperRosterId &&
-            matchupByRosterId.get(rosterId) === preferredMatchupId
-          );
-        }) ?? null
+    opponentSleeperRosterIdFromMatchup
+      ? rosters.find(
+          (roster) => stringId(roster.roster_id) === opponentSleeperRosterIdFromMatchup,
+        ) ?? null
       : null;
   const opponentSleeperRosterId = stringId(opponentRoster?.roster_id);
+  const matchupTeamCount = preferredMatchupRosterIds.length || undefined;
+  const hasCleanSleeperMatchup =
+    Boolean(preferredMatchupId && opponentSleeperRosterId) && matchupTeamCount === 2;
+  const hasPartialSleeperMatchup = Boolean(
+    preferredMatchupId && (opponentSleeperRosterId || matchupTeamCount),
+  );
+  const matchupConfidence: SleeperMatchupConfidence = preferredSleeperRosterId
+    ? hasCleanSleeperMatchup
+      ? "matched"
+      : hasPartialSleeperMatchup
+        ? "partial"
+        : "missing"
+    : "no-user-roster";
   const importedPlayers = new Map<string, NflFantasyPlayer>();
   const sortedRosters = [...rosters].sort((left, right) => {
     const leftRosterId = stringId(left.roster_id);
@@ -871,6 +904,17 @@ export function buildSleeperFantasyLeague({
     leagueId: stringId(league.league_id) || "league",
     leagueName: cleanLine(league.name) || "Sleeper league import",
     matchupId: preferredMatchupId,
+    matchupConfidence,
+    matchupSource: matchups.length > 0 ? "Sleeper matchup endpoint" : "Sleeper roster endpoint",
+    matchupSummary: sleeperMatchupReceiptSummary({
+      matchupConfidence,
+      matchupId: preferredMatchupId,
+      matchupTeamCount,
+      opponentRosterId: opponentSleeperRosterId,
+      selectedRosterId: preferredSleeperRosterId,
+      week,
+    }),
+    matchupTeamCount,
     opponentRosterId: opponentSleeperRosterId || undefined,
     opponentTeamId,
     rosterCount: rosters.length,
@@ -879,7 +923,7 @@ export function buildSleeperFantasyLeague({
     selectedTeamId,
     settings,
     status: preferredSleeperRosterId
-      ? preferredMatchupId && opponentSleeperRosterId
+      ? hasCleanSleeperMatchup
         ? "matched"
         : "no-matchup"
       : "no-user-match",
@@ -903,14 +947,47 @@ export function buildSleeperFantasyLeague({
     notes: [
       "Sleeper import loaded rosters, starters, benches, and player names.",
       settings.summary,
-      receipt.status === "matched"
-        ? `Matched roster ${receipt.selectedRosterId} to matchup ${receipt.matchupId}.`
-        : receipt.status === "no-matchup"
-          ? "Your roster loaded, but no current matchup opponent was found for that week."
-          : "League loaded, but no Sleeper user roster was matched automatically.",
+      receipt.matchupSummary ??
+        (receipt.status === "matched"
+          ? `Matched roster ${receipt.selectedRosterId} to matchup ${receipt.matchupId}.`
+          : receipt.status === "no-matchup"
+            ? "Your roster loaded, but no current matchup opponent was found for that week."
+            : "League loaded, but no Sleeper user roster was matched automatically."),
       "Sleeper projections are not included in the public roster endpoint, so the Seer creates the forecast layer from role, position, matchup, and health signals.",
     ],
   };
+}
+
+function sleeperMatchupReceiptSummary({
+  matchupConfidence,
+  matchupId,
+  matchupTeamCount,
+  opponentRosterId,
+  selectedRosterId,
+  week,
+}: {
+  matchupConfidence: SleeperMatchupConfidence;
+  matchupId?: string;
+  matchupTeamCount?: number;
+  opponentRosterId?: string;
+  selectedRosterId?: string;
+  week?: number;
+}) {
+  const weekCopy = week ? `Week ${week}` : "Current week";
+
+  if (matchupConfidence === "matched") {
+    return `${weekCopy}: Sleeper matched roster ${selectedRosterId} against roster ${opponentRosterId} in matchup ${matchupId}.`;
+  }
+
+  if (matchupConfidence === "partial") {
+    return `${weekCopy}: Sleeper returned matchup ${matchupId}, but ${matchupTeamCount ?? 0} roster${matchupTeamCount === 1 ? "" : "s"} were attached. Treat the opponent as a comparison fallback.`;
+  }
+
+  if (matchupConfidence === "missing") {
+    return `${weekCopy}: Sleeper loaded roster ${selectedRosterId}, but no head-to-head matchup was available yet. The app is comparing against another league team until the matchup feed catches up.`;
+  }
+
+  return `${weekCopy}: Sleeper loaded the league, but could not identify your roster automatically. Pick your team before trusting matchup advice.`;
 }
 
 export function parseSleeperImportQuery(value: string): SleeperImportQuery {
@@ -1930,6 +2007,15 @@ function sanitizeSleeperImportReceipt(value: unknown): SleeperImportReceipt | un
     leagueName: receipt.leagueName,
     matchupId:
       typeof receipt.matchupId === "string" ? receipt.matchupId : undefined,
+    matchupConfidence: isSleeperMatchupConfidence(receipt.matchupConfidence)
+      ? receipt.matchupConfidence
+      : undefined,
+    matchupSource:
+      typeof receipt.matchupSource === "string" ? receipt.matchupSource : undefined,
+    matchupSummary:
+      typeof receipt.matchupSummary === "string" ? receipt.matchupSummary : undefined,
+    matchupTeamCount:
+      typeof receipt.matchupTeamCount === "number" ? receipt.matchupTeamCount : undefined,
     opponentRosterId:
       typeof receipt.opponentRosterId === "string"
         ? receipt.opponentRosterId
@@ -2401,6 +2487,17 @@ function isSleeperImportReceiptStatus(
   value: unknown,
 ): value is SleeperImportReceipt["status"] {
   return value === "matched" || value === "no-matchup" || value === "no-user-match";
+}
+
+function isSleeperMatchupConfidence(
+  value: unknown,
+): value is SleeperMatchupConfidence {
+  return (
+    value === "matched" ||
+    value === "partial" ||
+    value === "missing" ||
+    value === "no-user-roster"
+  );
 }
 
 function sleeperLeagueStatusRank(value: unknown) {

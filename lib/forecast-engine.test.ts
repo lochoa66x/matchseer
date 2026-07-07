@@ -189,6 +189,24 @@ describe("market pulse probability nudge", () => {
     expect(nudge.summary.en).toContain("crowd murmur");
     expect(nudge.summary.en).not.toContain("actual probabilities");
   });
+
+  it("keeps two-way knockout advance markets out of 90-minute probability lanes", () => {
+    const nudge = applyMarketPulseProbabilityNudge({
+      probabilities: { home: 49, draw: 32, away: 19 },
+      marketPulse: {
+        marketShape: "two-way",
+        home: 43,
+        draw: 0,
+        away: 57,
+        liquidityScore: 0.82,
+      },
+    });
+
+    expect(nudge.applied).toBe(false);
+    expect(nudge.reason).toBe("advance-market-pulse");
+    expect(nudge.probabilities).toEqual({ home: 49, draw: 32, away: 19 });
+    expect(nudge.market).toEqual({ home: 43, draw: 0, away: 57 });
+  });
 });
 
 describe("live match probability model", () => {

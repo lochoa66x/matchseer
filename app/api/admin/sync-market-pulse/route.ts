@@ -81,6 +81,7 @@ export async function POST(request: Request) {
 
       const lookup = await fetchPolymarketPulseForTarget({
         matchId: match.id,
+        marketShape: match.forecast.knockout ? "two-way" : "three-way",
         startsAt: match.startsAt,
         home: {
           name: match.home.name,
@@ -106,11 +107,12 @@ export async function POST(request: Request) {
     }
 
     const matchResult = await listMatches();
-    const targets = matchResult.matches
+    const targets: MarketPulseTarget[] = matchResult.matches
       .filter((match) => match.status !== "Final")
       .slice(0, 90)
       .map((match) => ({
         matchId: match.id,
+        marketShape: match.forecast.knockout ? "two-way" : "three-way",
         startsAt: match.startsAt,
         home: {
           name: match.home.name,
