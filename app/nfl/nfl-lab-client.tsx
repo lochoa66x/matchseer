@@ -4006,17 +4006,36 @@ function FantasyLeagueJumpBar({
   rooms: FantasySavedRoom[];
 }) {
   if (rooms.length === 0) {
-    return null;
+    return (
+      <section
+        className="nfl-fantasy-league-jump empty"
+        aria-label="Saved fantasy leagues"
+      >
+        <div className="nfl-fantasy-league-jump-head">
+          <div>
+            <span>No saved leagues yet</span>
+            <strong>Connect a Sleeper league to make this room real.</strong>
+          </div>
+          <button onClick={() => onViewChange("roster")} type="button">
+            <RefreshCw size={15} />
+            Connect Sleeper
+          </button>
+        </div>
+      </section>
+    );
   }
 
   const selectedRoomId = activeRoomId ?? rooms[0]?.id;
+  const hasMultipleRooms = rooms.length > 1;
 
   return (
     <section className="nfl-fantasy-league-jump" aria-label="Saved fantasy leagues">
       <div className="nfl-fantasy-league-jump-head">
         <div>
-          <span>League jump</span>
-          <strong>Pick the room to analyze</strong>
+          <span>{hasMultipleRooms ? "League jump" : "Saved league"}</span>
+          <strong>
+            {hasMultipleRooms ? "Pick the room to analyze" : "Current room ready"}
+          </strong>
         </div>
         <button onClick={() => onViewChange("roster")} type="button">
           <RefreshCw size={15} />
@@ -4035,7 +4054,17 @@ function FantasyLeagueJumpBar({
               onClick={() => onRoomChange(room.id)}
               type="button"
             >
-              <span>{roomRead.kicker}</span>
+              <div className="nfl-fantasy-league-jump-card-top">
+                <span>{roomRead.kicker}</span>
+                <i
+                  className={cx(
+                    "nfl-fantasy-league-jump-source",
+                    roomRead.sourceTone,
+                  )}
+                >
+                  {roomRead.sourceLabel}
+                </i>
+              </div>
               <strong>{roomRead.name}</strong>
               <em>{roomRead.matchup}</em>
               <small>{roomRead.meta}</small>
@@ -4050,8 +4079,9 @@ function FantasyLeagueJumpBar({
 function fantasySavedRoomRead(room: FantasySavedRoom) {
   const league = room.importedLeague;
   const activeTeamId = room.activeTeamId ?? league.suggestedTeamId;
+  const sleeperOpponentTeamId = authoritativeSleeperOpponentTeamId(league);
   const opponentTeamId =
-    authoritativeSleeperOpponentTeamId(league) ??
+    sleeperOpponentTeamId ??
     room.opponentTeamId ??
     league.suggestedOpponentTeamId;
   const activeTeam = league.teams.find((team) => team.id === activeTeamId);
@@ -4065,21 +4095,36 @@ function fantasySavedRoomRead(room: FantasySavedRoom) {
     room.scoringFormat && scoringLabels[room.scoringFormat]
       ? scoringLabels[room.scoringFormat]
       : league.settings?.formatLabel ?? "Scoring";
+  const teamCount = league.settings
+    ? `${league.teams.length} teams · ${league.settings.lineupSlotCount} starters`
+    : `${league.teams.length} teams`;
   const matchup = opponentTeam
     ? `${activeTeam?.name ?? "My team"} vs ${opponentTeam.name}`
     : activeTeam?.name ?? "Pick team";
-  const matchupLabel =
-    league.sleeper?.matchupConfidence === "matched"
-      ? "Sleeper matchup"
-      : league.sleeper?.matchupConfidence === "partial"
-        ? "Partial matchup"
-        : "League room";
+  const sourceTone =
+    !league.sleeper
+      ? "fallback"
+      : league.sleeper.matchupConfidence === "matched" && sleeperOpponentTeamId
+        ? "live"
+        : league.sleeper.matchupConfidence === "partial"
+          ? "warn"
+          : "fallback";
+  const sourceLabel =
+    sourceTone === "live"
+      ? "Sleeper matched"
+      : sourceTone === "warn"
+        ? "Partial match"
+        : league.sleeper
+          ? "Manual compare"
+          : "Manual import";
 
   return {
     kicker: `${season} · ${week}`,
     matchup,
-    meta: `${matchupLabel} · ${scoring}`,
+    meta: `${scoring} · ${teamCount}`,
     name,
+    sourceLabel,
+    sourceTone,
   };
 }
 
@@ -12816,7 +12861,7 @@ function fantasyMatchupAccuracyLabel(
   if (!fantasyImport) {
     return {
       detail: "Sample teams are useful for exploring the tool, not real league advice.",
-      label: "Sample compare",
+      label: "Sample mode",
       tone: "sample" as const,
     };
   }
@@ -12833,7 +12878,7 @@ function fantasyMatchupAccuracyLabel(
     if (receipt.opponentTeamId && receipt.opponentTeamId !== selectedOpponentId) {
       return {
         detail: "Sleeper found the real opponent, but you are comparing against a different league team.",
-        label: "League compare",
+        label: "Manual compare",
         tone: "fallback" as const,
       };
     }
@@ -12842,7 +12887,7 @@ function fantasyMatchupAccuracyLabel(
       detail:
         receipt.matchupSummary ??
         `Sleeper matched this Week ${receipt.week ?? "?"} opponent from the live matchup endpoint.`,
-      label: "Sleeper matchup",
+      label: "Sleeper matched opponent",
       tone: "live" as const,
     };
   }
@@ -12852,7 +12897,7 @@ function fantasyMatchupAccuracyLabel(
       detail:
         receipt.matchupSummary ??
         "Sleeper returned a matchup id, but not a clean two-team matchup. Treat this as a comparison target.",
-      label: "Partial matchup",
+      label: "Partial Sleeper match",
       tone: "warn" as const,
     };
   }
