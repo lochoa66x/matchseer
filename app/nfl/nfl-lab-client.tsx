@@ -21,7 +21,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   applyFantasyProviderBridge,
   buildFantasyMatchupWeaknessPlan,
@@ -1140,6 +1140,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [teamLens, setTeamLens] = useState<FantasyTeamLens>("redraft");
   const [activeFantasyTeamId, setActiveFantasyTeamId] = useState("seer-house");
   const [opponentFantasyTeamId, setOpponentFantasyTeamId] = useState("rival-house");
+  const lastSleeperMatchupSelectionKeyRef = useRef("");
   const [fantasyImport, setFantasyImport] = useState<ImportedFantasyLeague | null>(null);
   const [savedFantasyRooms, setSavedFantasyRooms] = useState<FantasySavedRoom[]>([]);
   const [activeFantasyRoomId, setActiveFantasyRoomId] = useState<string | null>(null);
@@ -1732,17 +1733,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       return;
     }
 
+    const sleeperOpponentTeamId = authoritativeSleeperOpponentTeamId(fantasyImport);
+    const sleeperMatchupKey = sleeperMatchupSelectionKey(fantasyImport);
     const activeIsValid = fantasyImport.teams.some(
       (team) => team.id === activeFantasyTeamId,
     );
     const opponentIsValid =
       fantasyImport.teams.some((team) => team.id === opponentFantasyTeamId) &&
       (opponentFantasyTeamId !== activeFantasyTeamId || fantasyImport.teams.length === 1);
-
-    if (activeIsValid && opponentIsValid) {
-      return;
-    }
-
     const suggestedTeam =
       (activeIsValid
         ? fantasyImport.teams.find((team) => team.id === activeFantasyTeamId)
@@ -1750,12 +1748,30 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       fantasyImport.teams.find((team) => team.id === fantasyImport.suggestedTeamId) ??
       fantasyImport.teams[0];
     const suggestedOpponent =
+      fantasyImport.teams.find(
+        (team) => team.id === sleeperOpponentTeamId && team.id !== suggestedTeam.id,
+      ) ??
       (opponentIsValid
         ? fantasyImport.teams.find((team) => team.id === opponentFantasyTeamId)
         : undefined) ??
       fantasyImport.teams.find((team) => team.id === fantasyImport.suggestedOpponentTeamId) ??
       fantasyImport.teams.find((team) => team.id !== suggestedTeam.id) ??
       suggestedTeam;
+    const shouldApplySleeperMatchup =
+      Boolean(sleeperMatchupKey && sleeperOpponentTeamId) &&
+      lastSleeperMatchupSelectionKeyRef.current !== sleeperMatchupKey &&
+      suggestedTeam.id === fantasyImport.suggestedTeamId;
+
+    if (shouldApplySleeperMatchup) {
+      lastSleeperMatchupSelectionKeyRef.current = sleeperMatchupKey;
+      setActiveFantasyTeamId(suggestedTeam.id);
+      setOpponentFantasyTeamId(suggestedOpponent.id);
+      return;
+    }
+
+    if (activeIsValid && opponentIsValid) {
+      return;
+    }
 
     setActiveFantasyTeamId(suggestedTeam.id);
     setOpponentFantasyTeamId(suggestedOpponent.id);
@@ -1799,11 +1815,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
   function restoreFantasySavedRoom(room: FantasySavedRoom) {
     const importedLeague = room.importedLeague;
+    const sleeperOpponentTeamId = authoritativeSleeperOpponentTeamId(importedLeague);
     const restoredTeam =
       importedLeague.teams.find((team) => team.id === room.activeTeamId) ??
       importedLeague.teams.find((team) => team.id === importedLeague.suggestedTeamId) ??
       importedLeague.teams[0];
     const restoredOpponent =
+      importedLeague.teams.find(
+        (team) => team.id === sleeperOpponentTeamId && team.id !== restoredTeam?.id,
+      ) ??
       importedLeague.teams.find(
         (team) => team.id === room.opponentTeamId && team.id !== restoredTeam?.id,
       ) ??
@@ -2750,6 +2770,13 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             scoringFormat={scoringFormat}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
+          />
+
+          <FantasyLeagueJumpBar
+            activeRoomId={activeFantasyRoomId}
+            onRoomChange={handleSavedFantasyRoomChange}
+            onViewChange={setFantasyView}
+            rooms={savedFantasyRooms}
           />
 
           <FantasyHero
@@ -3965,6 +3992,95 @@ function FantasyContextBar({
       </div>
     </section>
   );
+}
+
+function FantasyLeagueJumpBar({
+  activeRoomId,
+  onRoomChange,
+  onViewChange,
+  rooms,
+}: {
+  activeRoomId: string | null;
+  onRoomChange: (roomId: string) => void;
+  onViewChange: (view: FantasyView) => void;
+  rooms: FantasySavedRoom[];
+}) {
+  if (rooms.length === 0) {
+    return null;
+  }
+
+  const selectedRoomId = activeRoomId ?? rooms[0]?.id;
+
+  return (
+    <section className="nfl-fantasy-league-jump" aria-label="Saved fantasy leagues">
+      <div className="nfl-fantasy-league-jump-head">
+        <div>
+          <span>League jump</span>
+          <strong>Pick the room to analyze</strong>
+        </div>
+        <button onClick={() => onViewChange("roster")} type="button">
+          <RefreshCw size={15} />
+          Connect another
+        </button>
+      </div>
+      <div className="nfl-fantasy-league-jump-list">
+        {rooms.map((room) => {
+          const roomRead = fantasySavedRoomRead(room);
+          const isActive = room.id === selectedRoomId;
+
+          return (
+            <button
+              className={cx(isActive && "active")}
+              key={room.id}
+              onClick={() => onRoomChange(room.id)}
+              type="button"
+            >
+              <span>{roomRead.kicker}</span>
+              <strong>{roomRead.name}</strong>
+              <em>{roomRead.matchup}</em>
+              <small>{roomRead.meta}</small>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function fantasySavedRoomRead(room: FantasySavedRoom) {
+  const league = room.importedLeague;
+  const activeTeamId = room.activeTeamId ?? league.suggestedTeamId;
+  const opponentTeamId =
+    authoritativeSleeperOpponentTeamId(league) ??
+    room.opponentTeamId ??
+    league.suggestedOpponentTeamId;
+  const activeTeam = league.teams.find((team) => team.id === activeTeamId);
+  const opponentTeam = league.teams.find(
+    (team) => team.id === opponentTeamId && team.id !== activeTeam?.id,
+  );
+  const name = league.sleeper?.leagueName ?? league.label;
+  const week = league.week ? `Week ${league.week}` : "Current room";
+  const season = league.season ?? "Fantasy";
+  const scoring =
+    room.scoringFormat && scoringLabels[room.scoringFormat]
+      ? scoringLabels[room.scoringFormat]
+      : league.settings?.formatLabel ?? "Scoring";
+  const matchup = opponentTeam
+    ? `${activeTeam?.name ?? "My team"} vs ${opponentTeam.name}`
+    : activeTeam?.name ?? "Pick team";
+  const matchupLabel =
+    league.sleeper?.matchupConfidence === "matched"
+      ? "Sleeper matchup"
+      : league.sleeper?.matchupConfidence === "partial"
+        ? "Partial matchup"
+        : "League room";
+
+  return {
+    kicker: `${season} · ${week}`,
+    matchup,
+    meta: `${matchupLabel} · ${scoring}`,
+    name,
+  };
 }
 
 function FantasyHero({
@@ -12311,6 +12427,34 @@ function fantasyRoomIdForLeague(importedLeague: ImportedFantasyLeague) {
     importedLeague.id,
     importedLeague.season ?? "season",
     importedLeague.week ? `week-${importedLeague.week}` : "room",
+  ].join(":");
+}
+
+function authoritativeSleeperOpponentTeamId(importedLeague: ImportedFantasyLeague) {
+  const receipt = importedLeague.sleeper;
+
+  if (receipt?.matchupConfidence !== "matched" || receipt.status !== "matched") {
+    return undefined;
+  }
+
+  return importedLeague.suggestedOpponentTeamId ?? receipt.opponentTeamId;
+}
+
+function sleeperMatchupSelectionKey(importedLeague: ImportedFantasyLeague) {
+  const receipt = importedLeague.sleeper;
+  const opponentTeamId = authoritativeSleeperOpponentTeamId(importedLeague);
+
+  if (!receipt || !opponentTeamId) {
+    return "";
+  }
+
+  return [
+    receipt.leagueId,
+    receipt.season ?? importedLeague.season ?? "",
+    receipt.week ?? importedLeague.week ?? "",
+    receipt.selectedTeamId ?? importedLeague.suggestedTeamId ?? "",
+    opponentTeamId,
+    receipt.matchupId ?? "",
   ].join(":");
 }
 
