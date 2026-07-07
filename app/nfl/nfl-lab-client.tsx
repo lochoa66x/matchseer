@@ -1133,6 +1133,15 @@ const seededNflDataset: NflSeerDataset = {
 
 const sleeperStorageKey = "matchseer:nfl-fantasy:sleeper-connection:v1";
 const fantasyRoomStorageKey = "matchseer:fantasy-seer:rooms:v1";
+const fantasyViewTargetIds: Record<FantasyView, string> = {
+  compare: "player-compare",
+  league: "league-power-map",
+  overview: "fantasy-overview",
+  players: "scouting-board",
+  rookies: "fantasy-rookies",
+  roster: "fantasy-team-lab",
+  trades: "trade-builder",
+};
 
 export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [nflDataset, setNflDataset] = useState<NflSeerDataset>(seededNflDataset);
@@ -1214,6 +1223,23 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     !isFantasyMode &&
     nflDataStatus === "fallback" &&
     nflDataset.source === "seeded-fallback";
+
+  function revealFantasyView(view: FantasyView) {
+    setFantasyView(view);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.setTimeout(() => {
+      const target =
+        document.getElementById(fantasyViewTargetIds[view]) ??
+        document.getElementById("fantasy-rooms");
+
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
+
   const matchups = useMemo(
     () => withSeededNflSlateRooms(nflDataset.matchups),
     [nflDataset.matchups],
@@ -2452,29 +2478,41 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             <>
               <a
                 className={fantasyView === "overview" ? "active" : undefined}
-                href="#fantasy-seer"
-                onClick={() => setFantasyView("overview")}
+                href="#fantasy-overview"
+                onClick={(event) => {
+                  event.preventDefault();
+                  revealFantasyView("overview");
+                }}
               >
                 Best Move
               </a>
               <a
                 className={fantasyView === "roster" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("roster")}
+                href="#fantasy-team-lab"
+                onClick={(event) => {
+                  event.preventDefault();
+                  revealFantasyView("roster");
+                }}
               >
                 Roster
               </a>
               <a
                 className={fantasyView === "league" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("league")}
+                href="#league-power-map"
+                onClick={(event) => {
+                  event.preventDefault();
+                  revealFantasyView("league");
+                }}
               >
                 League
               </a>
               <a
                 className={fantasyView === "trades" ? "active" : undefined}
-                href="#fantasy-rooms"
-                onClick={() => setFantasyView("trades")}
+                href="#trade-builder"
+                onClick={(event) => {
+                  event.preventDefault();
+                  revealFantasyView("trades");
+                }}
               >
                 Trades
               </a>
@@ -2774,7 +2812,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onSavedRoomChange={handleSavedFantasyRoomChange}
             onScoringChange={setScoringFormat}
             onTeamChange={setActiveFantasyTeamId}
-            onViewChange={setFantasyView}
+            onViewChange={revealFantasyView}
             opponentTeamId={opponentFantasyTeam.id}
             savedRooms={savedFantasyRooms}
             scoringFormat={scoringFormat}
@@ -2785,7 +2823,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
           <FantasyLeagueJumpBar
             activeRoomId={activeFantasyRoomId}
             onRoomChange={handleSavedFantasyRoomChange}
-            onViewChange={setFantasyView}
+            onViewChange={revealFantasyView}
             rooms={savedFantasyRooms}
           />
 
@@ -2794,7 +2832,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             fantasyImport={fantasyImport}
             matchupReport={fantasyMatchupReport}
             onAskSeer={requestScoutingRead}
-            onViewChange={setFantasyView}
+            onViewChange={revealFantasyView}
             read={fantasyHeroRead}
             report={activeTeamReport}
             scoringFormat={scoringFormat}
@@ -2806,7 +2844,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             current={fantasyView}
             leagueMap={fantasyLeaguePowerMap}
             matchupReport={fantasyMatchupReport}
-            onChange={setFantasyView}
+            onChange={revealFantasyView}
             report={activeTeamReport}
             rookieCount={rookieWatchRows.length}
             totalPlayers={scoutingBoard.length}
@@ -2941,7 +2979,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onRemoveSavedRoom={handleRemoveSavedFantasyRoom}
             onSavedRoomChange={handleSavedFantasyRoomChange}
             onTeamChange={setActiveFantasyTeamId}
-            onViewChange={setFantasyView}
+            onViewChange={revealFantasyView}
             opponentTeamId={opponentFantasyTeam.id}
             savedRooms={savedFantasyRooms}
             sourceLanes={fantasySourceLanes}
@@ -3899,7 +3937,7 @@ function FantasyContextBar({
   }
 
   return (
-    <section className="nfl-fantasy-context-bar" aria-label="Fantasy decision room context">
+    <section className="nfl-fantasy-context-bar" aria-label="Fantasy decision context">
       <div className="nfl-fantasy-context-summary">
         <span>
           <UsersRound size={16} />
@@ -4024,7 +4062,7 @@ function FantasyLeagueJumpBar({
         <div className="nfl-fantasy-league-jump-head">
           <div>
             <span>No saved leagues yet</span>
-            <strong>Connect a Sleeper league to make this room real.</strong>
+            <strong>Connect a Sleeper league to make this analysis real.</strong>
           </div>
           <button onClick={() => onViewChange("roster")} type="button">
             <RefreshCw size={15} />
@@ -4044,7 +4082,7 @@ function FantasyLeagueJumpBar({
         <div>
           <span>{hasMultipleRooms ? "League jump" : "Saved league"}</span>
           <strong>
-            {hasMultipleRooms ? "Pick the room to analyze" : "Current room ready"}
+            {hasMultipleRooms ? "Pick the league to analyze" : "Current league ready"}
           </strong>
         </div>
         <button onClick={() => onViewChange("roster")} type="button">
@@ -4186,21 +4224,21 @@ function FantasyHero({
       <div className="nfl-fantasy-command">
         <div className="nfl-section-kicker">
           <BrainCircuit size={17} />
-          Fantasy football experiments
+          Fantasy lineup lab
         </div>
         <h1>Fantasy Seer</h1>
         <p>
-          Weekly fantasy decisions across all your teams, cleaned up. Best move first,
-          close calls second, trade ideas third, and the deep math tucked into the rooms.
+          One clean weekly plan for every league you manage. Start with the best
+          move, check the risky spots, then use waivers and trades with a price line.
         </p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
             <RefreshCw size={16} />
-            Connect roster
+            Connect league
           </button>
           <button className="secondary" onClick={() => onViewChange("trades")} type="button">
             <LineChart size={16} />
-            Build trade
+            Find trade angle
           </button>
           <button
             className="secondary"
@@ -4209,7 +4247,7 @@ function FantasyHero({
             type="button"
           >
             <Sparkles size={16} />
-            {scoutStatus === "loading" ? "Reading" : "Ask Fantasy Seer"}
+            {scoutStatus === "loading" ? "Reading lineup" : "Ask about lineup"}
           </button>
         </div>
         <FantasySeerSafetyNote />
@@ -4217,7 +4255,7 @@ function FantasyHero({
 
       <article className="nfl-fantasy-command-card">
         <div className="nfl-card-topline">
-          <span>{teamLensLabels[teamLens]} board</span>
+          <span>{teamLensLabels[teamLens]} decision board</span>
           <strong>{sourceLabel}</strong>
         </div>
 
@@ -4230,6 +4268,7 @@ function FantasyHero({
 
         <FantasyWeeklyMatchupPanel
           matchupReport={matchupReport}
+          onViewChange={onViewChange}
           opponentReport={opponentReport}
           report={report}
         />
@@ -4248,7 +4287,7 @@ function FantasyHero({
 
         <div className="nfl-roster-map" aria-label="Roster map">
           <div className="nfl-roster-map-head">
-            <span>Roster map</span>
+            <span>Roster health</span>
             <strong>{weeklyCoach.pressure.label}</strong>
             <em>{weeklyCoach.pressure.summary}</em>
           </div>
@@ -4267,9 +4306,9 @@ function FantasyHero({
           <summary>
             <span>
               <Sparkles size={16} />
-              Receipts / Model Lab
+              Why this read
             </span>
-            <em>Open the deeper math</em>
+            <em>Projection, role, matchup</em>
           </summary>
           <div className="nfl-fantasy-read-card nfl-model-receipts">
             <strong>{read.headline}</strong>
@@ -4290,10 +4329,12 @@ function FantasyHero({
 
 function FantasyWeeklyMatchupPanel({
   matchupReport,
+  onViewChange,
   opponentReport,
   report,
 }: {
   matchupReport: FantasyMatchupReport;
+  onViewChange: (view: FantasyView) => void;
   opponentReport: FantasyTeamReport;
   report: FantasyTeamReport;
 }) {
@@ -4309,7 +4350,7 @@ function FantasyWeeklyMatchupPanel({
         <div>
           <span>
             <Swords size={16} />
-            This week matchup
+            Weekly matchup
           </span>
           <strong>
             {report.team.name} vs {opponentReport.team.name}
@@ -4324,17 +4365,17 @@ function FantasyWeeklyMatchupPanel({
 
       <div className="nfl-week-matchup-summary">
         <div>
-          <span>My projection</span>
+          <span>My team</span>
           <strong>{report.projection.toFixed(1)}</strong>
           <em>{report.floor.toFixed(1)} floor</em>
         </div>
         <div className="focus">
-          <span>Weekly edge</span>
+          <span>Projected edge</span>
           <strong>{matchupReport.edgeLabel}</strong>
           <em>{matchupReport.confidence}% confidence</em>
         </div>
         <div>
-          <span>Opponent</span>
+          <span>Their team</span>
           <strong>{opponentReport.projection.toFixed(1)}</strong>
           <em>{opponentReport.ceiling.toFixed(1)} ceiling</em>
         </div>
@@ -4360,9 +4401,9 @@ function FantasyWeeklyMatchupPanel({
       </div>
 
       <div className="nfl-week-matchup-takeaways">
-        <FantasyMatchupTakeaway title="Where I win" items={read.myEdges} />
-        <FantasyMatchupTakeaway title="Where they win" items={read.opponentEdges} />
-        <FantasyMatchupTakeaway title="Swing slots" items={read.swingSlots} />
+        <FantasyMatchupTakeaway title="Your edge" items={read.myEdges} />
+        <FantasyMatchupTakeaway title="Their edge" items={read.opponentEdges} />
+        <FantasyMatchupTakeaway title="Deciding slots" items={read.swingSlots} />
       </div>
 
       <div className="nfl-week-opponent-plan">
@@ -4372,14 +4413,10 @@ function FantasyWeeklyMatchupPanel({
           <p>{read.planSummary}</p>
         </div>
         <button
-          onClick={() =>
-            document
-              .getElementById("fantasy-rooms")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
+          onClick={() => onViewChange("overview")}
           type="button"
         >
-          Open rooms
+          See lineup details
           <ChevronRight size={15} />
         </button>
       </div>
@@ -4615,7 +4652,7 @@ function FantasyCommandCenter({
     null;
   const selectedOpponentId = selectedOpponent?.report.team.id ?? active.report.team.id;
   const leagueLabel =
-    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league room";
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league";
   const leagueMeta = [
     fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
     fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
@@ -4658,8 +4695,8 @@ function FantasyCommandCenter({
           </div>
           <h1>{leagueLabel}</h1>
           <p>
-            One league, one team, one decision room at a time. Your roster gets
-            lineup advice; every other roster becomes a compare and trade target.
+            One league and one team at a time. Your roster gets the lineup advice;
+            every other roster becomes a compare target or trade angle.
           </p>
         </div>
         <div className="nfl-fantasy-command-center-controls">
@@ -4807,7 +4844,7 @@ function FantasyCommandCenter({
         </article>
       </div>
 
-      <div className="nfl-fantasy-command-center-actions" aria-label="Fantasy room shortcuts">
+      <div className="nfl-fantasy-command-center-actions" aria-label="Fantasy shortcuts">
         <button onClick={() => onViewChange("overview")} type="button">
           <Sparkles size={16} />
           Best Move
@@ -4845,11 +4882,11 @@ function FantasySourceTruthStrip({
     <div className="nfl-fantasy-source-truth" aria-label="Fantasy source truth">
       <div>
         <ShieldCheck size={16} />
-        <span>Source truth</span>
+        <span>Data confidence</span>
         <strong>
           {liveSourceCount}/{sourceLanes.length} live
         </strong>
-        <em>model nudges stay capped</em>
+        <em>source data first, context nudges second</em>
       </div>
       <div className="nfl-fantasy-source-truth-grid">
         {sourceLanes.map((lane) => (
@@ -4883,7 +4920,6 @@ function FantasyTeamPortfolio({
   leagueMap,
   opponentTeamId,
   onOpponentTeamChange,
-  onTeamChange,
   onViewChange,
   teamLens,
 }: {
@@ -4891,13 +4927,12 @@ function FantasyTeamPortfolio({
   leagueMap: FantasyLeaguePowerMap;
   opponentTeamId: string;
   onOpponentTeamChange: (teamId: string) => void;
-  onTeamChange: (teamId: string) => void;
   onViewChange: (view: FantasyView) => void;
   teamLens: FantasyTeamLens;
 }) {
   const activeId = leagueMap.active.report.team.id;
   const leagueLabel =
-    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league room";
+    fantasyImport?.sleeper?.leagueName ?? fantasyImport?.label ?? "Sample league";
   const leagueMeta = [
     fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
     fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
@@ -4914,18 +4949,6 @@ function FantasyTeamPortfolio({
     opponentOptions.find((team) => team.report.team.id === opponentTeamId)?.report.team.id ??
     opponentOptions[0]?.report.team.id ??
     activeId;
-
-  function handleManageTeam(teamId: string) {
-    onTeamChange(teamId);
-
-    if (teamId === opponentTeamId) {
-      const nextOpponent =
-        leagueMap.teams.find((team) => team.report.team.id !== teamId)?.report.team.id ??
-        teamId;
-
-      onOpponentTeamChange(nextOpponent);
-    }
-  }
 
   function handleOpponentCompare(teamId: string) {
     onOpponentTeamChange(teamId);
@@ -4947,7 +4970,7 @@ function FantasyTeamPortfolio({
             <UsersRound size={17} />
             Team portfolio
           </div>
-          <h2>One league room at a time</h2>
+          <h2>One league at a time</h2>
           <p>
             Your roster gets lineup actions. Other teams become league reads: compare them,
             find their weak spots, and look for trade targets without turning the whole page
@@ -4976,7 +4999,7 @@ function FantasyTeamPortfolio({
           <div>
             <button onClick={() => onViewChange("roster")} type="button">
               <ClipboardList size={16} />
-              Roster room
+              Manage roster
             </button>
             <button className="secondary" onClick={() => onViewChange("players")} type="button">
               <Search size={16} />
@@ -5034,7 +5057,7 @@ function FantasyTeamPortfolio({
               </div>
               <p>{activePressure.summary}</p>
               <div className="nfl-team-portfolio-actions">
-                <button onClick={() => handleManageTeam(leagueMap.active.report.team.id)} type="button">
+                <button onClick={() => onViewChange("roster")} type="button">
                   <ClipboardList size={15} />
                   Manage roster
                 </button>
@@ -5202,15 +5225,15 @@ function FantasyBestMovePanel({
 }) {
   const bestMoveRows = [
     {
-      label: "Why",
+      label: "Why it helps",
       value: weeklyCoach.bestMove.why,
     },
     {
-      label: "What could change it",
+      label: "What changes it",
       value: weeklyCoach.bestMove.fallback,
     },
     {
-      label: "Risk level",
+      label: "Risk check",
       value: weeklyCoach.bestMove.risk,
     },
   ];
@@ -5233,16 +5256,16 @@ function FantasyBestMovePanel({
             playerName={featuredPlayer?.name ?? weeklyCoach.bestMove.playerName ?? report.team.name}
             position={featuredPlayer?.position ?? report.strongestLane.position}
           />
-          <em>Role lens - projection, range, and matchup context.</em>
+          <em>Projection, role, matchup, and news sensitivity in one read.</em>
         </div>
-        <h2>{weeklyCoach.bestMove.call}</h2>
+        <h2>{weeklyCoach.bestMove.playerName ?? featuredPlayer?.name ?? report.strongestLane.label}</h2>
         <p>{weeklyCoach.bestMove.why}</p>
         <div className="nfl-best-move-actions">
           <button onClick={() => onViewChange("overview")} type="button">
             See next moves
           </button>
           <button onClick={() => onViewChange("compare")} type="button">
-            View receipts
+            Why this call
           </button>
         </div>
       </div>
@@ -5257,11 +5280,11 @@ function FantasyBestMovePanel({
             {weeklyCoach.bestMove.edge}
           </span>
           <span>
-            <b>Projected</b>
+            <b>Team total</b>
             {report.projection.toFixed(1)} pts
           </span>
           <span>
-            <b>Matchup</b>
+            <b>Weekly read</b>
             {matchupReport.edgeLabel}
           </span>
         </div>
@@ -5329,19 +5352,19 @@ function fantasyActionReceiptRows(action: FantasyActionItem) {
       value: `${action.state}: ${action.detail}`,
     },
     {
-      label: "Why",
+      label: "Why it helps",
       value: action.why,
     },
     {
-      label: "What could change it",
+      label: "What changes it",
       value: action.fallback,
     },
     {
-      label: "Risk level",
+      label: "Risk check",
       value: action.risk,
     },
     {
-      label: "Source vs Seer",
+      label: "Model edge",
       value: action.edge,
     },
   ];
@@ -5432,7 +5455,7 @@ function FantasyViewTabs({
     },
     {
       id: "players",
-      label: "Player Research",
+      label: "Player Lab",
       meta: `${totalPlayers} pool`,
       icon: <Search size={17} />,
     },
@@ -5450,14 +5473,14 @@ function FantasyViewTabs({
     },
     {
       id: "compare",
-      label: "Receipts",
+      label: "Why This Read",
       meta: matchupReport.edgeLabel,
       icon: <Gauge size={17} />,
     },
   ];
 
   return (
-    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy decision rooms">
+    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy decision sections">
       {tabs.map((tab) => (
         <button
           aria-pressed={current === tab.id}
@@ -5744,7 +5767,7 @@ function FantasyOverview({
         </div>
         <h2>Clean board</h2>
         <p>
-          A quieter shortlist from the full player room. Open Players when you want
+          A quieter shortlist from the full player pool. Open Players when you want
           the deeper ranking board by position.
         </p>
         <div className="nfl-fantasy-spotlight-list">
@@ -5973,10 +5996,10 @@ function FantasyRookieBoard({
             <Trophy size={17} />
             Rookie and dynasty watch
           </div>
-          <h2>Future value room</h2>
+          <h2>Future value board</h2>
           <p>
             A calmer place for rookies, breakouts, taxi stashes, and dynasty-friendly
-            players. When true rookie flags arrive, this room will use them first.
+            players. When true rookie flags arrive, this board will use them first.
           </p>
         </div>
         <strong className="nfl-fantasy-room-badge">{rows.length} watchlist</strong>
@@ -6664,19 +6687,19 @@ function fantasyPlayerAdviceRows(
       value: fantasyPlayerActionAdvice(player, projection),
     },
     {
-      label: "Why",
+      label: "Why it helps",
       value: firstReason,
     },
     {
-      label: "What could change it",
+      label: "What changes it",
       value: fantasyPlayerChangeTrigger(player),
     },
     {
-      label: "Risk level",
+      label: "Risk check",
       value: fantasyPlayerRiskForCard(player),
     },
     {
-      label: "Source vs Seer",
+      label: "Model edge",
       value: `${receipt.sourceLabel} ${receipt.sourceProjection.toFixed(1)} -> ${receipt.finalLabel} ${receipt.finalProjection.toFixed(1)} (${formatFantasyDelta(receipt.delta)})`,
     },
   ];
@@ -7495,9 +7518,9 @@ function FantasyTeamLab({
             <Trophy size={17} />
             Fantasy team lab
           </div>
-          <h2>My roster room</h2>
+          <h2>My roster</h2>
           <p>
-            Set the roster once, then use this room for the practical stuff: lineup
+            Set the roster once, then use this section for the practical stuff: lineup
             weak spots, matchup pressure, and clean trade paths.
           </p>
         </div>
@@ -10636,7 +10659,7 @@ function buildFantasyWeeklyCoach({
     receipts: [
       `${scoringLabels[scoringFormat]} · ${teamLensLabels[teamLens]} settings are active.`,
       `Team range: ${report.floor.toFixed(1)}-${report.ceiling.toFixed(1)} points.`,
-      `Source vs Seer: ${formatFantasyDelta(report.lineupSeerDelta)} after context.`,
+      `Model edge: ${formatFantasyDelta(report.lineupSeerDelta)} after context.`,
       `Pressure watch: ${pressure.summary}`,
     ],
     rosterMap: buildFantasyRosterMap(report),
@@ -10951,7 +10974,7 @@ function buildFantasyActionQueue({
             topStart.delta,
           )} vs source`,
           fallback: topStartCloseCall
-            ? `If late news changes the ${topStartCloseCall.slotLabel} room, re-check ${topStartCloseCall.starter.name} vs ${topStartCloseCall.challenger.name}.`
+            ? `If late news changes the ${topStartCloseCall.slotLabel} role, re-check ${topStartCloseCall.starter.name} vs ${topStartCloseCall.challenger.name}.`
             : `Keep ${topStart.player.name} in unless injury, weather, or role news changes the workload.`,
           kind: "start",
           label: topStart.label,
@@ -11046,7 +11069,7 @@ function buildFantasyActionQueue({
         }
       : {
           detail:
-            "No bench player is forcing a move right now. Hold the starters unless late role or injury news changes the room.",
+            "No bench player is forcing a move right now. Hold the starters unless late role or injury news changes the workload.",
           confidence: "Medium",
           edge: "No clear bench lift",
           fallback: "Use waivers for depth instead of forcing a same-roster swap.",
@@ -11196,7 +11219,7 @@ function scoutingBoardModeCopy(
 
   return hasLiveOrImportedSourceRankings
     ? "Full player universe. Useful before drafts, for trade context, and for seeing where source rank disagrees with the Seer."
-    : "Full player universe. In season, Available and Top pickups are usually the higher-utility rooms.";
+    : "Full player universe. In season, Available and Top pickups are usually the highest-utility views.";
 }
 
 function scoutingBoardModeUtility(mode: ScoutingBoardMode) {
