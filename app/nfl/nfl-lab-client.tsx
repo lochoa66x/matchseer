@@ -159,6 +159,16 @@ type FantasyWeeklyCoachRead = {
   rosterMap: FantasyRosterMapItem[];
 };
 
+type FantasyWeeklyMatchupLane = {
+  gap: number;
+  label: string;
+  myProjection: number;
+  opponentProjection: number;
+  share: number;
+  summary: string;
+  tone: "mine" | "opponent" | "even";
+};
+
 type NflGameCardRead = {
   confidenceLabel: string;
   favorite: NflTeam;
@@ -4218,6 +4228,12 @@ function FantasyHero({
           weeklyCoach={weeklyCoach}
         />
 
+        <FantasyWeeklyMatchupPanel
+          matchupReport={matchupReport}
+          opponentReport={opponentReport}
+          report={report}
+        />
+
         <div className="nfl-fantasy-decision-lanes" aria-label="Key fantasy decisions">
           <FantasyHeroDecisionCard action={closeAction} eyebrow="Close call" />
           <FantasyHeroDecisionCard action={marketAction} eyebrow="Trade / waiver idea" />
@@ -4247,26 +4263,6 @@ function FantasyHero({
           </div>
         </div>
 
-        <div className="nfl-fantasy-scoreboard">
-          <div>
-            <span>{report.team.manager}</span>
-            <strong>{report.team.name}</strong>
-            <em>{report.projection.toFixed(1)} projected pts</em>
-          </div>
-          <div className="nfl-fantasy-scoreboard-core">
-            <span>Matchup</span>
-            <strong>{matchupReport.edgeLabel}</strong>
-            <em>
-              {matchupReport.confidence}% read · {matchupReport.chaos}% variance
-            </em>
-          </div>
-          <div>
-            <span>Opponent</span>
-            <strong>{opponentReport.team.name}</strong>
-            <em>{opponentReport.projection.toFixed(1)} projected pts</em>
-          </div>
-        </div>
-
         <details className="nfl-model-lab-drawer">
           <summary>
             <span>
@@ -4290,6 +4286,294 @@ function FantasyHero({
       </article>
     </section>
   );
+}
+
+function FantasyWeeklyMatchupPanel({
+  matchupReport,
+  opponentReport,
+  report,
+}: {
+  matchupReport: FantasyMatchupReport;
+  opponentReport: FantasyTeamReport;
+  report: FantasyTeamReport;
+}) {
+  const read = buildFantasyWeeklyMatchupRead({
+    matchupReport,
+    opponentReport,
+    report,
+  });
+
+  return (
+    <section className="nfl-week-matchup-panel" aria-label="This week matchup">
+      <div className="nfl-week-matchup-head">
+        <div>
+          <span>
+            <Swords size={16} />
+            This week matchup
+          </span>
+          <strong>
+            {report.team.name} vs {opponentReport.team.name}
+          </strong>
+          <em>{read.context}</em>
+        </div>
+        <b className={cx(read.myGap >= 0 ? "mine" : "opponent")}>
+          {read.myGap >= 0 ? "+" : ""}
+          {read.myGap.toFixed(1)}
+        </b>
+      </div>
+
+      <div className="nfl-week-matchup-summary">
+        <div>
+          <span>My projection</span>
+          <strong>{report.projection.toFixed(1)}</strong>
+          <em>{report.floor.toFixed(1)} floor</em>
+        </div>
+        <div className="focus">
+          <span>Weekly edge</span>
+          <strong>{matchupReport.edgeLabel}</strong>
+          <em>{matchupReport.confidence}% confidence</em>
+        </div>
+        <div>
+          <span>Opponent</span>
+          <strong>{opponentReport.projection.toFixed(1)}</strong>
+          <em>{opponentReport.ceiling.toFixed(1)} ceiling</em>
+        </div>
+      </div>
+
+      <div className="nfl-week-matchup-lanes">
+        {read.lanes.map((lane) => (
+          <article className={cx("nfl-week-matchup-lane", lane.tone)} key={lane.label}>
+            <div>
+              <span>{lane.label}</span>
+              <strong>{lane.summary}</strong>
+            </div>
+            <div className="nfl-week-matchup-meter" aria-hidden="true">
+              <i className="mine" style={{ width: `${lane.share}%` }} />
+              <i className="opponent" style={{ width: `${100 - lane.share}%` }} />
+            </div>
+            <div className="nfl-week-matchup-values">
+              <b>{lane.myProjection.toFixed(1)}</b>
+              <b>{lane.opponentProjection.toFixed(1)}</b>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="nfl-week-matchup-takeaways">
+        <FantasyMatchupTakeaway title="Where I win" items={read.myEdges} />
+        <FantasyMatchupTakeaway title="Where they win" items={read.opponentEdges} />
+        <FantasyMatchupTakeaway title="Swing slots" items={read.swingSlots} />
+      </div>
+
+      <div className="nfl-week-opponent-plan">
+        <div>
+          <span>{read.planLabel}</span>
+          <strong>{read.planHeadline}</strong>
+          <p>{read.planSummary}</p>
+        </div>
+        <button
+          onClick={() =>
+            document
+              .getElementById("fantasy-rooms")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          type="button"
+        >
+          Open rooms
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function FantasyMatchupTakeaway({
+  items,
+  title,
+}: {
+  items: string[];
+  title: string;
+}) {
+  return (
+    <div>
+      <span>{title}</span>
+      {items.map((item) => (
+        <strong key={item}>{item}</strong>
+      ))}
+    </div>
+  );
+}
+
+function buildFantasyWeeklyMatchupRead({
+  matchupReport,
+  opponentReport,
+  report,
+}: {
+  matchupReport: FantasyMatchupReport;
+  opponentReport: FantasyTeamReport;
+  report: FantasyTeamReport;
+}) {
+  const myGap = round1(report.projection - opponentReport.projection);
+  const lanes = buildFantasyWeeklyMatchupLanes({
+    matchupReport,
+    opponentReport,
+    report,
+  });
+  const myEdges = lanes
+    .filter((lane) => lane.gap > 0.5)
+    .sort((left, right) => right.gap - left.gap)
+    .slice(0, 2);
+  const opponentEdges = lanes
+    .filter((lane) => lane.gap < -0.5)
+    .sort((left, right) => left.gap - right.gap)
+    .slice(0, 2);
+  const swingSlots = [...lanes]
+    .sort((left, right) => Math.abs(left.gap) - Math.abs(right.gap))
+    .slice(0, 3);
+  const bestMine = myEdges[0] ?? lanes.find((lane) => lane.gap >= 0);
+  const danger = opponentEdges[0] ?? lanes.find((lane) => lane.gap < 0);
+  const swing = swingSlots[0];
+  const myEdgesCopy = fantasyMatchupLaneList(myEdges, "No clean lane yet");
+  const opponentEdgesCopy = fantasyMatchupLaneList(opponentEdges, "No major leak");
+  const swingCopy = fantasyMatchupLaneList(swingSlots, "No close slots");
+  const planLabel =
+    myGap >= 2 ? "Protect the edge" : myGap <= -2 ? "Find swing points" : "One lineup call";
+  const planHeadline =
+    myGap >= 2
+      ? `You have ${fantasySignedGap(myGap)} on paper.`
+      : myGap <= -2
+        ? `You need ${fantasySignedGap(Math.abs(myGap))} of swing value.`
+        : "This is close enough for one news item to matter.";
+  const planSummary =
+    myGap >= 2
+      ? `Keep the stable roles in. Watch ${danger?.label ?? "the opponent ceiling"} and do not trade floor for a tiny upside chase.`
+      : myGap <= -2
+        ? `Attack ${bestMine?.label ?? "your best lane"} and revisit ${swing?.label ?? "the closest slot"} before kickoff. The opponent can hurt you through ${danger?.label ?? "their strongest lane"}.`
+        : `Break ties with role security. ${bestMine?.label ?? "Your best lane"} is live, but ${danger?.label ?? "their counter"} can flip the week.`;
+
+  return {
+    context: `${matchupReport.confidence}% confidence · ${matchupReport.chaos}% variance · ${matchupReport.winLean}% lean`,
+    lanes,
+    myEdges: myEdgesCopy,
+    myGap,
+    opponentEdges: opponentEdgesCopy,
+    planHeadline,
+    planLabel,
+    planSummary,
+    swingSlots: swingCopy,
+  };
+}
+
+function buildFantasyWeeklyMatchupLanes({
+  matchupReport,
+  opponentReport,
+  report,
+}: {
+  matchupReport: FantasyMatchupReport;
+  opponentReport: FantasyTeamReport;
+  report: FantasyTeamReport;
+}): FantasyWeeklyMatchupLane[] {
+  const reportIsLeft = matchupReport.left.team.id === report.team.id;
+  const positionLanes = matchupReport.positionEdges.map((edge) => {
+    const myProjection = reportIsLeft ? edge.leftProjection : edge.rightProjection;
+    const opponentProjection = reportIsLeft ? edge.rightProjection : edge.leftProjection;
+
+    return fantasyWeeklyMatchupLane({
+      label: edge.position === "DST" ? "DEF" : edge.position,
+      myProjection,
+      opponentProjection,
+    });
+  });
+  const flexLane = fantasyWeeklyMatchupLane({
+    label: "FLEX",
+    myProjection: fantasyFlexLaneProjection(report),
+    opponentProjection: fantasyFlexLaneProjection(opponentReport),
+  });
+  const benchLane = fantasyWeeklyMatchupLane({
+    label: "Bench",
+    myProjection: fantasyBenchLaneProjection(report),
+    opponentProjection: fantasyBenchLaneProjection(opponentReport),
+  });
+
+  return [...positionLanes.slice(0, 4), flexLane, ...positionLanes.slice(4), benchLane];
+}
+
+function fantasyWeeklyMatchupLane({
+  label,
+  myProjection,
+  opponentProjection,
+}: {
+  label: string;
+  myProjection: number;
+  opponentProjection: number;
+}): FantasyWeeklyMatchupLane {
+  const gap = round1(myProjection - opponentProjection);
+  const absoluteGap = Math.abs(gap);
+  const tone = absoluteGap < 0.5 ? "even" : gap > 0 ? "mine" : "opponent";
+  const summary =
+    tone === "even"
+      ? "Even"
+      : gap > 0
+        ? `You ${fantasySignedGap(gap)}`
+        : `Them ${fantasySignedGap(absoluteGap)}`;
+
+  return {
+    gap,
+    label,
+    myProjection,
+    opponentProjection,
+    share: fantasyMatchupShare(myProjection, opponentProjection),
+    summary,
+    tone,
+  };
+}
+
+function fantasyMatchupLaneList(
+  lanes: FantasyWeeklyMatchupLane[],
+  fallback: string,
+) {
+  if (lanes.length === 0) {
+    return [fallback];
+  }
+
+  return lanes.map((lane) => `${lane.label} ${lane.summary}`);
+}
+
+function fantasyFlexLaneProjection(report: FantasyTeamReport) {
+  const eligible = report.players
+    .filter((player) => ["RB", "WR", "TE"].includes(normalizeScoutingPosition(player.position)))
+    .sort(
+      (left, right) =>
+        right.contextProjection.projection - left.contextProjection.projection,
+    );
+
+  return round1(
+    average(eligible.slice(2, 5).map((player) => player.contextProjection.projection)),
+  );
+}
+
+function fantasyBenchLaneProjection(report: FantasyTeamReport) {
+  return round1(
+    average(
+      report.benchPlayers
+        .slice(0, 5)
+        .map((player) => player.contextProjection.projection),
+    ),
+  );
+}
+
+function fantasyMatchupShare(myProjection: number, opponentProjection: number) {
+  const total = myProjection + opponentProjection;
+
+  if (total <= 0) {
+    return 50;
+  }
+
+  return Math.max(16, Math.min(84, Math.round((myProjection / total) * 100)));
+}
+
+function fantasySignedGap(value: number) {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
 function FantasyCommandCenter({
