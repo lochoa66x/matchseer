@@ -20909,3 +20909,299 @@ body {
   }
 }
 /* === End Fantasy Seer Decision Memo Pass === */
+
+/* === Fantasy Seer Roster Value Ladder === */
+.nfl-roster-value-ladder {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(216, 180, 93, 0.055), transparent 42%),
+    rgba(20, 24, 32, 0.78);
+  border: 1px solid var(--film-room-border, #2a303b);
+  border-radius: 12px;
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.nfl-roster-ladder-head,
+.nfl-roster-ladder-summary,
+.nfl-roster-ladder-columns,
+.nfl-roster-ladder-player {
+  min-width: 0;
+}
+
+.nfl-roster-ladder-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.nfl-roster-ladder-head h3 {
+  margin: 4px 0 0;
+  color: var(--film-room-copy, #f4f1e8);
+  font-size: clamp(1.25rem, 2vw, 1.85rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1.02;
+}
+
+.nfl-roster-ladder-head p {
+  max-width: 62ch;
+  margin: 6px 0 0;
+  color: var(--film-room-muted, #aeb8c7);
+  font-size: 0.82rem;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.nfl-roster-ladder-head > span {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  color: var(--film-room-bg, #0b0e12);
+  background: linear-gradient(
+    105deg,
+    var(--film-room-brass, #d8b45d),
+    var(--film-room-ice, #9db7e8)
+  );
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 930;
+  white-space: nowrap;
+}
+
+.nfl-roster-ladder-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-roster-ladder-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  background: rgba(11, 14, 18, 0.5);
+  border: 1px solid rgba(157, 183, 232, 0.14);
+  border-radius: 10px;
+}
+
+.nfl-roster-ladder-summary span,
+.nfl-roster-ladder-column-label,
+.nfl-roster-ladder-score span {
+  color: rgba(174, 184, 199, 0.8);
+  font-size: 0.61rem;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.nfl-roster-ladder-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--film-room-copy, #f4f1e8);
+  font-size: 1.05rem;
+  font-weight: 940;
+  line-height: 1.08;
+}
+
+.nfl-roster-ladder-summary em {
+  color: var(--film-room-muted, #aeb8c7);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 740;
+  line-height: 1.25;
+}
+
+.nfl-roster-ladder-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.nfl-roster-ladder-columns > div {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nfl-roster-ladder-list,
+.nfl-roster-ladder-full-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nfl-roster-ladder-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  background: rgba(11, 14, 18, 0.48);
+  border: 1px solid var(--film-room-border, #2a303b);
+  border-radius: 10px;
+}
+
+.nfl-roster-ladder-player.core {
+  border-color: rgba(157, 183, 232, 0.34);
+}
+
+.nfl-roster-ladder-player.hold {
+  border-color: rgba(216, 180, 93, 0.3);
+}
+
+.nfl-roster-ladder-player.watch {
+  border-color: rgba(157, 183, 232, 0.18);
+}
+
+.nfl-roster-ladder-player.cut {
+  background:
+    linear-gradient(135deg, rgba(216, 107, 74, 0.075), transparent 48%),
+    rgba(11, 14, 18, 0.52);
+  border-color: rgba(216, 107, 74, 0.28);
+}
+
+.nfl-roster-ladder-rank {
+  display: grid;
+  min-width: 38px;
+  min-height: 38px;
+  place-items: center;
+  color: var(--film-room-bg, #0b0e12);
+  background: linear-gradient(
+    135deg,
+    var(--film-room-brass, #d8b45d),
+    var(--film-room-ice, #9db7e8)
+  );
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.nfl-roster-ladder-player-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nfl-roster-ladder-player-main strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--film-room-copy, #f4f1e8);
+  font-size: 0.98rem;
+  font-weight: 930;
+  line-height: 1.08;
+}
+
+.nfl-roster-ladder-player-main em {
+  color: var(--film-room-muted, #aeb8c7);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.nfl-roster-ladder-player-main p {
+  margin: 2px 0 0;
+  color: rgba(216, 222, 232, 0.76);
+  font-size: 0.72rem;
+  font-weight: 720;
+  line-height: 1.32;
+}
+
+.nfl-roster-ladder-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.nfl-roster-ladder-tags span {
+  padding: 3px 7px;
+  color: rgba(244, 241, 232, 0.82);
+  background: rgba(42, 48, 59, 0.62);
+  border: 1px solid rgba(157, 183, 232, 0.13);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.nfl-roster-ladder-score {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 82px;
+  text-align: right;
+}
+
+.nfl-roster-ladder-score strong {
+  color: var(--film-room-copy, #f4f1e8);
+  font-size: 1.25rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.nfl-roster-ladder-score em {
+  color: var(--film-room-brass, #d8b45d);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.nfl-roster-ladder-full {
+  padding: 10px;
+  background: rgba(11, 14, 18, 0.36);
+  border: 1px solid rgba(157, 183, 232, 0.12);
+  border-radius: 10px;
+}
+
+.nfl-roster-ladder-full summary {
+  cursor: pointer;
+  color: var(--film-room-copy, #f4f1e8);
+  font-size: 0.82rem;
+  font-weight: 880;
+}
+
+.nfl-roster-ladder-full-list {
+  margin-top: 10px;
+}
+
+.nfl-roster-ladder-player.compact {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 8px;
+}
+
+.nfl-roster-ladder-player.compact .nfl-roster-ladder-player-main p {
+  display: none;
+}
+
+@media (max-width: 1000px) {
+  .nfl-roster-ladder-summary,
+  .nfl-roster-ladder-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .nfl-roster-ladder-head {
+    flex-direction: column;
+  }
+
+  .nfl-roster-ladder-player,
+  .nfl-roster-ladder-player.compact {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .nfl-roster-ladder-score {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+  }
+}
+/* === End Fantasy Seer Roster Value Ladder === */

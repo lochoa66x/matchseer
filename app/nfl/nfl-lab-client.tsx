@@ -448,6 +448,26 @@ type FantasyTeamReport = {
   tradeIdeas: string[];
 };
 
+type FantasyRosterLadderBand =
+  | "Protected core"
+  | "Strong hold"
+  | "Useful depth"
+  | "Bubble"
+  | "Cut line";
+type FantasyRosterLadderTone = "core" | "hold" | "watch" | "cut";
+
+type FantasyRosterLadderRow = {
+  band: FantasyRosterLadderBand;
+  cutScore: number;
+  detail: string;
+  keepScore: number;
+  player: ScoutingRow;
+  rank: number;
+  reason: string;
+  tags: string[];
+  tone: FantasyRosterLadderTone;
+};
+
 type FantasyMatchupReport = {
   left: FantasyTeamReport;
   right: FantasyTeamReport;
@@ -5990,6 +6010,371 @@ function FantasySuggestedPlayerPanel({
   );
 }
 
+function FantasyRosterValueLadder({
+  report,
+  teamLens,
+}: {
+  report: FantasyTeamReport;
+  teamLens: FantasyTeamLens;
+}) {
+  const ladder = buildFantasyRosterValueLadder(report, teamLens);
+
+  if (ladder.length === 0) {
+    return null;
+  }
+
+  const protectedCore = ladder.slice(0, Math.min(3, ladder.length));
+  const cutLine = [...ladder].reverse().slice(0, Math.min(5, ladder.length));
+  const saferCut = cutLine[0];
+  const cutCount = ladder.filter(
+    (row) => row.band === "Cut line" || row.band === "Bubble",
+  ).length;
+
+  return (
+    <article className="nfl-roster-value-ladder">
+      <div className="nfl-roster-ladder-head">
+        <div>
+          <div className="nfl-section-kicker">
+            <ShieldCheck size={17} />
+            Roster value ladder
+          </div>
+          <h3>Best players to expendable players</h3>
+          <p>
+            Use this before a waiver add. Top names are protected, bottom names
+            are the first cut-line checks.
+          </p>
+        </div>
+        <span>
+          {teamLensLabels[teamLens]} · {ladder.length} players
+        </span>
+      </div>
+
+      <div className="nfl-roster-ladder-summary">
+        <div>
+          <span>Protected</span>
+          <strong>{protectedCore[0]?.player.name ?? "Core starter"}</strong>
+          <em>Only move in a real upgrade.</em>
+        </div>
+        <div>
+          <span>Safer cut check</span>
+          <strong>{saferCut.player.name}</strong>
+          <em>{saferCut.band.toLowerCase()} · {saferCut.cutScore}% cut score</em>
+        </div>
+        <div>
+          <span>Bubble room</span>
+          <strong>{cutCount}</strong>
+          <em>Players to compare against waivers.</em>
+        </div>
+      </div>
+
+      <div className="nfl-roster-ladder-columns">
+        <div>
+          <span className="nfl-roster-ladder-column-label">Protected core</span>
+          <div className="nfl-roster-ladder-list">
+            {protectedCore.map((row) => (
+              <FantasyRosterLadderItem key={row.player.id} row={row} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className="nfl-roster-ladder-column-label">Cut line</span>
+          <div className="nfl-roster-ladder-list">
+            {cutLine.map((row) => (
+              <FantasyRosterLadderItem key={row.player.id} row={row} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <details className="nfl-roster-ladder-full">
+        <summary>Show full best-to-cut ladder</summary>
+        <div className="nfl-roster-ladder-full-list">
+          {ladder.map((row) => (
+            <FantasyRosterLadderItem compact key={row.player.id} row={row} />
+          ))}
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function FantasyRosterLadderItem({
+  compact = false,
+  row,
+}: {
+  compact?: boolean;
+  row: FantasyRosterLadderRow;
+}) {
+  return (
+    <div className={cx("nfl-roster-ladder-player", row.tone, compact && "compact")}>
+      <div className="nfl-roster-ladder-rank">#{row.rank}</div>
+      <div className="nfl-roster-ladder-player-main">
+        <strong>{row.player.name}</strong>
+        <em>{fantasyPlayerTeamLine(row.player)}</em>
+        <p>{row.reason}</p>
+        <div className="nfl-roster-ladder-tags">
+          {row.tags.map((tag) => (
+            <span key={tag}>{tag}</span>
+          ))}
+        </div>
+      </div>
+      <div className="nfl-roster-ladder-score">
+        <span>{row.band}</span>
+        <strong>{row.keepScore}</strong>
+        <em>{row.detail}</em>
+      </div>
+    </div>
+  );
+}
+
+function buildFantasyRosterValueLadder(
+  report: FantasyTeamReport,
+  teamLens: FantasyTeamLens,
+): FantasyRosterLadderRow[] {
+  const starterIds = new Set(report.players.map((player) => player.id));
+  const seenIds = new Set<string>();
+  const rosterPlayers = [...report.players, ...report.benchPlayers].filter((player) => {
+    if (seenIds.has(player.id)) {
+      return false;
+    }
+
+    seenIds.add(player.id);
+    return true;
+  });
+
+  return rosterPlayers
+    .map((player) =>
+      fantasyRosterLadderRow({
+        player,
+        report,
+        starterIds,
+        teamLens,
+      }),
+    )
+    .sort(
+      (left, right) =>
+        right.keepScore - left.keepScore ||
+        right.player.contextProjection.projection -
+          left.player.contextProjection.projection,
+    )
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+function fantasyRosterLadderRow({
+  player,
+  report,
+  starterIds,
+  teamLens,
+}: {
+  player: ScoutingRow;
+  report: FantasyTeamReport;
+  starterIds: Set<string>;
+  teamLens: FantasyTeamLens;
+}): FantasyRosterLadderRow {
+  const position = normalizeScoutingPosition(player.position);
+  const isStarter = starterIds.has(player.id);
+  const role = player.roleSecurity ?? player.health;
+  const dynastyValue = player.dynastyValue ?? Math.round((role + player.health) / 2);
+  const rangeUpside =
+    player.contextProjection.ceiling - player.contextProjection.projection;
+  const streamPosition = position === "K" || position === "DST";
+  const starterBonus = isStarter ? 16 : 0;
+  const weeklyScore =
+    player.contextProjection.projection * 2.05 +
+    player.contextProjection.floor * 1.1 +
+    rangeUpside * 0.52 +
+    role * 0.22 +
+    player.health * 0.14 -
+    player.chaos * 0.18 +
+    starterBonus;
+  const dynastyScore =
+    teamLens === "dynasty"
+      ? dynastyValue * 0.28 +
+        (typeof player.age === "number"
+          ? clampValue(29 - player.age, -6, 8) * 1.2
+          : 0) -
+        (streamPosition ? (isStarter ? 8 : 16) : 0)
+      : streamPosition
+        ? isStarter
+          ? -2
+          : -6
+        : 0;
+  const keepScore = clampMeter(Math.round(weeklyScore + dynastyScore));
+  const cutScore = clampMeter(
+    Math.round(100 - keepScore + (isStarter ? -18 : 10) + (streamPosition ? 7 : 0)),
+  );
+  const band = fantasyRosterLadderBand({ isStarter, keepScore, streamPosition, teamLens });
+  const tone = fantasyRosterLadderTone(band);
+  const tags = fantasyRosterLadderTags({
+    dynastyValue,
+    isStarter,
+    player,
+    position,
+    role,
+    streamPosition,
+    teamLens,
+  });
+
+  return {
+    band,
+    cutScore,
+    detail: fantasyRosterLadderDetail({ band, cutScore, isStarter }),
+    keepScore,
+    player,
+    rank: 0,
+    reason: fantasyRosterLadderReason({
+      band,
+      isWeakPosition: report.weakestLane.position === position,
+      position,
+      streamPosition,
+      teamLens,
+    }),
+    tags,
+    tone,
+  };
+}
+
+function fantasyRosterLadderBand({
+  isStarter,
+  keepScore,
+  streamPosition,
+  teamLens,
+}: {
+  isStarter: boolean;
+  keepScore: number;
+  streamPosition: boolean;
+  teamLens: FantasyTeamLens;
+}): FantasyRosterLadderBand {
+  if (isStarter && keepScore >= 78) {
+    return "Protected core";
+  }
+
+  if (keepScore >= 72) {
+    return streamPosition && teamLens === "dynasty" ? "Useful depth" : "Strong hold";
+  }
+
+  if (keepScore >= 58) {
+    return "Useful depth";
+  }
+
+  if (keepScore >= 43) {
+    return "Bubble";
+  }
+
+  return "Cut line";
+}
+
+function fantasyRosterLadderTone(
+  band: FantasyRosterLadderBand,
+): FantasyRosterLadderTone {
+  if (band === "Protected core") {
+    return "core";
+  }
+
+  if (band === "Strong hold") {
+    return "hold";
+  }
+
+  if (band === "Useful depth" || band === "Bubble") {
+    return "watch";
+  }
+
+  return "cut";
+}
+
+function fantasyRosterLadderTags({
+  dynastyValue,
+  isStarter,
+  player,
+  position,
+  role,
+  streamPosition,
+  teamLens,
+}: {
+  dynastyValue: number;
+  isStarter: boolean;
+  player: ScoutingRow;
+  position: ScoutingPlayerPosition;
+  role: number;
+  streamPosition: boolean;
+  teamLens: FantasyTeamLens;
+}) {
+  return [
+    isStarter ? "Starter" : "Bench",
+    position,
+    `${player.contextProjection.projection.toFixed(1)} pts`,
+    `Role ${Math.round(role)}`,
+    teamLens === "dynasty" ? `Dynasty ${Math.round(dynastyValue)}` : null,
+    streamPosition ? "Streamable" : null,
+  ].filter(Boolean) as string[];
+}
+
+function fantasyRosterLadderReason({
+  band,
+  isWeakPosition,
+  position,
+  streamPosition,
+  teamLens,
+}: {
+  band: FantasyRosterLadderBand;
+  isWeakPosition: boolean;
+  position: ScoutingPlayerPosition;
+  streamPosition: boolean;
+  teamLens: FantasyTeamLens;
+}) {
+  if (band === "Protected core") {
+    return `${position} is part of the weekly spine. Do not cut unless a clear premium upgrade comes back.`;
+  }
+
+  if (band === "Strong hold") {
+    return isWeakPosition
+      ? "Keep this lane stable first; it is already one of the roster pressure points."
+      : "Useful weekly value. Trade only if it solves a bigger roster need.";
+  }
+
+  if (band === "Useful depth") {
+    return teamLens === "dynasty" && !streamPosition
+      ? "Playable depth with enough long-term value to shop before cutting."
+      : "Helpful depth, but compare against the waiver add and your weekly need.";
+  }
+
+  if (band === "Bubble") {
+    return streamPosition
+      ? "Streamable profile. Replace if the league format or matchup gives you a better weekly setup."
+      : "Bubble player. Cut only when the incoming player has a clearer role or solves a weak lane.";
+  }
+
+  return "First cut-line name. This is where the waiver conversation should start.";
+}
+
+function fantasyRosterLadderDetail({
+  band,
+  cutScore,
+  isStarter,
+}: {
+  band: FantasyRosterLadderBand;
+  cutScore: number;
+  isStarter: boolean;
+}) {
+  if (band === "Protected core") {
+    return "lock down";
+  }
+
+  if (band === "Strong hold") {
+    return isStarter ? "startable" : "trade first";
+  }
+
+  if (band === "Useful depth") {
+    return "hold or shop";
+  }
+
+  if (band === "Bubble") {
+    return `${cutScore}% cut check`;
+  }
+
+  return `${cutScore}% cut line`;
+}
+
 function fantasyDropCandidate(report: FantasyTeamReport, target: ScoutingRow) {
   const benchCandidates = report.benchPlayers
     .filter((player) => player.id !== target.id)
@@ -7859,6 +8244,8 @@ function FantasyTeamLab({
           <AdviceList title="Trade paths" items={activeReport.tradeIdeas} />
         </article>
       </div>
+
+      <FantasyRosterValueLadder report={activeReport} teamLens={teamLens} />
 
       <article className="nfl-fantasy-matchup-card">
         <div className="nfl-fantasy-matchup-head">
