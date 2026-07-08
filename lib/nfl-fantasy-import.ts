@@ -1473,6 +1473,10 @@ export function mergeFantasyPlayerPools(
       ? projectionReceiptFields(matchedBase)
       : {};
 
+    if (matchedBase) {
+      merged.delete(matchedBase.id);
+    }
+
     merged.set(player.id, {
       ...player,
       ...receipt,

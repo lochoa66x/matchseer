@@ -774,8 +774,8 @@ const scoutingBoardModeOptions: Array<{
   },
   {
     value: "available",
-    label: "Available now",
-    summary: "waiver pool",
+    label: "Free agents",
+    summary: "unrostered",
   },
   {
     value: "topPicks",
@@ -1421,6 +1421,16 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       ),
     [fantasyImport, fantasyTeams],
   );
+  const rosteredScoutingPlayerKeys = useMemo(
+    () =>
+      fantasyImport
+        ? rosteredFantasyPlayerIdentityKeys({
+            players: fantasyPlayers,
+            teams: fantasyTeams,
+          })
+        : new Set<string>(),
+    [fantasyImport, fantasyPlayers, fantasyTeams],
+  );
   const visibleScoutingRows = useMemo(
     () =>
       filterScoutingRows({
@@ -1429,15 +1439,19 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         position: scoutingPosition,
         rows: scoutingBoard,
         rosteredIds: rosteredScoutingPlayerIds,
+        rosteredKeys: rosteredScoutingPlayerKeys,
+        teamLens,
         weakestPosition: activeTeamReport.weakestLane.position,
       }),
     [
       activeTeamReport.weakestLane.position,
       rosteredScoutingPlayerIds,
+      rosteredScoutingPlayerKeys,
       scoutingBoard,
       scoutingBoardMode,
       scoutingDepth,
       scoutingPosition,
+      teamLens,
     ],
   );
   const fantasyMatchupReport = useMemo(
@@ -2856,6 +2870,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               matchupReport={fantasyMatchupReport}
               report={activeTeamReport}
               rosteredIds={rosteredScoutingPlayerIds}
+              rosteredKeys={rosteredScoutingPlayerKeys}
               rows={scoutingBoard}
               scoringFormat={scoringFormat}
               teamLens={teamLens}
@@ -2875,6 +2890,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
               position={scoutingPosition}
               rosteredIds={rosteredScoutingPlayerIds}
+              rosteredKeys={rosteredScoutingPlayerKeys}
               rows={visibleScoutingRows}
               scoringFormat={scoringFormat}
               status={scoutStatus}
@@ -5503,6 +5519,7 @@ function FantasyOverview({
   matchupReport,
   report,
   rosteredIds,
+  rosteredKeys,
   rows,
   scoringFormat,
   teamLens,
@@ -5511,6 +5528,7 @@ function FantasyOverview({
   matchupReport: FantasyMatchupReport;
   report: FantasyTeamReport;
   rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
@@ -5527,9 +5545,11 @@ function FantasyOverview({
         rows,
         "topPicks",
         rosteredIds,
+        rosteredKeys,
         report.weakestLane.position,
+        teamLens,
       ).slice(0, 5),
-    [report.weakestLane.position, rosteredIds, rows],
+    [report.weakestLane.position, rosteredIds, rosteredKeys, rows, teamLens],
   );
   const [selectedPlayerId, setSelectedPlayerId] = useState(
     () => suggestedPlayers[0]?.id ?? "",
@@ -5701,6 +5721,7 @@ function FantasyOverview({
             player={selectedPlayer}
             report={report}
             rosteredIds={rosteredIds}
+            rosteredKeys={rosteredKeys}
             scoringFormat={scoringFormat}
             teamLens={teamLens}
           />
@@ -5790,17 +5811,19 @@ function FantasySuggestedPlayerPanel({
   player,
   report,
   rosteredIds,
+  rosteredKeys,
   scoringFormat,
   teamLens,
 }: {
   player: ScoutingRow;
   report: FantasyTeamReport;
   rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
 }) {
   const position = normalizeScoutingPosition(player.position);
-  const available = rosteredIds.size === 0 || !rosteredIds.has(player.id);
+  const available = isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys);
   const dropCandidate = fantasyDropCandidate(report, player);
   const action = fantasyDeepResearchAction({
     available,
@@ -7101,6 +7124,7 @@ function ScoutingBoard({
   onRequest,
   position,
   rosteredIds,
+  rosteredKeys,
   rows,
   scoringFormat,
   status,
@@ -7118,6 +7142,7 @@ function ScoutingBoard({
   onRequest: () => void;
   position: ScoutingPosition;
   rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   status: ScoutStatus;
@@ -7128,18 +7153,32 @@ function ScoutingBoard({
     scoutingDepthOptions.find((option) => option.value === depth) ??
     scoutingDepthOptions[0];
   const modeOption = scoutingBoardModeOptions.find((option) => option.value === mode);
+  const hasLeagueRosterSignal = rosteredIds.size > 0 || rosteredKeys.size > 0;
   const deepResearchRows = buildDeepResearchRows({
     rosteredIds,
+    rosteredKeys,
     rows: allRows,
     teamLens,
     weakestPosition,
   });
   const laneTotal =
     position === "ALL"
-      ? scoutingRowsForMode(allRows, mode, rosteredIds, weakestPosition).length
-      : scoutingRowsForMode(allRows, mode, rosteredIds, weakestPosition).filter(
-          (row) => normalizeScoutingPosition(row.position) === position,
-        ).length;
+      ? scoutingRowsForMode(
+          allRows,
+          mode,
+          rosteredIds,
+          rosteredKeys,
+          weakestPosition,
+          teamLens,
+        ).length
+      : scoutingRowsForMode(
+          allRows,
+          mode,
+          rosteredIds,
+          rosteredKeys,
+          weakestPosition,
+          teamLens,
+        ).filter((row) => normalizeScoutingPosition(row.position) === position).length;
 
   return (
     <section className="nfl-scouting-board" id="scouting-board">
@@ -7151,11 +7190,15 @@ function ScoutingBoard({
           </div>
           <h2>{modeOption?.label ?? "Player"} board</h2>
           <p>
-            {scoutingBoardModeCopy(mode, hasLiveOrImportedSourceRankings)}
+            {scoutingBoardModeCopy(
+              mode,
+              hasLiveOrImportedSourceRankings,
+              hasLeagueRosterSignal,
+            )}
           </p>
           <div className="nfl-board-mode-note">
-            <strong>{scoutingBoardModeUtility(mode)}</strong>
-            <span>{scoutingBoardModeDetail(mode)}</span>
+            <strong>{scoutingBoardModeUtility(mode, hasLeagueRosterSignal)}</strong>
+            <span>{scoutingBoardModeDetail(mode, hasLeagueRosterSignal)}</span>
           </div>
         </div>
         <div className="nfl-scouting-actions">
@@ -7180,7 +7223,9 @@ function ScoutingBoard({
               allRows,
               option.value,
               rosteredIds,
+              rosteredKeys,
               weakestPosition,
+              teamLens,
             ).length;
 
             return (
@@ -7202,7 +7247,14 @@ function ScoutingBoard({
             const count =
               option.value === "ALL"
                 ? laneTotal
-                : scoutingRowsForMode(allRows, mode, rosteredIds, weakestPosition).filter(
+                : scoutingRowsForMode(
+                    allRows,
+                    mode,
+                    rosteredIds,
+                    rosteredKeys,
+                    weakestPosition,
+                    teamLens,
+                  ).filter(
                     (row) => normalizeScoutingPosition(row.position) === option.value,
                   ).length;
 
@@ -9297,8 +9349,11 @@ function buildWaiverMoveTarget({
 }): FantasyMoveTarget {
   const board = buildScoutingBoard(allPlayers, scoringFormat, contextByTeam);
   const rosteredIds = new Set(teams.flatMap((team) => team.rosterIds));
+  const rosteredKeys = rosteredFantasyPlayerIdentityKeys({ players: board, teams });
   const position = active.weakestPosition.position;
-  const freeAgents = board.filter((player) => !rosteredIds.has(player.id));
+  const freeAgents = board.filter((player) =>
+    isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys),
+  );
   const candidates = freeAgents.length > 0 ? freeAgents : active.report.benchPlayers;
   const target =
     [...candidates].sort(
@@ -9311,7 +9366,7 @@ function buildWaiverMoveTarget({
     return fallbackFantasyMoveTarget("waiver", position);
   }
 
-  const isTrueFreeAgent = freeAgents.some((player) => player.id === target.id);
+  const isTrueFreeAgent = isScoutingPlayerAvailable(target, rosteredIds, rosteredKeys);
 
   return {
     action: isTrueFreeAgent ? "Add or watch" : "Watch list",
@@ -10282,25 +10337,104 @@ function compareFantasyPlayers(
   };
 }
 
+type FantasyPlayerIdentityInput = {
+  id?: string;
+  name: string;
+  position: string;
+  team?: string;
+};
+
+function rosteredFantasyPlayerIdentityKeys({
+  players,
+  teams,
+}: {
+  players: FantasyPlayerIdentityInput[];
+  teams: FantasyTeam[];
+}) {
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const keys = new Set<string>();
+
+  teams.forEach((team) => {
+    team.rosterIds.forEach((playerId) => {
+      const player = playersById.get(playerId);
+
+      if (!player) {
+        return;
+      }
+
+      fantasyPlayerIdentityKeys(player).forEach((key) => keys.add(key));
+    });
+  });
+
+  return keys;
+}
+
+function isScoutingPlayerAvailable(
+  player: FantasyPlayerIdentityInput,
+  rosteredIds: Set<string>,
+  rosteredKeys: Set<string>,
+) {
+  if (rosteredIds.size === 0 && rosteredKeys.size === 0) {
+    return true;
+  }
+
+  if (player.id && rosteredIds.has(player.id)) {
+    return false;
+  }
+
+  return !fantasyPlayerIdentityKeys(player).some((key) => rosteredKeys.has(key));
+}
+
+function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
+  const name = normalizeFantasyIdentityPart(player.name);
+  const position = normalizeScoutingPosition(player.position);
+  const team = normalizeTeamCode(player.team ?? "");
+
+  if (!name) {
+    return [];
+  }
+
+  return [`${name}|${team}|${position}`, `${name}|${position}`];
+}
+
+function normalizeFantasyIdentityPart(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function filterScoutingRows({
   depth,
   mode,
   position,
   rosteredIds,
+  rosteredKeys,
   rows,
+  teamLens,
   weakestPosition,
 }: {
   depth: ScoutingDepth;
   mode: ScoutingBoardMode;
   position: ScoutingPosition;
   rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
+  teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
 }) {
   const depthOption =
     scoutingDepthOptions.find((option) => option.value === depth) ??
     scoutingDepthOptions[0];
-  const modeRows = scoutingRowsForMode(rows, mode, rosteredIds, weakestPosition);
+  const modeRows = scoutingRowsForMode(
+    rows,
+    mode,
+    rosteredIds,
+    rosteredKeys,
+    weakestPosition,
+    teamLens,
+  );
   const laneRows =
     position === "ALL"
       ? modeRows
@@ -10315,20 +10449,28 @@ function scoutingRowsForMode(
   rows: ScoutingRow[],
   mode: ScoutingBoardMode,
   rosteredIds: Set<string>,
+  rosteredKeys: Set<string>,
   weakestPosition: ScoutingPlayerPosition,
+  teamLens: FantasyTeamLens,
 ) {
-  const availableRows =
-    rosteredIds.size > 0 ? rows.filter((row) => !rosteredIds.has(row.id)) : rows;
+  const availableRows = rows.filter((row) =>
+    isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
+  );
 
   if (mode === "available") {
-    return availableRows;
+    return [...availableRows].sort(
+      (left, right) =>
+        fantasyPickupScore(right, weakestPosition, teamLens, "available") -
+          fantasyPickupScore(left, weakestPosition, teamLens, "available") ||
+        right.contextProjection.floor - left.contextProjection.floor,
+    );
   }
 
   if (mode === "topPicks") {
     return [...availableRows].sort(
       (left, right) =>
-        fantasyPickupScore(right, weakestPosition) -
-          fantasyPickupScore(left, weakestPosition) ||
+        fantasyPickupScore(right, weakestPosition, teamLens, "pickup") -
+          fantasyPickupScore(left, weakestPosition, teamLens, "pickup") ||
         right.contextProjection.floor - left.contextProjection.floor,
     );
   }
@@ -10351,15 +10493,33 @@ function scoutingRowsForMode(
 function fantasyPickupScore(
   player: ScoutingRow,
   weakestPosition: ScoutingPlayerPosition,
+  teamLens: FantasyTeamLens,
+  mode: "available" | "pickup",
 ) {
   const position = normalizeScoutingPosition(player.position);
-  const needBoost = position === weakestPosition ? 5.5 : 0;
+  const needBoost = position === weakestPosition ? (mode === "pickup" ? 8 : 5.5) : 0;
+  const dynastyValue = player.dynastyValue ?? player.health;
+  const roleSecurity = player.roleSecurity ?? player.health;
+  const upsideGap =
+    player.contextProjection.ceiling - player.contextProjection.projection;
+
+  if (teamLens === "dynasty") {
+    return (
+      player.contextProjection.projection * 0.92 +
+      player.contextProjection.floor * 0.28 +
+      upsideGap * 1.05 +
+      dynastyValue * 0.34 +
+      roleSecurity * 0.07 +
+      needBoost -
+      player.chaos * 0.025
+    );
+  }
 
   return (
     player.contextProjection.projection * 1.45 +
     player.contextProjection.floor * 0.64 +
     player.contextProjection.ceiling * 0.22 +
-    (player.roleSecurity ?? player.health) * 0.08 +
+    roleSecurity * 0.08 +
     player.matchup * 0.045 -
     player.chaos * 0.055 +
     needBoost
@@ -10402,17 +10562,20 @@ function fantasyUltraDeepScore(
 
 function buildDeepResearchRows({
   rosteredIds,
+  rosteredKeys,
   rows,
   teamLens,
   weakestPosition,
 }: {
   rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
 }): FantasyDeepResearchRow[] {
-  const availableRows =
-    rosteredIds.size > 0 ? rows.filter((row) => !rosteredIds.has(row.id)) : rows;
+  const availableRows = rows.filter((row) =>
+    isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
+  );
   const deepPool = availableRows.filter(
     (player) =>
       fantasyUltraDeepCandidate(player) ||
@@ -10422,7 +10585,7 @@ function buildDeepResearchRows({
 
   return [...candidates]
     .map((player) => {
-      const available = rosteredIds.size === 0 || !rosteredIds.has(player.id);
+      const available = isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys);
       const score = fantasyDeepResearchScore({
         available,
         player,
@@ -11204,9 +11367,12 @@ function scoutingBoardModeLabel(mode: ScoutingBoardMode) {
 function scoutingBoardModeCopy(
   mode: ScoutingBoardMode,
   hasLiveOrImportedSourceRankings: boolean,
+  hasLeagueRosterSignal: boolean,
 ) {
   if (mode === "available") {
-    return "In-season waiver view: unrostered options first when a Sleeper, paste, or screenshot league is connected.";
+    return hasLeagueRosterSignal
+      ? "League free-agent view: rostered players are removed before the Seer scores weekly help and dynasty value."
+      : "Availability is not verified yet. Connect Sleeper, paste rosters, or upload a screenshot to turn this into a real free-agent board.";
   }
 
   if (mode === "topPicks") {
@@ -11222,9 +11388,14 @@ function scoutingBoardModeCopy(
     : "Full player universe. In season, Available and Top pickups are usually the highest-utility views.";
 }
 
-function scoutingBoardModeUtility(mode: ScoutingBoardMode) {
+function scoutingBoardModeUtility(
+  mode: ScoutingBoardMode,
+  hasLeagueRosterSignal: boolean,
+) {
   if (mode === "available") {
-    return "Use this for waivers after rosters are loaded.";
+    return hasLeagueRosterSignal
+      ? "Use this for actual waiver and free-agent decisions."
+      : "Use this as a watchlist until rosters are loaded.";
   }
 
   if (mode === "topPicks") {
@@ -11238,9 +11409,14 @@ function scoutingBoardModeUtility(mode: ScoutingBoardMode) {
   return "Use this mostly for draft prep or player universe context.";
 }
 
-function scoutingBoardModeDetail(mode: ScoutingBoardMode) {
+function scoutingBoardModeDetail(
+  mode: ScoutingBoardMode,
+  hasLeagueRosterSignal: boolean,
+) {
   if (mode === "available") {
-    return "It removes rostered players and keeps the best playable pool in front.";
+    return hasLeagueRosterSignal
+      ? "It removes players already held by any team in this league."
+      : "It cannot know who is taken until a league roster source is connected.";
   }
 
   if (mode === "topPicks") {

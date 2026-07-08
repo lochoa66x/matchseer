@@ -173,6 +173,19 @@ describe("NFL fantasy imports", () => {
     expect(plan.tradePath.summary).toContain("young role growth");
   });
 
+  it("replaces matching seeded players when imported rosters arrive", () => {
+    const importedPlayer: NflFantasyPlayer = {
+      ...knownPlayer,
+      id: "sleeper-111-josh-allen",
+      source: "sleeper",
+    };
+    const merged = mergeFantasyPlayerPools([knownPlayer], [importedPlayer]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe("sleeper-111-josh-allen");
+    expect(merged[0].name).toBe("Josh Allen");
+  });
+
   it("parses pasted my-team and opponent rosters", () => {
     const league = createManualFantasyLeague({
       knownPlayers: [knownPlayer],
