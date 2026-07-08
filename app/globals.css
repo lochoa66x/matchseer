@@ -20414,3 +20414,228 @@ body {
   }
 }
 /* === End Fantasy Seer Editorial Polish Pass === */
+
+/* === Fantasy Seer Premium Decision Card Pass === */
+.nfl-fantasy-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 330px);
+  gap: 14px;
+  align-items: start;
+}
+
+.nfl-fantasy-command {
+  gap: 12px;
+  padding: 18px;
+}
+
+.nfl-fantasy-command h1 {
+  max-width: 8ch;
+  font-size: clamp(2.15rem, 3.5vw, 3.05rem);
+  line-height: 0.98;
+}
+
+.nfl-fantasy-command p {
+  max-width: 31ch;
+  color: rgba(244, 241, 232, 0.72);
+  font-size: 0.88rem;
+  line-height: 1.48;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions {
+  gap: 8px;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions button {
+  min-height: 38px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+}
+
+.nfl-fantasy-command .nfl-fantasy-safety-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.nfl-fantasy-command .nfl-fantasy-safety-note p {
+  max-width: none;
+  color: rgba(216, 222, 232, 0.68);
+  font-size: 0.72rem;
+  line-height: 1.38;
+}
+
+.nfl-best-move-hero {
+  grid-template-columns: minmax(0, 0.92fr) minmax(280px, 0.58fr);
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.nfl-best-move-main {
+  gap: 11px;
+}
+
+.nfl-best-move-main > span {
+  color: var(--film-room-brass);
+  font-size: 0.68rem;
+}
+
+.nfl-best-move-player-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 520px);
+  min-width: 0;
+  padding: 8px;
+  background:
+    linear-gradient(135deg, rgba(216, 180, 93, 0.08), transparent 58%),
+    rgba(20, 24, 32, 0.72);
+  border: 1px solid rgba(216, 180, 93, 0.16);
+  border-radius: 12px;
+}
+
+.nfl-best-move-player-strip > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nfl-best-move-player-strip strong {
+  overflow: hidden;
+  color: rgba(244, 241, 232, 0.94);
+  font-size: 0.9rem;
+  font-weight: 920;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-best-move-player-strip span {
+  overflow: hidden;
+  color: rgba(174, 184, 199, 0.78);
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-best-move-player-strip em {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 6px 8px;
+  color: var(--film-room-bg);
+  background: linear-gradient(105deg, var(--film-room-brass), var(--film-room-ice));
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 920;
+  white-space: nowrap;
+}
+
+.nfl-best-move-main h2 {
+  max-width: 15ch;
+  font-size: clamp(1.85rem, 3.5vw, 2.85rem);
+  line-height: 1.01;
+}
+
+.nfl-best-move-main p {
+  max-width: 48ch;
+  color: rgba(216, 222, 232, 0.74);
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+
+.nfl-best-move-actions button {
+  min-height: 36px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 0.76rem;
+}
+
+.nfl-best-move-side {
+  gap: 9px;
+}
+
+.nfl-best-move-status {
+  min-height: 44px;
+  padding: 9px 10px;
+  border-radius: 10px;
+}
+
+.nfl-best-move-status strong {
+  font-size: 0.82rem;
+}
+
+.nfl-best-move-status em {
+  font-size: 0.68rem;
+}
+
+.nfl-best-move-scorecards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-best-move-scorecards span,
+.nfl-best-move-plain-rows span {
+  padding: 9px;
+  border-radius: 9px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.nfl-best-move-scorecards span {
+  min-height: 76px;
+  font-size: 0.84rem;
+}
+
+.nfl-best-move-scorecards b,
+.nfl-best-move-plain-rows b {
+  color: rgba(174, 184, 199, 0.8);
+  font-size: 0.58rem;
+}
+
+.nfl-best-move-plain-rows {
+  gap: 7px;
+}
+
+.nfl-best-move-plain-rows span {
+  min-height: 0;
+}
+
+.nfl-generic-player-art.compact {
+  width: 46px;
+  border-radius: 12px;
+}
+
+@media (max-width: 1120px) {
+  .nfl-fantasy-hero,
+  .nfl-best-move-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-fantasy-command h1,
+  .nfl-fantasy-command p,
+  .nfl-best-move-main h2 {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .nfl-best-move-scorecards {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-best-move-player-strip {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .nfl-best-move-player-strip em {
+    margin-left: 0;
+  }
+}
+/* === End Fantasy Seer Premium Decision Card Pass === */

@@ -893,7 +893,7 @@ const proFootballShortDisclaimer =
 const proFootballFullDisclaimer =
   `Pro Football Seer is an independent, experimental pro football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun game companion, not as professional advice.`;
 const fantasySeerShortDisclaimer =
-  `${independentSportsDisclaimer} Fantasy Seer is for fun lineup analysis and algorithm testing, not betting or professional advice. Player visuals are generic MatchSeer avatars, never official photos, logos, helmets, or team marks.`;
+  "Independent algorithm playground. No official affiliation, no betting advice, and no official photos, logos, helmets, or team marks.";
 const fantasySeerFullDisclaimer =
   `Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. ${independentSportsDisclaimer} Player visuals are generic MatchSeer-created placeholders and do not represent official player photos, team logos, helmets, uniforms, or league marks. ${experimentalUseDisclaimer} Use it as a fun decision companion, not as professional advice.`;
 
@@ -5333,6 +5333,14 @@ function FantasyBestMovePanel({
         (player) => player.name === weeklyCoach.bestMove.playerName,
       )
     : report.players[0] ?? report.benchPlayers[0];
+  const playerLabel =
+    weeklyCoach.bestMove.playerName ?? featuredPlayer?.name ?? report.strongestLane.label;
+  const positionLabel = scoutingRankLabel(
+    featuredPlayer ? normalizeScoutingPosition(featuredPlayer.position) : report.strongestLane.position,
+  );
+  const moveVerb = weeklyCoach.bestMove.state.toLowerCase().includes("start")
+    ? "Start"
+    : weeklyCoach.bestMove.state;
 
   return (
     <section className="nfl-best-move-hero" aria-label="Your best fantasy move">
@@ -5341,15 +5349,21 @@ function FantasyBestMovePanel({
           <ShieldCheck size={17} />
           Your best move
         </span>
-        <div className="nfl-best-move-visual-row">
+        <div className="nfl-best-move-player-strip">
           <FantasyPlayerArtwork
-            className="hero"
-            playerName={featuredPlayer?.name ?? weeklyCoach.bestMove.playerName ?? report.team.name}
+            className="compact"
+            playerName={playerLabel}
             position={featuredPlayer?.position ?? report.strongestLane.position}
           />
-          <em>Projection, role, matchup, and news sensitivity in one read.</em>
+          <div>
+            <strong>{playerLabel}</strong>
+            <span>
+              {positionLabel} · {weeklyCoach.bestMove.edge} · {weeklyCoach.bestMove.confidence} confidence
+            </span>
+          </div>
+          <em>{weeklyCoach.bestMove.state}</em>
         </div>
-        <h2>{weeklyCoach.bestMove.playerName ?? featuredPlayer?.name ?? report.strongestLane.label}</h2>
+        <h2>{moveVerb}: {playerLabel}</h2>
         <p>{weeklyCoach.bestMove.why}</p>
         <div className="nfl-best-move-actions">
           <button onClick={() => onViewChange("overview")} type="button">
