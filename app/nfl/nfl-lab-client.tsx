@@ -1425,7 +1425,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     () =>
       fantasyImport
         ? rosteredFantasyPlayerIdentityKeys({
-            players: fantasyPlayers,
+            players: [...fantasyPlayers, ...fantasyImport.players],
             teams: fantasyTeams,
           })
         : new Set<string>(),
@@ -10394,7 +10394,7 @@ function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
     return [];
   }
 
-  return [`${name}|${team}|${position}`, `${name}|${position}`];
+  return [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`];
 }
 
 function normalizeFantasyIdentityPart(value: string) {
@@ -10402,6 +10402,7 @@ function normalizeFantasyIdentityPart(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|v)\.?\b/g, "")
     .replace(/[^a-z0-9]/g, "");
 }
 

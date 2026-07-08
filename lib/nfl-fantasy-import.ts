@@ -1468,14 +1468,13 @@ export function mergeFantasyPlayerPools(
   const merged = new Map(basePlayers.map((player) => [player.id, player]));
 
   importedPlayers.forEach((player) => {
-    const matchedBase = findMatchingPlayer(basePlayers, player);
+    const matchedBases = findMatchingPlayers(basePlayers, player);
+    const matchedBase = matchedBases[0];
     const receipt: Partial<NflFantasyPlayer> = matchedBase
       ? projectionReceiptFields(matchedBase)
       : {};
 
-    if (matchedBase) {
-      merged.delete(matchedBase.id);
-    }
+    matchedBases.forEach((match) => merged.delete(match.id));
 
     merged.set(player.id, {
       ...player,
@@ -2918,7 +2917,7 @@ function projectionKeys(player: {
   position?: string;
   team?: string;
 }) {
-  const name = normalizeName(player.name);
+  const name = normalizePlayerIdentityName(player.name);
   const team = normalizeTeam(player.team);
   const position = normalizePosition(player.position);
 
@@ -2949,10 +2948,17 @@ function findMatchingPlayer(
   players: NflFantasyPlayer[],
   target: NflFantasyPlayer,
 ) {
-  const keys = projectionKeys(target);
+  return findMatchingPlayers(players, target)[0];
+}
 
-  return players.find((player) =>
-    projectionKeys(player).some((key) => keys.includes(key)),
+function findMatchingPlayers(
+  players: NflFantasyPlayer[],
+  target: NflFantasyPlayer,
+) {
+  const keys = new Set(projectionKeys(target));
+
+  return players.filter((player) =>
+    projectionKeys(player).some((key) => keys.has(key)),
   );
 }
 
@@ -3306,6 +3312,15 @@ function cleanLine(value: unknown) {
 
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizePlayerIdentityName(value: string) {
+  return cleanLine(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv|v)\.?\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function slugify(value: string) {

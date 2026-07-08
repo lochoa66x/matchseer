@@ -961,4 +961,43 @@ Brock Bowers,LV,TE,15.1,22,1,Fantasy Sheet,1,2026-09-04T12:00:00.000Z`,
     expect(imported?.sourceProjection).toBe(23);
     expect(imported?.seerProjection).toBeDefined();
   });
+
+  it("matches owned suffix variants and removes duplicate source copies", () => {
+    const sourcePlayer: NflFantasyPlayer = {
+      ...knownPlayer,
+      id: "seeded-marvin-harrison-jr",
+      name: "Marvin Harrison Jr.",
+      team: "ARI",
+      position: "WR",
+      sourceProjection: 18.4,
+      seerProjection: 19.1,
+      sourceRank: 24,
+    };
+    const providerDuplicate: NflFantasyPlayer = {
+      ...sourcePlayer,
+      id: "provider-marvin-harrison-jr",
+      sourceRank: 25,
+    };
+    const sleeperPlayer: NflFantasyPlayer = {
+      ...knownPlayer,
+      id: "sleeper-999-marvinharrison",
+      name: "Marvin Harrison",
+      team: "ARI",
+      position: "WR",
+      source: "sleeper",
+      sourceProjection: undefined,
+      seerProjection: undefined,
+      sourceRank: undefined,
+    };
+
+    const merged = mergeFantasyPlayerPools(
+      [sourcePlayer, providerDuplicate],
+      [sleeperPlayer],
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("sleeper-999-marvinharrison");
+    expect(merged[0]?.sourceProjection).toBe(18.4);
+    expect(merged[0]?.seerProjection).toBe(19.1);
+  });
 });
