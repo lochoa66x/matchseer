@@ -367,6 +367,62 @@ describe("NFL fantasy imports", () => {
     expect(sanitized?.sleeper?.settings?.taxiSlots).toBe(3);
   });
 
+  it("keeps dynasty lineup slots free of kicker and defense when Sleeper omits them", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "987654321",
+        name: "Dynasty No K Defense",
+        roster_positions: [
+          "QB",
+          "RB",
+          "RB",
+          "WR",
+          "WR",
+          "TE",
+          "FLEX",
+          "SUPER_FLEX",
+          "BN",
+          "BN",
+          "TAXI",
+        ],
+        scoring_settings: { rec: 1 },
+        season: "2026",
+      },
+      players: {
+        "111": {
+          full_name: "Josh Allen",
+          position: "QB",
+          team: "BUF",
+          search_rank: 4,
+        },
+      },
+      rosters: [
+        {
+          owner_id: "u1",
+          players: ["111"],
+          roster_id: 1,
+          starters: ["111"],
+        },
+      ],
+      users: [{ user_id: "u1", display_name: "Luis" }],
+      week: 1,
+    });
+
+    expect(league.settings?.rosterPositions).not.toContain("K");
+    expect(league.settings?.rosterPositions).not.toContain("DEF");
+    expect(league.settings?.rosterPositions).not.toContain("DST");
+    expect(league.teams[0].lineupSlots?.map((slot) => slot.label)).toEqual([
+      "QB",
+      "RB",
+      "RB2",
+      "WR",
+      "WR2",
+      "TE",
+      "FLEX",
+      "SUPER FLEX",
+    ]);
+  });
+
   it("parses Sleeper league and user URLs cleanly", () => {
     expect(
       parseSleeperImportQuery("https://sleeper.com/leagues/123456789012345678"),

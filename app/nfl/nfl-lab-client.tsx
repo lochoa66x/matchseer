@@ -414,6 +414,8 @@ type FantasyTeamReport = {
   players: ScoutingRow[];
   benchPlayers: ScoutingRow[];
   lineup: FantasyLineupSlotPick[];
+  lineupPositions: FantasyPosition[];
+  lineupSlots: FantasyLineupSlotDefinition[];
   lineupSourceProjection: number;
   lineupSeerDelta: number;
   startSitReceipts: FantasyDecisionReceipt[];
@@ -679,6 +681,7 @@ const scoutingPositionOptions: Array<{ value: ScoutingPosition; label: string }>
 ];
 
 const fantasyCoveragePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE", "K", "DST"];
+const fantasyCorePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE"];
 
 const nflPhaseLabels: Record<NflSeasonPhase, string> = {
   preseason: "Preseason",
@@ -4542,13 +4545,17 @@ function buildFantasyWeeklyMatchupLanes({
     myProjection: fantasyFlexLaneProjection(report),
     opponentProjection: fantasyFlexLaneProjection(opponentReport),
   });
+  const hasFlexLane =
+    fantasyReportHasFlexibleSlot(report) || fantasyReportHasFlexibleSlot(opponentReport);
   const benchLane = fantasyWeeklyMatchupLane({
     label: "Bench",
     myProjection: fantasyBenchLaneProjection(report),
     opponentProjection: fantasyBenchLaneProjection(opponentReport),
   });
 
-  return [...positionLanes.slice(0, 4), flexLane, ...positionLanes.slice(4), benchLane];
+  return hasFlexLane
+    ? [...positionLanes.slice(0, 4), flexLane, ...positionLanes.slice(4), benchLane]
+    : [...positionLanes, benchLane];
 }
 
 function fantasyWeeklyMatchupLane({
@@ -6218,9 +6225,13 @@ function FantasyLeaguePowerMapSection({
 }
 
 function FantasyPositionRankStrip({ team }: { team: FantasyLeaguePowerTeam }) {
+  const visibleRanks = team.positionRanks.filter((rank) =>
+    team.report.lineupPositions.includes(rank.position),
+  );
+
   return (
     <div className="nfl-league-position-ranks" aria-label="Position ranks">
-      {team.positionRanks.map((rank) => (
+      {visibleRanks.map((rank) => (
         <article key={rank.position}>
           <span>{scoutingRankLabel(rank.position)}</span>
           <strong>
@@ -8561,6 +8572,30 @@ function fantasyImportedLineupSlot(
   };
 }
 
+function fantasyLineupPositions(
+  lineupSlots: FantasyLineupSlotDefinition[],
+): FantasyPosition[] {
+  const positions = fantasyCoveragePositions.filter((position) =>
+    lineupSlots.some((slot) => slot.positions.includes(position)),
+  );
+
+  return positions.length > 0 ? positions : fantasyCorePositions;
+}
+
+function fantasyReportPositionUnion(
+  reports: FantasyTeamReport[],
+): FantasyPosition[] {
+  const positions = fantasyCoveragePositions.filter((position) =>
+    reports.some((report) => report.lineupPositions.includes(position)),
+  );
+
+  return positions.length > 0 ? positions : fantasyCorePositions;
+}
+
+function fantasyReportHasFlexibleSlot(report: FantasyTeamReport) {
+  return report.lineupSlots.some((slot) => slot.positions.length > 1);
+}
+
 function analyzeFantasyTeam({
   allPlayers,
   contextByTeam,
@@ -8579,9 +8614,11 @@ function analyzeFantasyTeam({
   const fullRoster = board.filter((player) => rosterIdSet.has(player.id));
   const rosterPool =
     fullRoster.length > 0 ? fullRoster : board.slice(0, Math.min(12, board.length));
+  const lineupSlots = fantasyLineupSlotsForTeam(team);
+  const lineupPositions = fantasyLineupPositions(lineupSlots);
   const decision = buildFantasyLineupDecision({
     lens,
-    lineupSlots: fantasyLineupSlotsForTeam(team),
+    lineupSlots,
     roster: rosterPool,
     scoringFormat,
   });
@@ -8592,7 +8629,7 @@ function analyzeFantasyTeam({
         ? rosterPool
         : board.slice(0, 1);
   const benchPlayers = decision.benchPlayers;
-  const lanes = fantasyRosterLanes(decision.lineup);
+  const lanes = fantasyRosterLanes(decision.lineup, lineupPositions);
   const projection = round1(
     sum(roster.map((player) => player.contextProjection.projection)),
   );
@@ -8620,6 +8657,8 @@ function analyzeFantasyTeam({
     players: roster,
     benchPlayers,
     lineup: decision.lineup,
+    lineupPositions,
+    lineupSlots,
     lineupSourceProjection: decision.sourceProjection,
     lineupSeerDelta: decision.seerDelta,
     startSitReceipts: decision.startSitReceipts,
@@ -9040,8 +9079,11 @@ function slotDefinition(
   );
 }
 
-function fantasyRosterLanes(lineup: FantasyLineupSlotPick[]) {
-  const lanes = fantasyCoveragePositions.map((position) => {
+function fantasyRosterLanes(
+  lineup: FantasyLineupSlotPick[],
+  positions: FantasyPosition[] = fantasyCoveragePositions,
+) {
+  const lanes = positions.map((position) => {
     const players = lineup
       .map((slot) => slot.player)
       .filter(
@@ -9612,6 +9654,10 @@ function buildFantasyLeaguePowerTeam(
   powerTeam?: FantasyPowerRankedTeam,
 ): FantasyLeaguePowerTeam {
   const positionEdges = fantasyLeaguePositionEdges(report, positionAverages);
+  const powerPositionRanks =
+    powerTeam?.positionRanks.filter((rank) =>
+      report.lineupPositions.includes(rank.position),
+    ) ?? [];
   const strongestPosition =
     [...positionEdges].sort(
       (left, right) =>
@@ -9654,7 +9700,9 @@ function buildFantasyLeaguePowerTeam(
     injurySensitivity,
     matchupWeakness: fantasyLeagueWeaknessCopy(report, weakestPosition),
     positionRanks:
-      powerTeam?.positionRanks ?? fantasyFallbackPositionRanks(report, positionEdges),
+      powerPositionRanks.length > 0
+        ? powerPositionRanks
+        : fantasyFallbackPositionRanks(report, positionEdges),
     rank: 0,
     recommendation: fantasyLeagueTeamRecommendation(report, weakestPosition, lens),
     report,
@@ -9684,30 +9732,23 @@ function fantasyFallbackPositionRanks(
 function fantasyLeaguePositionAverages(
   reports: FantasyTeamReport[],
 ): Record<FantasyPosition, number> {
-  return fantasyCoveragePositions.reduce<Record<FantasyPosition, number>>(
-    (averages, position) => {
-      averages[position] = round1(
-        average(reports.map((report) => fantasyTeamPositionProjection(report, position))),
-      );
+  const activePositions = fantasyReportPositionUnion(reports);
+  const averages = emptyFantasyPositionRecord();
 
-      return averages;
-    },
-    {
-      QB: 0,
-      RB: 0,
-      WR: 0,
-      TE: 0,
-      K: 0,
-      DST: 0,
-    },
-  );
+  activePositions.forEach((position) => {
+    averages[position] = round1(
+      average(reports.map((report) => fantasyTeamPositionProjection(report, position))),
+    );
+  });
+
+  return averages;
 }
 
 function fantasyLeaguePositionEdges(
   report: FantasyTeamReport,
   positionAverages: Record<FantasyPosition, number>,
 ): FantasyPositionEdge[] {
-  return fantasyCoveragePositions.map((position) => {
+  return report.lineupPositions.map((position) => {
     const leftProjection = fantasyTeamPositionProjection(report, position);
     const rightProjection = positionAverages[position] ?? 0;
     const rawGap = round1(leftProjection - rightProjection);
@@ -9869,7 +9910,7 @@ function fantasyPositionEdges(
   leftReport: FantasyTeamReport,
   rightReport: FantasyTeamReport,
 ): FantasyPositionEdge[] {
-  return fantasyCoveragePositions.map((position) => {
+  return fantasyReportPositionUnion([leftReport, rightReport]).map((position) => {
     const leftProjection = round1(
       sum(
         leftReport.players
@@ -10892,14 +10933,10 @@ function fantasyPrimaryPressure(report: FantasyTeamReport): FantasyPressureLane 
 }
 
 function buildFantasyRosterMap(report: FantasyTeamReport): FantasyRosterMapItem[] {
-  const positionCards: Array<{ label: string; position: FantasyPosition }> = [
-    { label: "QB", position: "QB" },
-    { label: "RB", position: "RB" },
-    { label: "WR", position: "WR" },
-    { label: "TE", position: "TE" },
-    { label: "K", position: "K" },
-    { label: "DST", position: "DST" },
-  ];
+  const positionCards = report.lineupPositions.map((position) => ({
+    label: position === "DST" ? "DST" : position,
+    position,
+  }));
   const cards = positionCards.map(({ label, position }) => {
     const value = fantasyTeamPositionProjection(report, position);
     const band = fantasyPositionBand(position, value);
@@ -10914,13 +10951,20 @@ function buildFantasyRosterMap(report: FantasyTeamReport): FantasyRosterMapItem[
       tone: fantasyBandTone(band),
     };
   });
-  const flexPool = report.players
-    .filter((player) => ["RB", "WR", "TE"].includes(normalizeScoutingPosition(player.position)))
-    .sort(
-      (left, right) =>
-        right.contextProjection.projection - left.contextProjection.projection,
-    );
-  const flexValue = round1(average(flexPool.slice(2, 5).map((player) => player.contextProjection.projection)));
+  const hasFlexSlot = fantasyReportHasFlexibleSlot(report);
+  const flexPool = hasFlexSlot
+    ? report.players
+        .filter((player) =>
+          ["RB", "WR", "TE"].includes(normalizeScoutingPosition(player.position)),
+        )
+        .sort(
+          (left, right) =>
+            right.contextProjection.projection - left.contextProjection.projection,
+        )
+    : [];
+  const flexValue = round1(
+    average(flexPool.slice(2, 5).map((player) => player.contextProjection.projection)),
+  );
   const flexBand =
     report.closeCalls.length > 0
       ? "Competitive"
@@ -10932,17 +10976,20 @@ function buildFantasyRosterMap(report: FantasyTeamReport): FantasyRosterMapItem[
   const benchBand = fantasyTrustBand(report.depth);
 
   return [
-    ...cards.slice(0, 4),
-    {
-      band: flexBand,
-      detail:
-        report.closeCalls.length > 0
-          ? "Close call needs one news check"
-          : `${flexValue.toFixed(1)} flexible pts`,
-      label: "FLEX",
-      tone: fantasyBandTone(flexBand),
-    },
-    ...cards.slice(4),
+    ...cards,
+    ...(hasFlexSlot
+      ? [
+          {
+            band: flexBand,
+            detail:
+              report.closeCalls.length > 0
+                ? "Close call needs one news check"
+                : `${flexValue.toFixed(1)} flexible pts`,
+            label: "FLEX",
+            tone: fantasyBandTone(flexBand),
+          },
+        ]
+      : []),
     {
       band: benchBand,
       detail: `${report.benchPlayers.length} bench players · ${report.depth}% depth`,
@@ -11328,6 +11375,17 @@ function countScoutingPositions(rows: ScoutingRow[]) {
       DST: 0,
     } satisfies Record<ScoutingPlayerPosition, number>,
   );
+}
+
+function emptyFantasyPositionRecord() {
+  return {
+    QB: 0,
+    RB: 0,
+    WR: 0,
+    TE: 0,
+    K: 0,
+    DST: 0,
+  } satisfies Record<FantasyPosition, number>;
 }
 
 function normalizeScoutingPosition(position: string): ScoutingPlayerPosition {
