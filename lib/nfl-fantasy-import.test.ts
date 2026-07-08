@@ -262,6 +262,66 @@ describe("NFL fantasy imports", () => {
     expect(league.players.map((player) => player.source)).toContain("sleeper");
   });
 
+  it("adds Sleeper free-agent candidates that are not on league rosters", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456789",
+        name: "Free Agent League",
+        roster_positions: ["QB", "RB", "WR", "TE", "FLEX", "SUPER_FLEX", "BN"],
+        season: "2026",
+      },
+      players: {
+        "111": {
+          full_name: "Amon-Ra St. Brown",
+          fantasy_positions: ["WR"],
+          position: "WR",
+          search_rank: 9,
+          team: "DET",
+        },
+        "444": {
+          full_name: "Mike Gesicki",
+          fantasy_positions: ["TE"],
+          position: "TE",
+          search_rank: 280,
+          status: "Active",
+          team: "CIN",
+        },
+        "555": {
+          full_name: "Keenan Allen",
+          fantasy_positions: ["WR"],
+          position: "WR",
+          search_rank: 292,
+          status: "Active",
+          team: "FA",
+        },
+        "666": {
+          full_name: "Cameron Dicker",
+          fantasy_positions: ["K"],
+          position: "K",
+          search_rank: 120,
+          status: "Active",
+          team: "LAC",
+        },
+      },
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["111"], starters: ["111"] },
+      ],
+      users: [{ user_id: "u1", display_name: "Luis" }],
+      week: 1,
+    });
+
+    const playerNames = league.players.map((player) => player.name);
+
+    expect(playerNames).toContain("Amon-Ra St. Brown");
+    expect(playerNames).toContain("Mike Gesicki");
+    expect(playerNames).toContain("Keenan Allen");
+    expect(playerNames).not.toContain("Cameron Dicker");
+    expect(league.teams[0].rosterIds).not.toContain(
+      league.players.find((player) => player.name === "Mike Gesicki")?.id,
+    );
+    expect(league.sleeper?.freeAgentCandidateCount).toBe(2);
+  });
+
   it("keeps Sleeper team defenses as DST roster players", () => {
     const league = buildSleeperFantasyLeague({
       league: {

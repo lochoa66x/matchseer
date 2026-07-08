@@ -341,6 +341,7 @@ export type SleeperImportReceipt = {
   leagueName: string;
   season?: string;
   week?: number;
+  freeAgentCandidateCount?: number;
   matchupId?: string;
   matchupConfidence?: SleeperMatchupConfidence;
   matchupSource?: string;
@@ -767,6 +768,9 @@ export function buildSleeperFantasyLeague({
 }): ImportedFantasyLeague {
   const settings = sleeperLeagueSettings(league);
   const lineupSlots = sleeperLineupSlotsFromPositions(settings.rosterPositions);
+  const rosteredSleeperIds = new Set(
+    rosters.flatMap((roster) => normalizeSleeperIds(roster.players)),
+  );
   const userById = new Map(
     users
       .map((user) => [stringId(user.user_id), user] as const)
@@ -894,6 +898,16 @@ export function buildSleeperFantasyLeague({
       };
     })
     .filter((team) => team.rosterIds.length > 0);
+  const freeAgentCandidates = sleeperFreeAgentFantasyPlayers({
+    eligiblePositions: sleeperLineupEligiblePositions(lineupSlots),
+    players,
+    rosteredSleeperIds,
+  });
+
+  freeAgentCandidates.forEach((player) => {
+    importedPlayers.set(player.id, player);
+  });
+
   const selectedTeamId = preferredSleeperRosterId
     ? `sleeper-roster-${preferredSleeperRosterId}`
     : teams[0]?.id;
@@ -903,6 +917,7 @@ export function buildSleeperFantasyLeague({
   const receipt: SleeperImportReceipt = {
     leagueId: stringId(league.league_id) || "league",
     leagueName: cleanLine(league.name) || "Sleeper league import",
+    freeAgentCandidateCount: freeAgentCandidates.length,
     matchupId: preferredMatchupId,
     matchupConfidence,
     matchupSource: matchups.length > 0 ? "Sleeper matchup endpoint" : "Sleeper roster endpoint",
@@ -946,6 +961,9 @@ export function buildSleeperFantasyLeague({
     suggestedTeamId: selectedTeamId,
     notes: [
       "Sleeper import loaded rosters, starters, benches, and player names.",
+      freeAgentCandidates.length > 0
+        ? `Sleeper free-agent pool added ${freeAgentCandidates.length} unrostered candidates for this league format.`
+        : "Sleeper free-agent pool had no usable unrostered candidates for this league format.",
       settings.summary,
       receipt.matchupSummary ??
         (receipt.status === "matched"
@@ -1181,6 +1199,130 @@ function sleeperLineupSlot(position: string): ImportedFantasyLineupSlot | null {
   }
 
   return null;
+}
+
+const sleeperFreeAgentCandidateLimit = 650;
+const sleeperFreeAgentRankLimit = 1400;
+
+function sleeperFreeAgentFantasyPlayers({
+  eligiblePositions,
+  players,
+  rosteredSleeperIds,
+}: {
+  eligiblePositions: FantasySourcePosition[];
+  players: Record<string, SleeperPlayer>;
+  rosteredSleeperIds: Set<string>;
+}) {
+  const eligiblePositionSet = new Set(eligiblePositions);
+
+  return Object.entries(players)
+    .filter(([playerId, player]) =>
+      sleeperPlayerIsFreeAgentCandidate({
+        eligiblePositionSet,
+        player,
+        playerId,
+        rosteredSleeperIds,
+      }),
+    )
+    .map(([playerId, player], index) =>
+      sleeperPlayerToFantasyPlayer({
+        player,
+        playerId,
+        rank: sleeperPlayerSearchRank(player) ?? sleeperFreeAgentRankLimit + index + 1,
+      }),
+    )
+    .filter((player): player is NflFantasyPlayer => player !== null)
+    .sort(
+      (left, right) =>
+        (left.sourceRank ?? 9999) - (right.sourceRank ?? 9999) ||
+        left.name.localeCompare(right.name),
+    )
+    .slice(0, sleeperFreeAgentCandidateLimit);
+}
+
+function sleeperPlayerIsFreeAgentCandidate({
+  eligiblePositionSet,
+  player,
+  playerId,
+  rosteredSleeperIds,
+}: {
+  eligiblePositionSet: Set<FantasySourcePosition>;
+  player?: SleeperPlayer;
+  playerId: string;
+  rosteredSleeperIds: Set<string>;
+}) {
+  if (rosteredSleeperIds.has(playerId) || !player) {
+    return false;
+  }
+
+  const name =
+    cleanLine(player.full_name) ||
+    cleanLine(`${player.first_name ?? ""} ${player.last_name ?? ""}`) ||
+    cleanLine(player.search_full_name);
+  const position = sleeperPlayerFantasyPosition(player);
+
+  if (!name || !position || !eligiblePositionSet.has(position)) {
+    return false;
+  }
+
+  const rank = sleeperPlayerSearchRank(player);
+  const status = cleanLine(player.status).toLowerCase();
+  const injuryStatus = cleanLine(player.injury_status).toLowerCase();
+  const hasRosterableRank =
+    typeof rank === "number" && rank > 0 && rank <= sleeperFreeAgentRankLimit;
+  const hasActiveSignal =
+    !status ||
+    status === "active" ||
+    status === "injured reserve" ||
+    status === "physically unable to perform" ||
+    injuryStatus.length > 0;
+
+  return hasRosterableRank || hasActiveSignal;
+}
+
+function sleeperLineupEligiblePositions(
+  lineupSlots: ImportedFantasyLineupSlot[],
+): FantasySourcePosition[] {
+  const positions = fantasySourcePositions.filter((position) =>
+    lineupSlots.some((slot) => slot.positions.includes(position)),
+  );
+
+  return positions.length > 0 ? positions : ["QB", "RB", "WR", "TE"];
+}
+
+function sleeperPlayerFantasyPosition(player: SleeperPlayer) {
+  const positionValues = [player.position, ...(player.fantasy_positions ?? [])];
+
+  for (const value of positionValues) {
+    const position = fantasySourcePositionFromUnknown(value);
+
+    if (position) {
+      return position;
+    }
+  }
+
+  return null;
+}
+
+function sleeperPlayerSearchRank(player: SleeperPlayer) {
+  const rank =
+    typeof player.search_rank === "string" || typeof player.search_rank === "number"
+      ? Number(player.search_rank)
+      : NaN;
+
+  return Number.isFinite(rank) && rank > 0 ? rank : undefined;
+}
+
+function fantasySourcePositionFromUnknown(value: unknown): FantasySourcePosition | null {
+  const position = typeof value === "string" ? value.toUpperCase() : "";
+
+  if (position === "DEF" || position === "D" || position === "D/ST") {
+    return "DST";
+  }
+
+  return fantasySourcePositions.includes(position as FantasySourcePosition)
+    ? (position as FantasySourcePosition)
+    : null;
 }
 
 export function sleeperLeagueOptionsFromLeagues({
