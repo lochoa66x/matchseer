@@ -5280,14 +5280,25 @@ function FantasyPlayerArtwork({
       aria-label={`${positionLabel} generic MatchSeer player artwork${playerName ? ` for ${playerName}` : ""}`}
       role="img"
     >
-      <span className="nfl-generic-player-field" />
-      <span className="nfl-generic-player-route" />
-      <span className="nfl-generic-player-body" />
-      <span className="nfl-generic-player-head" />
-      <span className="nfl-generic-player-visor" />
-      <span className="nfl-generic-player-ball" />
+      <svg
+        aria-hidden="true"
+        className="nfl-generic-player-svg"
+        focusable="false"
+        viewBox="0 0 120 140"
+      >
+        <rect className="nfl-player-art-frame" height="132" rx="22" width="112" x="4" y="4" />
+        <path className="nfl-player-art-yardline" d="M20 35H100M20 72H100M60 18V122" />
+        <path className="nfl-player-art-route" d="M28 84C28 58 43 39 68 31" />
+        <path className="nfl-player-art-shield" d="M60 20 91 34 85 86 60 108 35 86 29 34Z" />
+        <path className="nfl-player-art-upright" d="M39 28V68M81 28V68M39 48H81M60 48V91" />
+        <path className="nfl-player-art-shoulders" d="M19 118C27 94 42 82 60 82C78 82 93 94 101 118C82 130 38 130 19 118Z" />
+        <path className="nfl-player-art-jersey" d="M42 87 60 113 78 87" />
+        <path className="nfl-player-art-head" d="M38 50C38 32 48 22 61 22C76 22 84 33 84 50C84 67 74 78 61 78C48 78 38 67 38 50Z" />
+        <path className="nfl-player-art-visor" d="M45 48C51 42 71 42 78 48V58C72 64 51 64 45 58Z" />
+        <path className="nfl-player-art-mask" d="M47 55H76M52 61H72" />
+        <path className="nfl-player-art-ball" d="M79 70C88 67 94 75 91 84C88 94 76 95 72 86C69 78 72 72 79 70Z" />
+      </svg>
       <span className="nfl-generic-player-position">{positionLabel}</span>
-      <span className="nfl-generic-player-role" />
     </span>
   );
 }
