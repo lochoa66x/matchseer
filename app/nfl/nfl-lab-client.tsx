@@ -5341,31 +5341,32 @@ function FantasyBestMovePanel({
   const moveVerb = weeklyCoach.bestMove.state.toLowerCase().includes("start")
     ? "Start"
     : weeklyCoach.bestMove.state;
+  const playerInitials = fantasyPlayerInitials(playerLabel);
 
   return (
     <section className="nfl-best-move-hero" aria-label="Your best fantasy move">
-      <div className="nfl-best-move-main">
-        <span>
-          <ShieldCheck size={17} />
-          Your best move
-        </span>
-        <div className="nfl-best-move-player-strip">
-          <FantasyPlayerArtwork
-            className="compact"
-            playerName={playerLabel}
-            position={featuredPlayer?.position ?? report.strongestLane.position}
-          />
-          <div>
-            <strong>{playerLabel}</strong>
-            <span>
-              {positionLabel} · {weeklyCoach.bestMove.edge} · {weeklyCoach.bestMove.confidence} confidence
-            </span>
-          </div>
-          <em>{weeklyCoach.bestMove.state}</em>
+      <div className="nfl-best-move-command">
+        <div className="nfl-best-move-command-head">
+          <span>
+            <ShieldCheck size={17} />
+            Your best move
+          </span>
+          <em>{weeklyCoach.bestMove.confidence} confidence</em>
         </div>
-        <h2>{moveVerb}: {playerLabel}</h2>
-        <p>{weeklyCoach.bestMove.why}</p>
-        <div className="nfl-best-move-actions">
+
+        <div className="nfl-best-move-decision">
+          <span className="nfl-best-move-monogram" aria-hidden="true">
+            <b>{playerInitials}</b>
+            <small>{positionLabel}</small>
+          </span>
+          <div>
+            <span>{moveVerb} now</span>
+            <strong>{playerLabel}</strong>
+            <p>{weeklyCoach.bestMove.why}</p>
+          </div>
+        </div>
+
+        <div className="nfl-best-move-action-strip">
           <button onClick={() => onViewChange("overview")} type="button">
             See next moves
           </button>
@@ -5374,11 +5375,8 @@ function FantasyBestMovePanel({
           </button>
         </div>
       </div>
-      <div className="nfl-best-move-side">
-        <div className="nfl-best-move-status">
-          <strong>{weeklyCoach.bestMove.state}</strong>
-          <em>{weeklyCoach.bestMove.confidence} confidence</em>
-        </div>
+
+      <div className="nfl-best-move-evidence">
         <div className="nfl-best-move-scorecards">
           <span>
             <b>Edge</b>
@@ -5393,12 +5391,12 @@ function FantasyBestMovePanel({
             {matchupReport.edgeLabel}
           </span>
         </div>
-        <div className="nfl-best-move-plain-rows">
+        <div className="nfl-best-move-memo">
           {bestMoveRows.map((row) => (
-            <span key={row.label}>
+            <article key={row.label}>
               <b>{row.label}</b>
-              {row.value}
-            </span>
+              <p>{row.value}</p>
+            </article>
           ))}
         </div>
       </div>
