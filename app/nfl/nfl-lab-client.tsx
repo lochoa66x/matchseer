@@ -68,8 +68,13 @@ import {
 
 type ScoringFormat = "standard" | "halfPpr" | "fullPpr";
 type FantasyTeamLens = "redraft" | "dynasty";
-type ScoutingPosition = "ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DST";
-type ScoutingPlayerPosition = Exclude<ScoutingPosition, "ALL">;
+type ScoutingPlayerPosition = "QB" | "RB" | "WR" | "TE" | "K" | "DST";
+type ScoutingSlotPosition =
+  | "FLEX"
+  | "SUPER_FLEX"
+  | "WRRB_FLEX"
+  | "WRTE_FLEX";
+type ScoutingPosition = "ALL" | ScoutingPlayerPosition | ScoutingSlotPosition;
 type ScoutingDepth = "top10" | "top25" | "deep";
 type ScoutingBoardMode = "general" | "available" | "topPicks" | "ultraDeep";
 type FantasyProviderStatusValue = "live" | "fallback" | "missing" | "error";
@@ -78,6 +83,11 @@ type FantasyProviderKind = "sleeper" | "players" | "projections" | "rankings";
 type FantasySourceLaneKind = "roster" | "projection" | "ranking" | "context" | "crowd";
 type FantasyPosition = ScoutingPlayerPosition;
 type FantasyPositionCounts = Record<FantasyPosition, number>;
+type ScoutingPositionOption = {
+  value: ScoutingPosition;
+  label: string;
+  positions: FantasyPosition[];
+};
 type NflLabMode = "nfl" | "fantasy";
 type FantasyView =
   | "overview"
@@ -669,16 +679,6 @@ type NflMarketPulse = {
     summary: string;
   };
 };
-
-const scoutingPositionOptions: Array<{ value: ScoutingPosition; label: string }> = [
-  { value: "ALL", label: "All" },
-  { value: "QB", label: "QB" },
-  { value: "RB", label: "RB" },
-  { value: "WR", label: "WR" },
-  { value: "TE", label: "TE" },
-  { value: "K", label: "Kicker" },
-  { value: "DST", label: "Def" },
-];
 
 const fantasyCoveragePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE", "K", "DST"];
 const fantasyCorePositions: FantasyPosition[] = ["QB", "RB", "WR", "TE"];
@@ -1438,7 +1438,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     () =>
       filterScoutingRows({
         depth: scoutingDepth,
+        lineupSlots: activeTeamReport.lineupSlots,
         mode: scoutingBoardMode,
+        playablePositions: activeTeamReport.lineupPositions,
         position: scoutingPosition,
         rows: scoutingBoard,
         rosteredIds: rosteredScoutingPlayerIds,
@@ -1448,6 +1450,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       }),
     [
       activeTeamReport.weakestLane.position,
+      activeTeamReport.lineupSlots,
+      activeTeamReport.lineupPositions,
       rosteredScoutingPlayerIds,
       rosteredScoutingPlayerKeys,
       scoutingBoard,
@@ -1457,6 +1461,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       teamLens,
     ],
   );
+  useEffect(() => {
+    const positionOptions = scoutingPositionOptionsForLineup(
+      activeTeamReport.lineupSlots,
+    );
+
+    if (!positionOptions.some((option) => option.value === scoutingPosition)) {
+      setScoutingPosition("ALL");
+    }
+  }, [activeTeamReport.lineupSlots, scoutingPosition]);
   const fantasyMatchupReport = useMemo(
     () =>
       compareFantasyTeams({
@@ -1517,8 +1530,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
     [activeFantasyTeam.id, fantasyLeaguePowerMap, scoringFormat, teamLens],
   );
   const rookieWatchRows = useMemo(
-    () => buildRookieWatchRows(scoutingBoard),
-    [scoutingBoard],
+    () => buildRookieWatchRows(scoutingBoard, activeTeamReport.lineupPositions),
+    [activeTeamReport.lineupPositions, scoutingBoard],
   );
   const fantasyHeroRead = useMemo(
     () =>
@@ -2013,7 +2026,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         body: JSON.stringify({
           boardMode: scoutingBoardModeLabel(scoutingBoardMode),
           depth: depthOption?.label ?? "Top 10",
-          positionLane: scoutingPositionLabel(scoutingPosition),
+          positionLane: scoutingPositionLabel(
+            scoutingPosition,
+            activeTeamReport.lineupSlots,
+          ),
           scoringFormat,
           players: visibleScoutingRows.map((player, index) => ({
             name: player.name,
@@ -2891,6 +2907,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               onPositionChange={updateScoutingPosition}
               onRequest={requestScoutingRead}
               hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
+              lineupSlots={activeTeamReport.lineupSlots}
+              playablePositions={activeTeamReport.lineupPositions}
               position={scoutingPosition}
               rosteredIds={rosteredScoutingPlayerIds}
               rosteredKeys={rosteredScoutingPlayerKeys}
@@ -5555,8 +5573,16 @@ function FantasyOverview({
         rosteredKeys,
         report.weakestLane.position,
         teamLens,
+        report.lineupPositions,
       ).slice(0, 5),
-    [report.weakestLane.position, rosteredIds, rosteredKeys, rows, teamLens],
+    [
+      report.lineupPositions,
+      report.weakestLane.position,
+      rosteredIds,
+      rosteredKeys,
+      rows,
+      teamLens,
+    ],
   );
   const [selectedPlayerId, setSelectedPlayerId] = useState(
     () => suggestedPlayers[0]?.id ?? "",
@@ -7133,6 +7159,8 @@ function ScoutingBoard({
   onModeChange,
   onPositionChange,
   onRequest,
+  lineupSlots,
+  playablePositions,
   position,
   rosteredIds,
   rosteredKeys,
@@ -7151,6 +7179,8 @@ function ScoutingBoard({
   onModeChange: (mode: ScoutingBoardMode) => void;
   onPositionChange: (position: ScoutingPosition) => void;
   onRequest: () => void;
+  lineupSlots: FantasyLineupSlotDefinition[];
+  playablePositions: FantasyPosition[];
   position: ScoutingPosition;
   rosteredIds: Set<string>;
   rosteredKeys: Set<string>;
@@ -7171,25 +7201,28 @@ function ScoutingBoard({
     rows: allRows,
     teamLens,
     weakestPosition,
+    playablePositions,
   });
+  const positionOptions = scoutingPositionOptionsForLineup(
+    lineupSlots,
+    playablePositions,
+  );
+  const modeRows = scoutingRowsForMode(
+    allRows,
+    mode,
+    rosteredIds,
+    rosteredKeys,
+    weakestPosition,
+    teamLens,
+    playablePositions,
+  );
+  const activePositionOption =
+    positionOptions.find((option) => option.value === position) ??
+    positionOptions[0];
   const laneTotal =
-    position === "ALL"
-      ? scoutingRowsForMode(
-          allRows,
-          mode,
-          rosteredIds,
-          rosteredKeys,
-          weakestPosition,
-          teamLens,
-        ).length
-      : scoutingRowsForMode(
-          allRows,
-          mode,
-          rosteredIds,
-          rosteredKeys,
-          weakestPosition,
-          teamLens,
-        ).filter((row) => normalizeScoutingPosition(row.position) === position).length;
+    activePositionOption.value === "ALL"
+      ? modeRows.length
+      : scoutingRowsForOption(modeRows, activePositionOption).length;
 
   return (
     <section className="nfl-scouting-board" id="scouting-board">
@@ -7237,6 +7270,7 @@ function ScoutingBoard({
               rosteredKeys,
               weakestPosition,
               teamLens,
+              playablePositions,
             ).length;
 
             return (
@@ -7254,20 +7288,11 @@ function ScoutingBoard({
           })}
         </div>
         <div className="nfl-scouting-filter-bar" aria-label="Position filters">
-          {scoutingPositionOptions.map((option) => {
+          {positionOptions.map((option) => {
             const count =
               option.value === "ALL"
-                ? laneTotal
-                : scoutingRowsForMode(
-                    allRows,
-                    mode,
-                    rosteredIds,
-                    rosteredKeys,
-                    weakestPosition,
-                    teamLens,
-                  ).filter(
-                    (row) => normalizeScoutingPosition(row.position) === option.value,
-                  ).length;
+                ? modeRows.length
+                : scoutingRowsForOption(modeRows, option).length;
 
             return (
               <button
@@ -8582,6 +8607,96 @@ function fantasyLineupPositions(
   return positions.length > 0 ? positions : fantasyCorePositions;
 }
 
+function scoutingPositionOptionsForLineup(
+  lineupSlots: FantasyLineupSlotDefinition[],
+  playablePositions: FantasyPosition[] = fantasyLineupPositions(lineupSlots),
+): ScoutingPositionOption[] {
+  const optionMap = new Map<ScoutingPosition, ScoutingPositionOption>();
+  const activePositions =
+    playablePositions.length > 0 ? playablePositions : fantasyCorePositions;
+
+  optionMap.set("ALL", {
+    value: "ALL",
+    label: "All",
+    positions: activePositions,
+  });
+
+  lineupSlots.forEach((slot) => {
+    const positions = slot.positions.filter((position) =>
+      activePositions.includes(position),
+    );
+
+    if (positions.length === 0) {
+      return;
+    }
+
+    const value = scoutingPositionValueForSlot(slot, positions);
+
+    if (!optionMap.has(value)) {
+      optionMap.set(value, {
+        value,
+        label: scoutingPositionLabelForSlot(slot, value),
+        positions,
+      });
+    }
+  });
+
+  return [...optionMap.values()];
+}
+
+function scoutingPositionValueForSlot(
+  slot: FantasyLineupSlotDefinition,
+  positions: FantasyPosition[],
+): ScoutingPosition {
+  if (positions.length === 1) {
+    return positions[0];
+  }
+
+  const normalizedSlotId = slot.id.replace(/\d+$/, "");
+
+  if (normalizedSlotId === "SUPER_FLEX") {
+    return "SUPER_FLEX";
+  }
+
+  if (normalizedSlotId === "WRRB_FLEX") {
+    return "WRRB_FLEX";
+  }
+
+  if (normalizedSlotId === "WRTE_FLEX") {
+    return "WRTE_FLEX";
+  }
+
+  return "FLEX";
+}
+
+function scoutingPositionLabelForSlot(
+  slot: FantasyLineupSlotDefinition,
+  value: ScoutingPosition,
+) {
+  if (value === "DST") {
+    return "Def";
+  }
+
+  if (value === "K") {
+    return "Kicker";
+  }
+
+  if (slot.positions.length === 1) {
+    return value;
+  }
+
+  return slot.label.replace(/\d+$/, "");
+}
+
+function scoutingRowsForOption(
+  rows: ScoutingRow[],
+  option: ScoutingPositionOption,
+) {
+  return rows.filter((row) =>
+    option.positions.includes(normalizeScoutingPosition(row.position)),
+  );
+}
+
 function fantasyReportPositionUnion(
   reports: FantasyTeamReport[],
 ): FantasyPosition[] {
@@ -9389,7 +9504,10 @@ function buildWaiverMoveTarget({
   scoringFormat: ScoringFormat;
   teams: FantasyTeam[];
 }): FantasyMoveTarget {
-  const board = buildScoutingBoard(allPlayers, scoringFormat, contextByTeam);
+  const board = buildScoutingBoard(allPlayers, scoringFormat, contextByTeam).filter(
+    (player) =>
+      active.report.lineupPositions.includes(normalizeScoutingPosition(player.position)),
+  );
   const rosteredIds = new Set(teams.flatMap((team) => team.rosterIds));
   const rosteredKeys = rosteredFantasyPlayerIdentityKeys({ players: board, teams });
   const position = active.weakestPosition.position;
@@ -9449,7 +9567,11 @@ function buildTradeMoveTarget({
         team,
       })),
     )
-    .filter(({ player }) => !activeRosterIds.has(player.id));
+    .filter(
+      ({ player }) =>
+        !activeRosterIds.has(player.id) &&
+        active.report.lineupPositions.includes(normalizeScoutingPosition(player.position)),
+    );
   const directPositionTargets = tradePool.filter(
     ({ player }) => normalizeScoutingPosition(player.position) === position,
   );
@@ -10449,7 +10571,9 @@ function normalizeFantasyIdentityPart(value: string) {
 
 function filterScoutingRows({
   depth,
+  lineupSlots,
   mode,
+  playablePositions,
   position,
   rosteredIds,
   rosteredKeys,
@@ -10458,7 +10582,9 @@ function filterScoutingRows({
   weakestPosition,
 }: {
   depth: ScoutingDepth;
+  lineupSlots: FantasyLineupSlotDefinition[];
   mode: ScoutingBoardMode;
+  playablePositions: FantasyPosition[];
   position: ScoutingPosition;
   rosteredIds: Set<string>;
   rosteredKeys: Set<string>;
@@ -10476,13 +10602,16 @@ function filterScoutingRows({
     rosteredKeys,
     weakestPosition,
     teamLens,
+    playablePositions,
   );
+  const positionOption =
+    scoutingPositionOptionsForLineup(lineupSlots, playablePositions).find(
+      (option) => option.value === position,
+    ) ?? null;
   const laneRows =
-    position === "ALL"
+    !positionOption || positionOption.value === "ALL"
       ? modeRows
-      : modeRows.filter(
-          (row) => normalizeScoutingPosition(row.position) === position,
-        );
+      : scoutingRowsForOption(modeRows, positionOption);
 
   return laneRows.slice(0, depthOption.limit);
 }
@@ -10494,8 +10623,12 @@ function scoutingRowsForMode(
   rosteredKeys: Set<string>,
   weakestPosition: ScoutingPlayerPosition,
   teamLens: FantasyTeamLens,
+  playablePositions: FantasyPosition[] = fantasyCoveragePositions,
 ) {
-  const availableRows = rows.filter((row) =>
+  const playableRows = rows.filter((row) =>
+    playablePositions.includes(normalizeScoutingPosition(row.position)),
+  );
+  const availableRows = playableRows.filter((row) =>
     isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
   );
 
@@ -10529,7 +10662,7 @@ function scoutingRowsForMode(
     );
   }
 
-  return rows;
+  return playableRows;
 }
 
 function fantasyPickupScore(
@@ -10603,19 +10736,24 @@ function fantasyUltraDeepScore(
 }
 
 function buildDeepResearchRows({
+  playablePositions,
   rosteredIds,
   rosteredKeys,
   rows,
   teamLens,
   weakestPosition,
 }: {
+  playablePositions: FantasyPosition[];
   rosteredIds: Set<string>;
   rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
 }): FantasyDeepResearchRow[] {
-  const availableRows = rows.filter((row) =>
+  const playableRows = rows.filter((row) =>
+    playablePositions.includes(normalizeScoutingPosition(row.position)),
+  );
+  const availableRows = playableRows.filter((row) =>
     isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
   );
   const deepPool = availableRows.filter(
@@ -11325,8 +11463,14 @@ function fantasyCloseCallTrailer(closeCall: FantasyCloseCall) {
   return closeCall.gap <= 0 ? closeCall.starter : closeCall.challenger;
 }
 
-function buildRookieWatchRows(rows: ScoutingRow[]) {
-  const taggedRows = rows.filter((player) => {
+function buildRookieWatchRows(
+  rows: ScoutingRow[],
+  playablePositions: FantasyPosition[] = fantasyCoveragePositions,
+) {
+  const playableRows = rows.filter((player) =>
+    playablePositions.includes(normalizeScoutingPosition(player.position)),
+  );
+  const taggedRows = playableRows.filter((player) => {
     const searchableText = [
       player.depthTier,
       ...player.traits,
@@ -11342,7 +11486,7 @@ function buildRookieWatchRows(rows: ScoutingRow[]) {
   const watchPool =
     taggedRows.length > 0
       ? taggedRows
-      : rows.filter((player) => (player.dynastyValue ?? player.health) >= 74);
+      : playableRows.filter((player) => (player.dynastyValue ?? player.health) >= 74);
 
   return [...watchPool]
     .sort((left, right) => rookieWatchScore(right) - rookieWatchScore(left))
@@ -11409,9 +11553,14 @@ function normalizeScoutingPosition(position: string): ScoutingPlayerPosition {
   return "WR";
 }
 
-function scoutingPositionLabel(position: ScoutingPosition) {
+function scoutingPositionLabel(
+  position: ScoutingPosition,
+  lineupSlots: FantasyLineupSlotDefinition[] = fantasyLineupSlots,
+) {
   return (
-    scoutingPositionOptions.find((option) => option.value === position)?.label ??
+    scoutingPositionOptionsForLineup(lineupSlots).find(
+      (option) => option.value === position,
+    )?.label ??
     position
   );
 }
