@@ -843,6 +843,41 @@ const fantasyPowerTierLabels: Record<FantasyPowerTier, string> = {
   chaos: "Chaos team",
 };
 
+const proFootballTeamDisplayNames: Record<string, string> = {
+  ARI: "Arizona Cardinals",
+  ATL: "Atlanta Falcons",
+  BAL: "Baltimore Ravens",
+  BUF: "Buffalo Bills",
+  CAR: "Carolina Panthers",
+  CHI: "Chicago Bears",
+  CIN: "Cincinnati Bengals",
+  CLE: "Cleveland Browns",
+  DAL: "Dallas Cowboys",
+  DEN: "Denver Broncos",
+  DET: "Detroit Lions",
+  GB: "Green Bay Packers",
+  HOU: "Houston Texans",
+  IND: "Indianapolis Colts",
+  JAX: "Jacksonville Jaguars",
+  KC: "Kansas City Chiefs",
+  LAC: "Los Angeles Chargers",
+  LAR: "Los Angeles Rams",
+  LV: "Las Vegas Raiders",
+  MIA: "Miami Dolphins",
+  MIN: "Minnesota Vikings",
+  NE: "New England Patriots",
+  NO: "New Orleans Saints",
+  NYG: "New York Giants",
+  NYJ: "New York Jets",
+  PHI: "Philadelphia Eagles",
+  PIT: "Pittsburgh Steelers",
+  SEA: "Seattle Seahawks",
+  SF: "San Francisco 49ers",
+  TB: "Tampa Bay Buccaneers",
+  TEN: "Tennessee Titans",
+  WAS: "Washington Commanders",
+};
+
 const receptionPoints: Record<ScoringFormat, number> = {
   standard: 0,
   halfPpr: 0.5,
@@ -6025,7 +6060,7 @@ function FantasySpotlightRow({
         <div>
           <strong>{player.name}</strong>
           <em>
-            {player.position} · {player.opponent}
+            {fantasyPlayerTeamLine(player)}
           </em>
         </div>
       </div>
@@ -6079,7 +6114,7 @@ function FantasyRookieBoard({
                 <div>
                   <strong>{player.name}</strong>
                   <em>
-                    {player.position} ·{" "}
+                    {fantasyPlayerTeamLine(player)} ·{" "}
                     {player.depthTier ? formatDepthTier(player.depthTier) : "Watchlist"}
                   </em>
                 </div>
@@ -6703,7 +6738,7 @@ function FantasyCard({
         <div>
           <strong>{player.name}</strong>
           <em>
-            {player.position} · {player.team} · {player.opponent}
+            {fantasyPlayerTeamLine(player)}
           </em>
           <small>{fantasyPlayerRoleBand(player)}</small>
         </div>
@@ -7122,7 +7157,7 @@ function FantasyDuelPlayer({
         <div>
           <strong>{player.name}</strong>
           <em>
-            {player.position} · {player.opponent}
+            {fantasyPlayerTeamLine(player)}
           </em>
         </div>
       </div>
@@ -7381,7 +7416,7 @@ function ScoutingBoard({
                   <div>
                     <strong>{player.name}</strong>
                     <em>
-                      {player.position} · {player.team} · {player.opponent}
+                      {fantasyPlayerTeamLine(player)}
                     </em>
                   </div>
                 </div>
@@ -7479,7 +7514,7 @@ function DeepResearchPanel({
               <div>
                 <strong>{row.player.name}</strong>
                 <em>
-                  {normalizeScoutingPosition(row.player.position)} · {row.player.team} · {row.player.opponent}
+                  {fantasyPlayerTeamLine(row.player)}
                 </em>
               </div>
             </div>
@@ -7765,7 +7800,7 @@ function FantasyTeamLab({
                   <div>
                     <strong>{player.name}</strong>
                     <em>
-                      {player.position} · {player.opponent}
+                      {fantasyPlayerTeamLine(player)}
                     </em>
                     <ProjectionReceipt
                       player={player}
@@ -7976,7 +8011,7 @@ function FantasyDecisionEnginePanel({
               <strong>{slot.player?.name ?? `Need ${slot.label}`}</strong>
               <em>
                 {slot.player
-                  ? `${slot.player.position} · ${slot.player.team} · ${slot.player.opponent}`
+                  ? fantasyPlayerTeamLine(slot.player)
                   : "No eligible player found"}
               </em>
             </div>
@@ -9609,7 +9644,9 @@ function buildTradeMoveTarget({
       weakestPosition: position,
     }),
     risk: fantasyMoveRisk(target.player, lens),
-    teamLabel: `${target.team.report.team.name} · ${target.player.team}`,
+    teamLabel: `${target.team.report.team.name} · ${fantasyPlayerTeamLabel(
+      target.player.team,
+    )}`,
     title: "Trade target",
     value: `${target.player.contextProjection.projection.toFixed(1)} proj · role ${
       target.player.roleSecurity ?? target.player.health
@@ -10565,6 +10602,36 @@ function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
   }
 
   return [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`];
+}
+
+function fantasyPlayerTeamLine(player: {
+  position: string;
+  team?: string;
+  opponent?: string;
+}) {
+  return [
+    normalizeScoutingPosition(player.position),
+    fantasyPlayerTeamLabel(player.team),
+    cleanFantasyPlayerOpponent(player.opponent),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function fantasyPlayerTeamLabel(team?: string) {
+  const code = normalizeTeamCode(team ?? "");
+
+  if (code === "FA") {
+    return "Free agent";
+  }
+
+  return proFootballTeamDisplayNames[code] ?? code;
+}
+
+function cleanFantasyPlayerOpponent(opponent?: string) {
+  const value = typeof opponent === "string" ? opponent.trim() : "";
+
+  return value.length > 0 ? value : "Weekly matchup";
 }
 
 function normalizeFantasyIdentityPart(value: string) {
@@ -11856,7 +11923,7 @@ function fallbackTeamContext({
 }): NflFantasyTeamContext {
   return {
     freshness: "unknown",
-    message: `${player.name} is using player-role fallback until the schedule context covers ${player.team}.`,
+    message: `${player.name} is using player-role fallback until the schedule context covers ${fantasyPlayerTeamLabel(player.team)}.`,
     opponent: player.opponent,
     opponentCode: cleanOpponentCode(player.opponent),
     opponentCoaching: fallbackDefense,
