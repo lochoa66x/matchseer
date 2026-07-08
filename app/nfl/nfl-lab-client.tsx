@@ -7198,7 +7198,7 @@ function ScoutingBoard({
   const deepResearchRows = buildDeepResearchRows({
     rosteredIds,
     rosteredKeys,
-    rows: allRows,
+    rows,
     teamLens,
     weakestPosition,
     playablePositions,
@@ -7219,6 +7219,21 @@ function ScoutingBoard({
   const activePositionOption =
     positionOptions.find((option) => option.value === position) ??
     positionOptions[0];
+  const rowsForMode = (nextMode: ScoutingBoardMode) => {
+    const nextRows = scoutingRowsForMode(
+      allRows,
+      nextMode,
+      rosteredIds,
+      rosteredKeys,
+      weakestPosition,
+      teamLens,
+      playablePositions,
+    );
+
+    return activePositionOption.value === "ALL"
+      ? nextRows
+      : scoutingRowsForOption(nextRows, activePositionOption);
+  };
   const laneTotal =
     activePositionOption.value === "ALL"
       ? modeRows.length
@@ -7263,15 +7278,7 @@ function ScoutingBoard({
       <div className="nfl-scouting-tools" aria-label="Scouting board controls">
         <div className="nfl-scouting-mode" aria-label="Board mode">
           {scoutingBoardModeOptions.map((option) => {
-            const count = scoutingRowsForMode(
-              allRows,
-              option.value,
-              rosteredIds,
-              rosteredKeys,
-              weakestPosition,
-              teamLens,
-              playablePositions,
-            ).length;
+            const count = rowsForMode(option.value).length;
 
             return (
               <button
@@ -10642,12 +10649,17 @@ function scoutingRowsForMode(
   }
 
   if (mode === "topPicks") {
-    return [...availableRows].sort(
+    const rankedRows = [...availableRows].sort(
       (left, right) =>
         fantasyPickupScore(right, weakestPosition, teamLens, "pickup") -
           fantasyPickupScore(left, weakestPosition, teamLens, "pickup") ||
         right.contextProjection.floor - left.contextProjection.floor,
     );
+    const candidateLimit = Math.round(
+      clampValue(availableRows.length * 0.14, 18, 72),
+    );
+
+    return rankedRows.slice(0, candidateLimit);
   }
 
   if (mode === "ultraDeep") {
@@ -10704,13 +10716,16 @@ function fantasyPickupScore(
 function fantasyUltraDeepCandidate(player: ScoutingRow) {
   const upsideGap =
     player.contextProjection.ceiling - player.contextProjection.projection;
+  const rank = player.sourceRank ?? player.nflRank;
+  const dynastyValue = player.dynastyValue ?? 0;
+  const roleSecurity = player.roleSecurity ?? player.health;
 
   return (
     player.depthTier === "stash" ||
     player.depthTier === "streamer" ||
-    player.depthTier === "rotation" ||
-    (player.dynastyValue ?? 0) >= 68 ||
-    upsideGap >= 7 ||
+    rank >= 180 ||
+    (dynastyValue >= 70 && roleSecurity < 62) ||
+    upsideGap >= 8.5 ||
     player.roleSecurity === undefined ||
     player.contextProjection.projection <= 9
   );
