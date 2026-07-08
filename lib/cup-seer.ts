@@ -31,7 +31,7 @@ export type CupSnapshotCandidate = {
 export function buildCupCandidates(
   matches: Match[],
   language: Language,
-  limit = 8,
+  limit = 4,
 ): CupCandidate[] {
   const teamMap = new Map<
     string,

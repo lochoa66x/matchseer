@@ -1062,7 +1062,7 @@ export default function AdminPage() {
           ) : (
             <Trophy size={18} />
           )}
-          Save final 8 snapshot
+          Save final 4 snapshot
         </button>
         <button
           className="admin-command primary"
@@ -1259,7 +1259,7 @@ function CupSnapshotPanel({
       <div className="admin-table-header">
         <div>
           <p className="eyebrow">Cup Seer memory</p>
-          <h2>Final 8 weekly lane</h2>
+          <h2>Final 4 title lane</h2>
         </div>
         <div className="traffic-generated">
           <Trophy size={16} />
@@ -1270,15 +1270,15 @@ function CupSnapshotPanel({
       {!hasSecret ? (
         <div className="traffic-empty">
           <Trophy size={22} />
-          <strong>Final 8 memory locked</strong>
+          <strong>Final 4 memory locked</strong>
           <span>Add the admin secret to load or save weekly Cup Seer snapshots.</span>
         </div>
       ) : !current ? (
         <div className="traffic-empty">
           <Trophy size={22} />
-          <strong>No final 8 snapshot yet</strong>
+          <strong>No final 4 snapshot yet</strong>
           <span>
-            Once Week 1 is complete, save a snapshot to start tracking movement.
+            Once a knockout round is complete, save a snapshot to start tracking movement.
           </span>
           <button
             className="admin-command model-save-button"

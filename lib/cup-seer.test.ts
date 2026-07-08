@@ -56,8 +56,8 @@ function match(
   };
 }
 
-describe("Cup Seer final 8 lane", () => {
-  it("returns eight teams and adds second-round path probability", () => {
+describe("Cup Seer final 4 title lane", () => {
+  it("returns four title teams by default and keeps path probability", () => {
     const teams = [
       team("France", "FRA", 94),
       team("Brazil", "BRA", 91),
@@ -75,8 +75,27 @@ describe("Cup Seer final 8 lane", () => {
 
     const candidates = buildCupCandidates(matches, "en");
 
-    expect(candidates).toHaveLength(8);
+    expect(candidates).toHaveLength(4);
     expect(candidates[0].advanceProbability).toBeGreaterThan(0);
+  });
+
+  it("can still build the wider eight-team lane when requested", () => {
+    const teams = [
+      team("France", "FRA", 94),
+      team("Brazil", "BRA", 91),
+      team("Argentina", "ARG", 93),
+      team("Spain", "ESP", 92),
+      team("England", "ENG", 90),
+      team("Germany", "GER", 88),
+      team("Netherlands", "NED", 87),
+      team("Portugal", "POR", 88),
+      team("Canada", "CAN", 66),
+    ];
+    const matches = teams.map((item, index) =>
+      match(item, team(`Opponent ${index}`, `O${index}`, 52)),
+    );
+
+    expect(buildCupCandidates(matches, "en", 8)).toHaveLength(8);
   });
 
   it("uses final scores as actual points once a match is complete", () => {

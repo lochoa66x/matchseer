@@ -18229,6 +18229,105 @@ body {
   font-weight: 950;
 }
 
+.archive-next-round-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(220px, 0.55fr) minmax(280px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 12px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, rgba(49, 211, 145, 0.09), transparent 42%),
+    rgba(5, 8, 16, 0.44);
+  border: 1px solid rgba(49, 211, 145, 0.18);
+  border-radius: 14px;
+}
+
+.archive-next-round-panel h3,
+.archive-next-round-panel p {
+  margin: 0;
+}
+
+.archive-next-round-panel h3 {
+  margin-top: 6px;
+  color: #fff;
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  line-height: 1;
+}
+
+.archive-next-round-panel p {
+  margin-top: 8px;
+  color: var(--ms-copy-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.archive-next-round-teams,
+.archive-next-round-fixtures {
+  display: grid;
+  gap: 8px;
+}
+
+.archive-next-round-teams {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archive-next-round-teams span,
+.archive-next-round-fixtures button {
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 10px;
+}
+
+.archive-next-round-teams span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.archive-next-round-teams strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-next-round-fixtures button {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-next-round-fixtures button:hover {
+  border-color: rgba(49, 211, 145, 0.34);
+  transform: translateY(-1px);
+}
+
+.archive-next-round-fixtures span,
+.archive-next-round-fixtures em {
+  color: var(--ms-copy-soft);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.archive-next-round-fixtures strong {
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 950;
+  line-height: 1.12;
+}
+
 .archive-metric-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-top: 12px;
@@ -18318,6 +18417,7 @@ body {
 
 @media (max-width: 980px) {
   .archive-report-head,
+  .archive-next-round-panel,
   .archive-body-grid,
   .archive-miss-strip {
     grid-template-columns: 1fr;

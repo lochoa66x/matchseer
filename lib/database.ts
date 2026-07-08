@@ -890,7 +890,7 @@ export async function saveCupSeerSnapshot(
     await ensureCupSeerSnapshotSchema(connection.sql);
 
     const { matches } = await listMatches();
-    const candidates = toCupSnapshotCandidates(buildCupCandidates(matches, "en", 8));
+    const candidates = toCupSnapshotCandidates(buildCupCandidates(matches, "en", 4));
     const countRows = (await connection.sql`
       select count(*)::int as count
       from cup_seer_snapshots;
@@ -909,7 +909,7 @@ export async function saveCupSeerSnapshot(
         ${JSON.stringify({
           modelVersion: "v4.0",
           matchesConsidered: matches.length,
-          note: "Final 8 lane snapshot with second-round path probability.",
+          note: "Final 4 title-lane snapshot with knockout path probability.",
         })}::jsonb
       );
     `;

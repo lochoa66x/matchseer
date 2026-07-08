@@ -82,11 +82,27 @@ type WorldCupArchiveMetric = {
   value: string;
   detail: string;
 };
+type WorldCupNextRoundFixture = {
+  id: string;
+  home: Team;
+  away: Team;
+  schedule: string;
+  venue: string;
+  lean: string;
+};
+type WorldCupNextRoundField = {
+  label: string;
+  status: string;
+  note: string;
+  teams: Team[];
+  fixtures: WorldCupNextRoundFixture[];
+};
 type WorldCupArchiveReport = {
   archiveMode: boolean;
   title: string;
   intro: string;
   status: string;
+  nextRound: WorldCupNextRoundField;
   podium: WorldCupArchivePodiumSlot[];
   metrics: WorldCupArchiveMetric[];
   championLane: Array<{
@@ -248,8 +264,8 @@ const copy = {
     pending: "Pending",
     refereePending: "Assignment pending",
     cupSeer: "Weekly Cup Seer",
-    cupSeerTitle: "Who is in the final-eight lane?",
-    cupSeerIntro: "Weekly pulse: finished matches count, upcoming fixtures stay projected, and the Seer tracks the eight strongest cup lanes.",
+    cupSeerTitle: "Who is still in the title lane?",
+    cupSeerIntro: "The field is tighter now: finished matches count, upcoming fixtures stay projected, and the Seer tracks the four strongest title lanes.",
     cupPulse: "Weekly pulse",
     cupLeader: "Top signal",
     cupOpen: "Open weekly cup pulse",
@@ -417,8 +433,8 @@ const copy = {
     pending: "Pendiente",
     refereePending: "Asignación pendiente",
     cupSeer: "Vidente semanal de la copa",
-    cupSeerTitle: "¿Quién entra en la vía de los ocho más fuertes?",
-    cupSeerIntro: "Pulso semanal: los resultados terminados cuentan, los próximos siguen proyectados y el Vidente sigue las ocho rutas más fuertes.",
+    cupSeerTitle: "¿Quién sigue en la ruta del título?",
+    cupSeerIntro: "El campo ya se cerró: los resultados terminados cuentan, los próximos siguen proyectados y el Vidente sigue las cuatro rutas más fuertes al título.",
     cupPulse: "Pulso semanal",
     cupLeader: "Señal líder",
     cupOpen: "Abrir pulso semanal",
@@ -586,8 +602,8 @@ const copy = {
     pending: "En attente",
     refereePending: "Affectation en attente",
     cupSeer: "Voyant hebdo de la coupe",
-    cupSeerTitle: "Qui entre dans la voie des huit plus forts ?",
-    cupSeerIntro: "Pulse hebdo : les matchs terminés comptent, les affiches à venir restent projetées, et le voyant suit les huit routes les plus fortes.",
+    cupSeerTitle: "Qui reste dans la voie du titre ?",
+    cupSeerIntro: "Le champ se resserre : les matchs terminés comptent, les affiches à venir restent projetées, et le voyant suit les quatre routes les plus fortes vers le titre.",
     cupPulse: "Pulse hebdo",
     cupLeader: "Signal leader",
     cupOpen: "Ouvrir le pulse hebdo",
@@ -2424,6 +2440,7 @@ function buildWorldCupArchiveReport(
   const finalResult = matchResultTeams(finalMatch);
   const thirdPlaceResult = matchResultTeams(thirdPlaceMatch);
   const archiveMode = Boolean(finalResult);
+  const nextRound = buildWorldCupNextRoundField(matches, candidates, archiveMode);
   const usedTeams = new Set<string>();
   const podium: WorldCupArchivePodiumSlot[] = [];
 
@@ -2553,37 +2570,231 @@ function buildWorldCupArchiveReport(
   return {
     archiveMode,
     championLane: candidates.slice(0, 4).map((candidate) => ({
-      detail: `${candidate.advanceProbability}% path · ${candidate.matches} fixtures · reconstructed from stored forecasts`,
+      detail: `${candidate.advanceProbability}% title path · ${candidate.matches} fixtures · top-four lane`,
       signal: candidate.signal,
       team: candidate.team,
     })),
     improvements: [
-      "Save champion-lane snapshots on every sync so the final chart shows real movement, not only reconstruction.",
-      "Keep travel distance, rest days, and extra-time fatigue as first-class receipts during knockout rounds.",
+      "Save top-four title snapshots on every sync so the final chart shows real movement, not only reconstruction.",
+      "Keep travel distance, rest days, and extra-time fatigue as first-class receipts during the next knockout round.",
       "Separate 90-minute draw reads from advancement reads so cautious knockout games do not look like misses.",
+      "Treat officiating controversy as chaos/confidence noise only after review, not as a hidden-hand assumption.",
       "Calibrate crowd signal after every final result, especially for favorites and public-heavy teams.",
     ],
     intro: archiveMode
       ? "Final results are in. This closes the tournament as a readable Seer report: what landed, what missed, and what the next model should learn."
-      : "Archive preview is live. When the final ends, this becomes the closing report with champion, podium, receipts, and lessons.",
+      : "The knockout picture is sharper now. The Seer trims the title lane to four teams, keeps the next-round bracket visible, and logs what this round taught the model.",
     lessons: [
       scoreboard.reviewed > 0
         ? `The model is sitting at ${scoreboard.survivalRate}% direction survival across ${scoreboard.reviewed} reviewed matches.`
         : "The model needs more final receipts before the success story can be judged honestly.",
+      `${nextRound.status}: ${nextRound.note}`,
       drawReceipts.length > 0
         ? `Draw/deadlock calls were noisy: ${drawHits}/${drawReceipts.length} survived, so caution needs calibration.`
         : "Draw pricing should stay visible, because knockout football can look like a draw for 90 minutes even when someone must advance.",
       penaltyLaneMatches.length > 0
         ? "Penalty rooms are already part of the read, but the archive needs shootout-result receipts to judge them cleanly."
         : "Penalty logic is ready; it should activate only when the regulation-deadlock lane gets loud enough.",
+      "Disputed-call discourse should raise chaos and lower certainty until receipts are reviewed; the Seer should never convert social noise into a fixed accusation.",
       "The exercise is a success if users can see both the call and the receipt. The final page should show confidence without pretending certainty.",
     ],
     metrics,
+    nextRound,
     podium,
-    status: archiveMode ? "Final archive" : "Archive preview",
-    title: archiveMode ? "World Cup closing report" : "World Cup archive warming up",
+    status: archiveMode ? "Final archive" : "Next phase tuning",
+    title: archiveMode ? "World Cup closing report" : "World Cup next-round tuning",
     topMisses,
   };
+}
+
+function buildWorldCupNextRoundField(
+  matches: Match[],
+  candidates: CupCandidate[],
+  archiveMode: boolean,
+): WorldCupNextRoundField {
+  const nextMatches = nextOpenKnockoutMatches(matches);
+  const teams = uniqueTeams(
+    nextMatches.flatMap((match) => [match.home, match.away]),
+  );
+
+  if (nextMatches.length > 0 && teams.length > 0) {
+    const label = knockoutRoundDisplayLabel(nextMatches[0]);
+    const status = `${teams.length} teams active`;
+
+    return {
+      fixtures: nextMatches.map((match) => ({
+        away: match.away,
+        home: match.home,
+        id: match.id,
+        lean: nextRoundLeanLabel(match),
+        schedule: formatMatchSchedule(match),
+        venue: match.venue,
+      })),
+      label,
+      note: `${label} is the live bracket focus. The title lane is intentionally trimmed to four so the read gets sharper, not louder.`,
+      status,
+      teams,
+    };
+  }
+
+  const completedField = latestCompletedKnockoutField(matches);
+
+  if (completedField.teams.length > 0) {
+    const nextLabel = nextKnockoutRoundLabel(completedField.key);
+
+    return {
+      fixtures: [],
+      label: `${nextLabel} field`,
+      note: `${completedField.teams.length} teams advanced from ${completedField.label}. Fixtures are not loaded yet, but the title lane is already trimmed to four.`,
+      status: `${completedField.teams.length} teams through`,
+      teams: completedField.teams,
+    };
+  }
+
+  const fallbackTeams = candidates.slice(0, 4).map((candidate) => candidate.team);
+
+  return {
+    fixtures: [],
+    label: archiveMode ? "Tournament field settled" : "Top-four title lane",
+    note: archiveMode
+      ? "The archive now studies final receipts instead of projecting the next round."
+      : "No confirmed next-round fixtures are loaded yet, so the Seer is showing the four strongest title paths from stored forecasts.",
+    status: `${fallbackTeams.length} title teams`,
+    teams: fallbackTeams,
+  };
+}
+
+function nextOpenKnockoutMatches(matches: Match[]) {
+  const openKnockouts = matches
+    .filter((match) => match.status !== "Final")
+    .filter(isKnockoutRound)
+    .filter((match) => !match.home.isPlaceholder && !match.away.isPlaceholder)
+    .sort((left, right) => receiptSortTime(left) - receiptSortTime(right));
+  const first = openKnockouts[0];
+
+  if (!first) {
+    return [];
+  }
+
+  const roundKey = knockoutRoundKey(first);
+
+  return openKnockouts.filter((match) => knockoutRoundKey(match) === roundKey);
+}
+
+function latestCompletedKnockoutField(matches: Match[]) {
+  const completed = matches
+    .filter((match) => match.status === "Final")
+    .filter(isKnockoutRound)
+    .map((match) => ({
+      match,
+      result: matchResultTeams(match),
+    }))
+    .filter((entry): entry is { match: Match; result: { winner: Team; loser: Team } } =>
+      Boolean(entry.result),
+    )
+    .sort((left, right) => receiptSortTime(right.match) - receiptSortTime(left.match));
+  const first = completed[0];
+
+  if (!first) {
+    return {
+      key: "knockout",
+      label: "completed knockout round",
+      teams: [] as Team[],
+    };
+  }
+
+  const key = knockoutRoundKey(first.match);
+  const roundMatches = completed.filter((entry) => knockoutRoundKey(entry.match) === key);
+
+  return {
+    key,
+    label: knockoutRoundDisplayLabel(first.match),
+    teams: uniqueTeams(roundMatches.map((entry) => entry.result.winner)),
+  };
+}
+
+function uniqueTeams(teams: Team[]) {
+  const seen = new Set<string>();
+  const result: Team[] = [];
+
+  for (const team of teams) {
+    const key = normalizeTeamKey(team.name || team.code);
+
+    if (seen.has(key) || team.isPlaceholder) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(team);
+  }
+
+  return result;
+}
+
+function knockoutRoundKey(match: Match) {
+  const label = `${match.stage ?? ""} ${match.group}`.toLowerCase();
+
+  if (label.includes("quarter")) {
+    return "quarter-finals";
+  }
+
+  if (label.includes("semi")) {
+    return "semi-finals";
+  }
+
+  if (label.includes("final") && !label.includes("third") && !label.includes("3rd")) {
+    return "final";
+  }
+
+  if (label.includes("round of 16") || label.includes("last_16") || label.includes("r16")) {
+    return "round-of-16";
+  }
+
+  if (label.includes("round of 32") || label.includes("last_32") || label.includes("r32")) {
+    return "round-of-32";
+  }
+
+  return label.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "knockout";
+}
+
+function knockoutRoundDisplayLabel(match: Match) {
+  const key = knockoutRoundKey(match);
+  const labels: Record<string, string> = {
+    final: "Final",
+    "quarter-finals": "Quarter-finals",
+    "round-of-16": "Round of 16",
+    "round-of-32": "Round of 32",
+    "semi-finals": "Semi-finals",
+  };
+
+  return labels[key] ?? match.group ?? "Next knockout round";
+}
+
+function nextKnockoutRoundLabel(key: string) {
+  const labels: Record<string, string> = {
+    "quarter-finals": "Semi-finals",
+    "round-of-16": "Quarter-finals",
+    "round-of-32": "Round of 16",
+    "semi-finals": "Final",
+  };
+
+  return labels[key] ?? "Next knockout round";
+}
+
+function nextRoundLeanLabel(match: Match) {
+  const projectedAdvancer = match.forecast.knockout?.projectedAdvancer;
+
+  if (projectedAdvancer === "home") {
+    return `${match.home.code} advance lane`;
+  }
+
+  if (projectedAdvancer === "away") {
+    return `${match.away.code} advance lane`;
+  }
+
+  const leader = getMatchLean(match, matchAccentColors(match));
+
+  return `${leader.label} lean`;
 }
 
 function archiveLabel(language: Language, english: string) {
@@ -3437,6 +3648,42 @@ function WorldCupArchiveReportBoard({
         ))}
       </div>
 
+      <article className="archive-next-round-panel" aria-label="World Cup next round">
+        <div>
+          <div className="section-heading">
+            <CalendarDays size={17} />
+            <span>{report.nextRound.label}</span>
+          </div>
+          <h3>Next phase field</h3>
+          <p>{report.nextRound.note}</p>
+        </div>
+        <div className="archive-next-round-teams">
+          {report.nextRound.teams.map((team) => (
+            <span key={team.name}>
+              <TeamFlag team={team} compact />
+              <strong>{team.name}</strong>
+            </span>
+          ))}
+        </div>
+        {report.nextRound.fixtures.length > 0 && (
+          <div className="archive-next-round-fixtures">
+            {report.nextRound.fixtures.map((fixture) => (
+              <button
+                key={fixture.id}
+                onClick={() => onSelectMatch(fixture.id)}
+                type="button"
+              >
+                <span>{fixture.schedule}</span>
+                <strong>
+                  {fixture.home.name} vs {fixture.away.name}
+                </strong>
+                <em>{fixture.venue} · {fixture.lean}</em>
+              </button>
+            ))}
+          </div>
+        )}
+      </article>
+
       <div className="archive-metric-grid" aria-label="Seer tournament metrics">
         {report.metrics.map((metric) => (
           <div className="archive-metric-card" key={metric.label}>
@@ -3451,7 +3698,7 @@ function WorldCupArchiveReportBoard({
         <article>
           <div className="section-heading">
             <Activity size={17} />
-            <span>Champion lane</span>
+            <span>Title lane · top 4</span>
           </div>
           <div className="archive-champion-lane">
             {report.championLane.map((lane, index) => (
