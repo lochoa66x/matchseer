@@ -97,6 +97,35 @@ type WorldCupNextRoundField = {
   teams: Team[];
   fixtures: WorldCupNextRoundFixture[];
 };
+type TournamentPathBadgeTone = "hit" | "miss" | "live" | "chaos" | "neutral";
+type TournamentPathBadge = {
+  label: string;
+  tone: TournamentPathBadgeTone;
+};
+type TournamentPathTeamSlot = {
+  team: Team;
+  score: string;
+  winner: boolean;
+  seerLean: boolean;
+};
+type TournamentPathMatch = {
+  id: string;
+  badges: TournamentPathBadge[];
+  away: TournamentPathTeamSlot;
+  home: TournamentPathTeamSlot;
+  matchLabel: string;
+  resultLabel: string;
+  schedule: string;
+  seerLeanLabel: string;
+  summary: string;
+  tone: "hit" | "miss" | "pending";
+  venue: string;
+};
+type TournamentPathRound = {
+  key: string;
+  label: string;
+  matches: TournamentPathMatch[];
+};
 type WorldCupArchiveReport = {
   archiveMode: boolean;
   title: string;
@@ -113,6 +142,7 @@ type WorldCupArchiveReport = {
   lessons: string[];
   improvements: string[];
   topMisses: ForecastReceipt[];
+  tournamentPath: TournamentPathRound[];
 };
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
@@ -2604,7 +2634,281 @@ function buildWorldCupArchiveReport(
     status: archiveMode ? "Final archive" : "Next phase tuning",
     title: archiveMode ? "World Cup closing report" : "World Cup next-round tuning",
     topMisses,
+    tournamentPath: buildTournamentPathRounds(matches, language),
   };
+}
+
+function buildTournamentPathRounds(
+  matches: Match[],
+  language: Language,
+): TournamentPathRound[] {
+  const rounds = new Map<string, TournamentPathRound>();
+  const knockoutMatches = matches
+    .filter(isKnockoutRound)
+    .sort((left, right) => receiptSortTime(left) - receiptSortTime(right));
+
+  for (const match of knockoutMatches) {
+    const key = knockoutRoundKey(match);
+    const existingRound = rounds.get(key);
+    const round =
+      existingRound ??
+      {
+        key,
+        label: knockoutRoundDisplayLabel(match),
+        matches: [],
+      };
+
+    round.matches.push(
+      buildTournamentPathMatch(match, language),
+    );
+    rounds.set(key, round);
+  }
+
+  return Array.from(rounds.values()).sort(
+    (left, right) =>
+      tournamentRoundSortIndex(left.key) - tournamentRoundSortIndex(right.key),
+  );
+}
+
+function buildTournamentPathMatch(
+  match: Match,
+  language: Language,
+): TournamentPathMatch {
+  const projectedSide = tournamentProjectedSide(match);
+  const result = matchResultTeams(match);
+  const actualSide = result
+    ? result.winner.name === match.home.name
+      ? "home"
+      : "away"
+    : undefined;
+  const finalScore = parseScoreline(match.score);
+  const penalties = parsePenaltyScoreline(match.score);
+  const isReviewed = match.status === "Final" && Boolean(finalScore);
+  const tone: TournamentPathMatch["tone"] =
+    isReviewed && actualSide
+      ? actualSide === projectedSide
+        ? "hit"
+        : "miss"
+      : "pending";
+  const projectedTeam = projectedSide === "home" ? match.home : match.away;
+  const projectedAdvance = match.forecast.knockout
+    ? projectedSide === "home"
+      ? match.forecast.knockout.homeAdvance
+      : match.forecast.knockout.awayAdvance
+    : forecastProbabilityForSide(match, projectedSide);
+  const actualProbability = actualSide
+    ? forecastProbabilityForSide(match, actualSide)
+    : 100;
+  const badges = buildTournamentPathBadges({
+    actualProbability,
+    match,
+    penalties,
+    projectedSide,
+    tone,
+  });
+
+  return {
+    away: {
+      score: tournamentPathScore(match, "away"),
+      seerLean: projectedSide === "away",
+      team: match.away,
+      winner: actualSide === "away",
+    },
+    badges,
+    home: {
+      score: tournamentPathScore(match, "home"),
+      seerLean: projectedSide === "home",
+      team: match.home,
+      winner: actualSide === "home",
+    },
+    id: match.id,
+    matchLabel: knockoutRoundDisplayLabel(match),
+    resultLabel: tournamentPathResultLabel(match),
+    schedule: formatMatchSchedule(match),
+    seerLeanLabel: `${projectedTeam.code} ${projectedAdvance}% advance`,
+    summary: tournamentPathSummary({
+      actualSide,
+      language,
+      match,
+      projectedSide,
+      tone,
+    }),
+    tone,
+    venue: match.venue,
+  };
+}
+
+function buildTournamentPathBadges({
+  actualProbability,
+  match,
+  penalties,
+  projectedSide,
+  tone,
+}: {
+  actualProbability: number;
+  match: Match;
+  penalties: { home: number; away: number } | null;
+  projectedSide: "home" | "away";
+  tone: TournamentPathMatch["tone"];
+}): TournamentPathBadge[] {
+  const knockout = match.forecast.knockout;
+  const badges: TournamentPathBadge[] = [];
+
+  if (tone === "hit") {
+    badges.push({ label: "Seer hit", tone: "hit" });
+  } else if (tone === "miss") {
+    badges.push({ label: "Seer miss", tone: "miss" });
+  } else if (match.status === "Live") {
+    badges.push({ label: "Live", tone: "live" });
+  } else {
+    badges.push({ label: "Pending", tone: "neutral" });
+  }
+
+  if (match.status === "Final" && (tone === "miss" || actualProbability <= 45)) {
+    badges.push({ label: "Upset", tone: "chaos" });
+  }
+
+  if (penalties || (knockout?.penalties ?? 0) >= 12 || knockout?.penaltyRoom) {
+    badges.push({ label: penalties ? "Pens" : "Pens lane", tone: "chaos" });
+  }
+
+  if (tournamentPathHasExtraTime(match)) {
+    badges.push({ label: "ET", tone: "live" });
+  } else if ((knockout?.extraTime ?? 0) >= 28) {
+    badges.push({ label: "ET lane", tone: "neutral" });
+  }
+
+  if ((knockout?.projectedAdvancer ?? projectedSide) !== projectedSide) {
+    badges.push({ label: "Advance check", tone: "neutral" });
+  }
+
+  return badges.slice(0, 4);
+}
+
+function tournamentPathSummary({
+  actualSide,
+  language,
+  match,
+  projectedSide,
+  tone,
+}: {
+  actualSide?: "home" | "away";
+  language: Language;
+  match: Match;
+  projectedSide: "home" | "away";
+  tone: TournamentPathMatch["tone"];
+}) {
+  const projectedCode = sideLabel(match, projectedSide);
+  const actualCode = actualSide ? sideLabel(match, actualSide) : "";
+
+  if (language === "es") {
+    if (tone === "hit") {
+      return `El Seer inclinó ${projectedCode}; el resultado siguió ese camino.`;
+    }
+
+    if (tone === "miss") {
+      return `El Seer inclinó ${projectedCode}; ${actualCode} se quedó con el recibo.`;
+    }
+
+    return `El Seer inclina ${projectedCode}; el recibo queda abierto hasta el cierre.`;
+  }
+
+  if (language === "fr") {
+    if (tone === "hit") {
+      return `Le Seer penchait ${projectedCode}; le résultat a suivi ce chemin.`;
+    }
+
+    if (tone === "miss") {
+      return `Le Seer penchait ${projectedCode}; ${actualCode} a pris le reçu.`;
+    }
+
+    return `Le Seer penche ${projectedCode}; le reçu reste ouvert jusqu'au résultat.`;
+  }
+
+  if (tone === "hit") {
+    return `The Seer leaned ${projectedCode}; the result followed the path.`;
+  }
+
+  if (tone === "miss") {
+    return `The Seer leaned ${projectedCode}; ${actualCode} took the receipt.`;
+  }
+
+  return `The Seer leans ${projectedCode}; the receipt stays open until the match closes.`;
+}
+
+function tournamentProjectedSide(match: Match): "home" | "away" {
+  const knockoutAdvancer = match.forecast.knockout?.projectedAdvancer;
+
+  if (knockoutAdvancer === "home" || knockoutAdvancer === "away") {
+    return knockoutAdvancer;
+  }
+
+  const projectedSide = getProjectedForecastSide(match);
+
+  if (projectedSide === "home" || projectedSide === "away") {
+    return projectedSide;
+  }
+
+  return match.forecast.home >= match.forecast.away ? "home" : "away";
+}
+
+function tournamentPathScore(match: Match, side: "home" | "away") {
+  const score = parseScoreline(match.score);
+
+  if (!score) {
+    return "—";
+  }
+
+  const penalties = parsePenaltyScoreline(match.score);
+  const value = side === "home" ? score.home : score.away;
+
+  if (penalties && score.home === score.away) {
+    const penaltyValue = side === "home" ? penalties.home : penalties.away;
+
+    return `${value} (${penaltyValue})`;
+  }
+
+  return `${value}`;
+}
+
+function tournamentPathResultLabel(match: Match) {
+  if (match.status === "Live") {
+    return match.minute ?? "Live";
+  }
+
+  const score = parseScoreline(match.score);
+
+  if (match.status !== "Final" || !score) {
+    return "Scheduled";
+  }
+
+  const penalties = parsePenaltyScoreline(match.score);
+
+  if (penalties && score.home === score.away) {
+    return `FT ${score.home}-${score.away}, pens ${penalties.home}-${penalties.away}`;
+  }
+
+  return `FT ${score.home}-${score.away}`;
+}
+
+function tournamentPathHasExtraTime(match: Match) {
+  return /a\.?e\.?t\.?|after extra|extra time|120'|120 min/i.test(
+    `${match.score ?? ""} ${match.time ?? ""}`,
+  );
+}
+
+function tournamentRoundSortIndex(key: string) {
+  const order = [
+    "round-of-32",
+    "round-of-16",
+    "quarter-finals",
+    "semi-finals",
+    "third-place",
+    "final",
+  ];
+  const index = order.indexOf(key);
+
+  return index === -1 ? order.length : index;
 }
 
 function buildWorldCupNextRoundField(
@@ -2734,6 +3038,10 @@ function uniqueTeams(teams: Team[]) {
 function knockoutRoundKey(match: Match) {
   const label = `${match.stage ?? ""} ${match.group}`.toLowerCase();
 
+  if (label.includes("third") || label.includes("3rd") || label.includes("bronze")) {
+    return "third-place";
+  }
+
   if (label.includes("quarter")) {
     return "quarter-finals";
   }
@@ -2765,6 +3073,7 @@ function knockoutRoundDisplayLabel(match: Match) {
     "round-of-16": "Round of 16",
     "round-of-32": "Round of 32",
     "semi-finals": "Semi-finals",
+    "third-place": "Third place",
   };
 
   return labels[key] ?? match.group ?? "Next knockout round";
@@ -2776,6 +3085,7 @@ function nextKnockoutRoundLabel(key: string) {
     "round-of-16": "Quarter-finals",
     "round-of-32": "Round of 16",
     "semi-finals": "Final",
+    "third-place": "Final archive",
   };
 
   return labels[key] ?? "Next knockout round";
@@ -3694,7 +4004,150 @@ function WorldCupArchiveReportBoard({
         ))}
       </div>
 
+      <TournamentPathView
+        onSelectMatch={onSelectMatch}
+        rounds={report.tournamentPath}
+      />
     </section>
+  );
+}
+
+function TournamentPathView({
+  onSelectMatch,
+  rounds,
+}: {
+  onSelectMatch: (matchId: string) => void;
+  rounds: TournamentPathRound[];
+}) {
+  const [activeRoundKey, setActiveRoundKey] = useState(rounds[0]?.key ?? "");
+
+  useEffect(() => {
+    if (rounds.length === 0) {
+      return;
+    }
+
+    if (!rounds.some((round) => round.key === activeRoundKey)) {
+      setActiveRoundKey(rounds[0].key);
+    }
+  }, [activeRoundKey, rounds]);
+
+  if (rounds.length === 0) {
+    return null;
+  }
+
+  return (
+    <article className="tournament-path-view" aria-label="Tournament path">
+      <div className="tournament-path-head">
+        <div>
+          <div className="section-heading">
+            <Trophy size={17} />
+            <span>Tournament path</span>
+          </div>
+          <h3>Knockout bracket receipts</h3>
+          <p>Round path with the Seer lean, final result, upset flags, ET, and penalty rooms.</p>
+        </div>
+        <span>{rounds.reduce((total, round) => total + round.matches.length, 0)} fixtures</span>
+      </div>
+
+      <div className="tournament-path-tabs" aria-label="Tournament rounds">
+        {rounds.map((round) => (
+          <button
+            aria-pressed={activeRoundKey === round.key}
+            className={cx(activeRoundKey === round.key && "active")}
+            key={round.key}
+            onClick={() => setActiveRoundKey(round.key)}
+            type="button"
+          >
+            {round.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="tournament-path-rounds">
+        {rounds.map((round) => (
+          <section
+            className={cx(
+              "tournament-path-round",
+              activeRoundKey === round.key && "active",
+            )}
+            key={round.key}
+          >
+            <div className="tournament-path-round-title">
+              <strong>{round.label}</strong>
+              <span>
+                {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
+              </span>
+            </div>
+            <div className="tournament-path-match-list">
+              {round.matches.map((match) => (
+                <TournamentPathMatchCard
+                  key={match.id}
+                  match={match}
+                  onSelectMatch={onSelectMatch}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function TournamentPathMatchCard({
+  match,
+  onSelectMatch,
+}: {
+  match: TournamentPathMatch;
+  onSelectMatch: (matchId: string) => void;
+}) {
+  return (
+    <button
+      className={cx("tournament-path-match", match.tone)}
+      onClick={() => onSelectMatch(match.id)}
+      type="button"
+    >
+      <span className="tournament-path-match-top">
+        <span>
+          <strong>{match.schedule}</strong>
+          <em>{match.venue}</em>
+        </span>
+        <span className="tournament-path-score">{match.resultLabel}</span>
+      </span>
+
+      <span className="tournament-path-teams">
+        <TournamentPathTeamRow slot={match.home} />
+        <TournamentPathTeamRow slot={match.away} />
+      </span>
+
+      <span className="tournament-path-receipt">
+        <span>Seer lean</span>
+        <strong>{match.seerLeanLabel}</strong>
+      </span>
+
+      <span className="tournament-path-badges">
+        {match.badges.map((badge) => (
+          <span className={cx("tournament-path-badge", badge.tone)} key={badge.label}>
+            {badge.label}
+          </span>
+        ))}
+      </span>
+
+      <span className="tournament-path-summary">{match.summary}</span>
+    </button>
+  );
+}
+
+function TournamentPathTeamRow({ slot }: { slot: TournamentPathTeamSlot }) {
+  return (
+    <span className={cx("tournament-path-team-row", slot.winner && "winner", slot.seerLean && "seer")}>
+      <span>
+        <TeamFlag team={slot.team} compact />
+        <strong>{slot.team.name}</strong>
+        {slot.seerLean && <em>Seer lean</em>}
+      </span>
+      <b>{slot.score}</b>
+    </span>
   );
 }
 
