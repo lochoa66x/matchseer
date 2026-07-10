@@ -4295,7 +4295,7 @@ function TournamentBracketNode({
         <TournamentBracketTeamSlot slot={match.away} />
       </span>
       <span className="tournament-bracket-node-foot">
-        <em>{match.seerLeanLabel}</em>
+        <em>{tournamentBracketLeanLabel(match.seerLeanLabel)}</em>
         {match.badges.slice(0, 1).map((badge) => (
           <span className={cx("tournament-path-badge", badge.tone)} key={badge.label}>
             {badge.label}
@@ -4304,6 +4304,10 @@ function TournamentBracketNode({
       </span>
     </button>
   );
+}
+
+function tournamentBracketLeanLabel(label: string) {
+  return label.replace(/\s+advances?$/i, "");
 }
 
 function TournamentBracketTeamSlot({ slot }: { slot: TournamentPathTeamSlot }) {
