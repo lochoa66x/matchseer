@@ -4021,6 +4021,29 @@ function TournamentPathView({
 }) {
   const [activeRoundKey, setActiveRoundKey] = useState(rounds[0]?.key ?? "");
   const [mobilePathOpen, setMobilePathOpen] = useState(false);
+  const roundByKey = new Map(rounds.map((round) => [round.key, round]));
+  const leftWingKeys = [
+    "round-of-32",
+    "round-of-16",
+    "quarter-finals",
+    "semi-finals",
+  ];
+  const rightWingKeys = [
+    "semi-finals",
+    "quarter-finals",
+    "round-of-16",
+    "round-of-32",
+  ];
+  const leftRounds = leftWingKeys.flatMap((key) =>
+    tournamentPathSideRound(roundByKey.get(key), "left"),
+  );
+  const rightRounds = rightWingKeys.flatMap((key) =>
+    tournamentPathSideRound(roundByKey.get(key), "right"),
+  );
+  const finalRound = roundByKey.get("final");
+  const thirdPlaceRound = roundByKey.get("third-place");
+  const activeRound =
+    rounds.find((round) => round.key === activeRoundKey) ?? rounds[0];
 
   useEffect(() => {
     if (rounds.length === 0) {
@@ -4045,7 +4068,7 @@ function TournamentPathView({
             <span>Tournament path</span>
           </div>
           <h3>Knockout bracket receipts</h3>
-          <p>Compact round path: result, Seer lean, upsets, ET, and penalty rooms.</p>
+          <p>Premium bracket path: results, Seer lean, upsets, ET, and penalty rooms.</p>
         </div>
         <span>{rounds.reduce((total, round) => total + round.matches.length, 0)} fixtures</span>
       </div>
@@ -4078,49 +4101,209 @@ function TournamentPathView({
       </div>
 
       <div className={cx("tournament-path-collapsible", mobilePathOpen && "open")}>
-        <div className="tournament-path-tabs" aria-label="Tournament rounds">
-          {rounds.map((round) => (
-            <button
-              aria-pressed={activeRoundKey === round.key}
-              className={cx(activeRoundKey === round.key && "active")}
-              key={round.key}
-              onClick={() => setActiveRoundKey(round.key)}
-              type="button"
-            >
-              {round.label}
-            </button>
-          ))}
+        <div className="tournament-bracket-scroll" aria-label="Desktop knockout bracket">
+          <div className="tournament-bracket-frame">
+            <div className="tournament-bracket-wing left">
+              {leftRounds.map((round, index) => (
+                <TournamentBracketRound
+                  key={`${round.key}-left`}
+                  onSelectMatch={onSelectMatch}
+                  round={round}
+                  side="left"
+                  stageIndex={index}
+                />
+              ))}
+            </div>
+
+            <div className="tournament-bracket-spine" aria-label="Final and third-place path">
+              <TournamentBracketRound
+                center
+                onSelectMatch={onSelectMatch}
+                round={finalRound}
+                side="center"
+                stageIndex={0}
+                title="Final"
+              />
+              <div className="tournament-bracket-spine-line" aria-hidden="true" />
+              <TournamentBracketRound
+                center
+                onSelectMatch={onSelectMatch}
+                round={thirdPlaceRound}
+                side="center"
+                stageIndex={1}
+                title="Third place"
+              />
+            </div>
+
+            <div className="tournament-bracket-wing right">
+              {rightRounds.map((round, index) => (
+                <TournamentBracketRound
+                  key={`${round.key}-right`}
+                  onSelectMatch={onSelectMatch}
+                  round={round}
+                  side="right"
+                  stageIndex={index}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="tournament-path-rounds">
-          {rounds.map((round) => (
-            <section
-              className={cx(
-                "tournament-path-round",
-                activeRoundKey === round.key && "active",
-              )}
-              key={round.key}
-            >
-              <div className="tournament-path-round-title">
-                <strong>{round.label}</strong>
-                <span>
-                  {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
-                </span>
-              </div>
-              <div className="tournament-path-match-list">
-                {round.matches.map((match) => (
-                  <TournamentPathMatchCard
-                    key={match.id}
-                    match={match}
-                    onSelectMatch={onSelectMatch}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        <div className="tournament-path-mobile-rounds">
+          <section className="tournament-path-round active">
+            <div className="tournament-path-round-title">
+              <strong>{activeRound.label}</strong>
+              <span>
+                {activeRound.matches.length}{" "}
+                {activeRound.matches.length === 1 ? "match" : "matches"}
+              </span>
+            </div>
+            <div className="tournament-path-match-list">
+              {activeRound.matches.map((match) => (
+                <TournamentPathMatchCard
+                  key={match.id}
+                  match={match}
+                  onSelectMatch={onSelectMatch}
+                />
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </article>
+  );
+}
+
+function tournamentPathSideRound(
+  round: TournamentPathRound | undefined,
+  side: "left" | "right",
+): TournamentPathRound[] {
+  if (!round) {
+    return [];
+  }
+
+  const midpoint = Math.ceil(round.matches.length / 2);
+  const matches =
+    side === "left"
+      ? round.matches.slice(0, midpoint)
+      : round.matches.slice(midpoint);
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      ...round,
+      matches,
+    },
+  ];
+}
+
+function TournamentBracketRound({
+  center,
+  onSelectMatch,
+  round,
+  side,
+  title,
+}: {
+  center?: boolean;
+  onSelectMatch: (matchId: string) => void;
+  round?: TournamentPathRound;
+  side: "left" | "right" | "center";
+  stageIndex?: number;
+  title?: string;
+}) {
+  const label = title ?? round?.label ?? "Pending";
+  const matches = round?.matches ?? [];
+
+  return (
+    <section
+      className={cx(
+        "tournament-bracket-round",
+        center && "center",
+        `side-${side}`,
+      )}
+    >
+      <div className="tournament-bracket-round-title">
+        <strong>{label}</strong>
+        <span>
+          {matches.length} {matches.length === 1 ? "match" : "matches"}
+        </span>
+      </div>
+      <div className="tournament-bracket-stack">
+        {matches.length > 0 ? (
+          matches.map((match) => (
+            <TournamentBracketNode
+              key={match.id}
+              match={match}
+              onSelectMatch={onSelectMatch}
+            />
+          ))
+        ) : (
+          <div className="tournament-bracket-empty">
+            <span>TBD</span>
+            <strong>{label} slots</strong>
+            <em>Waiting for the path to settle.</em>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TournamentBracketNode({
+  match,
+  onSelectMatch,
+}: {
+  match: TournamentPathMatch;
+  onSelectMatch: (matchId: string) => void;
+}) {
+  return (
+    <button
+      className={cx("tournament-bracket-node", match.tone)}
+      onClick={() => onSelectMatch(match.id)}
+      title={match.summary}
+      type="button"
+    >
+      <span className="tournament-bracket-node-meta">
+        <span>
+          <strong>{match.schedule}</strong>
+          <em>{match.venue}</em>
+        </span>
+        <b>{match.resultLabel}</b>
+      </span>
+      <span className="tournament-bracket-node-teams">
+        <TournamentBracketTeamSlot slot={match.home} />
+        <TournamentBracketTeamSlot slot={match.away} />
+      </span>
+      <span className="tournament-bracket-node-foot">
+        <em>{match.seerLeanLabel}</em>
+        {match.badges.slice(0, 2).map((badge) => (
+          <span className={cx("tournament-path-badge", badge.tone)} key={badge.label}>
+            {badge.label}
+          </span>
+        ))}
+      </span>
+    </button>
+  );
+}
+
+function TournamentBracketTeamSlot({ slot }: { slot: TournamentPathTeamSlot }) {
+  return (
+    <span
+      className={cx(
+        "tournament-bracket-team",
+        slot.winner && "winner",
+        slot.seerLean && "seer",
+      )}
+    >
+      <span>
+        <TeamFlag team={slot.team} compact />
+        <strong>{slot.team.code}</strong>
+      </span>
+      <b>{slot.score}</b>
+    </span>
   );
 }
 
