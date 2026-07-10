@@ -4215,6 +4215,7 @@ function TournamentBracketRound({
   title?: string;
 }) {
   const label = title ?? round?.label ?? "Pending";
+  const displayLabel = center ? label : tournamentBracketRoundLabel(label);
   const matches = round?.matches ?? [];
 
   return (
@@ -4226,7 +4227,7 @@ function TournamentBracketRound({
       )}
     >
       <div className="tournament-bracket-round-title">
-        <strong>{label}</strong>
+        <strong title={label}>{displayLabel}</strong>
         <span>
           {matches.length} {matches.length === 1 ? "match" : "matches"}
         </span>
@@ -4250,6 +4251,22 @@ function TournamentBracketRound({
       </div>
     </section>
   );
+}
+
+function tournamentBracketRoundLabel(label: string) {
+  if (/round of 32/i.test(label)) {
+    return "R32";
+  }
+  if (/round of 16/i.test(label)) {
+    return "R16";
+  }
+  if (/quarter/i.test(label)) {
+    return "QF";
+  }
+  if (/semi/i.test(label)) {
+    return "SF";
+  }
+  return label;
 }
 
 function TournamentBracketNode({
@@ -4279,7 +4296,7 @@ function TournamentBracketNode({
       </span>
       <span className="tournament-bracket-node-foot">
         <em>{match.seerLeanLabel}</em>
-        {match.badges.slice(0, 2).map((badge) => (
+        {match.badges.slice(0, 1).map((badge) => (
           <span className={cx("tournament-path-badge", badge.tone)} key={badge.label}>
             {badge.label}
           </span>
