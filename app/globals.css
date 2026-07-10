@@ -18747,7 +18747,7 @@ body {
 .tournament-bracket-scroll {
   max-width: 100%;
   overflow-x: auto;
-  padding: 4px 2px 12px;
+  padding: 4px 2px 14px;
   scrollbar-color: rgba(157, 183, 232, 0.48) transparent;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
@@ -18755,11 +18755,12 @@ body {
 
 .tournament-bracket-frame {
   display: grid;
-  grid-template-columns: minmax(540px, 1fr) minmax(230px, 0.44fr) minmax(540px, 1fr);
-  gap: 18px;
+  grid-template-columns: max-content 220px max-content;
+  gap: 74px;
   align-items: stretch;
-  min-width: 1360px;
-  padding: 20px;
+  width: max-content;
+  min-width: 100%;
+  padding: 22px 34px 28px;
   color: #152033;
   background:
     linear-gradient(90deg, rgba(157, 183, 232, 0.12) 1px, transparent 1px),
@@ -18775,10 +18776,10 @@ body {
 
 .tournament-bracket-wing {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(4, 168px);
+  gap: 58px;
   align-items: stretch;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .tournament-bracket-wing.right {
@@ -18794,7 +18795,7 @@ body {
   grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  min-width: 0;
+  min-width: 220px;
 }
 
 .tournament-bracket-spine-line {
@@ -18817,13 +18818,14 @@ body {
   position: absolute;
   top: 54px;
   bottom: 34px;
-  width: 12px;
+  z-index: 0;
+  width: 48px;
   border-color: #b7c0cf;
   pointer-events: none;
 }
 
 .tournament-bracket-round.side-left:not(:last-child)::after {
-  right: -15px;
+  right: -53px;
   border-top: 1px solid;
   border-right: 1px solid;
   border-bottom: 1px solid;
@@ -18831,7 +18833,7 @@ body {
 }
 
 .tournament-bracket-round.side-right:not(:last-child)::after {
-  left: -15px;
+  left: -53px;
   border-top: 1px solid;
   border-left: 1px solid;
   border-bottom: 1px solid;
@@ -18843,8 +18845,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 34px;
-  padding: 7px 9px;
+  min-height: 30px;
+  padding: 5px 8px;
   color: #46536b;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid #cdd5e1;
@@ -18854,7 +18856,7 @@ body {
 .tournament-bracket-round-title strong {
   overflow: hidden;
   color: #253049;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -18863,7 +18865,7 @@ body {
 .tournament-bracket-round-title span {
   flex: 0 0 auto;
   color: #66738b;
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   font-weight: 950;
   text-transform: uppercase;
 }
@@ -18882,10 +18884,15 @@ body {
 .tournament-bracket-node,
 .tournament-bracket-empty {
   position: relative;
+  z-index: 1;
   display: grid;
-  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  gap: 5px;
   min-width: 0;
-  padding: 8px;
+  overflow: hidden;
+  padding: 6px;
   color: #152033;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #c2cad8;
@@ -18940,7 +18947,7 @@ body {
 .tournament-bracket-node-meta {
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   color: #657188;
 }
 
@@ -18953,13 +18960,14 @@ body {
 .tournament-bracket-node-meta strong {
   overflow: hidden;
   color: #516079;
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tournament-bracket-node-meta em {
+  display: none;
   overflow: hidden;
   color: #7a8597;
   font-size: 0.6rem;
@@ -18972,7 +18980,7 @@ body {
 .tournament-bracket-node-meta b {
   flex: 0 0 auto;
   color: #253049;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 950;
 }
 
@@ -18984,9 +18992,9 @@ body {
 .tournament-bracket-team {
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 28px;
-  padding: 4px 6px;
+  gap: 6px;
+  min-height: 25px;
+  padding: 3px 5px;
   background: #fff;
   border: 1px solid #d5dbe6;
   border-radius: 7px;
@@ -19004,32 +19012,34 @@ body {
 
 .tournament-bracket-team > span {
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .tournament-bracket-team strong {
   color: #1f293d;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 950;
 }
 
 .tournament-bracket-team b {
   color: #111827;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 950;
 }
 
 .tournament-bracket-node-foot {
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   overflow: hidden;
+  min-height: 18px;
 }
 
 .tournament-bracket-node-foot em {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: #8f6b15;
-  font-size: 0.58rem;
+  font-size: 0.52rem;
   font-style: normal;
   font-weight: 950;
   text-overflow: ellipsis;
@@ -19038,12 +19048,13 @@ body {
 }
 
 .tournament-bracket-node-foot .tournament-path-badge {
-  min-height: 18px;
-  padding: 2px 5px;
+  flex: 0 0 auto;
+  min-height: 16px;
+  padding: 2px 4px;
   color: #334155;
   background: #eef2f8;
   border-color: #d6deea;
-  font-size: 0.52rem;
+  font-size: 0.48rem;
 }
 
 .tournament-bracket-node-foot .tournament-path-badge.hit {
@@ -19061,7 +19072,7 @@ body {
 
 .tournament-bracket-empty {
   align-content: center;
-  min-height: 106px;
+  min-height: 88px;
   color: #66738b;
   border-style: dashed;
 }
