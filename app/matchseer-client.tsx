@@ -4020,6 +4020,7 @@ function TournamentPathView({
   rounds: TournamentPathRound[];
 }) {
   const [activeRoundKey, setActiveRoundKey] = useState(rounds[0]?.key ?? "");
+  const [mobilePathOpen, setMobilePathOpen] = useState(false);
 
   useEffect(() => {
     if (rounds.length === 0) {
@@ -4044,51 +4045,80 @@ function TournamentPathView({
             <span>Tournament path</span>
           </div>
           <h3>Knockout bracket receipts</h3>
-          <p>Round path with the Seer lean, final result, upset flags, ET, and penalty rooms.</p>
+          <p>Compact round path: result, Seer lean, upsets, ET, and penalty rooms.</p>
         </div>
         <span>{rounds.reduce((total, round) => total + round.matches.length, 0)} fixtures</span>
       </div>
 
-      <div className="tournament-path-tabs" aria-label="Tournament rounds">
-        {rounds.map((round) => (
-          <button
-            aria-pressed={activeRoundKey === round.key}
-            className={cx(activeRoundKey === round.key && "active")}
-            key={round.key}
-            onClick={() => setActiveRoundKey(round.key)}
-            type="button"
+      <div className="tournament-path-mobile-controls">
+        <label>
+          <span>Round</span>
+          <select
+            aria-label="Choose tournament round"
+            onChange={(event) => {
+              setActiveRoundKey(event.target.value);
+              setMobilePathOpen(true);
+            }}
+            value={activeRoundKey}
           >
-            {round.label}
-          </button>
-        ))}
+            {rounds.map((round) => (
+              <option key={round.key} value={round.key}>
+                {round.label} · {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          aria-expanded={mobilePathOpen}
+          onClick={() => setMobilePathOpen((current) => !current)}
+          type="button"
+        >
+          {mobilePathOpen ? "Hide path" : "Show path"}
+        </button>
       </div>
 
-      <div className="tournament-path-rounds">
-        {rounds.map((round) => (
-          <section
-            className={cx(
-              "tournament-path-round",
-              activeRoundKey === round.key && "active",
-            )}
-            key={round.key}
-          >
-            <div className="tournament-path-round-title">
-              <strong>{round.label}</strong>
-              <span>
-                {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
-              </span>
-            </div>
-            <div className="tournament-path-match-list">
-              {round.matches.map((match) => (
-                <TournamentPathMatchCard
-                  key={match.id}
-                  match={match}
-                  onSelectMatch={onSelectMatch}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+      <div className={cx("tournament-path-collapsible", mobilePathOpen && "open")}>
+        <div className="tournament-path-tabs" aria-label="Tournament rounds">
+          {rounds.map((round) => (
+            <button
+              aria-pressed={activeRoundKey === round.key}
+              className={cx(activeRoundKey === round.key && "active")}
+              key={round.key}
+              onClick={() => setActiveRoundKey(round.key)}
+              type="button"
+            >
+              {round.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="tournament-path-rounds">
+          {rounds.map((round) => (
+            <section
+              className={cx(
+                "tournament-path-round",
+                activeRoundKey === round.key && "active",
+              )}
+              key={round.key}
+            >
+              <div className="tournament-path-round-title">
+                <strong>{round.label}</strong>
+                <span>
+                  {round.matches.length} {round.matches.length === 1 ? "match" : "matches"}
+                </span>
+              </div>
+              <div className="tournament-path-match-list">
+                {round.matches.map((match) => (
+                  <TournamentPathMatchCard
+                    key={match.id}
+                    match={match}
+                    onSelectMatch={onSelectMatch}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </article>
   );
