@@ -9542,6 +9542,40 @@ body {
   border-color: transparent;
 }
 
+.nfl-language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  color: var(--nfl-muted);
+  background: rgba(20, 24, 32, 0.78);
+  border: 1px solid var(--nfl-line);
+  border-radius: 8px;
+}
+
+.nfl-language-switcher button {
+  min-height: 30px;
+  padding: 6px 9px;
+  color: rgba(245, 244, 238, 0.72);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.nfl-language-switcher button:hover {
+  color: var(--nfl-ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nfl-language-switcher button.active {
+  color: var(--nfl-on-accent);
+  background: var(--nfl-primary-gradient);
+}
+
 .nfl-disclaimer {
   gap: 9px;
   margin-bottom: 18px;

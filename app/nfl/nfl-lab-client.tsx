@@ -8,6 +8,7 @@ import {
   FileImage,
   Gauge,
   HeartPulse,
+  Languages,
   LineChart,
   RefreshCw,
   Search,
@@ -89,6 +90,7 @@ type ScoutingPositionOption = {
   positions: FantasyPosition[];
 };
 type NflLabMode = "nfl" | "fantasy";
+type UiLanguage = "en" | "es";
 type FantasyView =
   | "overview"
   | "players"
@@ -856,6 +858,370 @@ const teamLensLabels: Record<FantasyTeamLens, string> = {
   dynasty: "Dynasty",
 };
 
+const nflLanguageStorageKey = "matchseer:ui-language:v1";
+const nflLanguageOptions: UiLanguage[] = ["en", "es"];
+
+const nflUiCopy = {
+  en: {
+    languageSelector: "Language",
+    nav: {
+      proFootball: "Pro Football Seer",
+      fantasy: "Fantasy Seer",
+      bestMove: "Best Move",
+      roster: "Roster",
+      league: "League",
+      trades: "Trades",
+      gameCard: "Game Card",
+      whatIf: "What-if Lab",
+      matchupDna: "Matchup DNA",
+      ask: "Ask the Seer",
+    },
+    disclaimer: {
+      proShort:
+        "MatchSeer is an independent fantasy and sports analysis tool. It is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association. Pro Football Seer is for fun analysis and algorithm testing, not betting or professional advice.",
+      proFullTitle: "Independent playground, not official league gospel.",
+      proFull:
+        "Pro Football Seer is an independent, experimental pro football analysis playground by MatchSeer. It is built for entertainment, learning, and real-world algorithm testing only. We do not support betting or gambling. Reads are MatchSeer's own interpretations based on available data, assumptions, and experimental models. Use it as a fun game companion, not as professional advice.",
+      fantasyShort:
+        "Independent algorithm playground. No official affiliation, no betting advice, and no official photos, logos, helmets, or team marks.",
+      fantasyFullTitle: "Weird little algorithm playground, not gospel.",
+      fantasyFull:
+        "Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. It is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association. Player visuals are generic MatchSeer-created placeholders and do not represent official player photos, team logos, helmets, uniforms, or league marks. Use it as a fun decision companion, not as professional advice.",
+    },
+    pro: {
+      heroKicker: "Team vs team",
+      heroTitle: "Pro Football Seer",
+      heroText:
+        "Pro football matchup reads without official-league noise. One matchup card, plain-English lean, underdog path, and the few signals that can move the read.",
+      games: "games",
+      labSlate: "Lab slate",
+      emptyTitle: "This room is between slates",
+      emptyText:
+        "Switch weeks or divisions, or use the active season room while the next real slate, preseason notes, and schedule signals refresh.",
+      slateControlsLabel: "Pro football slate controls",
+      seasonPhaseLabel: "Season phase",
+      weekLabel: "Pro football week",
+      phaseLabels: {
+        preseason: "Preseason",
+        regular: "Regular season",
+      },
+      weekDisplay: (week: number) => `Week ${week}`,
+      groupLabel: "Group",
+      allGroup: "All pro football",
+      preseasonHelper:
+        "Preseason reads weight QB depth, rotation hints, and roster-bubble chaos.",
+      regularHelper:
+        "Current week follows the live feed; future rooms stay ready for the next sync.",
+      preseasonModel: "Preseason model",
+      gameCard: "MatchSeer Game Card",
+      projectedScore: "Projected score",
+      gameScript: "Game script",
+      favoriteEdge: "Favorite edge",
+      underdogPath: "Underdog path",
+      whatFlipsIt: "What flips it",
+      leversToWatch: "Levers to watch",
+      signalSummaryLabel: "Seer signal summary",
+      scorePathRegular: "snap volume and catch-up pressure",
+      scorePathPreseason: "rotation pace, not regular rhythm",
+      askTitle: "Ask the Seer",
+      askVoice: "Ask voice",
+      askPresetsLabel: "Ask the Seer presets",
+      askPlaceholder: "Can the underdog steal it?",
+      askWhy: (teamName: string) => `Why ${teamName}?`,
+      askHowWin: (teamCode: string) => `How does ${teamCode} win?`,
+      askWhatFlips: "What flips it?",
+      askScorePath: "Explain the score path",
+      askFriend: "Explain like a friend",
+      askPreseason: "Preseason risk?",
+      matchupDna: "Matchup DNA",
+      scenario: {
+        kicker: "What-if lab",
+        title: "Live scenario pressure",
+        reset: "Reset read",
+        wind: "Wind stress",
+        health: "Health swing",
+        tempo: "Tempo",
+        homeNoise: "Home noise",
+        lean: "Scenario lean",
+        projected: "Projected",
+      },
+      standings: {
+        aria: "Pro football standings",
+        kicker: "Slate table",
+        allTitle: "Standings pulse",
+        groupTitle: (group: string) => `${group} pulse`,
+        summary: (phase: string, week: number) =>
+          `${phase} Week ${week}. Top slate shapes, kept compact until the full table matters.`,
+        tracked: (count: number) => `${count} teams tracked`,
+      },
+    },
+    fantasy: {
+      contextAria: "Fantasy decision context",
+      decisionRoom: "Decision room",
+      sampleRoom: "Sample room",
+      sampleMode: "Sample mode",
+      league: "League",
+      myTeam: "My team",
+      compare: "Compare",
+      addAnotherTeam: "Add another team",
+      liveSources: (live: number, total: number) => `${live}/${total} live sources`,
+      lastRefresh: (value: string) => `Last refresh: ${value}`,
+      connect: "Connect",
+      trades: "Trades",
+      remove: "Remove",
+      noSavedLeagues: "No saved leagues yet",
+      connectSleeperPrompt: "Connect a Sleeper league to make this analysis real.",
+      connectSleeper: "Connect Sleeper",
+      leagueJump: "League jump",
+      savedLeague: "Saved league",
+      pickLeague: "Pick the league to analyze",
+      currentLeagueReady: "Current league ready",
+      connectAnother: "Connect another",
+      heroKicker: "Fantasy lineup lab",
+      heroTitle: "Fantasy Seer",
+      heroText:
+        "One clean weekly plan for every league you manage. Start with the best move, check the risky spots, then use waivers and trades with a price line.",
+      connectLeague: "Connect league",
+      findTradeAngle: "Find trade angle",
+      readingLineup: "Reading lineup",
+      askLineup: "Ask about lineup",
+      decisionBoard: (lens: string) => `${lens} decision board`,
+      closeCall: "Close call",
+      tradeWaiverIdea: "Trade / waiver idea",
+      preKickoff: "Re-check before kickoff",
+      preKickoffFallback:
+        "confirm injuries, role, weather, and opponent defense before lineup lock.",
+      rosterHealth: "Roster health",
+      whyThisRead: "Why this read",
+      whyThisReadMeta: "Projection, role, matchup",
+      commandCenter: "Fantasy Command Center",
+      commandCenterText:
+        "One league and one team at a time. Your roster gets the lineup advice; every other roster becomes a compare target or trade angle.",
+      savedLeagues: "Saved leagues",
+      currentTeam: "Current team",
+      compareWith: "Compare with",
+      lastRefreshed: "Last refreshed",
+      removeSavedLeague: "Remove saved league",
+      myRoster: "My roster",
+      selectedCompareTarget: "Selected compare target",
+      weakAt: "weak at",
+      connectLeagueToCompare: "Connect a league to compare strength",
+      weakSpot: "Weak spot",
+      tradeTarget: "Trade target",
+      tradeLane: "Trade lane",
+      tradeLaneFallback:
+        "Once another roster is connected, this turns into a target, offer lane, and walk-away check.",
+      shortcutsAria: "Fantasy shortcuts",
+      leagueCompare: "League Compare",
+      tradeBuilder: "Trade Builder",
+      connectRefresh: "Connect / refresh",
+      dataConfidence: "Data confidence",
+      live: "live",
+      sourceTruth: "source data first, context nudges second",
+      rows: "rows",
+      tabsAria: "Fantasy decision sections",
+      tabMeta: {
+        nextStep: "next step",
+        starters: "starters",
+        pool: "pool",
+        watch: "watch",
+        offers: "offers",
+      },
+      tabs: {
+        overview: "Best Move",
+        roster: "My Roster",
+        league: "League Compare",
+        players: "Player Lab",
+        rookies: "Rookies",
+        trades: "Trade Builder",
+        compare: "Why This Read",
+      },
+    },
+  },
+  es: {
+    languageSelector: "Idioma",
+    nav: {
+      proFootball: "Gridiron Seer",
+      fantasy: "Fantasy Seer",
+      bestMove: "Mejor jugada",
+      roster: "Plantilla",
+      league: "Liga",
+      trades: "Cambios",
+      gameCard: "Ficha del partido",
+      whatIf: "Laboratorio",
+      matchupDna: "ADN del duelo",
+      ask: "Pregunta al Seer",
+    },
+    disclaimer: {
+      proShort:
+        "MatchSeer es una herramienta independiente de análisis deportivo y fantasy. No está afiliada, patrocinada ni respaldada por la NFL, ninguna liga profesional, equipo, jugador o asociación de jugadores. Gridiron Seer es para análisis divertido y pruebas de algoritmos, no para apuestas ni consejo profesional.",
+      proFullTitle: "Laboratorio independiente, no verdad oficial.",
+      proFull:
+        "Gridiron Seer es un laboratorio experimental e independiente de análisis de futbol americano creado por MatchSeer. Está hecho para entretenimiento, aprendizaje y pruebas de algoritmos en la vida real. No apoyamos apuestas ni juego. Las lecturas son interpretaciones propias de MatchSeer con datos disponibles, supuestos y modelos experimentales. Úsalo como compañía divertida para el partido, no como consejo profesional.",
+      fantasyShort:
+        "Laboratorio independiente de algoritmos. Sin afiliación oficial, sin consejos de apuestas y sin fotos, logos, cascos o marcas oficiales.",
+      fantasyFullTitle: "Pequeño laboratorio raro de algoritmos, no evangelio.",
+      fantasyFull:
+        "Fantasy Seer es un laboratorio experimental e independiente de análisis fantasy creado por MatchSeer. No está afiliado, patrocinado ni respaldado por la NFL, ninguna liga profesional, equipo, jugador o asociación de jugadores. Las visuales de jugadores son marcadores genéricos creados por MatchSeer y no representan fotos, logos, cascos, uniformes o marcas oficiales. Úsalo como compañía divertida para decidir, no como consejo profesional.",
+    },
+    pro: {
+      heroKicker: "Equipo contra equipo",
+      heroTitle: "Gridiron Seer",
+      heroText:
+        "Lecturas de futbol americano sin ruido de liga oficial. Una ficha clara del partido, inclinación en lenguaje simple, ruta del no favorito y las señales que pueden mover la lectura.",
+      games: "partidos",
+      labSlate: "Sala de prueba",
+      emptyTitle: "Esta sala está entre jornadas",
+      emptyText:
+        "Cambia semana o división, o usa la sala activa mientras se refrescan el calendario real, las notas de pretemporada y las señales de agenda.",
+      slateControlsLabel: "Controles del calendario",
+      seasonPhaseLabel: "Fase de temporada",
+      weekLabel: "Semana",
+      phaseLabels: {
+        preseason: "Pretemporada",
+        regular: "Temporada regular",
+      },
+      weekDisplay: (week: number) => `Semana ${week}`,
+      groupLabel: "Grupo",
+      allGroup: "Todo futbol americano",
+      preseasonHelper:
+        "La pretemporada pesa profundidad de QB, pistas de rotación y caos de jugadores en burbuja.",
+      regularHelper:
+        "La semana actual sigue la fuente viva; las salas futuras esperan el siguiente sync.",
+      preseasonModel: "Modelo de pretemporada",
+      gameCard: "Ficha MatchSeer",
+      projectedScore: "Marcador proyectado",
+      gameScript: "Guion del partido",
+      favoriteEdge: "Ventaja del favorito",
+      underdogPath: "Ruta del no favorito",
+      whatFlipsIt: "Qué lo cambia",
+      leversToWatch: "Palancas a vigilar",
+      signalSummaryLabel: "Resumen de señales",
+      scorePathRegular: "volumen de jugadas y presión de remontada",
+      scorePathPreseason: "ritmo de rotación, no ritmo regular",
+      askTitle: "Pregunta al Seer",
+      askVoice: "Voz",
+      askPresetsLabel: "Preguntas rápidas",
+      askPlaceholder: "¿Puede robarlo el no favorito?",
+      askWhy: (teamName: string) => `¿Por qué ${teamName}?`,
+      askHowWin: (teamCode: string) => `¿Cómo gana ${teamCode}?`,
+      askWhatFlips: "¿Qué lo cambia?",
+      askScorePath: "Explica el marcador",
+      askFriend: "Explícalo como amigo",
+      askPreseason: "¿Riesgo de pretemporada?",
+      matchupDna: "ADN del duelo",
+      scenario: {
+        kicker: "Laboratorio",
+        title: "Presión del escenario vivo",
+        reset: "Reiniciar lectura",
+        wind: "Estrés de viento",
+        health: "Cambio por salud",
+        tempo: "Ritmo",
+        homeNoise: "Ruido local",
+        lean: "Inclinación del escenario",
+        projected: "Proyectado",
+      },
+      standings: {
+        aria: "Tabla de futbol americano",
+        kicker: "Tabla de jornada",
+        allTitle: "Pulso de posiciones",
+        groupTitle: (group: string) => `Pulso ${group}`,
+        summary: (phase: string, week: number) =>
+          `${phase} Semana ${week}. Formas principales de la jornada, compactas hasta que importe la tabla completa.`,
+        tracked: (count: number) => `${count} equipos seguidos`,
+      },
+    },
+    fantasy: {
+      contextAria: "Contexto de decisiones fantasy",
+      decisionRoom: "Sala de decisiones",
+      sampleRoom: "Sala de muestra",
+      sampleMode: "Modo muestra",
+      league: "Liga",
+      myTeam: "Mi equipo",
+      compare: "Comparar",
+      addAnotherTeam: "Agrega otro equipo",
+      liveSources: (live: number, total: number) => `${live}/${total} fuentes vivas`,
+      lastRefresh: (value: string) => `Último refresh: ${value}`,
+      connect: "Conectar",
+      trades: "Cambios",
+      remove: "Quitar",
+      noSavedLeagues: "Todavía no hay ligas guardadas",
+      connectSleeperPrompt: "Conecta una liga de Sleeper para hacer real este análisis.",
+      connectSleeper: "Conectar Sleeper",
+      leagueJump: "Cambiar liga",
+      savedLeague: "Liga guardada",
+      pickLeague: "Elige la liga para analizar",
+      currentLeagueReady: "Liga actual lista",
+      connectAnother: "Conectar otra",
+      heroKicker: "Laboratorio de alineación",
+      heroTitle: "Fantasy Seer",
+      heroText:
+        "Un plan semanal claro para cada liga que manejas. Primero la mejor jugada, luego los puntos de riesgo, y después waivers o cambios con línea de precio.",
+      connectLeague: "Conectar liga",
+      findTradeAngle: "Buscar cambio",
+      readingLineup: "Leyendo alineación",
+      askLineup: "Preguntar por alineación",
+      decisionBoard: (lens: string) => `Tablero ${lens}`,
+      closeCall: "Decisión cerrada",
+      tradeWaiverIdea: "Idea de cambio / waiver",
+      preKickoff: "Revisar antes del kickoff",
+      preKickoffFallback:
+        "confirma lesiones, rol, clima y defensa rival antes de cerrar la alineación.",
+      rosterHealth: "Salud de plantilla",
+      whyThisRead: "Por qué esta lectura",
+      whyThisReadMeta: "Proyección, rol, matchup",
+      commandCenter: "Centro de mando Fantasy",
+      commandCenterText:
+        "Una liga y un equipo a la vez. Tu plantilla recibe consejos de alineación; las demás son objetivos de comparación o cambio.",
+      savedLeagues: "Ligas guardadas",
+      currentTeam: "Equipo actual",
+      compareWith: "Comparar con",
+      lastRefreshed: "Último refresh",
+      removeSavedLeague: "Quitar liga guardada",
+      myRoster: "Mi plantilla",
+      selectedCompareTarget: "Rival seleccionado",
+      weakAt: "débil en",
+      connectLeagueToCompare: "Conecta una liga para comparar fuerza",
+      weakSpot: "Punto débil",
+      tradeTarget: "Objetivo",
+      tradeLane: "Ruta de cambio",
+      tradeLaneFallback:
+        "Cuando conectes otro roster, esto se vuelve objetivo, oferta y línea de salida.",
+      shortcutsAria: "Atajos fantasy",
+      leagueCompare: "Comparar liga",
+      tradeBuilder: "Constructor de cambios",
+      connectRefresh: "Conectar / refrescar",
+      dataConfidence: "Confianza de datos",
+      live: "vivas",
+      sourceTruth: "datos primero, contexto después",
+      rows: "filas",
+      tabsAria: "Secciones de decisión fantasy",
+      tabMeta: {
+        nextStep: "siguiente paso",
+        starters: "titulares",
+        pool: "pool",
+        watch: "vigilar",
+        offers: "ofertas",
+      },
+      tabs: {
+        overview: "Mejor jugada",
+        roster: "Mi plantilla",
+        league: "Comparar liga",
+        players: "Laboratorio",
+        rookies: "Rookies",
+        trades: "Cambios",
+        compare: "Por qué",
+      },
+    },
+  },
+} satisfies Record<UiLanguage, Record<string, unknown>>;
+
+type NflUiCopy = (typeof nflUiCopy)["en"];
+
+function isUiLanguage(value: string | null | undefined): value is UiLanguage {
+  return value === "en" || value === "es";
+}
+
 const fantasyPowerTierLabels: Record<FantasyPowerTier, string> = {
   contender: "Contender",
   playoffHunt: "Playoff hunt",
@@ -903,19 +1269,6 @@ const receptionPoints: Record<ScoringFormat, number> = {
   halfPpr: 0.5,
   fullPpr: 1,
 };
-
-const independentSportsDisclaimer =
-  "MatchSeer is an independent fantasy and sports analysis tool. It is not affiliated with, sponsored by, or endorsed by the NFL, any professional sports league, team, player, or player association.";
-const experimentalUseDisclaimer =
-  "Built for entertainment, learning, and real-world algorithm testing only. We do not support betting or gambling. Reads are MatchSeer's own interpretations based on available data, assumptions, and experimental models, and some signals may be speculative, incomplete, inaccurate, or unrelated to real outcomes.";
-const proFootballShortDisclaimer =
-  `${independentSportsDisclaimer} Pro Football Seer is for fun analysis and algorithm testing, not betting or professional advice.`;
-const proFootballFullDisclaimer =
-  `Pro Football Seer is an independent, experimental pro football analysis playground by MatchSeer. ${independentSportsDisclaimer} ${experimentalUseDisclaimer} Use it as a fun game companion, not as professional advice.`;
-const fantasySeerShortDisclaimer =
-  "Independent algorithm playground. No official affiliation, no betting advice, and no official photos, logos, helmets, or team marks.";
-const fantasySeerFullDisclaimer =
-  `Fantasy Seer is an independent, experimental fantasy football analysis playground by MatchSeer. ${independentSportsDisclaimer} Player visuals are generic MatchSeer-created placeholders and do not represent official player photos, team logos, helmets, uniforms, or league marks. ${experimentalUseDisclaimer} Use it as a fun decision companion, not as professional advice.`;
 
 const teams = {
   bal: {
@@ -1273,10 +1626,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const [scoutStatus, setScoutStatus] = useState<ScoutStatus>("idle");
   const [scoutRead, setScoutRead] = useState<NflScoutingAnalysis | null>(null);
   const [fantasyView, setFantasyView] = useState<FantasyView>("overview");
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>("en");
   const [scenarioLeversByMatchup, setScenarioLeversByMatchup] = useState<
     Record<string, ScenarioLevers>
   >({});
   const isFantasyMode = mode === "fantasy";
+  const ui = nflUiCopy[uiLanguage];
   const isSeededLabMode =
     !isFantasyMode &&
     nflDataStatus === "fallback" &&
@@ -1296,6 +1651,19 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
       target?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
+  }
+
+  function updateUiLanguage(nextLanguage: UiLanguage) {
+    setUiLanguage(nextLanguage);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(nflLanguageStorageKey, nextLanguage);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("lang", nextLanguage);
+    window.history.replaceState(null, "", nextUrl.toString());
   }
 
   const matchups = useMemo(
@@ -1319,7 +1687,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       ),
     [matchups, nflSlateGroup],
   );
-  const slateLabel = `${nflPhaseLabels[nflPhase]} Week ${nflWeek}`;
+  const slateLabel = `${ui.pro.phaseLabels[nflPhase]} ${ui.pro.weekDisplay(nflWeek)}`;
   const useSlotLabelsInSlate = visibleNflMatchups.length > 0;
   const baseFantasyPlayers =
     nflDataset.fantasyPlayers.length > 0
@@ -1611,6 +1979,23 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   useEffect(() => {
     setSeerQuestionAsked(false);
   }, [activeMatchup.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const urlLanguage = params.get("lang");
+    const savedLanguage = window.localStorage.getItem(nflLanguageStorageKey);
+    const nextLanguage = isUiLanguage(urlLanguage)
+      ? urlLanguage
+      : isUiLanguage(savedLanguage)
+        ? savedLanguage
+        : "en";
+
+    setUiLanguage(nextLanguage);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2553,14 +2938,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             src="/brand/matchseer-app-icon.svg"
           />
           <strong>MatchSeer</strong>
-          <em>{isFantasyMode ? "Fantasy Seer" : "Pro Football Seer"}</em>
+          <em>{isFantasyMode ? ui.nav.fantasy : ui.nav.proFootball}</em>
         </a>
         <nav aria-label="MatchSeer sport navigation">
           <a className={!isFantasyMode ? "active" : undefined} href="/profootball">
-            Pro Football Seer
+            {ui.nav.proFootball}
           </a>
           <a className={isFantasyMode ? "active" : undefined} href="/fantasyseer">
-            Fantasy Seer
+            {ui.nav.fantasy}
           </a>
           {isFantasyMode ? (
             <>
@@ -2572,7 +2957,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   revealFantasyView("overview");
                 }}
               >
-                Best Move
+                {ui.nav.bestMove}
               </a>
               <a
                 className={fantasyView === "roster" ? "active" : undefined}
@@ -2582,7 +2967,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   revealFantasyView("roster");
                 }}
               >
-                Roster
+                {ui.nav.roster}
               </a>
               <a
                 className={fantasyView === "league" ? "active" : undefined}
@@ -2592,7 +2977,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   revealFantasyView("league");
                 }}
               >
-                League
+                {ui.nav.league}
               </a>
               <a
                 className={fantasyView === "trades" ? "active" : undefined}
@@ -2602,21 +2987,35 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   revealFantasyView("trades");
                 }}
               >
-                Trades
+                {ui.nav.trades}
               </a>
             </>
           ) : (
             <>
-              <a href="#team-seer">Game Card</a>
-              <a href="#scenario-lab">What-if Lab</a>
-              <a href="#matchup-dna">Matchup DNA</a>
-              <a href="#ask-seer">Ask the Seer</a>
+              <a href="#team-seer">{ui.nav.gameCard}</a>
+              <a href="#scenario-lab">{ui.nav.whatIf}</a>
+              <a href="#matchup-dna">{ui.nav.matchupDna}</a>
+              <a href="#ask-seer">{ui.nav.ask}</a>
             </>
           )}
         </nav>
+        <div className="nfl-language-switcher" aria-label={ui.languageSelector}>
+          <Languages size={15} />
+          {nflLanguageOptions.map((option) => (
+            <button
+              aria-pressed={uiLanguage === option}
+              className={cx(uiLanguage === option && "active")}
+              key={option}
+              onClick={() => updateUiLanguage(option)}
+              type="button"
+            >
+              {option.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </header>
 
-      {!isFantasyMode ? <ProFootballDisclaimer /> : null}
+      {!isFantasyMode ? <ProFootballDisclaimer ui={ui} /> : null}
 
       {!isFantasyMode ? (
         <>
@@ -2624,21 +3023,20 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             <div className="nfl-matchup-rail" aria-label="Pro football matchup list">
               <div className="nfl-section-kicker">
                 <Trophy size={17} />
-                Team vs team
+                {ui.pro.heroKicker}
               </div>
-              <h1>Pro Football Seer</h1>
-              <p>
-                Pro football matchup reads without official-league noise. One matchup
-                card, plain-English lean, underdog path, and the few signals that can move the read.
-              </p>
+              <h1>{ui.pro.heroTitle}</h1>
+              <p>{ui.pro.heroText}</p>
               <div className="nfl-slate-meta">
                 <span>{slateLabel}</span>
-                <span>{matchups.length} games</span>
+                <span>
+                  {matchups.length} {ui.pro.games}
+                </span>
               </div>
               {isSeededLabMode ? (
                 <div className="nfl-slate-chip">
                   <Sparkles size={15} />
-                  Lab slate
+                  {ui.pro.labSlate}
                 </div>
               ) : null}
               <NflSlateControls
@@ -2647,6 +3045,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 onPhaseChange={setNflPhase}
                 onWeekChange={setNflWeek}
                 phase={nflPhase}
+                ui={ui}
                 week={nflWeek}
               />
               <div className="nfl-matchup-list">
@@ -2670,11 +3069,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                   ))
                 ) : (
                   <article className="nfl-empty-slate-card">
-                    <strong>This room is between slates</strong>
-                    <p>
-                      Switch weeks or divisions, or use the active season room while
-                      the next real slate, preseason notes, and schedule signals refresh.
-                    </p>
+                    <strong>{ui.pro.emptyTitle}</strong>
+                    <p>{ui.pro.emptyText}</p>
                   </article>
                 )}
               </div>
@@ -2689,7 +3085,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <span>{activeGameCard.leanStrengthLabel}</span>
                 <span>{activeGameCard.gameTypeLabel}</span>
                 <span>{activeGameCard.confidenceLabel}</span>
-                {activeGameCard.isPreseason ? <span>Preseason model</span> : null}
+                {activeGameCard.isPreseason ? <span>{ui.pro.preseasonModel}</span> : null}
               </div>
 
               <div className="nfl-game-stage" aria-label="Pro Football Seer hero matchup">
@@ -2714,24 +3110,24 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <div className="nfl-seer-verdict">
                   <span>
                     <Sparkles size={16} />
-                    MatchSeer Game Card
+                    {ui.pro.gameCard}
                   </span>
                   <strong>{activeGameCard.verdictHeadline}</strong>
                   <p>{activeGameCard.verdictSummary}</p>
                 </div>
-                <div className="nfl-signal-stack" aria-label="Seer signal summary">
+                <div className="nfl-signal-stack" aria-label={ui.pro.signalSummaryLabel}>
                   <div>
-                    <span>Projected score</span>
+                    <span>{ui.pro.projectedScore}</span>
                     <strong>{activeScenario.projected}</strong>
                     <em>{activeGameCard.scorePathLabel}</em>
                   </div>
                   <div>
-                    <span>Game script</span>
+                    <span>{ui.pro.gameScript}</span>
                     <strong>{activeScenario.pace}%</strong>
                     <em>
                       {activeGameCard.isPreseason
-                        ? "rotation pace, not regular rhythm"
-                        : "snap volume and catch-up pressure"}
+                        ? ui.pro.scorePathPreseason
+                        : ui.pro.scorePathRegular}
                     </em>
                   </div>
                 </div>
@@ -2739,18 +3135,18 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
 
               <div className="nfl-game-card-grid" aria-label="MatchSeer Game Card details">
                 <article className="nfl-game-path-card favorite">
-                  <span>Favorite edge</span>
+                  <span>{ui.pro.favoriteEdge}</span>
                   <strong>{activeGameCard.favorite.code} path</strong>
                   <p>{activeGameCard.favoritePath}</p>
                 </article>
                 <article className="nfl-game-path-card">
-                  <span>Underdog path</span>
+                  <span>{ui.pro.underdogPath}</span>
                   <strong>{activeGameCard.underdog.code} path</strong>
                   <p>{activeGameCard.underdogPath}</p>
                 </article>
                 <article className="nfl-game-path-card">
-                  <span>What flips it</span>
-                  <strong>Levers to watch</strong>
+                  <span>{ui.pro.whatFlipsIt}</span>
+                  <strong>{ui.pro.leversToWatch}</strong>
                   <ul className="nfl-flip-list">
                     {activeGameCard.flipFactors.map((factor) => (
                       <li key={factor}>{factor}</li>
@@ -2781,12 +3177,12 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                 <div className="nfl-ask-seer-head">
                   <span>
                     <Sparkles size={17} />
-                    Ask the Seer
+                    {ui.pro.askTitle}
                   </span>
                   <label className="nfl-voice-select">
-                    <span>Ask voice</span>
+                    <span>{ui.pro.askVoice}</span>
                     <select
-                      aria-label="Ask the Seer voice"
+                      aria-label={ui.pro.askVoice}
                       onChange={(event) =>
                         setNflVoiceId(event.target.value as SeerVoiceId)
                       }
@@ -2804,17 +3200,17 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     type="button"
                   >
                     <Sparkles size={16} />
-                    Ask the Seer
+                    {ui.pro.askTitle}
                   </button>
                 </div>
-                <div className="nfl-question-chips" aria-label="Ask the Seer presets">
+                <div className="nfl-question-chips" aria-label={ui.pro.askPresetsLabel}>
                   {[
-                    `Why ${activeGameCard.favorite.name}?`,
-                    `How does ${activeGameCard.underdog.code} win?`,
-                    "What flips it?",
-                    "Explain the score path",
-                    "Explain like a friend",
-                    activeGameCard.isPreseason ? "Preseason risk?" : "",
+                    ui.pro.askWhy(activeGameCard.favorite.name),
+                    ui.pro.askHowWin(activeGameCard.underdog.code),
+                    ui.pro.askWhatFlips,
+                    ui.pro.askScorePath,
+                    ui.pro.askFriend,
+                    activeGameCard.isPreseason ? ui.pro.askPreseason : "",
                   ]
                     .filter((question): question is string => Boolean(question))
                     .map((question) => (
@@ -2831,10 +3227,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
                     ))}
                 </div>
                 <textarea
-                  aria-label="Ask the Seer"
+                  aria-label={ui.pro.askTitle}
                   maxLength={150}
                   onChange={(event) => setSeerQuestion(event.target.value)}
-                  placeholder="Can the underdog steal it?"
+                  placeholder={ui.pro.askPlaceholder}
                   rows={2}
                   value={seerQuestion}
                 />
@@ -2869,24 +3265,26 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             matchup={activeMatchup}
             onChange={updateScenarioLever}
             onReset={resetScenarioLevers}
+            ui={ui}
           />
 
           <NflStandingsPanel
             group={nflSlateGroup}
             rows={nflStandings}
             selection={{ phase: nflPhase, week: nflWeek }}
+            ui={ui}
           />
 
           <section className="nfl-grid-section game-only" id="matchup-dna">
             <div className="nfl-team-compare">
               <div className="nfl-section-kicker">
                 <Swords size={17} />
-                Matchup DNA
+                {ui.pro.matchupDna}
               </div>
               <TeamCompare matchup={activeMatchup} />
             </div>
           </section>
-          <ProFootballFooterDisclaimer />
+          <ProFootballFooterDisclaimer ui={ui} />
         </>
       ) : (
         <>
@@ -2906,6 +3304,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             scoringFormat={scoringFormat}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
+            ui={ui}
           />
 
           <FantasyLeagueJumpBar
@@ -2913,6 +3312,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             onRoomChange={handleSavedFantasyRoomChange}
             onViewChange={revealFantasyView}
             rooms={savedFantasyRooms}
+            ui={ui}
           />
 
           <FantasyHero
@@ -2926,6 +3326,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             scoringFormat={scoringFormat}
             scoutStatus={scoutStatus}
             teamLens={teamLens}
+            ui={ui}
           />
 
           <FantasyViewTabs
@@ -2936,6 +3337,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             report={activeTeamReport}
             rookieCount={rookieWatchRows.length}
             totalPlayers={scoutingBoard.length}
+            ui={ui}
           />
 
           {fantasyView === "overview" ? (
@@ -3076,8 +3478,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             savedRooms={savedFantasyRooms}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
+            ui={ui}
           />
-          <FantasySeerFooterDisclaimer />
+          <FantasySeerFooterDisclaimer ui={ui} />
         </>
       )}
     </main>
@@ -3226,6 +3629,7 @@ function NflSlateControls({
   onPhaseChange,
   onWeekChange,
   phase,
+  ui,
   week,
 }: {
   group: NflSlateGroup;
@@ -3233,11 +3637,12 @@ function NflSlateControls({
   onPhaseChange: (phase: NflSeasonPhase) => void;
   onWeekChange: (week: number) => void;
   phase: NflSeasonPhase;
+  ui: NflUiCopy;
   week: number;
 }) {
   return (
-    <div className="nfl-slate-controls" aria-label="Pro football slate controls">
-      <div className="nfl-phase-toggle" aria-label="Season phase">
+    <div className="nfl-slate-controls" aria-label={ui.pro.slateControlsLabel}>
+      <div className="nfl-phase-toggle" aria-label={ui.pro.seasonPhaseLabel}>
         {(Object.keys(nflPhaseLabels) as NflSeasonPhase[]).map((option) => (
           <button
             aria-pressed={phase === option}
@@ -3246,11 +3651,11 @@ function NflSlateControls({
             onClick={() => onPhaseChange(option)}
             type="button"
           >
-            {nflPhaseLabels[option]}
+            {ui.pro.phaseLabels[option]}
           </button>
         ))}
       </div>
-      <div className="nfl-week-strip" aria-label="Pro football week">
+      <div className="nfl-week-strip" aria-label={ui.pro.weekLabel}>
         {nflWeeksByPhase[phase].map((option) => (
           <button
             aria-pressed={week === option}
@@ -3264,22 +3669,22 @@ function NflSlateControls({
         ))}
       </div>
       <label className="nfl-group-select">
-        <span>Group</span>
+        <span>{ui.pro.groupLabel}</span>
         <select
           onChange={(event) => onGroupChange(event.target.value as NflSlateGroup)}
           value={group}
         >
           {nflSlateGroups.map((option) => (
             <option key={option} value={option}>
-              {option === "all" ? "All pro football" : option}
+              {option === "all" ? ui.pro.allGroup : option}
             </option>
           ))}
         </select>
       </label>
       <p>
         {phase === "preseason"
-          ? "Preseason reads weight QB depth, rotation hints, and roster-bubble chaos."
-          : "Current week follows the live feed; future rooms stay ready for the next sync."}
+          ? ui.pro.preseasonHelper
+          : ui.pro.regularHelper}
       </p>
     </div>
   );
@@ -3289,29 +3694,34 @@ function NflStandingsPanel({
   group,
   rows,
   selection,
+  ui,
 }: {
   group: NflSlateGroup;
   rows: NflStandingRow[];
   selection: NflSlateSelection;
+  ui: NflUiCopy;
 }) {
-  const title = group === "all" ? "Standings pulse" : `${group} pulse`;
+  const title =
+    group === "all" ? ui.pro.standings.allTitle : ui.pro.standings.groupTitle(group);
   const visibleRows = rows.slice(0, 4);
 
   return (
-    <section className="nfl-standings-panel" aria-label="Pro football standings">
+    <section className="nfl-standings-panel" aria-label={ui.pro.standings.aria}>
       <div className="nfl-standings-head">
         <div>
           <div className="nfl-section-kicker">
             <Trophy size={17} />
-            Slate table
+            {ui.pro.standings.kicker}
           </div>
           <h2>{title}</h2>
           <p>
-            {nflPhaseLabels[selection.phase]} Week {selection.week}. Top slate shapes,
-            kept compact until the full table matters.
+            {ui.pro.standings.summary(
+              ui.pro.phaseLabels[selection.phase],
+              selection.week,
+            )}
           </p>
         </div>
-        <strong>{rows.length} teams tracked</strong>
+        <strong>{ui.pro.standings.tracked(rows.length)}</strong>
       </div>
       <div className="nfl-standings-table">
         {visibleRows.map((row, index) => (
@@ -3346,12 +3756,14 @@ function ScenarioLab({
   matchup,
   onChange,
   onReset,
+  ui,
 }: {
   impact: ScenarioImpact;
   levers: ScenarioLevers;
   matchup: NflMatchup;
   onChange: (key: keyof ScenarioLevers, value: number) => void;
   onReset: () => void;
+  ui: NflUiCopy;
 }) {
   return (
     <section className="nfl-scenario-lab" id="scenario-lab">
@@ -3359,20 +3771,20 @@ function ScenarioLab({
         <div>
           <div className="nfl-section-kicker">
             <Gauge size={17} />
-            What-if lab
+            {ui.pro.scenario.kicker}
           </div>
-          <h2>Live scenario pressure</h2>
+          <h2>{ui.pro.scenario.title}</h2>
         </div>
         <button className="nfl-reset-button" onClick={onReset} type="button">
           <Sparkles size={16} />
-          Reset read
+          {ui.pro.scenario.reset}
         </button>
       </div>
       <div className="nfl-scenario-body">
         <div className="nfl-scenario-controls">
           <ScenarioControl
             icon={<Wind size={16} />}
-            label="Wind stress"
+            label={ui.pro.scenario.wind}
             max={100}
             min={0}
             onChange={(value) => onChange("wind", value)}
@@ -3381,7 +3793,7 @@ function ScenarioLab({
           />
           <ScenarioControl
             icon={<HeartPulse size={16} />}
-            label="Health swing"
+            label={ui.pro.scenario.health}
             max={20}
             min={-20}
             onChange={(value) => onChange("healthSwing", value)}
@@ -3390,7 +3802,7 @@ function ScenarioLab({
           />
           <ScenarioControl
             icon={<Timer size={16} />}
-            label="Tempo"
+            label={ui.pro.scenario.tempo}
             max={95}
             min={45}
             onChange={(value) => onChange("tempo", value)}
@@ -3399,7 +3811,7 @@ function ScenarioLab({
           />
           <ScenarioControl
             icon={<Activity size={16} />}
-            label="Home noise"
+            label={ui.pro.scenario.homeNoise}
             max={100}
             min={0}
             onChange={(value) => onChange("homeNoise", value)}
@@ -3409,14 +3821,14 @@ function ScenarioLab({
         </div>
         <article className="nfl-scenario-read">
           <div className="nfl-card-topline">
-            <span>Scenario lean</span>
+            <span>{ui.pro.scenario.lean}</span>
             <strong>
               {impact.leanCode} {impact.leanProbability}%
             </strong>
           </div>
           <p>{impact.read}</p>
           <div className="nfl-scenario-score">
-            <span>Projected</span>
+            <span>{ui.pro.scenario.projected}</span>
             <strong>{impact.projected}</strong>
           </div>
           <div className="nfl-scenario-factors">
@@ -3973,6 +4385,7 @@ function FantasyContextBar({
   scoringFormat,
   sourceLanes,
   teamLens,
+  ui,
 }: {
   activeRoom: FantasySavedRoom | null;
   activeRoomId: string | null;
@@ -3989,6 +4402,7 @@ function FantasyContextBar({
   scoringFormat: ScoringFormat;
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
+  ui: NflUiCopy;
 }) {
   const active = leagueMap.active;
   const opponentOptions = leagueMap.teams.filter(
@@ -4029,19 +4443,19 @@ function FantasyContextBar({
   }
 
   return (
-    <section className="nfl-fantasy-context-bar" aria-label="Fantasy decision context">
+    <section className="nfl-fantasy-context-bar" aria-label={ui.fantasy.contextAria}>
       <div className="nfl-fantasy-context-summary">
         <span>
           <UsersRound size={16} />
-          Decision room
+          {ui.fantasy.decisionRoom}
         </span>
         <strong>{leagueLabel}</strong>
-        <em>{leagueMeta.join(" · ") || "Sample mode"}</em>
+        <em>{leagueMeta.join(" · ") || ui.fantasy.sampleMode}</em>
       </div>
 
       <div className="nfl-fantasy-context-controls">
         <label>
-          <span>League</span>
+          <span>{ui.fantasy.league}</span>
           <select
             disabled={savedRooms.length === 0}
             onChange={(event) => onSavedRoomChange(event.target.value)}
@@ -4054,13 +4468,13 @@ function FantasyContextBar({
                 </option>
               ))
             ) : (
-              <option value="sample-room">Sample room</option>
+              <option value="sample-room">{ui.fantasy.sampleRoom}</option>
             )}
           </select>
         </label>
 
         <label>
-          <span>My team</span>
+          <span>{ui.fantasy.myTeam}</span>
           <select
             onChange={(event) => handleTeamChange(event.target.value)}
             value={active.report.team.id}
@@ -4074,7 +4488,7 @@ function FantasyContextBar({
         </label>
 
         <label>
-          <span>Compare</span>
+          <span>{ui.fantasy.compare}</span>
           <select
             disabled={opponentOptions.length === 0}
             onChange={(event) => onOpponentTeamChange(event.target.value)}
@@ -4087,7 +4501,7 @@ function FantasyContextBar({
                 </option>
               ))
             ) : (
-              <option value={active.report.team.id}>Add another team</option>
+              <option value={active.report.team.id}>{ui.fantasy.addAnotherTeam}</option>
             )}
           </select>
         </label>
@@ -4097,7 +4511,7 @@ function FantasyContextBar({
         <ScoringToggle value={scoringFormat} onChange={onScoringChange} />
         <span className="nfl-fantasy-context-sources">
           <ShieldCheck size={15} />
-          {liveSourceCount}/{sourceLanes.length} live sources
+          {ui.fantasy.liveSources(liveSourceCount, sourceLanes.length)}
         </span>
         <span
           className={cx("nfl-fantasy-matchup-accuracy", matchupAccuracy.tone)}
@@ -4107,15 +4521,17 @@ function FantasyContextBar({
           {matchupAccuracy.label}
         </span>
         <span className="nfl-fantasy-context-refresh">
-          Last refresh: {roomFreshness ? formatDataUpdated(roomFreshness) : "Sample mode"}
+          {ui.fantasy.lastRefresh(
+            roomFreshness ? formatDataUpdated(roomFreshness) : ui.fantasy.sampleMode,
+          )}
         </span>
         <button className="secondary" onClick={() => onViewChange("roster")} type="button">
           <RefreshCw size={15} />
-          Connect
+          {ui.fantasy.connect}
         </button>
         <button onClick={() => onViewChange("trades")} type="button">
           <LineChart size={15} />
-          Trades
+          {ui.fantasy.trades}
         </button>
         <button
           className="ghost"
@@ -4127,7 +4543,7 @@ function FantasyContextBar({
           }}
           type="button"
         >
-          Remove
+          {ui.fantasy.remove}
         </button>
       </div>
     </section>
@@ -4139,11 +4555,13 @@ function FantasyLeagueJumpBar({
   onRoomChange,
   onViewChange,
   rooms,
+  ui,
 }: {
   activeRoomId: string | null;
   onRoomChange: (roomId: string) => void;
   onViewChange: (view: FantasyView) => void;
   rooms: FantasySavedRoom[];
+  ui: NflUiCopy;
 }) {
   if (rooms.length === 0) {
     return (
@@ -4153,12 +4571,12 @@ function FantasyLeagueJumpBar({
       >
         <div className="nfl-fantasy-league-jump-head">
           <div>
-            <span>No saved leagues yet</span>
-            <strong>Connect a Sleeper league to make this analysis real.</strong>
+            <span>{ui.fantasy.noSavedLeagues}</span>
+            <strong>{ui.fantasy.connectSleeperPrompt}</strong>
           </div>
           <button onClick={() => onViewChange("roster")} type="button">
             <RefreshCw size={15} />
-            Connect Sleeper
+            {ui.fantasy.connectSleeper}
           </button>
         </div>
       </section>
@@ -4172,14 +4590,14 @@ function FantasyLeagueJumpBar({
     <section className="nfl-fantasy-league-jump" aria-label="Saved fantasy leagues">
       <div className="nfl-fantasy-league-jump-head">
         <div>
-          <span>{hasMultipleRooms ? "League jump" : "Saved league"}</span>
+          <span>{hasMultipleRooms ? ui.fantasy.leagueJump : ui.fantasy.savedLeague}</span>
           <strong>
-            {hasMultipleRooms ? "Pick the league to analyze" : "Current league ready"}
+            {hasMultipleRooms ? ui.fantasy.pickLeague : ui.fantasy.currentLeagueReady}
           </strong>
         </div>
         <button onClick={() => onViewChange("roster")} type="button">
           <RefreshCw size={15} />
-          Connect another
+          {ui.fantasy.connectAnother}
         </button>
       </div>
       <div className="nfl-fantasy-league-jump-list">
@@ -4279,6 +4697,7 @@ function FantasyHero({
   scoringFormat,
   scoutStatus,
   teamLens,
+  ui,
 }: {
   actions: FantasyActionItem[];
   fantasyImport: ImportedFantasyLeague | null;
@@ -4290,6 +4709,7 @@ function FantasyHero({
   scoringFormat: ScoringFormat;
   scoutStatus: ScoutStatus;
   teamLens: FantasyTeamLens;
+  ui: NflUiCopy;
 }) {
   const opponentReport =
     matchupReport.left.team.id === report.team.id
@@ -4316,21 +4736,18 @@ function FantasyHero({
       <div className="nfl-fantasy-command">
         <div className="nfl-section-kicker">
           <BrainCircuit size={17} />
-          Fantasy lineup lab
+          {ui.fantasy.heroKicker}
         </div>
-        <h1>Fantasy Seer</h1>
-        <p>
-          One clean weekly plan for every league you manage. Start with the best
-          move, check the risky spots, then use waivers and trades with a price line.
-        </p>
+        <h1>{ui.fantasy.heroTitle}</h1>
+        <p>{ui.fantasy.heroText}</p>
         <div className="nfl-fantasy-hero-actions">
           <button onClick={() => onViewChange("roster")} type="button">
             <RefreshCw size={16} />
-            Connect league
+            {ui.fantasy.connectLeague}
           </button>
           <button className="secondary" onClick={() => onViewChange("trades")} type="button">
             <LineChart size={16} />
-            Find trade angle
+            {ui.fantasy.findTradeAngle}
           </button>
           <button
             className="secondary"
@@ -4339,15 +4756,15 @@ function FantasyHero({
             type="button"
           >
             <Sparkles size={16} />
-            {scoutStatus === "loading" ? "Reading lineup" : "Ask about lineup"}
+            {scoutStatus === "loading" ? ui.fantasy.readingLineup : ui.fantasy.askLineup}
           </button>
         </div>
-        <FantasySeerSafetyNote />
+        <FantasySeerSafetyNote ui={ui} />
       </div>
 
       <article className="nfl-fantasy-command-card">
         <div className="nfl-card-topline">
-          <span>{teamLensLabels[teamLens]} decision board</span>
+          <span>{ui.fantasy.decisionBoard(teamLensLabels[teamLens])}</span>
           <strong>{sourceLabel}</strong>
         </div>
 
@@ -4366,20 +4783,24 @@ function FantasyHero({
         />
 
         <div className="nfl-fantasy-decision-lanes" aria-label="Key fantasy decisions">
-          <FantasyHeroDecisionCard action={closeAction} eyebrow="Close call" />
-          <FantasyHeroDecisionCard action={marketAction} eyebrow="Trade / waiver idea" />
+          <FantasyHeroDecisionCard action={closeAction} eyebrow={ui.fantasy.closeCall} />
+          <FantasyHeroDecisionCard
+            action={marketAction}
+            eyebrow={ui.fantasy.tradeWaiverIdea}
+          />
         </div>
 
         <div className="nfl-prekick-note">
           <Timer size={16} />
           <span>
-            Re-check before kickoff: {closeAction?.risk ?? "confirm injuries, role, weather, and opponent defense before lineup lock."}
+            {ui.fantasy.preKickoff}:{" "}
+            {closeAction?.risk ?? ui.fantasy.preKickoffFallback}
           </span>
         </div>
 
         <div className="nfl-roster-map" aria-label="Roster map">
           <div className="nfl-roster-map-head">
-            <span>Roster health</span>
+            <span>{ui.fantasy.rosterHealth}</span>
             <strong>{weeklyCoach.pressure.label}</strong>
             <em>{weeklyCoach.pressure.summary}</em>
           </div>
@@ -4398,9 +4819,9 @@ function FantasyHero({
           <summary>
             <span>
               <Sparkles size={16} />
-              Why this read
+              {ui.fantasy.whyThisRead}
             </span>
-            <em>Projection, role, matchup</em>
+            <em>{ui.fantasy.whyThisReadMeta}</em>
           </summary>
           <div className="nfl-fantasy-read-card nfl-model-receipts">
             <strong>{read.headline}</strong>
@@ -4723,6 +5144,7 @@ function FantasyCommandCenter({
   savedRooms,
   sourceLanes,
   teamLens,
+  ui,
 }: {
   activeRoom: FantasySavedRoom | null;
   activeRoomId: string | null;
@@ -4737,6 +5159,7 @@ function FantasyCommandCenter({
   savedRooms: FantasySavedRoom[];
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
+  ui: NflUiCopy;
 }) {
   const active = leagueMap.active;
   const opponentOptions = leagueMap.teams.filter(
@@ -4787,17 +5210,14 @@ function FantasyCommandCenter({
         <div>
           <div className="nfl-section-kicker">
             <UsersRound size={17} />
-            Fantasy Command Center
+            {ui.fantasy.commandCenter}
           </div>
           <h1>{leagueLabel}</h1>
-          <p>
-            One league and one team at a time. Your roster gets the lineup advice;
-            every other roster becomes a compare target or trade angle.
-          </p>
+          <p>{ui.fantasy.commandCenterText}</p>
         </div>
         <div className="nfl-fantasy-command-center-controls">
           <label className="room">
-            <span>Saved leagues</span>
+            <span>{ui.fantasy.savedLeagues}</span>
             <select
               disabled={savedRooms.length === 0}
               onChange={(event) => onSavedRoomChange(event.target.value)}
@@ -4809,13 +5229,13 @@ function FantasyCommandCenter({
                     {fantasySavedRoomLabel(room)}
                   </option>
                 ))
-              ) : (
-                <option value="sample-room">Sample room</option>
+                ) : (
+                <option value="sample-room">{ui.fantasy.sampleRoom}</option>
               )}
             </select>
           </label>
           <label>
-            <span>Current team</span>
+            <span>{ui.fantasy.currentTeam}</span>
             <select
               onChange={(event) => handleTeamChange(event.target.value)}
               value={active.report.team.id}
@@ -4828,7 +5248,7 @@ function FantasyCommandCenter({
             </select>
           </label>
           <label>
-            <span>Compare with</span>
+            <span>{ui.fantasy.compareWith}</span>
             <select
               disabled={opponentOptions.length === 0}
               onChange={(event) => handleOpponentChange(event.target.value)}
@@ -4841,14 +5261,14 @@ function FantasyCommandCenter({
                   </option>
                 ))
               ) : (
-                <option value={active.report.team.id}>Add another team</option>
+                <option value={active.report.team.id}>{ui.fantasy.addAnotherTeam}</option>
               )}
             </select>
           </label>
           <div className="nfl-fantasy-room-meta">
             <span>
-              <b>Last refreshed</b>
-              <strong>{roomFreshness ? formatDataUpdated(roomFreshness) : "Sample mode"}</strong>
+              <b>{ui.fantasy.lastRefreshed}</b>
+              <strong>{roomFreshness ? formatDataUpdated(roomFreshness) : ui.fantasy.sampleMode}</strong>
             </span>
             <button
               disabled={!activeRoomId || savedRooms.length === 0}
@@ -4859,7 +5279,7 @@ function FantasyCommandCenter({
               }}
               type="button"
             >
-              Remove saved league
+              {ui.fantasy.removeSavedLeague}
             </button>
           </div>
         </div>
@@ -4871,7 +5291,9 @@ function FantasyCommandCenter({
             {fantasyPlayerInitials(active.report.team.name)}
           </span>
           <div className="nfl-fantasy-selected-team-main">
-            <span>My roster · {active.report.team.manager}</span>
+            <span>
+              {ui.fantasy.myRoster} · {active.report.team.manager}
+            </span>
             <strong>{active.report.team.name}</strong>
             <em>
               {leagueMap.rankLabel} · {leagueMeta.join(" · ")}
@@ -4901,14 +5323,14 @@ function FantasyCommandCenter({
               : "VS"}
           </span>
           <div className="nfl-fantasy-selected-team-main">
-            <span>Selected compare target</span>
-            <strong>{selectedOpponent?.report.team.name ?? "Add another team"}</strong>
+            <span>{ui.fantasy.selectedCompareTarget}</span>
+            <strong>{selectedOpponent?.report.team.name ?? ui.fantasy.addAnotherTeam}</strong>
             <em>
               {selectedOpponent
-                ? `Rank #${selectedOpponent.rank} · weak at ${scoutingRankLabel(
+                ? `Rank #${selectedOpponent.rank} · ${ui.fantasy.weakAt} ${scoutingRankLabel(
                     selectedOpponent.weakestPosition.position,
                   )}`
-                : "Connect a league to compare strength"}
+                : ui.fantasy.connectLeagueToCompare}
             </em>
           </div>
           <div className="nfl-fantasy-selected-team-metrics">
@@ -4917,7 +5339,7 @@ function FantasyCommandCenter({
               <strong>{selectedOpponent?.report.projection.toFixed(1) ?? "--"}</strong>
             </span>
             <span>
-              Weak spot
+              {ui.fantasy.weakSpot}
               <strong>
                 {selectedOpponent
                   ? scoutingRankLabel(selectedOpponent.weakestPosition.position)
@@ -4925,43 +5347,44 @@ function FantasyCommandCenter({
               </strong>
             </span>
             <span>
-              Trade target
+              {ui.fantasy.tradeTarget}
               <strong>{opponentTradeRead?.targetLabel ?? leagueMap.easiestUpgrade}</strong>
             </span>
           </div>
           <div className="nfl-fantasy-trade-lane-preview">
-            <b>Trade lane</b>
+            <b>{ui.fantasy.tradeLane}</b>
             <strong>{opponentTradeRead?.targetLabel ?? leagueMap.easiestUpgrade}</strong>
             <p>
               {opponentTradeRead?.summary ??
-                "Once another roster is connected, this turns into a target, offer lane, and walk-away check."}
+                ui.fantasy.tradeLaneFallback}
             </p>
           </div>
         </article>
       </div>
 
-      <div className="nfl-fantasy-command-center-actions" aria-label="Fantasy shortcuts">
+      <div className="nfl-fantasy-command-center-actions" aria-label={ui.fantasy.shortcutsAria}>
         <button onClick={() => onViewChange("overview")} type="button">
           <Sparkles size={16} />
-          Best Move
+          {ui.fantasy.tabs.overview}
         </button>
         <button className="secondary" onClick={() => onViewChange("league")} type="button">
           <Trophy size={16} />
-          League Compare
+          {ui.fantasy.leagueCompare}
         </button>
         <button className="secondary" onClick={() => onViewChange("trades")} type="button">
           <LineChart size={16} />
-          Trade Builder
+          {ui.fantasy.tradeBuilder}
         </button>
         <button className="secondary" onClick={() => onViewChange("roster")} type="button">
           <RefreshCw size={16} />
-          Connect / refresh
+          {ui.fantasy.connectRefresh}
         </button>
       </div>
 
       <FantasySourceTruthStrip
         liveSourceCount={liveSourceCount}
         sourceLanes={sourceLanes}
+        ui={ui}
       />
     </section>
   );
@@ -4970,19 +5393,21 @@ function FantasyCommandCenter({
 function FantasySourceTruthStrip({
   liveSourceCount,
   sourceLanes,
+  ui,
 }: {
   liveSourceCount: number;
   sourceLanes: FantasySourceLane[];
+  ui: NflUiCopy;
 }) {
   return (
     <div className="nfl-fantasy-source-truth" aria-label="Fantasy source truth">
       <div>
         <ShieldCheck size={16} />
-        <span>Data confidence</span>
+        <span>{ui.fantasy.dataConfidence}</span>
         <strong>
-          {liveSourceCount}/{sourceLanes.length} live
+          {liveSourceCount}/{sourceLanes.length} {ui.fantasy.live}
         </strong>
-        <em>source data first, context nudges second</em>
+        <em>{ui.fantasy.sourceTruth}</em>
       </div>
       <div className="nfl-fantasy-source-truth-grid">
         {sourceLanes.map((lane) => (
@@ -4998,7 +5423,8 @@ function FantasySourceTruthStrip({
             {sourceLaneIcon(lane.kind)}
             <b>{lane.label}</b>
             <em>
-              {sourceLaneStatusCopy(lane)} · {fantasySourceLaneTotalRows(lane)} rows
+              {sourceLaneStatusCopy(lane)} · {fantasySourceLaneTotalRows(lane)}{" "}
+              {ui.fantasy.rows}
             </em>
           </span>
         ))}
@@ -5493,44 +5919,44 @@ function fantasyActionReceiptRows(action: FantasyActionItem) {
   ];
 }
 
-function ProFootballDisclaimer() {
+function ProFootballDisclaimer({ ui }: { ui: NflUiCopy }) {
   return (
     <aside className="nfl-disclaimer" aria-label="Pro Football Seer disclaimer">
       <ShieldCheck size={17} />
-      <span>{proFootballShortDisclaimer}</span>
+      <span>{ui.disclaimer.proShort}</span>
     </aside>
   );
 }
 
-function ProFootballFooterDisclaimer() {
+function ProFootballFooterDisclaimer({ ui }: { ui: NflUiCopy }) {
   return (
     <section className="nfl-fantasy-footer-note" aria-label="Pro Football Seer disclaimer">
       <div>
         <ShieldCheck size={18} />
-        <strong>Independent playground, not official league gospel.</strong>
+        <strong>{ui.disclaimer.proFullTitle}</strong>
       </div>
-      <p>{proFootballFullDisclaimer}</p>
+      <p>{ui.disclaimer.proFull}</p>
     </section>
   );
 }
 
-function FantasySeerSafetyNote() {
+function FantasySeerSafetyNote({ ui }: { ui: NflUiCopy }) {
   return (
     <aside className="nfl-fantasy-safety-note" aria-label="Fantasy Seer note">
       <ShieldCheck size={17} />
-      <p>{fantasySeerShortDisclaimer}</p>
+      <p>{ui.disclaimer.fantasyShort}</p>
     </aside>
   );
 }
 
-function FantasySeerFooterDisclaimer() {
+function FantasySeerFooterDisclaimer({ ui }: { ui: NflUiCopy }) {
   return (
     <section className="nfl-fantasy-footer-note" aria-label="Fantasy Seer disclaimer">
       <div>
         <ShieldCheck size={18} />
-        <strong>Weird little algorithm playground, not gospel.</strong>
+        <strong>{ui.disclaimer.fantasyFullTitle}</strong>
       </div>
-      <p>{fantasySeerFullDisclaimer}</p>
+      <p>{ui.disclaimer.fantasyFull}</p>
     </section>
   );
 }
@@ -5543,6 +5969,7 @@ function FantasyViewTabs({
   report,
   rookieCount,
   totalPlayers,
+  ui,
 }: {
   current: FantasyView;
   leagueMap: FantasyLeaguePowerMap;
@@ -5551,6 +5978,7 @@ function FantasyViewTabs({
   report: FantasyTeamReport;
   rookieCount: number;
   totalPlayers: number;
+  ui: NflUiCopy;
 }) {
   const tabs: Array<{
     id: FantasyView;
@@ -5560,50 +5988,50 @@ function FantasyViewTabs({
   }> = [
     {
       id: "overview",
-      label: "Best Move",
-      meta: "next step",
+      label: ui.fantasy.tabs.overview,
+      meta: ui.fantasy.tabMeta.nextStep,
       icon: <Sparkles size={17} />,
     },
     {
       id: "roster",
-      label: "My Roster",
-      meta: `${report.players.length} starters`,
+      label: ui.fantasy.tabs.roster,
+      meta: `${report.players.length} ${ui.fantasy.tabMeta.starters}`,
       icon: <UsersRound size={17} />,
     },
     {
       id: "league",
-      label: "League Compare",
+      label: ui.fantasy.tabs.league,
       meta: leagueMap.rankLabel,
       icon: <Trophy size={17} />,
     },
     {
       id: "players",
-      label: "Player Lab",
-      meta: `${totalPlayers} pool`,
+      label: ui.fantasy.tabs.players,
+      meta: `${totalPlayers} ${ui.fantasy.tabMeta.pool}`,
       icon: <Search size={17} />,
     },
     {
       id: "rookies",
-      label: "Rookies",
-      meta: `${rookieCount} watch`,
+      label: ui.fantasy.tabs.rookies,
+      meta: `${rookieCount} ${ui.fantasy.tabMeta.watch}`,
       icon: <Zap size={17} />,
     },
     {
       id: "trades",
-      label: "Trade Builder",
-      meta: "offers",
+      label: ui.fantasy.tabs.trades,
+      meta: ui.fantasy.tabMeta.offers,
       icon: <LineChart size={17} />,
     },
     {
       id: "compare",
-      label: "Why This Read",
+      label: ui.fantasy.tabs.compare,
       meta: matchupReport.edgeLabel,
       icon: <Gauge size={17} />,
     },
   ];
 
   return (
-    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label="Fantasy decision sections">
+    <nav className="nfl-fantasy-tabs" id="fantasy-rooms" aria-label={ui.fantasy.tabsAria}>
       {tabs.map((tab) => (
         <button
           aria-pressed={current === tab.id}
@@ -11777,7 +12205,7 @@ function buildFantasyHeroRead({
         : "Matchup edges are still settling.",
     ],
     watchlist,
-    disclaimer: fantasySeerShortDisclaimer,
+    disclaimer: nflUiCopy.en.disclaimer.fantasyShort,
     source: "seer",
   };
 }
