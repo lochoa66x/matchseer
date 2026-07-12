@@ -302,6 +302,82 @@ describe("NFL fantasy imports", () => {
           status: "Active",
           team: "LAC",
         },
+        "777": {
+          full_name: "Marvin Harrison Jr.",
+          fantasy_positions: ["WR"],
+          position: "WR",
+          search_rank: 12,
+          status: "Active",
+          team: "ARI",
+        },
+      },
+      rosters: [
+        { roster_id: 1, owner_id: "u1", players: ["111"], starters: ["111"] },
+        { roster_id: 2, owner_id: "u2", players: ["777"], starters: ["777"] },
+      ],
+      users: [
+        { user_id: "u1", display_name: "Luis" },
+        { user_id: "u2", display_name: "Rival" },
+      ],
+      week: 1,
+    });
+
+    const playerNames = league.players.map((player) => player.name);
+
+    expect(playerNames).toContain("Amon-Ra St. Brown");
+    expect(playerNames).toContain("Marvin Harrison Jr.");
+    expect(playerNames).toContain("Mike Gesicki");
+    expect(playerNames).toContain("Keenan Allen");
+    expect(playerNames).not.toContain("Cameron Dicker");
+    expect(league.teams[0].rosterIds).not.toContain(
+      league.players.find((player) => player.name === "Mike Gesicki")?.id,
+    );
+    expect(league.teams[1].rosterIds).toContain(
+      league.players.find((player) => player.name === "Marvin Harrison Jr.")?.id,
+    );
+    expect(league.sleeper?.freeAgentCandidateCount).toBe(2);
+  });
+
+  it("includes kicker and defense free agents only when Sleeper slots allow them", () => {
+    const league = buildSleeperFantasyLeague({
+      league: {
+        league_id: "123456790",
+        name: "Redraft With Specialists",
+        roster_positions: ["QB", "K", "DEF", "BN"],
+        season: "2026",
+      },
+      players: {
+        "111": {
+          full_name: "Josh Allen",
+          fantasy_positions: ["QB"],
+          position: "QB",
+          search_rank: 4,
+          team: "BUF",
+        },
+        "444": {
+          full_name: "Mike Gesicki",
+          fantasy_positions: ["TE"],
+          position: "TE",
+          search_rank: 280,
+          status: "Active",
+          team: "CIN",
+        },
+        "666": {
+          full_name: "Cameron Dicker",
+          fantasy_positions: ["K"],
+          position: "K",
+          search_rank: 120,
+          status: "Active",
+          team: "LAC",
+        },
+        PHI: {
+          full_name: "Philadelphia Eagles",
+          fantasy_positions: ["DEF"],
+          position: "DEF",
+          search_rank: 180,
+          status: "Active",
+          team: "PHI",
+        },
       },
       rosters: [
         { roster_id: 1, owner_id: "u1", players: ["111"], starters: ["111"] },
@@ -312,13 +388,10 @@ describe("NFL fantasy imports", () => {
 
     const playerNames = league.players.map((player) => player.name);
 
-    expect(playerNames).toContain("Amon-Ra St. Brown");
-    expect(playerNames).toContain("Mike Gesicki");
-    expect(playerNames).toContain("Keenan Allen");
-    expect(playerNames).not.toContain("Cameron Dicker");
-    expect(league.teams[0].rosterIds).not.toContain(
-      league.players.find((player) => player.name === "Mike Gesicki")?.id,
-    );
+    expect(league.settings?.rosterPositions).toEqual(["QB", "K", "DEF", "BN"]);
+    expect(playerNames).toContain("Cameron Dicker");
+    expect(playerNames).toContain("PHI D/ST");
+    expect(playerNames).not.toContain("Mike Gesicki");
     expect(league.sleeper?.freeAgentCandidateCount).toBe(2);
   });
 

@@ -451,11 +451,11 @@ type FantasyTeamReport = {
 };
 
 type FantasyRosterLadderBand =
-  | "Protected core"
-  | "Strong hold"
-  | "Useful depth"
-  | "Bubble"
-  | "Cut line";
+  | "Keep / start"
+  | "Keep"
+  | "Bench depth"
+  | "Trade chip"
+  | "Safe cut";
 type FantasyRosterLadderTone = "core" | "hold" | "watch" | "cut";
 
 type FantasyRosterLadderRow = {
@@ -1887,12 +1887,13 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   useEffect(() => {
     const positionOptions = scoutingPositionOptionsForLineup(
       activeTeamReport.lineupSlots,
+      activeTeamReport.lineupPositions,
     );
 
     if (!positionOptions.some((option) => option.value === scoutingPosition)) {
       setScoutingPosition("ALL");
     }
-  }, [activeTeamReport.lineupSlots, scoutingPosition]);
+  }, [activeTeamReport.lineupSlots, activeTeamReport.lineupPositions, scoutingPosition]);
   const fantasyMatchupReport = useMemo(
     () =>
       compareFantasyTeams({
@@ -6455,7 +6456,7 @@ function FantasyRosterValueLadder({
   const cutLine = [...ladder].reverse().slice(0, Math.min(5, ladder.length));
   const saferCut = cutLine[0];
   const cutCount = ladder.filter(
-    (row) => row.band === "Cut line" || row.band === "Bubble",
+    (row) => row.band === "Safe cut" || row.band === "Trade chip",
   ).length;
 
   return (
@@ -6468,8 +6469,8 @@ function FantasyRosterValueLadder({
           </div>
           <h3>Best players to expendable players</h3>
           <p>
-            Use this before a waiver add. Top names are protected, bottom names
-            are the first cut-line checks.
+            Use this before a waiver add. Top names are keeps, middle names are
+            trade chips, and the bottom is the safe-cut check.
           </p>
         </div>
         <span>
@@ -6489,15 +6490,15 @@ function FantasyRosterValueLadder({
           <em>{saferCut.band.toLowerCase()} · {saferCut.cutScore}% cut score</em>
         </div>
         <div>
-          <span>Bubble room</span>
+          <span>Decision room</span>
           <strong>{cutCount}</strong>
-          <em>Players to compare against waivers.</em>
+          <em>Trade-chip or safe-cut decisions.</em>
         </div>
       </div>
 
       <div className="nfl-roster-ladder-columns">
         <div>
-          <span className="nfl-roster-ladder-column-label">Protected core</span>
+          <span className="nfl-roster-ladder-column-label">Keep / start</span>
           <div className="nfl-roster-ladder-list">
             {protectedCore.map((row) => (
               <FantasyRosterLadderItem key={row.player.id} row={row} />
@@ -6505,7 +6506,7 @@ function FantasyRosterValueLadder({
           </div>
         </div>
         <div>
-          <span className="nfl-roster-ladder-column-label">Cut line</span>
+          <span className="nfl-roster-ladder-column-label">Trade / cut line</span>
           <div className="nfl-roster-ladder-list">
             {cutLine.map((row) => (
               <FantasyRosterLadderItem key={row.player.id} row={row} />
@@ -6674,36 +6675,36 @@ function fantasyRosterLadderBand({
   teamLens: FantasyTeamLens;
 }): FantasyRosterLadderBand {
   if (isStarter && keepScore >= 78) {
-    return "Protected core";
+    return "Keep / start";
   }
 
   if (keepScore >= 72) {
-    return streamPosition && teamLens === "dynasty" ? "Useful depth" : "Strong hold";
+    return streamPosition && teamLens === "dynasty" ? "Bench depth" : "Keep";
   }
 
   if (keepScore >= 58) {
-    return "Useful depth";
+    return "Bench depth";
   }
 
   if (keepScore >= 43) {
-    return "Bubble";
+    return "Trade chip";
   }
 
-  return "Cut line";
+  return "Safe cut";
 }
 
 function fantasyRosterLadderTone(
   band: FantasyRosterLadderBand,
 ): FantasyRosterLadderTone {
-  if (band === "Protected core") {
+  if (band === "Keep / start") {
     return "core";
   }
 
-  if (band === "Strong hold") {
+  if (band === "Keep") {
     return "hold";
   }
 
-  if (band === "Useful depth" || band === "Bubble") {
+  if (band === "Bench depth" || band === "Trade chip") {
     return "watch";
   }
 
@@ -6750,26 +6751,26 @@ function fantasyRosterLadderReason({
   streamPosition: boolean;
   teamLens: FantasyTeamLens;
 }) {
-  if (band === "Protected core") {
+  if (band === "Keep / start") {
     return `${position} is part of the weekly spine. Do not cut unless a clear premium upgrade comes back.`;
   }
 
-  if (band === "Strong hold") {
+  if (band === "Keep") {
     return isWeakPosition
       ? "Keep this lane stable first; it is already one of the roster pressure points."
       : "Useful weekly value. Trade only if it solves a bigger roster need.";
   }
 
-  if (band === "Useful depth") {
+  if (band === "Bench depth") {
     return teamLens === "dynasty" && !streamPosition
       ? "Playable depth with enough long-term value to shop before cutting."
       : "Helpful depth, but compare against the waiver add and your weekly need.";
   }
 
-  if (band === "Bubble") {
+  if (band === "Trade chip") {
     return streamPosition
       ? "Streamable profile. Replace if the league format or matchup gives you a better weekly setup."
-      : "Bubble player. Cut only when the incoming player has a clearer role or solves a weak lane.";
+      : "Trade-chip player. Cut only when the incoming player has a clearer role or solves a weak lane.";
   }
 
   return "First cut-line name. This is where the waiver conversation should start.";
@@ -6784,19 +6785,19 @@ function fantasyRosterLadderDetail({
   cutScore: number;
   isStarter: boolean;
 }) {
-  if (band === "Protected core") {
+  if (band === "Keep / start") {
     return "lock down";
   }
 
-  if (band === "Strong hold") {
+  if (band === "Keep") {
     return isStarter ? "startable" : "trade first";
   }
 
-  if (band === "Useful depth") {
+  if (band === "Bench depth") {
     return "hold or shop";
   }
 
-  if (band === "Bubble") {
+  if (band === "Trade chip") {
     return `${cutScore}% cut check`;
   }
 
@@ -8070,14 +8071,6 @@ function ScoutingBoard({
     scoutingDepthOptions[0];
   const modeOption = scoutingBoardModeOptions.find((option) => option.value === mode);
   const hasLeagueRosterSignal = rosteredIds.size > 0 || rosteredKeys.size > 0;
-  const deepResearchRows = buildDeepResearchRows({
-    rosteredIds,
-    rosteredKeys,
-    rows,
-    teamLens,
-    weakestPosition,
-    playablePositions,
-  });
   const positionOptions = scoutingPositionOptionsForLineup(
     lineupSlots,
     playablePositions,
@@ -8094,6 +8087,18 @@ function ScoutingBoard({
   const activePositionOption =
     positionOptions.find((option) => option.value === position) ??
     positionOptions[0];
+  const laneModeRows =
+    activePositionOption.value === "ALL"
+      ? modeRows
+      : scoutingRowsForOption(modeRows, activePositionOption);
+  const deepResearchRows = buildDeepResearchRows({
+    rosteredIds,
+    rosteredKeys,
+    rows: laneModeRows,
+    teamLens,
+    weakestPosition,
+    playablePositions: activePositionOption.positions,
+  });
   const rowsForMode = (nextMode: ScoutingBoardMode) => {
     const nextRows = scoutingRowsForMode(
       allRows,
@@ -8109,10 +8114,7 @@ function ScoutingBoard({
       ? nextRows
       : scoutingRowsForOption(nextRows, activePositionOption);
   };
-  const laneTotal =
-    activePositionOption.value === "ALL"
-      ? modeRows.length
-      : scoutingRowsForOption(modeRows, activePositionOption).length;
+  const laneTotal = laneModeRows.length;
 
   return (
     <section className="nfl-scouting-board" id="scouting-board">
@@ -11443,7 +11445,13 @@ function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
     return [];
   }
 
-  return [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`];
+  const keys = [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`];
+
+  if (name.length >= 6) {
+    keys.push(name);
+  }
+
+  return keys;
 }
 
 function fantasyPlayerTeamLine(player: {
@@ -11558,14 +11566,20 @@ function scoutingRowsForMode(
   }
 
   if (mode === "topPicks") {
-    const rankedRows = [...availableRows].sort(
+    const topPickupRows = availableRows.filter((player) =>
+      fantasyTopPickupCandidate(player, weakestPosition, teamLens),
+    );
+    const rankedRows = [
+      ...(topPickupRows.length > 0 ? topPickupRows : availableRows.slice(0, 12)),
+    ].sort(
       (left, right) =>
         fantasyPickupScore(right, weakestPosition, teamLens, "pickup") -
           fantasyPickupScore(left, weakestPosition, teamLens, "pickup") ||
         right.contextProjection.floor - left.contextProjection.floor,
     );
-    const candidateLimit = Math.round(
-      clampValue(availableRows.length * 0.14, 18, 72),
+    const candidateLimit = Math.min(
+      rankedRows.length,
+      Math.round(clampValue(availableRows.length * 0.08, 8, 48)),
     );
 
     return rankedRows.slice(0, candidateLimit);
@@ -11573,9 +11587,8 @@ function scoutingRowsForMode(
 
   if (mode === "ultraDeep") {
     const deepRows = availableRows.filter((player) => fantasyUltraDeepCandidate(player));
-    const candidates = deepRows.length > 0 ? deepRows : availableRows;
 
-    return [...candidates].sort(
+    return [...deepRows].sort(
       (left, right) =>
         fantasyUltraDeepScore(right, weakestPosition) -
           fantasyUltraDeepScore(left, weakestPosition) ||
@@ -11584,6 +11597,36 @@ function scoutingRowsForMode(
   }
 
   return playableRows;
+}
+
+function fantasyTopPickupCandidate(
+  player: ScoutingRow,
+  weakestPosition: ScoutingPlayerPosition,
+  teamLens: FantasyTeamLens,
+) {
+  const position = normalizeScoutingPosition(player.position);
+  const rank = player.sourceRank ?? player.nflRank;
+  const projection = player.contextProjection.projection;
+  const floor = player.contextProjection.floor;
+  const roleSecurity = player.roleSecurity ?? player.health;
+  const dynastyValue = player.dynastyValue ?? player.health;
+  const weakestLaneHelp = position === weakestPosition && projection >= 6.5;
+
+  if (position === "K" || position === "DST") {
+    return projection >= 7.5 || weakestLaneHelp;
+  }
+
+  if (teamLens === "dynasty" && dynastyValue >= 78 && projection >= 6.5) {
+    return true;
+  }
+
+  return (
+    weakestLaneHelp ||
+    projection >= 9.5 ||
+    floor >= 6 ||
+    roleSecurity >= 70 ||
+    (rank <= 220 && projection >= 7.5)
+  );
 }
 
 function fantasyPickupScore(
@@ -11628,15 +11671,15 @@ function fantasyUltraDeepCandidate(player: ScoutingRow) {
   const rank = player.sourceRank ?? player.nflRank;
   const dynastyValue = player.dynastyValue ?? 0;
   const roleSecurity = player.roleSecurity ?? player.health;
+  const weeklyLow = player.contextProjection.projection <= 10.5;
 
   return (
     player.depthTier === "stash" ||
     player.depthTier === "streamer" ||
-    rank >= 180 ||
-    (dynastyValue >= 70 && roleSecurity < 62) ||
-    upsideGap >= 8.5 ||
-    player.roleSecurity === undefined ||
-    player.contextProjection.projection <= 9
+    (rank >= 180 && (weeklyLow || roleSecurity < 68 || dynastyValue >= 68)) ||
+    (dynastyValue >= 70 && roleSecurity < 66) ||
+    (upsideGap >= 8.5 && player.contextProjection.projection <= 14) ||
+    (player.roleSecurity === undefined && rank >= 180)
   );
 }
 
