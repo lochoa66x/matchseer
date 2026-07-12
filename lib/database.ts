@@ -75,6 +75,8 @@ type MatchListResult = {
 type MatchListOptions = {
   limit?: number | null;
   prioritizeUpcoming?: boolean;
+  competitionName?: string | null;
+  competitionSlug?: string | null;
 };
 
 export type RealDataSyncResult = {
@@ -3358,6 +3360,9 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
       ? Math.max(1, Math.min(72, Math.round(options.limit)))
       : null;
   const prioritizeUpcoming = Boolean(options.prioritizeUpcoming);
+  const competitionSlug = options.competitionSlug?.trim() ?? "";
+  const competitionName = options.competitionName?.trim() ?? "";
+  const includeAnyCompetition = !competitionSlug && !competitionName;
 
   return (await sql`
     with ranked_matches as (
@@ -3406,6 +3411,16 @@ async function fetchMatchRows(sql: NeonQuery, options: MatchListOptions = {}) {
           else null
         end as finished_at
       from matches
+      join competitions on competitions.id = matches.competition_id
+      where (
+        ${includeAnyCompetition}::boolean
+        or competitions.slug = ${competitionSlug}
+        or lower(competitions.name) = lower(${competitionName})
+        or (
+          ${competitionName} <> ''
+          and lower(competitions.name) like '%' || lower(${competitionName}) || '%'
+        )
+      )
     ),
     target_matches as (
       select ranked_matches.id

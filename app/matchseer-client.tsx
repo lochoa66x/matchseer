@@ -26,6 +26,11 @@ import {
   buildCupCandidates as buildCupSeerCandidates,
   type CupCandidate,
 } from "../lib/cup-seer";
+import {
+  getSoccerCompetition,
+  soccerCompetitions,
+  type SoccerCompetitionKey,
+} from "../lib/soccer-competitions";
 import type {
   Language,
   ForecastInterpretation,
@@ -154,7 +159,7 @@ type OracleResponse = {
 
 const collapsedReceiptCount = 4;
 const liveRefreshIntervalMs = 12_000;
-const matchFeedCacheKey = "matchseer.match-feed.v4";
+const matchFeedCacheKeyPrefix = "matchseer.match-feed.v4";
 const matchFeedCacheTtlMs = 20 * 60 * 1000;
 
 const copy = {
@@ -748,6 +753,126 @@ const featuredFallbackMatches: Match[] = [
   }),
 ];
 
+const ligaMxFallbackMatches: Match[] = [
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-1",
+    status: "Upcoming",
+    startsAt: "2026-07-18T02:00:00.000Z",
+    group: "Apertura watch",
+    time: "10:00 PM",
+    venue: "Mexico City",
+    city: "Mexico City",
+    home: makeFeaturedTeam("America", "AME", "#D8B45D", 82, 80, 76, 78),
+    away: makeFeaturedTeam("Tigres", "TIG", "#9DB7E8", 80, 82, 79, 75),
+    forecast: makeFeaturedForecast(41, 28, 31, 58, 64, "1-1"),
+    weather: makeFeaturedWeather(
+      "22°C",
+      "8 km/h",
+      "Altitude and tempo are the first context checks before this read goes live.",
+    ),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-2",
+    status: "Upcoming",
+    startsAt: "2026-07-19T01:00:00.000Z",
+    group: "Table pressure",
+    time: "9:00 PM",
+    venue: "Monterrey",
+    city: "Monterrey",
+    home: makeFeaturedTeam("Monterrey", "MTY", "#9DB7E8", 84, 78, 77, 80),
+    away: makeFeaturedTeam("Toluca", "TOL", "#D8B45D", 78, 79, 76, 82),
+    forecast: makeFeaturedForecast(47, 26, 27, 61, 55, "2-1"),
+    weather: makeFeaturedWeather(
+      "27°C",
+      "10 km/h",
+      "Heat and travel get a small nudge until the live venue feed is connected.",
+    ),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-3",
+    status: "Upcoming",
+    startsAt: "2026-07-20T00:00:00.000Z",
+    group: "Liguilla lane",
+    time: "8:00 PM",
+    venue: "Guadalajara",
+    city: "Guadalajara",
+    home: makeFeaturedTeam("Guadalajara", "GDL", "#D8B45D", 76, 78, 75, 79),
+    away: makeFeaturedTeam("Cruz Azul", "CAZ", "#9DB7E8", 79, 81, 78, 74),
+    forecast: makeFeaturedForecast(35, 29, 36, 53, 62, "1-1"),
+    weather: makeFeaturedWeather(
+      "24°C",
+      "7 km/h",
+      "Short-tournament volatility keeps this as a lean, not a certainty.",
+    ),
+  }),
+];
+
+const championsFallbackMatches: Match[] = [
+  makeFeaturedFallbackMatch({
+    id: "ucl-featured-1",
+    status: "Upcoming",
+    startsAt: "2026-09-15T19:00:00.000Z",
+    group: "League phase",
+    time: "3:00 PM",
+    venue: "Madrid",
+    city: "Madrid",
+    home: makeFeaturedTeam("Madrid", "MAD", "#D8B45D", 88, 86, 82, 84),
+    away: makeFeaturedTeam("Manchester", "MCI", "#9DB7E8", 90, 88, 83, 80),
+    forecast: makeFeaturedForecast(39, 25, 36, 57, 59, "2-2"),
+    weather: makeFeaturedWeather(
+      "18°C",
+      "9 km/h",
+      "Squad depth and fixture congestion are the first receipts for this room.",
+    ),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "ucl-featured-2",
+    status: "Upcoming",
+    startsAt: "2026-09-16T19:00:00.000Z",
+    group: "Travel stress",
+    time: "3:00 PM",
+    venue: "Munich",
+    city: "Munich",
+    home: makeFeaturedTeam("Munich", "MUN", "#D8B45D", 87, 85, 84, 83),
+    away: makeFeaturedTeam("Paris", "PAR", "#9DB7E8", 84, 86, 80, 82),
+    forecast: makeFeaturedForecast(44, 25, 31, 60, 54, "2-1"),
+    weather: makeFeaturedWeather(
+      "12°C",
+      "11 km/h",
+      "Rest days and travel load sit behind the read until live fixtures arrive.",
+    ),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "ucl-featured-3",
+    status: "Upcoming",
+    startsAt: "2026-09-17T19:00:00.000Z",
+    group: "Qualification band",
+    time: "3:00 PM",
+    venue: "Milan",
+    city: "Milan",
+    home: makeFeaturedTeam("Milan", "MIL", "#D8B45D", 81, 82, 83, 80),
+    away: makeFeaturedTeam("London", "LON", "#9DB7E8", 83, 84, 81, 77),
+    forecast: makeFeaturedForecast(38, 28, 34, 55, 57, "1-1"),
+    weather: makeFeaturedWeather(
+      "16°C",
+      "6 km/h",
+      "League-phase table pressure changes the value of every point.",
+    ),
+  }),
+];
+
+function getFeaturedFallbackMatches(competitionKey: SoccerCompetitionKey) {
+  if (competitionKey === "liga-mx") {
+    return ligaMxFallbackMatches;
+  }
+
+  if (competitionKey === "champions-league") {
+    return championsFallbackMatches;
+  }
+
+  return featuredFallbackMatches;
+}
+
 function makeFeaturedTeam(
   name: string,
   code: string,
@@ -1010,9 +1135,15 @@ function SkeletonMatchCard() {
   );
 }
 
-function readCachedMatchFeed() {
+function matchFeedCacheKey(competitionKey: SoccerCompetitionKey) {
+  return `${matchFeedCacheKeyPrefix}.${competitionKey}`;
+}
+
+function readCachedMatchFeed(competitionKey: SoccerCompetitionKey) {
+  const cacheKey = matchFeedCacheKey(competitionKey);
+
   try {
-    const raw = window.localStorage.getItem(matchFeedCacheKey);
+    const raw = window.localStorage.getItem(cacheKey);
 
     if (!raw) {
       return [];
@@ -1025,7 +1156,7 @@ function readCachedMatchFeed() {
       Date.now() - cached.savedAt > matchFeedCacheTtlMs ||
       !Array.isArray(cached.matches)
     ) {
-      window.localStorage.removeItem(matchFeedCacheKey);
+      window.localStorage.removeItem(cacheKey);
       return [];
     }
 
@@ -1035,7 +1166,10 @@ function readCachedMatchFeed() {
   }
 }
 
-function writeCachedMatchFeed(matches: Match[]) {
+function writeCachedMatchFeed(
+  matches: Match[],
+  competitionKey: SoccerCompetitionKey,
+) {
   if (matches.length === 0) {
     return;
   }
@@ -1046,7 +1180,10 @@ function writeCachedMatchFeed(matches: Match[]) {
       matches,
     };
 
-    window.localStorage.setItem(matchFeedCacheKey, JSON.stringify(cached));
+    window.localStorage.setItem(
+      matchFeedCacheKey(competitionKey),
+      JSON.stringify(cached),
+    );
   } catch {
     // Cache is only a speed boost; failing silently keeps the live feed path intact.
   }
@@ -1054,6 +1191,39 @@ function writeCachedMatchFeed(matches: Match[]) {
 
 function isLanguageOption(value: string | null): value is Language {
   return value === "en" || value === "es" || value === "fr";
+}
+
+function SoccerCompetitionStrip({
+  activeKey,
+}: {
+  activeKey: SoccerCompetitionKey;
+}) {
+  const activeCompetition = getSoccerCompetition(activeKey);
+
+  return (
+    <section className="soccer-competition-strip" aria-label="Soccer Seer competitions">
+      <div>
+        <span>Soccer Seer</span>
+        <strong>{activeCompetition.name}</strong>
+        <em>{activeCompetition.promise}</em>
+      </div>
+      <nav aria-label="Soccer competition navigation">
+        {soccerCompetitions.map((competition) => (
+          <a
+            className={cx(
+              "soccer-competition-pill",
+              competition.key === activeKey && "active",
+            )}
+            href={competition.route}
+            key={competition.key}
+          >
+            <span>{competition.shortName}</span>
+            <strong>{competition.name}</strong>
+          </a>
+        ))}
+      </nav>
+    </section>
+  );
 }
 
 type MatchesResponse = {
@@ -1073,12 +1243,21 @@ type CachedMatchFeed = {
 };
 
 export default function MatchSeerHome({
+  competitionKey = "world-cup",
   initialLanguage,
 }: {
+  competitionKey?: SoccerCompetitionKey;
   initialLanguage: Language;
 }) {
+  const competition = getSoccerCompetition(competitionKey);
+  const competitionFallbackMatches = useMemo(
+    () => getFeaturedFallbackMatches(competition.key),
+    [competition.key],
+  );
   const [language, setLanguage] = useState<Language>(initialLanguage);
-  const [matches, setMatches] = useState<Match[]>(featuredFallbackMatches);
+  const [matches, setMatches] = useState<Match[]>(
+    () => competitionFallbackMatches,
+  );
   const [usingFeaturedFallback, setUsingFeaturedFallback] = useState(true);
   const [activeMatchId, setActiveMatchId] = useState("");
   const [matchFilter, setMatchFilter] = useState<MatchFilter>("next");
@@ -1112,7 +1291,7 @@ export default function MatchSeerHome({
     let loadingMatches = false;
     let hasLoadedOnce = false;
 
-    const cachedMatches = readCachedMatchFeed();
+    const cachedMatches = readCachedMatchFeed(competition.key);
 
     if (cachedMatches.length > 0) {
       setMatches(cachedMatches);
@@ -1148,6 +1327,8 @@ export default function MatchSeerHome({
           params.set("initial", "1");
         }
 
+        params.set("competition", competition.key);
+
         if (refreshLiveData) {
           params.set("refresh", "live");
         }
@@ -1168,12 +1349,12 @@ export default function MatchSeerHome({
 
         if (!ignore) {
           if (payload.matches.length === 0 && usingFeaturedFallback) {
-            setMatches(featuredFallbackMatches);
+            setMatches(competitionFallbackMatches);
             setMatchFeedStatus("success");
             setActiveMatchId((current) =>
-              featuredFallbackMatches.some((match) => match.id === current)
+              competitionFallbackMatches.some((match) => match.id === current)
                 ? current
-                : featuredFallbackMatches[0]?.id ?? "",
+                : competitionFallbackMatches[0]?.id ?? "",
             );
             setMatchFeedSlow(false);
             return;
@@ -1183,7 +1364,7 @@ export default function MatchSeerHome({
           setUsingFeaturedFallback(false);
           setMatchFeedStatus(payload.matches.length > 0 ? "success" : "empty");
           setMatchFeedSlow(false);
-          writeCachedMatchFeed(payload.matches);
+          writeCachedMatchFeed(payload.matches, competition.key);
           setActiveMatchId((current) => {
             if (payload.matches.length === 0) {
               return "";
@@ -1426,6 +1607,7 @@ export default function MatchSeerHome({
             ))}
           </div>
         </section>
+        <SoccerCompetitionStrip activeKey={competition.key} />
 
         <section className="content-grid">
           <aside className="match-rail" aria-label="Match list">
@@ -1542,6 +1724,7 @@ export default function MatchSeerHome({
           ))}
         </div>
       </section>
+      <SoccerCompetitionStrip activeKey={competition.key} />
 
       <section className="hero-grid hero-matchroom" id="forecast-board">
         <div className="hero-match-board">
