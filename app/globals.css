@@ -22378,3 +22378,289 @@ body {
   }
 }
 /* === End Soccer Seer competition shell === */
+
+/* === Fantasy Seer matchup utility v2 === */
+.nfl-week-matchup-source,
+.nfl-hub-source-pill,
+.nfl-team-lab-source-chip,
+.nfl-fantasy-match-source-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--nfl-muted);
+  background: rgba(20, 24, 32, 0.72);
+  border: 1px solid var(--nfl-line);
+  border-radius: 12px;
+}
+
+.nfl-week-matchup-source {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  padding: 10px 12px;
+  margin: -2px 0 4px;
+}
+
+.nfl-week-matchup-source span,
+.nfl-hub-source-pill span,
+.nfl-team-lab-source-chip span,
+.nfl-fantasy-match-source-mini span {
+  color: var(--nfl-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nfl-week-matchup-source strong,
+.nfl-hub-source-pill strong,
+.nfl-team-lab-source-chip strong,
+.nfl-fantasy-match-source-mini strong {
+  color: var(--nfl-ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.nfl-week-matchup-source p {
+  min-width: 0;
+  margin: 0;
+  color: rgba(174, 184, 199, 0.88);
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.nfl-week-matchup-source.live,
+.nfl-hub-source-pill.live,
+.nfl-team-lab-source-chip.live,
+.nfl-fantasy-match-source-mini.live {
+  background: rgba(157, 183, 232, 0.1);
+  border-color: rgba(157, 183, 232, 0.28);
+}
+
+.nfl-week-matchup-source.warn,
+.nfl-hub-source-pill.warn,
+.nfl-team-lab-source-chip.warn,
+.nfl-fantasy-match-source-mini.warn {
+  background: rgba(216, 180, 93, 0.11);
+  border-color: rgba(216, 180, 93, 0.3);
+}
+
+.nfl-week-matchup-source.fallback,
+.nfl-week-matchup-source.sample,
+.nfl-hub-source-pill.fallback,
+.nfl-hub-source-pill.sample,
+.nfl-team-lab-source-chip.fallback,
+.nfl-team-lab-source-chip.sample,
+.nfl-fantasy-match-source-mini.fallback,
+.nfl-fantasy-match-source-mini.sample {
+  background: rgba(42, 48, 59, 0.44);
+}
+
+.nfl-hub-source-pill,
+.nfl-team-lab-source-chip,
+.nfl-fantasy-match-source-mini {
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 9px;
+}
+
+.nfl-fantasy-match-source-mini {
+  margin-top: 10px;
+}
+
+.nfl-team-lab-source-chip {
+  align-self: end;
+}
+
+.nfl-fantasy-matchup-head em {
+  display: block;
+  max-width: 720px;
+  margin-top: 4px;
+  color: rgba(174, 184, 199, 0.78);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.nfl-waiver-fit-plan {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background:
+    linear-gradient(135deg, rgba(216, 180, 93, 0.06), transparent 42%),
+    rgba(11, 14, 18, 0.52);
+  border: 1px solid rgba(216, 180, 93, 0.22);
+  border-radius: 16px;
+}
+
+.nfl-waiver-fit-head {
+  display: flex;
+  gap: 14px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.nfl-waiver-fit-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.nfl-waiver-fit-head span {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: var(--nfl-brass);
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nfl-waiver-fit-head strong {
+  color: var(--nfl-ink);
+  font-size: clamp(1rem, 1.4vw, 1.28rem);
+  font-weight: 920;
+  line-height: 1.12;
+}
+
+.nfl-waiver-fit-head em {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  color: var(--nfl-subtle);
+  background: rgba(42, 48, 59, 0.46);
+  border: 1px solid var(--nfl-line);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.nfl-waiver-fit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-waiver-fit-grid article {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px;
+  background: rgba(20, 24, 32, 0.72);
+  border: 1px solid rgba(157, 183, 232, 0.14);
+  border-radius: 14px;
+}
+
+.nfl-waiver-fit-grid article > div:first-child,
+.nfl-waiver-fit-move {
+  display: grid;
+  gap: 2px;
+}
+
+.nfl-waiver-fit-grid span,
+.nfl-waiver-fit-move span {
+  color: var(--nfl-muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nfl-waiver-fit-grid strong,
+.nfl-waiver-fit-move strong {
+  overflow: hidden;
+  color: var(--nfl-ink);
+  font-size: 0.98rem;
+  font-weight: 920;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-waiver-fit-grid em,
+.nfl-waiver-fit-move em {
+  color: rgba(174, 184, 199, 0.82);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1.3;
+}
+
+.nfl-waiver-fit-grid p {
+  margin: 0;
+  color: rgba(244, 241, 232, 0.78);
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1.34;
+}
+
+.nfl-waiver-fit-move {
+  padding: 9px 10px;
+  background: rgba(11, 14, 18, 0.46);
+  border: 1px solid rgba(216, 180, 93, 0.14);
+  border-radius: 11px;
+}
+
+.nfl-waiver-fit-receipts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nfl-waiver-fit-receipts span {
+  padding: 5px 7px;
+  color: var(--nfl-subtle);
+  background: rgba(42, 48, 59, 0.48);
+  border: 1px solid rgba(157, 183, 232, 0.13);
+  border-radius: 999px;
+  font-size: 0.62rem;
+}
+
+.nfl-waiver-fit-empty {
+  margin: 0;
+  padding: 13px;
+  color: rgba(174, 184, 199, 0.86);
+  background: rgba(20, 24, 32, 0.62);
+  border: 1px solid var(--nfl-line);
+  border-radius: 12px;
+  font-weight: 780;
+}
+
+@media (max-width: 1100px) {
+  .nfl-week-matchup-source {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-waiver-fit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-team-lab-source-chip {
+    align-self: stretch;
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .nfl-waiver-fit-head,
+  .nfl-week-matchup-source,
+  .nfl-hub-source-pill,
+  .nfl-team-lab-source-chip,
+  .nfl-fantasy-match-source-mini {
+    align-items: stretch;
+  }
+
+  .nfl-waiver-fit-head {
+    display: grid;
+  }
+
+  .nfl-waiver-fit-head em,
+  .nfl-hub-source-pill,
+  .nfl-team-lab-source-chip,
+  .nfl-fantasy-match-source-mini {
+    width: 100%;
+  }
+}
+/* === End Fantasy Seer matchup utility v2 === */

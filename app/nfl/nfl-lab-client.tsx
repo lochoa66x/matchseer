@@ -520,6 +520,26 @@ type FantasyMoveTarget = {
   value: string;
 };
 
+type FantasyMatchupSourceRead = {
+  detail: string;
+  label: string;
+  sourceLabel: string;
+  tone: "live" | "warn" | "fallback" | "sample";
+};
+
+type FantasyWaiverFitRecommendation = {
+  action: string;
+  cutPlayer: ScoutingRow | null;
+  cutRead: string;
+  dynastyRead: string;
+  horizon: string;
+  player: ScoutingRow;
+  position: ScoutingPlayerPosition;
+  projectedLift: number | null;
+  reason: string;
+  shortTermRead: string;
+};
+
 type FantasyDeepResearchRow = {
   action: string;
   available: boolean;
@@ -1976,6 +1996,32 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       }),
     [activeTeamReport, fantasyMatchupReport],
   );
+  const fantasyMatchupSource = useMemo(
+    () =>
+      buildFantasyMatchupSource({
+        fantasyImport,
+        opponentTeamId: opponentFantasyTeam.id,
+      }),
+    [fantasyImport, opponentFantasyTeam.id],
+  );
+  const fantasyWaiverFits = useMemo(
+    () =>
+      buildFantasyWaiverFitRecommendations({
+        playablePositions: activeTeamReport.lineupPositions,
+        report: activeTeamReport,
+        rosteredIds: rosteredScoutingPlayerIds,
+        rosteredKeys: rosteredScoutingPlayerKeys,
+        rows: scoutingBoard,
+        teamLens,
+      }),
+    [
+      activeTeamReport,
+      rosteredScoutingPlayerIds,
+      rosteredScoutingPlayerKeys,
+      scoutingBoard,
+      teamLens,
+    ],
+  );
 
   useEffect(() => {
     setSeerQuestionAsked(false);
@@ -3305,6 +3351,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             scoringFormat={scoringFormat}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
+            matchupSource={fantasyMatchupSource}
             ui={ui}
           />
 
@@ -3320,6 +3367,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             actions={fantasyActionQueue}
             fantasyImport={fantasyImport}
             matchupReport={fantasyMatchupReport}
+            matchupSource={fantasyMatchupSource}
             onAskSeer={requestScoutingRead}
             onViewChange={revealFantasyView}
             read={fantasyHeroRead}
@@ -3345,12 +3393,14 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             <FantasyOverview
               actions={fantasyActionQueue}
               matchupReport={fantasyMatchupReport}
+              matchupSource={fantasyMatchupSource}
               report={activeTeamReport}
               rosteredIds={rosteredScoutingPlayerIds}
               rosteredKeys={rosteredScoutingPlayerKeys}
               rows={scoutingBoard}
               scoringFormat={scoringFormat}
               teamLens={teamLens}
+              waiverFits={fantasyWaiverFits}
             />
           ) : null}
 
@@ -3393,6 +3443,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               manualImportStatus={manualImportStatus}
               manualRosterText={manualRosterText}
               matchupReport={fantasyMatchupReport}
+              matchupSource={fantasyMatchupSource}
               onManualImport={() => applyManualRosterImport("manual")}
               onLensChange={setTeamLens}
               onOpponentTeamChange={setOpponentFantasyTeamId}
@@ -3479,6 +3530,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
             savedRooms={savedFantasyRooms}
             sourceLanes={fantasySourceLanes}
             teamLens={teamLens}
+            matchupSource={fantasyMatchupSource}
             ui={ui}
           />
           <FantasySeerFooterDisclaimer ui={ui} />
@@ -4386,6 +4438,7 @@ function FantasyContextBar({
   scoringFormat,
   sourceLanes,
   teamLens,
+  matchupSource,
   ui,
 }: {
   activeRoom: FantasySavedRoom | null;
@@ -4403,6 +4456,7 @@ function FantasyContextBar({
   scoringFormat: ScoringFormat;
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
+  matchupSource: FantasyMatchupSourceRead;
   ui: NflUiCopy;
 }) {
   const active = leagueMap.active;
@@ -4420,10 +4474,7 @@ function FantasyContextBar({
     activeRoom?.savedAt ??
     (fantasyImport ? new Date().toISOString() : "");
   const liveSourceCount = sourceLanes.filter((lane) => lane.status === "live").length;
-  const matchupAccuracy = fantasyMatchupAccuracyLabel(
-    fantasyImport,
-    selectedOpponentId,
-  );
+  const matchupAccuracy = matchupSource;
   const leagueMeta = [
     fantasyImport?.season ? `Season ${fantasyImport.season}` : null,
     fantasyImport?.week ? `Week ${fantasyImport.week}` : null,
@@ -4691,6 +4742,7 @@ function FantasyHero({
   actions,
   fantasyImport,
   matchupReport,
+  matchupSource,
   onAskSeer,
   onViewChange,
   read,
@@ -4703,6 +4755,7 @@ function FantasyHero({
   actions: FantasyActionItem[];
   fantasyImport: ImportedFantasyLeague | null;
   matchupReport: FantasyMatchupReport;
+  matchupSource: FantasyMatchupSourceRead;
   onAskSeer: () => void;
   onViewChange: (view: FantasyView) => void;
   read: NflScoutingAnalysis;
@@ -4778,6 +4831,7 @@ function FantasyHero({
 
         <FantasyWeeklyMatchupPanel
           matchupReport={matchupReport}
+          matchupSource={matchupSource}
           onViewChange={onViewChange}
           opponentReport={opponentReport}
           report={report}
@@ -4843,11 +4897,13 @@ function FantasyHero({
 
 function FantasyWeeklyMatchupPanel({
   matchupReport,
+  matchupSource,
   onViewChange,
   opponentReport,
   report,
 }: {
   matchupReport: FantasyMatchupReport;
+  matchupSource: FantasyMatchupSourceRead;
   onViewChange: (view: FantasyView) => void;
   opponentReport: FantasyTeamReport;
   report: FantasyTeamReport;
@@ -4875,6 +4931,12 @@ function FantasyWeeklyMatchupPanel({
           {read.myGap >= 0 ? "+" : ""}
           {read.myGap.toFixed(1)}
         </b>
+      </div>
+
+      <div className={cx("nfl-week-matchup-source", matchupSource.tone)}>
+        <span>{matchupSource.label}</span>
+        <strong>{matchupSource.sourceLabel}</strong>
+        <p>{matchupSource.detail}</p>
       </div>
 
       <div className="nfl-week-matchup-summary">
@@ -5145,6 +5207,7 @@ function FantasyCommandCenter({
   savedRooms,
   sourceLanes,
   teamLens,
+  matchupSource,
   ui,
 }: {
   activeRoom: FantasySavedRoom | null;
@@ -5160,6 +5223,7 @@ function FantasyCommandCenter({
   savedRooms: FantasySavedRoom[];
   sourceLanes: FantasySourceLane[];
   teamLens: FantasyTeamLens;
+  matchupSource: FantasyMatchupSourceRead;
   ui: NflUiCopy;
 }) {
   const active = leagueMap.active;
@@ -5359,6 +5423,10 @@ function FantasyCommandCenter({
               {opponentTradeRead?.summary ??
                 ui.fantasy.tradeLaneFallback}
             </p>
+          </div>
+          <div className={cx("nfl-fantasy-match-source-mini", matchupSource.tone)}>
+            <span>{matchupSource.label}</span>
+            <strong>{matchupSource.sourceLabel}</strong>
           </div>
         </article>
       </div>
@@ -6053,21 +6121,25 @@ function FantasyViewTabs({
 function FantasyOverview({
   actions,
   matchupReport,
+  matchupSource,
   report,
   rosteredIds,
   rosteredKeys,
   rows,
   scoringFormat,
   teamLens,
+  waiverFits,
 }: {
   actions: FantasyActionItem[];
   matchupReport: FantasyMatchupReport;
+  matchupSource: FantasyMatchupSourceRead;
   report: FantasyTeamReport;
   rosteredIds: Set<string>;
   rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
+  waiverFits: FantasyWaiverFitRecommendation[];
 }) {
   const weeklyCoach = buildFantasyWeeklyCoach({
     matchupReport,
@@ -6077,15 +6149,18 @@ function FantasyOverview({
   });
   const suggestedPlayers = useMemo(
     () =>
-      scoutingRowsForMode(
-        rows,
-        "topPicks",
-        rosteredIds,
-        rosteredKeys,
-        report.weakestLane.position,
-        teamLens,
-        report.lineupPositions,
-      ).slice(0, 5),
+      uniqueScoutingRowsById([
+        ...waiverFits.map((fit) => fit.player),
+        ...scoutingRowsForMode(
+          rows,
+          "topPicks",
+          rosteredIds,
+          rosteredKeys,
+          report.weakestLane.position,
+          teamLens,
+          report.lineupPositions,
+        ),
+      ]).slice(0, 5),
     [
       report.lineupPositions,
       report.weakestLane.position,
@@ -6093,6 +6168,7 @@ function FantasyOverview({
       rosteredKeys,
       rows,
       teamLens,
+      waiverFits,
     ],
   );
   const [selectedPlayerId, setSelectedPlayerId] = useState(
@@ -6190,6 +6266,10 @@ function FantasyOverview({
         <div className="nfl-hub-grid">
           <article className="nfl-hub-panel nfl-hub-matchup-card">
             <span className="nfl-hub-label">Current matchup</span>
+            <div className={cx("nfl-hub-source-pill", matchupSource.tone)}>
+              <span>{matchupSource.label}</span>
+              <strong>{matchupSource.sourceLabel}</strong>
+            </div>
             <div className="nfl-hub-matchup-row">
               <div>
                 <strong>{matchupReport.left.team.name}</strong>
@@ -6262,6 +6342,7 @@ function FantasyOverview({
 
         {selectedPlayer ? (
           <FantasySuggestedPlayerPanel
+            fit={waiverFits.find((item) => item.player.id === selectedPlayer.id) ?? null}
             player={selectedPlayer}
             report={report}
             rosteredIds={rosteredIds}
@@ -6270,6 +6351,8 @@ function FantasyOverview({
             teamLens={teamLens}
           />
         ) : null}
+
+        <FantasyWaiverFitPlan recommendations={waiverFits} report={report} />
 
         <div className="nfl-hub-week-room" aria-label="Weekly check points">
           {weekTimeline.map((item) => (
@@ -6352,6 +6435,7 @@ function FantasyOverview({
 }
 
 function FantasySuggestedPlayerPanel({
+  fit,
   player,
   report,
   rosteredIds,
@@ -6359,6 +6443,7 @@ function FantasySuggestedPlayerPanel({
   scoringFormat,
   teamLens,
 }: {
+  fit: FantasyWaiverFitRecommendation | null;
   player: ScoutingRow;
   report: FantasyTeamReport;
   rosteredIds: Set<string>;
@@ -6383,6 +6468,9 @@ function FantasySuggestedPlayerPanel({
   const moveShape = dropCandidate
     ? `If you need a roster spot, compare against ${dropCandidate.name} first. Do not cut a steadier starter just to chase a bench pop.`
     : "No obvious drop candidate is showing yet. Treat this as a watchlist or trade-chip read.";
+  const addCutCopy = fit?.cutPlayer
+    ? `Add ${fit.player.name}; first cut check is ${fit.cutPlayer.name}.`
+    : `Shortlist ${player.name}; no clean cut is automatic yet.`;
 
   return (
     <article className="nfl-hub-player-detail">
@@ -6424,10 +6512,8 @@ function FantasySuggestedPlayerPanel({
         </div>
         <div>
           <span>Move shape</span>
-          <strong>
-            {position === report.weakestLane.position ? "Need fit" : "Bench value"}
-          </strong>
-          <p>{moveShape}</p>
+          <strong>{fit?.action ?? (position === report.weakestLane.position ? "Need fit" : "Bench value")}</strong>
+          <p>{fit ? `${addCutCopy} ${fit.reason}` : moveShape}</p>
         </div>
         <div>
           <span>Risk check</span>
@@ -6435,6 +6521,62 @@ function FantasySuggestedPlayerPanel({
           <p>{fantasyDeepResearchRisk(player)}</p>
         </div>
       </div>
+    </article>
+  );
+}
+
+function FantasyWaiverFitPlan({
+  recommendations,
+  report,
+}: {
+  recommendations: FantasyWaiverFitRecommendation[];
+  report: FantasyTeamReport;
+}) {
+  return (
+    <article className="nfl-waiver-fit-plan" aria-label="Waiver fit plan">
+      <div className="nfl-waiver-fit-head">
+        <div>
+          <span>
+            <Search size={16} />
+            Waiver fit plan
+          </span>
+          <strong>Patch {report.weakestLane.label} without cutting the wrong player</strong>
+        </div>
+        <em>{recommendations.length} fit checks</em>
+      </div>
+
+      {recommendations.length > 0 ? (
+        <div className="nfl-waiver-fit-grid">
+          {recommendations.slice(0, 3).map((item) => (
+            <article key={item.player.id}>
+              <div>
+                <span>{item.horizon}</span>
+                <strong>Add {item.player.name}</strong>
+                <em>{fantasyPlayerTeamLine(item.player)}</em>
+              </div>
+              <div className="nfl-waiver-fit-move">
+                <span>Cut check</span>
+                <strong>{item.cutPlayer?.name ?? "No automatic cut"}</strong>
+                <em>{item.cutRead}</em>
+              </div>
+              <p>{item.reason}</p>
+              <div className="nfl-waiver-fit-receipts">
+                <span>{scoutingRankLabel(item.position)} lane</span>
+                <span>{item.shortTermRead}</span>
+                {item.projectedLift !== null ? (
+                  <span>{formatFantasyDelta(item.projectedLift)} projected lift</span>
+                ) : null}
+                <span>{item.dynastyRead}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="nfl-waiver-fit-empty">
+          No clean add/cut move yet. Keep the roster intact until a better free-agent
+          pool or projection source is connected.
+        </p>
+      )}
     </article>
   );
 }
@@ -8402,6 +8544,7 @@ function FantasyTeamLab({
   manualImportStatus,
   manualRosterText,
   matchupReport,
+  matchupSource,
   onManualImport,
   onLensChange,
   onManualRosterTextChange,
@@ -8448,6 +8591,7 @@ function FantasyTeamLab({
   manualImportStatus: FantasyImportStatus;
   manualRosterText: string;
   matchupReport: FantasyMatchupReport;
+  matchupSource: FantasyMatchupSourceRead;
   onManualImport: () => void;
   onLensChange: (lens: FantasyTeamLens) => void;
   onManualRosterTextChange: (value: string) => void;
@@ -8588,6 +8732,10 @@ function FantasyTeamLab({
             ))}
           </select>
         </label>
+        <div className={cx("nfl-team-lab-source-chip", matchupSource.tone)}>
+          <span>{matchupSource.label}</span>
+          <strong>{matchupSource.sourceLabel}</strong>
+        </div>
       </div>
 
       <FantasyDecisionEnginePanel
@@ -8684,6 +8832,7 @@ function FantasyTeamLab({
             <strong>
               {matchupReport.left.team.name} vs {matchupReport.right.team.name}
             </strong>
+            <em>{matchupSource.detail}</em>
           </div>
           <b>
             {matchupReport.edgeLabel} · {matchupReport.confidence}% read
@@ -11597,6 +11746,175 @@ function scoutingRowsForMode(
   }
 
   return playableRows;
+}
+
+function uniqueScoutingRowsById(rows: ScoutingRow[]) {
+  const seen = new Set<string>();
+
+  return rows.filter((row) => {
+    if (seen.has(row.id)) {
+      return false;
+    }
+
+    seen.add(row.id);
+    return true;
+  });
+}
+
+function buildFantasyWaiverFitRecommendations({
+  playablePositions,
+  report,
+  rosteredIds,
+  rosteredKeys,
+  rows,
+  teamLens,
+}: {
+  playablePositions: FantasyPosition[];
+  report: FantasyTeamReport;
+  rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
+  rows: ScoutingRow[];
+  teamLens: FantasyTeamLens;
+}): FantasyWaiverFitRecommendation[] {
+  const weakestPosition = report.weakestLane.position;
+  const availableRows = rows
+    .filter((row) => playablePositions.includes(normalizeScoutingPosition(row.position)))
+    .filter((row) => isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys));
+  const candidatePool = availableRows.filter(
+    (player) =>
+      normalizeScoutingPosition(player.position) === weakestPosition ||
+      fantasyTopPickupCandidate(player, weakestPosition, teamLens) ||
+      fantasyUltraDeepCandidate(player),
+  );
+  const candidates = candidatePool.length > 0 ? candidatePool : availableRows;
+
+  return uniqueScoutingRowsById(candidates)
+    .map((player) => {
+      const position = normalizeScoutingPosition(player.position);
+      const cutPlayer = fantasyWaiverCutCandidate(report, player, teamLens);
+      const projectedLift = cutPlayer
+        ? round1(player.contextProjection.projection - cutPlayer.contextProjection.projection)
+        : null;
+      const isWeakLane = position === weakestPosition;
+      const dynastyValue = player.dynastyValue ?? player.health;
+      const horizon =
+        teamLens === "dynasty" && dynastyValue >= 72 && player.contextProjection.projection < 10
+          ? "Dynasty stash"
+          : isWeakLane
+            ? "Weak-lane patch"
+            : "Bench upgrade";
+
+      return {
+        action: isWeakLane ? "Direct patch" : "Value add",
+        cutPlayer,
+        cutRead: cutPlayer
+          ? `${cutPlayer.contextProjection.projection.toFixed(1)} pts · ${fantasyPlayerTeamLine(
+              cutPlayer,
+            )}`
+          : "Keep bench intact unless the pool improves.",
+        dynastyRead:
+          teamLens === "dynasty"
+            ? `Dynasty ${Math.round(dynastyValue)}`
+            : `${player.contextProjection.floor.toFixed(1)} floor`,
+        horizon,
+        player,
+        position,
+        projectedLift,
+        reason: fantasyWaiverFitReason({
+          isWeakLane,
+          player,
+          projectedLift,
+          report,
+          teamLens,
+        }),
+        shortTermRead: fantasyWaiverShortTermRead(player, projectedLift),
+      };
+    })
+    .sort(
+      (left, right) =>
+        fantasyWaiverFitScore(right, weakestPosition, teamLens) -
+          fantasyWaiverFitScore(left, weakestPosition, teamLens) ||
+        (right.projectedLift ?? -99) - (left.projectedLift ?? -99),
+    )
+    .slice(0, 4);
+}
+
+function fantasyWaiverCutCandidate(
+  report: FantasyTeamReport,
+  target: ScoutingRow,
+  teamLens: FantasyTeamLens,
+) {
+  const benchIds = new Set(report.benchPlayers.map((player) => player.id));
+  const ladder = buildFantasyRosterValueLadder(report, teamLens);
+  const candidates = ladder
+    .filter((row) => benchIds.has(row.player.id) && row.player.id !== target.id)
+    .filter((row) => row.band !== "Keep / start" && row.band !== "Keep")
+    .sort(
+      (left, right) =>
+        right.cutScore - left.cutScore ||
+        left.player.contextProjection.projection -
+          right.player.contextProjection.projection,
+    );
+
+  return candidates[0]?.player ?? report.benchPlayers[report.benchPlayers.length - 1] ?? null;
+}
+
+function fantasyWaiverFitScore(
+  recommendation: FantasyWaiverFitRecommendation,
+  weakestPosition: ScoutingPlayerPosition,
+  teamLens: FantasyTeamLens,
+) {
+  return (
+    fantasyPickupScore(
+      recommendation.player,
+      weakestPosition,
+      teamLens,
+      recommendation.position === weakestPosition ? "pickup" : "available",
+    ) +
+    (recommendation.projectedLift ?? 0) * 2.2 +
+    (recommendation.position === weakestPosition ? 5 : 0)
+  );
+}
+
+function fantasyWaiverFitReason({
+  isWeakLane,
+  player,
+  projectedLift,
+  report,
+  teamLens,
+}: {
+  isWeakLane: boolean;
+  player: ScoutingRow;
+  projectedLift: number | null;
+  report: FantasyTeamReport;
+  teamLens: FantasyTeamLens;
+}) {
+  const liftCopy =
+    projectedLift !== null
+      ? ` It grades ${formatFantasyDelta(projectedLift)} against the first cut check.`
+      : "";
+
+  if (isWeakLane) {
+    return `${player.name} directly addresses ${report.weakestLane.label}. ${report.weakestLane.summary}${liftCopy}`;
+  }
+
+  if (teamLens === "dynasty") {
+    return `${player.name} is not your weakest-lane position, but the long-term value is strong enough to compare against the back of the bench.${liftCopy}`;
+  }
+
+  return `${player.name} is a bench-value add. Use it only if the role is clearer than the player you would cut.${liftCopy}`;
+}
+
+function fantasyWaiverShortTermRead(player: ScoutingRow, projectedLift: number | null) {
+  if (projectedLift !== null && projectedLift >= 2) {
+    return "Immediate lineup help";
+  }
+
+  if ((player.roleSecurity ?? player.health) >= 72) {
+    return "Stable bench depth";
+  }
+
+  return "Watchlist before claim";
 }
 
 function fantasyTopPickupCandidate(
@@ -14576,6 +14894,34 @@ function fantasyMatchupAccuracyLabel(
       "Sleeper has not published a head-to-head matchup for this roster/week yet. This is a league comparison fallback.",
     label: "Compare fallback",
     tone: "fallback" as const,
+  };
+}
+
+function buildFantasyMatchupSource({
+  fantasyImport,
+  opponentTeamId,
+}: {
+  fantasyImport: ImportedFantasyLeague | null;
+  opponentTeamId: string;
+}): FantasyMatchupSourceRead {
+  const accuracy = fantasyMatchupAccuracyLabel(fantasyImport, opponentTeamId);
+  const receipt = fantasyImport?.sleeper;
+  const sourceLabel =
+    receipt?.matchupConfidence === "matched"
+      ? `Week ${receipt.week ?? "?"} matchup`
+      : receipt?.matchupConfidence === "partial"
+        ? `Week ${receipt.week ?? "?"} partial`
+        : fantasyImport?.source === "sleeper"
+          ? "Sleeper league"
+          : fantasyImport
+            ? fantasyImport.source
+            : "Sample data";
+
+  return {
+    detail: accuracy.detail,
+    label: accuracy.label,
+    sourceLabel,
+    tone: accuracy.tone,
   };
 }
 
