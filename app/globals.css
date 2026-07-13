@@ -22983,3 +22983,209 @@ body {
   }
 }
 /* === End Fantasy Seer information architecture polish === */
+/* === Fantasy Seer final containment polish === */
+.nfl-fantasy-hero {
+  max-width: 1320px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: start;
+  gap: 16px;
+}
+
+.nfl-fantasy-command,
+.nfl-fantasy-command-card,
+.nfl-fantasy-command-center,
+.nfl-weekly-command-hub,
+.nfl-best-move-hero,
+.nfl-week-matchup-panel,
+.nfl-hero-decision-card,
+.nfl-roster-map,
+.nfl-model-lab-drawer {
+  border-radius: 12px;
+}
+
+.nfl-fantasy-command {
+  position: sticky;
+  top: 94px;
+  align-self: start;
+  gap: 14px;
+  padding: 18px;
+}
+
+.nfl-fantasy-command h1 {
+  max-width: 12ch;
+  font-size: clamp(2.05rem, 3.8vw, 3.1rem);
+  line-height: 0.98;
+}
+
+.nfl-fantasy-command p {
+  max-width: 32ch;
+  font-size: 0.9rem;
+  line-height: 1.48;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+}
+
+.nfl-fantasy-command .nfl-fantasy-hero-actions button {
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+}
+
+.nfl-fantasy-command .nfl-fantasy-safety-note {
+  max-height: 132px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.nfl-fantasy-command .nfl-fantasy-safety-note p {
+  font-size: 0.74rem;
+  line-height: 1.42;
+}
+
+.nfl-fantasy-command-card {
+  gap: 14px;
+  padding: 14px;
+}
+
+.nfl-card-topline {
+  gap: 10px;
+}
+
+.nfl-card-topline strong {
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nfl-best-move-hero {
+  grid-template-columns: minmax(0, 0.84fr) minmax(280px, 0.64fr);
+  gap: 14px;
+  padding: clamp(14px, 1.6vw, 18px);
+}
+
+.nfl-best-move-command,
+.nfl-best-move-evidence {
+  gap: 10px;
+}
+
+.nfl-best-move-command-head {
+  min-height: 34px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(157, 183, 232, 0.11);
+}
+
+.nfl-best-move-command-head span,
+.nfl-best-move-command-head em {
+  font-size: 0.68rem;
+}
+
+.nfl-best-move-decision {
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 11px;
+  padding: 12px;
+  background: rgba(11, 14, 18, 0.5);
+  border: 1px solid rgba(157, 183, 232, 0.12);
+  border-radius: 12px;
+}
+
+.nfl-best-move-monogram {
+  width: 48px;
+  height: 54px;
+  border-radius: 13px;
+}
+
+.nfl-best-move-monogram b {
+  font-size: 0.8rem;
+}
+
+.nfl-best-move-monogram small {
+  font-size: 0.52rem;
+}
+
+.nfl-best-move-decision > div > span {
+  font-size: 0.62rem;
+}
+
+.nfl-best-move-decision strong {
+  max-width: 18ch;
+  font-size: clamp(1.26rem, 2.4vw, 1.78rem);
+  line-height: 1.02;
+}
+
+.nfl-best-move-decision p {
+  max-width: 48ch;
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
+
+.nfl-best-move-action-strip {
+  gap: 8px;
+}
+
+.nfl-best-move-action-strip button {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 0.76rem;
+}
+
+.nfl-best-move-scorecards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-best-move-scorecards span {
+  min-height: 74px;
+  padding: 10px;
+  font-size: 0.86rem;
+}
+
+.nfl-best-move-memo {
+  gap: 8px;
+}
+
+.nfl-best-move-memo article {
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.nfl-best-move-memo p {
+  font-size: 0.75rem;
+  line-height: 1.36;
+}
+
+.nfl-week-matchup-panel,
+.nfl-roster-map,
+.nfl-model-lab-drawer,
+.nfl-prekick-note {
+  padding: 12px;
+}
+
+.nfl-week-matchup-summary,
+.nfl-week-matchup-takeaways {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-week-matchup-summary > div,
+.nfl-week-matchup-takeaways > div,
+.nfl-week-matchup-lane,
+.nfl-roster-map-card {
+  min-height: 0;
+  padding: 9px;
+  border-radius: 10px;
+}
+
+.nfl-week-matchup-summary strong,
+.nfl-week-matchup-takeaways strong {
+  white-space: normal;
+}
+
+.nfl-roster-map-grid {
