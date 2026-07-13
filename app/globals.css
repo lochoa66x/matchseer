@@ -22664,3 +22664,322 @@ body {
   }
 }
 /* === End Fantasy Seer matchup utility v2 === */
+
+/* === Fantasy Seer information architecture polish === */
+.nfl-fantasy-context-bar,
+.nfl-fantasy-command-center,
+.nfl-fantasy-overview {
+  max-width: 1280px;
+}
+
+.nfl-fantasy-context-bar {
+  grid-template-columns: minmax(210px, 0.34fr) minmax(0, 1fr) minmax(260px, 0.52fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+.nfl-fantasy-command-center {
+  margin: 0 auto 14px;
+  padding: 14px;
+}
+
+.nfl-fantasy-command-center-top {
+  align-items: end;
+  grid-template-columns: minmax(240px, 0.42fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.nfl-fantasy-command-center-top h1 {
+  max-width: none;
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
+  letter-spacing: 0;
+}
+
+.nfl-fantasy-command-center-top p {
+  max-width: 52ch;
+  font-size: 0.78rem;
+}
+
+.nfl-fantasy-command-center-controls {
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+  gap: 8px;
+}
+
+.nfl-fantasy-command-center-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-fantasy-selected-team-card {
+  min-height: 0;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.nfl-fantasy-selected-team-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.nfl-fantasy-selected-team-card p,
+.nfl-fantasy-trade-lane-preview p {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.nfl-fantasy-overview {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.nfl-weekly-command-hub {
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+}
+
+.nfl-hub-head {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, auto);
+  gap: 14px;
+}
+
+.nfl-hub-head h2 {
+  max-width: none;
+  font-size: clamp(1.25rem, 2.2vw, 1.85rem);
+  line-height: 1.06;
+  letter-spacing: 0;
+}
+
+.nfl-hub-head p {
+  max-width: 62ch;
+  font-size: 0.78rem;
+}
+
+.nfl-hub-grid {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.88fr) minmax(300px, 1fr);
+  gap: 10px;
+}
+
+.nfl-hub-panel {
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.nfl-hub-player-detail {
+  align-items: start;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.nfl-hub-player-visual {
+  grid-row: span 2;
+  min-width: 0;
+}
+
+.nfl-hub-player-advice {
+  grid-column: 2;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-waiver-fit-plan {
+  padding: 13px;
+  border-radius: 14px;
+}
+
+.nfl-waiver-fit-grid,
+.nfl-hub-week-room {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nfl-fantasy-action-queue {
+  gap: 11px;
+  padding: 13px;
+  border-radius: 14px;
+}
+
+.nfl-fantasy-action-head h2 {
+  font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+  letter-spacing: 0;
+}
+
+.nfl-fantasy-action-head > span {
+  padding: 6px 8px;
+  font-size: 0.64rem;
+}
+
+.nfl-fantasy-action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nfl-action-card {
+  gap: 9px;
+  padding: 11px;
+  border-radius: 12px;
+}
+
+.nfl-action-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.nfl-action-card p {
+  font-size: 0.73rem;
+  line-height: 1.32;
+}
+
+.nfl-action-receipts {
+  display: none;
+}
+
+.nfl-action-card em {
+  font-size: 0.66rem;
+}
+
+.nfl-fantasy-workbench-drawer {
+  display: grid;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  background: rgba(20, 24, 32, 0.68);
+  border: 1px solid var(--film-room-border, rgba(42, 48, 59, 0.9));
+  border-radius: 14px;
+}
+
+.nfl-fantasy-workbench-drawer summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 13px 15px;
+  color: var(--film-room-copy, #f4f1e8);
+  cursor: pointer;
+  list-style: none;
+}
+
+.nfl-fantasy-workbench-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.nfl-fantasy-workbench-drawer summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--film-room-brass, #d8b45d);
+  font-size: 0.75rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.nfl-fantasy-workbench-drawer summary em {
+  color: var(--film-room-muted, #aeb8c7);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 760;
+  text-align: right;
+}
+
+.nfl-fantasy-workbench-drawer[open] summary {
+  border-bottom: 1px solid var(--film-room-border, rgba(42, 48, 59, 0.9));
+}
+
+.nfl-fantasy-workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.nfl-fantasy-workbench-grid .nfl-fantasy-focus-panel {
+  margin: 0;
+  box-shadow: none;
+}
+
+.nfl-fantasy-focus-panel {
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.nfl-fantasy-focus-panel h2 {
+  max-width: none;
+  font-size: clamp(1.05rem, 1.7vw, 1.35rem);
+  letter-spacing: 0;
+}
+
+.nfl-fantasy-focus-panel p {
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.nfl-fantasy-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nfl-fantasy-spotlight-row {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  padding: 9px;
+}
+
+@media (max-width: 1180px) {
+  .nfl-fantasy-command-center-top,
+  .nfl-fantasy-command-center-body,
+  .nfl-hub-grid,
+  .nfl-hub-player-detail,
+  .nfl-fantasy-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-hub-player-visual,
+  .nfl-hub-player-advice {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .nfl-fantasy-command-center-controls,
+  .nfl-fantasy-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .nfl-fantasy-context-bar,
+  .nfl-fantasy-command-center,
+  .nfl-fantasy-overview {
+    max-width: 100%;
+  }
+
+  .nfl-fantasy-context-bar,
+  .nfl-fantasy-command-center-controls,
+  .nfl-fantasy-action-grid,
+  .nfl-waiver-fit-grid,
+  .nfl-hub-week-room,
+  .nfl-fantasy-kpi-grid,
+  .nfl-hub-player-advice {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-hub-head,
+  .nfl-fantasy-workbench-drawer summary {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-fantasy-workbench-drawer summary {
+    display: grid;
+  }
+
+  .nfl-fantasy-workbench-drawer summary em {
+    text-align: left;
+  }
+
+  .nfl-fantasy-spotlight-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .nfl-fantasy-spotlight-row > div:last-child {
+    grid-column: 2;
+  }
+}
+/* === End Fantasy Seer information architecture polish === */

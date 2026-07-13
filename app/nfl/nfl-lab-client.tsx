@@ -6367,69 +6367,81 @@ function FantasyOverview({
 
       <FantasyActionQueue actions={actions} />
 
-      <article className="nfl-fantasy-focus-panel">
-        <div className="nfl-section-kicker">
-          <Sparkles size={17} />
-          This week at a glance
-        </div>
-        <h2>{report.team.name} command read</h2>
-        <p>{teamAdviceSummary(report, teamLens)}</p>
-        <div className="nfl-fantasy-kpi-grid">
-          <div>
-            <span>Projection</span>
-            <strong>{report.projection.toFixed(1)}</strong>
-            <em>{formatFantasyDelta(report.lineupSeerDelta)} vs source</em>
-          </div>
-          <div>
-            <span>Range</span>
-            <strong>
-              {report.floor.toFixed(1)}-{report.ceiling.toFixed(1)}
-            </strong>
-            <em>{scoringLabels[scoringFormat]}</em>
-          </div>
-          <div>
-            <span>Matchup</span>
-            <strong>{matchupReport.edgeLabel}</strong>
-            <em>{matchupReport.winLean}% lean</em>
-          </div>
-          <div>
-            <span>Pressure point</span>
-            <strong>{weeklyCoach.pressure.label}</strong>
-            <em>{report.strongestLane.label} carries</em>
-          </div>
-        </div>
-        <div className="nfl-fantasy-action-list">
-          <span>Lineup pressure</span>
-          {report.startSitReceipts.slice(0, 4).map((receipt) => (
-            <p key={`${receipt.label}-${receipt.player.id}`}>
-              <strong>{receipt.label}</strong> {receipt.summary}
-            </p>
-          ))}
-        </div>
-      </article>
+      <details className="nfl-fantasy-workbench-drawer">
+        <summary>
+          <span>
+            <Sparkles size={16} />
+            Weekly workbench
+          </span>
+          <em>Open matchup receipts, lineup pressure, and player pulse</em>
+        </summary>
 
-      <article className="nfl-fantasy-focus-panel">
-        <div className="nfl-section-kicker">
-          <Search size={17} />
-          Top player pulse
+        <div className="nfl-fantasy-workbench-grid">
+          <article className="nfl-fantasy-focus-panel">
+            <div className="nfl-section-kicker">
+              <Sparkles size={17} />
+              This week at a glance
+            </div>
+            <h2>{report.team.name} command read</h2>
+            <p>{teamAdviceSummary(report, teamLens)}</p>
+            <div className="nfl-fantasy-kpi-grid">
+              <div>
+                <span>Projection</span>
+                <strong>{report.projection.toFixed(1)}</strong>
+                <em>{formatFantasyDelta(report.lineupSeerDelta)} vs source</em>
+              </div>
+              <div>
+                <span>Range</span>
+                <strong>
+                  {report.floor.toFixed(1)}-{report.ceiling.toFixed(1)}
+                </strong>
+                <em>{scoringLabels[scoringFormat]}</em>
+              </div>
+              <div>
+                <span>Matchup</span>
+                <strong>{matchupReport.edgeLabel}</strong>
+                <em>{matchupReport.winLean}% lean</em>
+              </div>
+              <div>
+                <span>Pressure point</span>
+                <strong>{weeklyCoach.pressure.label}</strong>
+                <em>{report.strongestLane.label} carries</em>
+              </div>
+            </div>
+            <div className="nfl-fantasy-action-list">
+              <span>Lineup pressure</span>
+              {report.startSitReceipts.slice(0, 4).map((receipt) => (
+                <p key={`${receipt.label}-${receipt.player.id}`}>
+                  <strong>{receipt.label}</strong> {receipt.summary}
+                </p>
+              ))}
+            </div>
+          </article>
+
+          <article className="nfl-fantasy-focus-panel">
+            <div className="nfl-section-kicker">
+              <Search size={17} />
+              Top player pulse
+            </div>
+            <h2>Clean board</h2>
+            <p>
+              A quieter shortlist from the full player pool. Open Players when you want
+              the deeper ranking board by position.
+            </p>
+            <div className="nfl-fantasy-spotlight-list">
+              {suggestedPlayers.slice(0, 6).map((player, index) => (
+                <FantasySpotlightRow
+                  index={index}
+                  key={player.id}
+                  player={player}
+                  scoringFormat={scoringFormat}
+                />
+              ))}
+            </div>
+            <AdviceList title="Close calls" items={closeCalls} />
+          </article>
         </div>
-        <h2>Clean board</h2>
-        <p>
-          A quieter shortlist from the full player pool. Open Players when you want
-          the deeper ranking board by position.
-        </p>
-        <div className="nfl-fantasy-spotlight-list">
-          {suggestedPlayers.slice(0, 6).map((player, index) => (
-            <FantasySpotlightRow
-              index={index}
-              key={player.id}
-              player={player}
-              scoringFormat={scoringFormat}
-            />
-          ))}
-        </div>
-        <AdviceList title="Close calls" items={closeCalls} />
-      </article>
+      </details>
     </section>
   );
 }
