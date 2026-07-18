@@ -8833,6 +8833,19 @@ body {
   gap: 18px;
 }
 
+.liga-selected-matchroom {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 16px;
+}
+
+.liga-selected-matchroom .hero-selected-panel {
+  min-height: 0;
+}
+
+.liga-selected-matchroom .seer-panel-title {
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+}
+
 .hero-match-list {
   grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
   max-height: 510px;
@@ -11462,7 +11475,7 @@ body {
 /* === Liga MX traditional league mode === */
 .liga-mode-board {
   width: min(100%, 1760px);
-  margin: 20px auto 0;
+  margin: 18px auto 0;
   padding: clamp(14px, 2vw, 22px);
   color: var(--text-primary);
   background:
@@ -11535,6 +11548,7 @@ body {
 }
 
 .liga-snapshot-grid article,
+.liga-context-card,
 .liga-table-panel,
 .liga-zone-panel,
 .jornada-hub,
@@ -11549,11 +11563,12 @@ body {
   display: grid;
   align-content: start;
   gap: 7px;
-  min-height: 108px;
+  min-height: 104px;
   padding: 13px;
 }
 
 .liga-snapshot-grid span,
+.liga-context-card span,
 .liga-table-panel header span,
 .liga-zone-card span,
 .jornada-card-top span,
@@ -11573,6 +11588,66 @@ body {
   line-height: 1.08;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.liga-context-strip {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.6fr) repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.liga-context-title,
+.liga-context-card {
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  border-radius: 13px;
+}
+
+.liga-context-title {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 8px;
+  color: rgba(216, 180, 93, 0.88);
+  background: rgba(216, 180, 93, 0.075);
+  border: 1px solid rgba(216, 180, 93, 0.18);
+}
+
+.liga-context-title strong {
+  max-width: 13ch;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  line-height: 1.08;
+}
+
+.liga-context-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.liga-context-card strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liga-context-card p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(239, 235, 222, 0.66);
+  font-size: 0.74rem;
+  font-weight: 720;
+  line-height: 1.36;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .liga-mode-layout {
@@ -11761,7 +11836,7 @@ body {
   appearance: none;
   display: grid;
   gap: 10px;
-  min-height: 180px;
+  min-height: 196px;
   padding: 12px;
   color: inherit;
   text-align: left;
@@ -11773,10 +11848,17 @@ body {
 }
 
 .jornada-card:hover,
-.jornada-card:focus-visible {
+.jornada-card:focus-visible,
+.jornada-card.active {
   border-color: rgba(216, 180, 93, 0.34);
   background: rgba(20, 24, 32, 0.92);
   transform: translateY(-1px);
+}
+
+.jornada-card.active {
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(216, 180, 93, 0.18) inset;
 }
 
 .jornada-card-top,
@@ -11836,6 +11918,33 @@ body {
   -webkit-line-clamp: 2;
 }
 
+.jornada-card-action {
+  align-self: end;
+  justify-self: start;
+  min-height: 28px;
+  padding: 6px 9px;
+  color: #0b0e12;
+  background: linear-gradient(135deg, #d8b45d, #9db7e8);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+@media (max-width: 1320px) {
+  .liga-context-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .liga-context-title {
+    min-height: 0;
+  }
+
+  .liga-context-title strong {
+    max-width: none;
+  }
+}
+
 @media (max-width: 1180px) {
   .liga-mode-layout {
     grid-template-columns: 1fr;
@@ -11859,6 +11968,7 @@ body {
   }
 
   .liga-snapshot-grid,
+  .liga-context-strip,
   .jornada-grid {
     grid-template-columns: 1fr;
   }
@@ -11874,10 +11984,6 @@ body {
   }
 }
 /* === End Liga MX traditional league mode === */
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 7px;
-}
 
 .nfl-roster-map-card {
   display: grid;

@@ -1731,13 +1731,15 @@ export default function MatchSeerHome({
     [isLigaMxMode, language, matches],
   );
   useEffect(() => {
+    const activeGuardMatches = isLigaMxMode ? sortedMatches : visibleMatches;
+
     if (
-      visibleMatches.length > 0 &&
-      !visibleMatches.some((match) => match.id === activeMatchId)
+      activeGuardMatches.length > 0 &&
+      !activeGuardMatches.some((match) => match.id === activeMatchId)
     ) {
-      setActiveMatchId(visibleMatches[0].id);
+      setActiveMatchId(activeGuardMatches[0].id);
     }
-  }, [activeMatchId, visibleMatches]);
+  }, [activeMatchId, isLigaMxMode, sortedMatches, visibleMatches]);
 
   async function requestOracleRead(matchId: string, selectedLanguage: Language) {
     const match = matches.find((item) => item.id === matchId);
@@ -1816,6 +1818,16 @@ export default function MatchSeerHome({
       setShareStatus("error");
       window.setTimeout(() => setShareStatus("idle"), 2200);
     }
+  }
+
+  function selectMatchForRead(matchId: string) {
+    setActiveMatchId(matchId);
+    window.requestAnimationFrame(() => {
+      document.getElementById("ask-seer")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
 
   if (!activeMatch) {
@@ -1932,6 +1944,11 @@ export default function MatchSeerHome({
   const activeAccents = matchAccentColors(activeMatch);
   const activeMatchIsFinal = activeMatch.status === "Final";
   const activeMatchCanAsk = !activeMatchIsFinal && !isPendingMatchRead(activeMatch);
+  const selectedReadCopy = isLigaMxMode
+    ? language === "es"
+      ? { eyebrow: "Lectura del partido", title: "Pronostico claro" }
+      : { eyebrow: "Match read", title: "Clear forecast" }
+    : { eyebrow: t.seerHub, title: t.matchday };
 
   return (
     <main className="app-shell">
@@ -1973,8 +1990,19 @@ export default function MatchSeerHome({
       </section>
       <SoccerCompetitionStrip activeKey={competition.key} />
 
-      <section className="hero-grid hero-matchroom" id="forecast-board">
-        <div className="hero-match-board">
+      {isLigaMxMode && leagueModeReport && (
+        <LigaMxLeagueModeBoard
+          report={leagueModeReport}
+          language={language}
+          selectedMatchId={activeMatch.id}
+          usingFeaturedFallback={usingFeaturedFallback}
+          onSelectMatch={selectMatchForRead}
+        />
+      )}
+
+      <section className={cx("hero-grid hero-matchroom", isLigaMxMode && "liga-selected-matchroom")} id="forecast-board">
+        {!isLigaMxMode && (
+          <div className="hero-match-board">
           <div className="hero-match-board-header">
             <div className="hero-board-copy">
               <div className="section-heading">
@@ -2096,32 +2124,35 @@ export default function MatchSeerHome({
               );
             })}
           </div>
-        </div>
+          </div>
+        )}
 
         <div className="seer-access-panel seer-command-panel hero-selected-panel" id="ask-seer">
           <div className="seer-panel-header">
             <div>
               <p className="eyebrow">
-                {t.seerHub}
-                <span
-                  style={{
-                    marginLeft: 8,
-                    padding: "2px 7px",
-                    borderRadius: 6,
-                    fontSize: "0.72em",
-                    fontWeight: 600,
-                    letterSpacing: "0.04em",
-                    textTransform: "none",
-                    color: "#7fe0ff",
-                    background: "rgba(32, 215, 255, 0.16)",
-                    border: "1px solid rgba(32, 215, 255, 0.3)",
-                    verticalAlign: "middle",
-                  }}
-                >
-                  v4
-                </span>
+                {selectedReadCopy.eyebrow}
+                {!isLigaMxMode && (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      padding: "2px 7px",
+                      borderRadius: 6,
+                      fontSize: "0.72em",
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      textTransform: "none",
+                      color: "#7fe0ff",
+                      background: "rgba(32, 215, 255, 0.16)",
+                      border: "1px solid rgba(32, 215, 255, 0.3)",
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    v4
+                  </span>
+                )}
               </p>
-              <h2 className="seer-panel-title">{t.matchday}</h2>
+              <h2 className="seer-panel-title">{selectedReadCopy.title}</h2>
               <div className="seer-teams">
                 <div className="seer-team-name">
                   <TeamFlag accentColor={activeAccents.home} team={activeMatch.home} />
@@ -2179,15 +2210,6 @@ export default function MatchSeerHome({
           </div>
         </div>
       </section>
-
-      {isLigaMxMode && leagueModeReport && (
-        <LigaMxLeagueModeBoard
-          report={leagueModeReport}
-          language={language}
-          usingFeaturedFallback={usingFeaturedFallback}
-          onSelectMatch={(matchId) => setActiveMatchId(matchId)}
-        />
-      )}
 
       {!usingFeaturedFallback && isWorldCupMode && (
         <SeerScoreboardBoard
@@ -4586,23 +4608,25 @@ function LigaMxLeagueModeBoard({
   language,
   onSelectMatch,
   report,
+  selectedMatchId,
   usingFeaturedFallback,
 }: {
   language: Language;
   onSelectMatch: (matchId: string) => void;
   report: LeagueModeReport;
+  selectedMatchId: string;
   usingFeaturedFallback: boolean;
 }) {
   const copy = {
-    section: language === "es" ? "Tabla + Jornada" : "Table + Matchday",
-    title: language === "es" ? "Liga MX en modo tradicional" : "Liga MX in league mode",
+    section: language === "es" ? "Centro de liga" : "League center",
+    title: language === "es" ? "Liga MX: tabla, jornada y contexto" : "Liga MX: table, matchday, and context",
     intro:
       language === "es"
-        ? "Primero tabla, despues partido: puntos, diferencia, zona de liguilla y una explicacion clara del pronostico."
-        : "Table first, then fixture: points, goal difference, postseason zone, and a clear forecast explanation.",
+        ? "Primero la competencia: tabla, zona de liguilla, forma y partidos. El pronostico aparece cuando eliges un juego."
+        : "Competition first: table, postseason zone, form, and fixtures. The forecast appears after you pick a match.",
     source: usingFeaturedFallback
       ? language === "es"
-        ? "Vista de prueba mientras conectamos fuente en vivo"
+        ? "Vista previa con calendario cacheado"
         : "Preview mode while the live source connects"
       : language === "es"
         ? "Fuente en vivo conectada"
@@ -4622,12 +4646,54 @@ function LigaMxLeagueModeBoard({
     zone: language === "es" ? "Zona" : "Zone",
     forecast: language === "es" ? "Lectura simple" : "Simple read",
     change: language === "es" ? "Que puede cambiar" : "What can change",
+    contextTitle: language === "es" ? "Contexto que pesa" : "Context that matters",
+    selectRead: language === "es" ? "Abrir lectura" : "Open read",
   };
   const keyMatchLabel = report.keyMatch
     ? `${report.keyMatch.home.name} vs ${report.keyMatch.away.name}`
     : language === "es"
       ? "Sin partido"
       : "No match";
+  const contextCards = [
+    {
+      label: language === "es" ? "Forma + localia" : "Form + home field",
+      value: language === "es" ? "Base del modelo" : "Model base",
+      detail:
+        language === "es"
+          ? "Fuerza, localia, ritmo y cierre sostienen el pronostico inicial."
+          : "Team strength, home field, tempo, and finishing drive the first read.",
+    },
+    {
+      label: language === "es" ? "Bajas y plantillas" : "Absences + squads",
+      value: language === "es" ? "Pendiente" : "Pending",
+      detail:
+        language === "es"
+          ? "Se marca como incompleto hasta conectar una fuente confiable."
+          : "Marked incomplete until a reliable source is connected.",
+    },
+    {
+      label: language === "es" ? "Presion de tabla" : "Table pressure",
+      value: language === "es" ? "Liguilla" : "Postseason",
+      detail:
+        language === "es"
+          ? "La zona de clasificacion explica urgencia sin sobrecorregir el resultado."
+          : "The table zone explains urgency without overcorrecting the result.",
+    },
+    {
+      label: language === "es" ? "Datos vivos" : "Live data",
+      value: usingFeaturedFallback
+        ? language === "es"
+          ? "Cache"
+          : "Cached"
+        : language === "es"
+          ? "Activos"
+          : "Active",
+      detail:
+        language === "es"
+          ? "El tablero separa datos confirmados de contexto provisional."
+          : "The board separates confirmed data from provisional context.",
+    },
+  ];
 
   return (
     <section className="liga-mode-board" id="liga-mx-table">
@@ -4662,6 +4728,20 @@ function LigaMxLeagueModeBoard({
             {report.finalCount} {copy.final}
           </p>
         </article>
+      </div>
+
+      <div className="liga-context-strip" aria-label={copy.contextTitle}>
+        <div className="liga-context-title">
+          <ShieldCheck size={17} />
+          <strong>{copy.contextTitle}</strong>
+        </div>
+        {contextCards.map((card) => (
+          <article className="liga-context-card" key={card.label}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <p>{card.detail}</p>
+          </article>
+        ))}
       </div>
 
       <div className="liga-mode-layout">
@@ -4752,10 +4832,11 @@ function LigaMxLeagueModeBoard({
 
             return (
               <button
-                className="jornada-card"
+                className={cx("jornada-card", selectedMatchId === match.id && "active")}
                 key={match.id}
                 onClick={() => onSelectMatch(match.id)}
                 type="button"
+                aria-pressed={selectedMatchId === match.id}
               >
                 <div className="jornada-card-top">
                   <span>{formatMatchSchedule(match)}</span>
@@ -4777,6 +4858,7 @@ function LigaMxLeagueModeBoard({
                 </div>
                 <p>{reason}</p>
                 <em>{copy.change}: {match.weather.mood[language] ?? match.weather.mood.en}</em>
+                <span className="jornada-card-action">{copy.selectRead}</span>
               </button>
             );
           })}
