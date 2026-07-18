@@ -8449,6 +8449,10 @@ body {
   display: none;
 }
 
+.cup-candidate-grid.is-finalist-lane {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
 @media (max-width: 760px) {
   .cup-seer-summary {
     grid-template-columns: 1fr;

@@ -336,6 +336,8 @@ const copy = {
     cupSeer: "Weekly Cup Seer",
     cupSeerTitle: "Who is still in the title lane?",
     cupSeerIntro: "The field keeps tightening: finished matches count, upcoming fixtures stay projected, and MatchSeer tracks the live title lane.",
+    cupFinalistsTitle: "Only the final pair remains.",
+    cupFinalistsIntro: "The title lane is trimmed to the two finalists. Eliminated contenders move to receipts, not the live champion read.",
     cupPulse: "Weekly pulse",
     cupLeader: "Top signal",
     cupOpen: "Open weekly cup pulse",
@@ -505,6 +507,8 @@ const copy = {
     cupSeer: "Vidente semanal de la copa",
     cupSeerTitle: "¿Quién sigue en la ruta del título?",
     cupSeerIntro: "El campo se sigue cerrando: los resultados terminados cuentan, los próximos siguen proyectados y MatchSeer sigue la ruta viva al título.",
+    cupFinalistsTitle: "Solo queda la final.",
+    cupFinalistsIntro: "La ruta al título se reduce a los dos finalistas. Los equipos eliminados pasan a recibos, no a la lectura viva del campeón.",
     cupPulse: "Pulso semanal",
     cupLeader: "Señal líder",
     cupOpen: "Abrir pulso semanal",
@@ -674,6 +678,8 @@ const copy = {
     cupSeer: "Voyant hebdo de la coupe",
     cupSeerTitle: "Qui reste dans la voie du titre ?",
     cupSeerIntro: "Le champ se resserre encore : les matchs terminés comptent, les affiches à venir restent projetées, et MatchSeer suit la route vivante vers le titre.",
+    cupFinalistsTitle: "Il ne reste que la finale.",
+    cupFinalistsIntro: "La route du titre est limitée aux deux finalistes. Les équipes éliminées passent aux reçus, pas au suivi vivant du champion.",
     cupPulse: "Pulse hebdo",
     cupLeader: "Signal leader",
     cupOpen: "Ouvrir le pulse hebdo",
@@ -1717,6 +1723,14 @@ export default function MatchSeerHome({
     () => buildCupSeerCandidates(matches, language),
     [matches, language],
   );
+  const cupTitleCandidates = useMemo(
+    () => buildWorldCupLiveTitleCandidates(matches, cupCandidates),
+    [cupCandidates, matches],
+  );
+  const isCupFinalistLane = useMemo(
+    () => worldCupFinalTeams(matches).length >= 2,
+    [matches],
+  );
   const cupPulseLabel = useMemo(() => getCupPulseLabel(language), [language]);
   const seerScoreboard = useMemo(
     () => buildSeerScoreboard(matches, language, t),
@@ -2236,7 +2250,8 @@ export default function MatchSeerHome({
 
       {!usingFeaturedFallback && isWorldCupMode && (
         <CupSeerBoard
-          candidates={cupCandidates}
+          candidates={cupTitleCandidates}
+          finalistLane={isCupFinalistLane}
           language={language}
           onSelectTeam={(teamName) => {
             const candidateMatch = matches.find(
@@ -3303,6 +3318,58 @@ function buildWorldCupChampionLane(matches: Match[], candidates: CupCandidate[])
       team,
     };
   });
+}
+
+function buildWorldCupLiveTitleCandidates(
+  matches: Match[],
+  candidates: CupCandidate[],
+) {
+  const finalTeams = worldCupFinalTeams(matches);
+
+  if (finalTeams.length < 2) {
+    return candidates;
+  }
+
+  const finalistKeys = new Set(
+    finalTeams.map((team) => normalizeTeamKey(team.name)),
+  );
+  const finalistCandidates = candidates.filter((candidate) =>
+    finalistKeys.has(normalizeTeamKey(candidate.team.name)),
+  );
+
+  if (finalistCandidates.length >= 2) {
+    return finalistCandidates.slice(0, 2);
+  }
+
+  const existingKeys = new Set(
+    finalistCandidates.map((candidate) => normalizeTeamKey(candidate.team.name)),
+  );
+  const fallbackCandidates = finalTeams
+    .filter((team) => !existingKeys.has(normalizeTeamKey(team.name)))
+    .map((team) => buildFallbackWorldCupFinalistCandidate(team, candidates[0]));
+
+  return [...finalistCandidates, ...fallbackCandidates].slice(0, 2);
+}
+
+function buildFallbackWorldCupFinalistCandidate(
+  team: Team,
+  benchmark?: CupCandidate,
+): CupCandidate {
+  const signal = benchmark?.signal ?? 50;
+  const advanceProbability = benchmark?.advanceProbability ?? signal;
+
+  return {
+    advanceProbability,
+    expectedPoints: benchmark?.expectedPoints ?? 0,
+    matches: benchmark?.matches ?? 1,
+    pathSignal: benchmark?.pathSignal ?? signal,
+    risk: "Finals stay narrow until the last receipt lands.",
+    score: signal,
+    signal,
+    team,
+    traits: ["Final path", "Title lane"],
+    verdict: `${team.name} are in the final title lane.`,
+  };
 }
 
 function buildWorldCupArchiveReport(
@@ -4934,12 +5001,14 @@ function LigaMxLeagueModeBoard({
 
 function CupSeerBoard({
   candidates,
+  finalistLane,
   language,
   onSelectTeam,
   pulseLabel,
   t,
 }: {
   candidates: CupCandidate[];
+  finalistLane: boolean;
   language: Language;
   onSelectTeam: (teamName: string) => void;
   pulseLabel: string;
@@ -4977,8 +5046,8 @@ function CupSeerBoard({
               {t.cupPulse} · {pulseLabel}
             </span>
           </div>
-          <h2>{t.cupSeerTitle}</h2>
-          <p>{t.cupSeerIntro}</p>
+          <h2>{finalistLane ? t.cupFinalistsTitle : t.cupSeerTitle}</h2>
+          <p>{finalistLane ? t.cupFinalistsIntro : t.cupSeerIntro}</p>
         </div>
         <div className="cup-seer-actions">
           {leader && (
@@ -5005,7 +5074,11 @@ function CupSeerBoard({
           </button>
         </div>
       </div>
-      <div className="cup-candidate-grid" hidden={!isOpen} id="cup-seer-candidates">
+      <div
+        className={cx("cup-candidate-grid", finalistLane && "is-finalist-lane")}
+        hidden={!isOpen}
+        id="cup-seer-candidates"
+      >
         {candidates.length === 0 && (
           <div className="empty-match-state">{t.noCupCandidates}</div>
         )}
