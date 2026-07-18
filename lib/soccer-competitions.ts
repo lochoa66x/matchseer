@@ -50,7 +50,7 @@ export const soccerCompetitions: SoccerCompetitionConfig[] = [
     tableLabel: "Group archive",
     bracketLabel: "Tournament path",
     accent: "#D8B45D",
-    secondaryAccent: "#9DB7E8",
+    secondaryAccent: "#37B889",
     modelNotes: [
       "Separate 90-minute draw reads from advancement reads.",
       "Keep penalties, extra time, travel, and rest visible as receipts.",

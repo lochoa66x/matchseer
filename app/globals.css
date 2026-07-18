@@ -4751,6 +4751,76 @@ body {
   height: 30px;
 }
 
+.team-flag.club-color-marker {
+  padding: 2px;
+  background:
+    radial-gradient(circle at 24% 20%, rgba(255, 255, 255, 0.34), transparent 27%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.team-color-shield {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+    0 -8px 16px rgba(0, 0, 0, 0.18) inset;
+}
+
+.team-flag.compact .team-color-shield {
+  border-radius: 5px;
+}
+
+.team-color-shield::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 38%),
+    radial-gradient(circle at 78% 18%, rgba(255, 255, 255, 0.32), transparent 16%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.team-color-shield.pattern-split {
+  background:
+    linear-gradient(135deg, var(--team-color, #d8b45d) 0 49%, var(--team-color-2, #9db7e8) 50%),
+    var(--team-color-3, #121722);
+}
+
+.team-color-shield.pattern-stripe {
+  background:
+    linear-gradient(
+      90deg,
+      var(--team-color, #d8b45d) 0 32%,
+      var(--team-color-2, #f8f8f6) 32% 66%,
+      var(--team-color, #d8b45d) 66%
+    );
+}
+
+.team-color-shield.pattern-diagonal {
+  background:
+    linear-gradient(
+      135deg,
+      var(--team-color, #d8b45d) 0 38%,
+      var(--team-color-2, #9db7e8) 38% 62%,
+      var(--team-color-3, #121722) 62%
+    );
+}
+
+.team-color-shield.pattern-hoops {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      var(--team-color, #d8b45d) 0 7px,
+      var(--team-color-2, #f8f8f6) 7px 14px
+    );
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     padding: 18px;
@@ -11483,9 +11553,10 @@ body {
   padding: clamp(14px, 2vw, 22px);
   color: var(--text-primary);
   background:
-    linear-gradient(145deg, rgba(216, 180, 93, 0.065), transparent 38%),
-    linear-gradient(180deg, rgba(20, 24, 32, 0.96), rgba(11, 14, 18, 0.98));
-  border: 1px solid rgba(157, 183, 232, 0.16);
+    radial-gradient(circle at 8% 4%, rgba(55, 184, 137, 0.12), transparent 31%),
+    radial-gradient(circle at 92% 0%, rgba(216, 180, 93, 0.13), transparent 34%),
+    linear-gradient(180deg, rgba(18, 22, 29, 0.98), rgba(9, 12, 16, 0.99));
+  border: 1px solid rgba(216, 180, 93, 0.2);
   border-radius: 18px;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
 }
@@ -11536,7 +11607,7 @@ body {
   max-width: min(320px, 100%);
   padding: 9px 13px;
   color: #0b0e12;
-  background: linear-gradient(135deg, #d8b45d, #9db7e8);
+  background: linear-gradient(135deg, #d8b45d 0%, #e9d9aa 48%, #9db7e8 100%);
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 900;
@@ -11558,8 +11629,9 @@ body {
 .jornada-hub,
 .jornada-card {
   min-width: 0;
-  background: rgba(11, 14, 18, 0.58);
-  border: 1px solid rgba(157, 183, 232, 0.13);
+  background:
+    linear-gradient(180deg, rgba(20, 24, 32, 0.7), rgba(11, 14, 18, 0.72));
+  border: 1px solid rgba(216, 180, 93, 0.12);
   border-radius: 13px;
 }
 
@@ -11577,7 +11649,7 @@ body {
 .liga-zone-card span,
 .jornada-card-top span,
 .jornada-card-read span {
-  color: rgba(216, 180, 93, 0.82);
+  color: rgba(216, 180, 93, 0.9);
   font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -11615,8 +11687,9 @@ body {
   justify-items: start;
   gap: 8px;
   color: rgba(216, 180, 93, 0.88);
-  background: rgba(216, 180, 93, 0.075);
-  border: 1px solid rgba(216, 180, 93, 0.18);
+  background:
+    linear-gradient(145deg, rgba(216, 180, 93, 0.13), rgba(55, 184, 137, 0.055));
+  border: 1px solid rgba(216, 180, 93, 0.22);
 }
 
 .liga-context-title strong {
@@ -11703,21 +11776,22 @@ body {
 .liga-table td {
   padding: 9px 10px;
   color: rgba(239, 235, 222, 0.88);
-  background: rgba(20, 24, 32, 0.78);
-  border-top: 1px solid rgba(157, 183, 232, 0.12);
-  border-bottom: 1px solid rgba(157, 183, 232, 0.12);
+  background:
+    linear-gradient(90deg, rgba(216, 180, 93, 0.035), rgba(20, 24, 32, 0.82));
+  border-top: 1px solid rgba(216, 180, 93, 0.11);
+  border-bottom: 1px solid rgba(216, 180, 93, 0.11);
   font-size: 0.78rem;
   font-weight: 850;
   vertical-align: middle;
 }
 
 .liga-table td:first-child {
-  border-left: 1px solid rgba(157, 183, 232, 0.12);
+  border-left: 1px solid rgba(216, 180, 93, 0.11);
   border-radius: 10px 0 0 10px;
 }
 
 .liga-table td:last-child {
-  border-right: 1px solid rgba(157, 183, 232, 0.12);
+  border-right: 1px solid rgba(216, 180, 93, 0.11);
   border-radius: 0 10px 10px 0;
 }
 
@@ -11759,9 +11833,9 @@ body {
   justify-content: center;
   min-height: 25px;
   padding: 5px 8px;
-  border: 1px solid rgba(157, 183, 232, 0.16);
+  border: 1px solid rgba(216, 180, 93, 0.16);
   border-radius: 999px;
-  background: rgba(157, 183, 232, 0.08);
+  background: rgba(216, 180, 93, 0.07);
   color: rgba(216, 223, 235, 0.9);
   font-size: 0.62rem;
   font-weight: 900;
@@ -11778,8 +11852,8 @@ body {
 
 .liga-zone-chip.liguilla,
 .liga-zone-card.liguilla {
-  border-color: rgba(157, 183, 232, 0.34);
-  background: rgba(157, 183, 232, 0.09);
+  border-color: rgba(157, 183, 232, 0.3);
+  background: rgba(157, 183, 232, 0.075);
 }
 
 .liga-zone-chip.chasing,
@@ -11854,8 +11928,9 @@ body {
 .jornada-card:hover,
 .jornada-card:focus-visible,
 .jornada-card.active {
-  border-color: rgba(216, 180, 93, 0.34);
-  background: rgba(20, 24, 32, 0.92);
+  border-color: rgba(216, 180, 93, 0.38);
+  background:
+    linear-gradient(180deg, rgba(28, 33, 42, 0.92), rgba(12, 15, 20, 0.94));
   transform: translateY(-1px);
 }
 
@@ -11928,7 +12003,7 @@ body {
   min-height: 28px;
   padding: 6px 9px;
   color: #0b0e12;
-  background: linear-gradient(135deg, #d8b45d, #9db7e8);
+  background: linear-gradient(135deg, #d8b45d, #37b889);
   border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 950;

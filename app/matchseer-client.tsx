@@ -803,8 +803,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "10:00 PM",
     venue: "Estadio neutral",
     city: "Mexico City",
-    home: makeFeaturedTeam("America", "AME", "#D8B45D", 82, 80, 76, 78),
-    away: makeFeaturedTeam("Tigres", "TIG", "#9DB7E8", 80, 82, 79, 75),
+    home: makeFeaturedTeam("America", "AME", "#F2C84B", 82, 80, 76, 78),
+    away: makeFeaturedTeam("Tigres", "TIG", "#173E75", 80, 82, 79, 75),
     forecast: makeLigaMxForecast(
       41,
       28,
@@ -829,8 +829,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "9:00 PM",
     venue: "Estadio neutral",
     city: "Monterrey",
-    home: makeFeaturedTeam("Monterrey", "MTY", "#9DB7E8", 84, 78, 77, 80),
-    away: makeFeaturedTeam("Toluca", "TOL", "#D8B45D", 78, 79, 76, 82),
+    home: makeFeaturedTeam("Monterrey", "MTY", "#155F9F", 84, 78, 77, 80),
+    away: makeFeaturedTeam("Toluca", "TOL", "#C71F35", 78, 79, 76, 82),
     forecast: makeLigaMxForecast(
       47,
       26,
@@ -855,8 +855,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "8:00 PM",
     venue: "Estadio neutral",
     city: "Guadalajara",
-    home: makeFeaturedTeam("Guadalajara", "GDL", "#D8B45D", 76, 78, 75, 79),
-    away: makeFeaturedTeam("Cruz Azul", "CAZ", "#9DB7E8", 79, 81, 78, 74),
+    home: makeFeaturedTeam("Guadalajara", "GDL", "#D82837", 76, 78, 75, 79),
+    away: makeFeaturedTeam("Cruz Azul", "CAZ", "#1C64B7", 79, 81, 78, 74),
     forecast: makeLigaMxForecast(
       35,
       29,
@@ -881,8 +881,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "10:00 PM",
     venue: "Estadio neutral",
     city: "Mexico City",
-    home: makeFeaturedTeam("Pumas", "PUM", "#D8B45D", 75, 77, 73, 82),
-    away: makeFeaturedTeam("Pachuca", "PAC", "#9DB7E8", 77, 79, 76, 80),
+    home: makeFeaturedTeam("Pumas", "PUM", "#C9A64B", 75, 77, 73, 82),
+    away: makeFeaturedTeam("Pachuca", "PAC", "#1D55A2", 77, 79, 76, 80),
     forecast: makeLigaMxForecast(
       38,
       28,
@@ -903,8 +903,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "8:00 PM",
     venue: "Estadio neutral",
     city: "Torreon",
-    home: makeFeaturedTeam("Santos Laguna", "SAN", "#D8B45D", 72, 74, 70, 76),
-    away: makeFeaturedTeam("Atlas", "ATS", "#9DB7E8", 70, 73, 74, 72),
+    home: makeFeaturedTeam("Santos Laguna", "SAN", "#1C8C5E", 72, 74, 70, 76),
+    away: makeFeaturedTeam("Atlas", "ATS", "#B8202F", 70, 73, 74, 72),
     forecast: makeLigaMxForecast(
       42,
       27,
@@ -925,8 +925,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "10:00 PM",
     venue: "Estadio neutral",
     city: "Leon",
-    home: makeFeaturedTeam("Leon", "LEO", "#D8B45D", 74, 76, 72, 75),
-    away: makeFeaturedTeam("Necaxa", "NEC", "#9DB7E8", 68, 70, 71, 74),
+    home: makeFeaturedTeam("Leon", "LEO", "#228A50", 74, 76, 72, 75),
+    away: makeFeaturedTeam("Necaxa", "NEC", "#D83C3C", 68, 70, 71, 74),
     forecast: makeLigaMxForecast(
       46,
       27,
@@ -947,8 +947,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "9:00 PM",
     venue: "Estadio neutral",
     city: "Ciudad Juarez",
-    home: makeFeaturedTeam("Juarez", "JUA", "#D8B45D", 69, 72, 70, 73),
-    away: makeFeaturedTeam("Tijuana", "TIJ", "#9DB7E8", 68, 71, 69, 72),
+    home: makeFeaturedTeam("Juarez", "JUA", "#1D806F", 69, 72, 70, 73),
+    away: makeFeaturedTeam("Tijuana", "TIJ", "#D82837", 68, 71, 69, 72),
     forecast: makeLigaMxForecast(
       40,
       30,
@@ -969,8 +969,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "7:00 PM",
     venue: "Estadio neutral",
     city: "Puebla",
-    home: makeFeaturedTeam("Puebla", "PUE", "#D8B45D", 67, 69, 68, 74),
-    away: makeFeaturedTeam("Queretaro", "QUE", "#9DB7E8", 66, 68, 67, 73),
+    home: makeFeaturedTeam("Puebla", "PUE", "#2D76B8", 67, 69, 68, 74),
+    away: makeFeaturedTeam("Queretaro", "QUE", "#11151C", 66, 68, 67, 73),
     forecast: makeLigaMxForecast(
       39,
       31,
@@ -991,8 +991,8 @@ const ligaMxFallbackMatches: Match[] = [
     time: "10:00 PM",
     venue: "Estadio neutral",
     city: "Mazatlan",
-    home: makeFeaturedTeam("Mazatlan", "MAZ", "#D8B45D", 66, 68, 65, 70),
-    away: makeFeaturedTeam("Atletico San Luis", "ASL", "#9DB7E8", 70, 72, 69, 73),
+    home: makeFeaturedTeam("Mazatlan", "MAZ", "#7047BE", 66, 68, 65, 70),
+    away: makeFeaturedTeam("Atletico San Luis", "ASL", "#C83B3F", 70, 72, 69, 73),
     forecast: makeLigaMxForecast(
       33,
       29,
@@ -2746,6 +2746,147 @@ const teamAccentPalette = [
   "#2dd4bf",
 ];
 
+type TeamColorwayPattern = "split" | "stripe" | "diagonal" | "hoops";
+
+type TeamColorway = {
+  primary: string;
+  secondary: string;
+  tertiary: string;
+  pattern: TeamColorwayPattern;
+};
+
+const clubColorwaysByCode: Record<string, TeamColorway> = {
+  AME: {
+    primary: "#F2C84B",
+    secondary: "#132B63",
+    tertiary: "#C73635",
+    pattern: "split",
+  },
+  ASL: {
+    primary: "#C83B3F",
+    secondary: "#D8B45D",
+    tertiary: "#214D95",
+    pattern: "diagonal",
+  },
+  ATS: {
+    primary: "#B8202F",
+    secondary: "#11151C",
+    tertiary: "#F3EEE3",
+    pattern: "split",
+  },
+  CAZ: {
+    primary: "#1C64B7",
+    secondary: "#F2F7FF",
+    tertiary: "#D83C3C",
+    pattern: "diagonal",
+  },
+  GDL: {
+    primary: "#D82837",
+    secondary: "#F8F8F6",
+    tertiary: "#17477E",
+    pattern: "stripe",
+  },
+  JUA: {
+    primary: "#1D806F",
+    secondary: "#11151C",
+    tertiary: "#E35B45",
+    pattern: "diagonal",
+  },
+  LEO: {
+    primary: "#228A50",
+    secondary: "#F7F7F2",
+    tertiary: "#C8A246",
+    pattern: "stripe",
+  },
+  MAZ: {
+    primary: "#7047BE",
+    secondary: "#11151C",
+    tertiary: "#D8B45D",
+    pattern: "diagonal",
+  },
+  MTY: {
+    primary: "#155F9F",
+    secondary: "#F4F8FB",
+    tertiary: "#0B2B4B",
+    pattern: "stripe",
+  },
+  NEC: {
+    primary: "#D83C3C",
+    secondary: "#F8F8F6",
+    tertiary: "#11151C",
+    pattern: "stripe",
+  },
+  PAC: {
+    primary: "#1D55A2",
+    secondary: "#F7F9FC",
+    tertiary: "#D8463D",
+    pattern: "stripe",
+  },
+  PUE: {
+    primary: "#2D76B8",
+    secondary: "#F7F9FC",
+    tertiary: "#D83C3C",
+    pattern: "diagonal",
+  },
+  PUM: {
+    primary: "#C9A64B",
+    secondary: "#182E5B",
+    tertiary: "#F6EFD5",
+    pattern: "split",
+  },
+  QUE: {
+    primary: "#11151C",
+    secondary: "#1E67A8",
+    tertiary: "#F7F9FC",
+    pattern: "hoops",
+  },
+  SAN: {
+    primary: "#1C8C5E",
+    secondary: "#F7F9FC",
+    tertiary: "#123324",
+    pattern: "hoops",
+  },
+  TIG: {
+    primary: "#F0C84B",
+    secondary: "#173E75",
+    tertiary: "#F7E7A6",
+    pattern: "split",
+  },
+  TIJ: {
+    primary: "#D82837",
+    secondary: "#11151C",
+    tertiary: "#F7F9FC",
+    pattern: "split",
+  },
+  TOL: {
+    primary: "#C71F35",
+    secondary: "#F7F7F2",
+    tertiary: "#8A1424",
+    pattern: "split",
+  },
+};
+
+const clubColorwaysByName: Record<string, TeamColorway> = {
+  america: clubColorwaysByCode.AME,
+  "atletico san luis": clubColorwaysByCode.ASL,
+  atlas: clubColorwaysByCode.ATS,
+  "cruz azul": clubColorwaysByCode.CAZ,
+  guadalajara: clubColorwaysByCode.GDL,
+  juarez: clubColorwaysByCode.JUA,
+  leon: clubColorwaysByCode.LEO,
+  mazatlan: clubColorwaysByCode.MAZ,
+  monterrey: clubColorwaysByCode.MTY,
+  necaxa: clubColorwaysByCode.NEC,
+  pachuca: clubColorwaysByCode.PAC,
+  puebla: clubColorwaysByCode.PUE,
+  pumas: clubColorwaysByCode.PUM,
+  queretaro: clubColorwaysByCode.QUE,
+  "santos laguna": clubColorwaysByCode.SAN,
+  tigres: clubColorwaysByCode.TIG,
+  tijuana: clubColorwaysByCode.TIJ,
+  toluca: clubColorwaysByCode.TOL,
+};
+
 function teamAccentIndex(team: Team) {
   const seed = `${team.code}-${team.name}`;
 
@@ -2755,21 +2896,42 @@ function teamAccentIndex(team: Team) {
   ) % teamAccentPalette.length;
 }
 
+function teamColorwayForTeam(team: Team, fallbackColor?: string): TeamColorway {
+  const codeColorway = clubColorwaysByCode[team.code.toUpperCase()];
+  const nameColorway = clubColorwaysByName[normalizeTeamKey(team.name)];
+
+  return codeColorway ?? nameColorway ?? {
+    primary: fallbackColor ?? teamAccentPalette[teamAccentIndex(team)],
+    secondary: "#E6EEF8",
+    tertiary: "#121722",
+    pattern: "diagonal",
+  };
+}
+
 function teamAccentColor(team: Team) {
-  return teamAccentPalette[teamAccentIndex(team)];
+  return teamColorwayForTeam(team).primary;
 }
 
 function matchAccentColors(match: Match) {
-  const homeIndex = teamAccentIndex(match.home);
-  let awayIndex = teamAccentIndex(match.away);
+  const homeColor = teamAccentColor(match.home);
+  const awayColorway = teamColorwayForTeam(match.away);
+  let awayColor = awayColorway.primary;
 
-  if (awayIndex === homeIndex || paletteColorsAreTooClose(homeIndex, awayIndex)) {
-    awayIndex = mostContrastingPaletteIndex(homeIndex);
+  if (colorDistance(homeColor, awayColor) < 86) {
+    awayColor = awayColorway.secondary;
+  }
+
+  if (colorDistance(homeColor, awayColor) < 86) {
+    awayColor = awayColorway.tertiary;
+  }
+
+  if (colorDistance(homeColor, awayColor) < 86) {
+    awayColor = teamAccentPalette[mostContrastingPaletteIndex(teamAccentIndex(match.home))];
   }
 
   return {
-    home: teamAccentPalette[homeIndex],
-    away: teamAccentPalette[awayIndex],
+    home: homeColor,
+    away: awayColor,
   };
 }
 
@@ -5708,12 +5870,22 @@ function TeamFlag({
   const flagCode = flagCodeForTeam(team);
   const [failed, setFailed] = useState(!flagCode);
   const displayColor = accentColor ?? teamAccentColor(team);
+  const colorway = teamColorwayForTeam(team, displayColor);
+  const showColorShield = !team.isPlaceholder && (!flagCode || failed);
 
   return (
     <span
       aria-label={`${team.name} marker`}
-      className={cx("team-flag", compact && "compact")}
-      style={{ "--team-color": displayColor } as React.CSSProperties}
+      className={cx(
+        "team-flag",
+        compact && "compact",
+        showColorShield && "club-color-marker",
+      )}
+      style={{
+        "--team-color": colorway.primary,
+        "--team-color-2": colorway.secondary,
+        "--team-color-3": colorway.tertiary,
+      } as React.CSSProperties}
       title={team.name}
     >
       {flagCode && !failed ? (
@@ -5722,6 +5894,11 @@ function TeamFlag({
           loading="lazy"
           onError={() => setFailed(true)}
           src={`https://flagcdn.com/${flagCode}.svg`}
+        />
+      ) : showColorShield ? (
+        <span
+          aria-hidden="true"
+          className={cx("team-color-shield", `pattern-${colorway.pattern}`)}
         />
       ) : (
         <span>{team.code}</span>
