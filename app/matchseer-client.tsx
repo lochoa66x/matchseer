@@ -149,6 +149,41 @@ type WorldCupArchiveReport = {
   topMisses: ForecastReceipt[];
   tournamentPath: TournamentPathRound[];
 };
+type LeagueZoneKey = "top4" | "liguilla" | "chasing" | "needsHelp" | "out";
+type LeagueTableRow = {
+  rank: number;
+  team: Team;
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+  projectedPoints: number;
+  form: string[];
+  zone: LeagueZoneKey;
+  strength: number;
+  note: string;
+};
+type LeagueZoneSummary = {
+  key: LeagueZoneKey;
+  label: string;
+  detail: string;
+  count: number;
+};
+type LeagueModeReport = {
+  rows: LeagueTableRow[];
+  zoneSummaries: LeagueZoneSummary[];
+  keyMatch: Match | null;
+  currentLabel: string;
+  tableSummary: string;
+  matches: Match[];
+  liveCount: number;
+  upcomingCount: number;
+  finalCount: number;
+};
 type OracleResponse = {
   source: "openai" | "seeded-fallback";
   reason?: string;
@@ -758,13 +793,22 @@ const ligaMxFallbackMatches: Match[] = [
     id: "lmx-featured-1",
     status: "Upcoming",
     startsAt: "2026-07-18T02:00:00.000Z",
-    group: "Apertura watch",
+    group: "Jornada 1",
     time: "10:00 PM",
-    venue: "Mexico City",
+    venue: "Estadio neutral",
     city: "Mexico City",
     home: makeFeaturedTeam("America", "AME", "#D8B45D", 82, 80, 76, 78),
     away: makeFeaturedTeam("Tigres", "TIG", "#9DB7E8", 80, 82, 79, 75),
-    forecast: makeFeaturedForecast(41, 28, 31, 58, 64, "1-1"),
+    forecast: makeLigaMxForecast(
+      41,
+      28,
+      31,
+      58,
+      64,
+      "1-1",
+      "Partido de margen corto: la localia y el control de ritmo pesan, pero Tigres tiene banca para cerrarlo.",
+      "A thin-margin match: home rhythm matters, but Tigres have enough depth to keep it tight.",
+    ),
     weather: makeFeaturedWeather(
       "22°C",
       "8 km/h",
@@ -775,13 +819,22 @@ const ligaMxFallbackMatches: Match[] = [
     id: "lmx-featured-2",
     status: "Upcoming",
     startsAt: "2026-07-19T01:00:00.000Z",
-    group: "Table pressure",
+    group: "Jornada 1",
     time: "9:00 PM",
-    venue: "Monterrey",
+    venue: "Estadio neutral",
     city: "Monterrey",
     home: makeFeaturedTeam("Monterrey", "MTY", "#9DB7E8", 84, 78, 77, 80),
     away: makeFeaturedTeam("Toluca", "TOL", "#D8B45D", 78, 79, 76, 82),
-    forecast: makeFeaturedForecast(47, 26, 27, 61, 55, "2-1"),
+    forecast: makeLigaMxForecast(
+      47,
+      26,
+      27,
+      61,
+      55,
+      "2-1",
+      "Monterrey trae la mejor base, pero Toluca castiga si el partido se vuelve de ida y vuelta.",
+      "Monterrey bring the stronger base, but Toluca can punish a stretched match.",
+    ),
     weather: makeFeaturedWeather(
       "27°C",
       "10 km/h",
@@ -792,18 +845,159 @@ const ligaMxFallbackMatches: Match[] = [
     id: "lmx-featured-3",
     status: "Upcoming",
     startsAt: "2026-07-20T00:00:00.000Z",
-    group: "Liguilla lane",
+    group: "Jornada 1",
     time: "8:00 PM",
-    venue: "Guadalajara",
+    venue: "Estadio neutral",
     city: "Guadalajara",
     home: makeFeaturedTeam("Guadalajara", "GDL", "#D8B45D", 76, 78, 75, 79),
     away: makeFeaturedTeam("Cruz Azul", "CAZ", "#9DB7E8", 79, 81, 78, 74),
-    forecast: makeFeaturedForecast(35, 29, 36, 53, 62, "1-1"),
+    forecast: makeLigaMxForecast(
+      35,
+      29,
+      36,
+      53,
+      62,
+      "1-1",
+      "La lectura queda pareja: Cruz Azul tiene mejor control, Chivas necesita empujar desde localia y pelota parada.",
+      "The read stays even: Cruz Azul have the cleaner control lane, while Chivas need home pressure and set pieces.",
+    ),
     weather: makeFeaturedWeather(
       "24°C",
       "7 km/h",
       "Short-tournament volatility keeps this as a lean, not a certainty.",
     ),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-4",
+    status: "Upcoming",
+    startsAt: "2026-07-20T02:00:00.000Z",
+    group: "Jornada 1",
+    time: "10:00 PM",
+    venue: "Estadio neutral",
+    city: "Mexico City",
+    home: makeFeaturedTeam("Pumas", "PUM", "#D8B45D", 75, 77, 73, 82),
+    away: makeFeaturedTeam("Pachuca", "PAC", "#9DB7E8", 77, 79, 76, 80),
+    forecast: makeLigaMxForecast(
+      38,
+      28,
+      34,
+      56,
+      60,
+      "1-1",
+      "Pumas recibe un empujon por altura y localia; Pachuca responde con transiciones y mejor balance.",
+      "Pumas get a small altitude and home bump; Pachuca answer with transition speed and better balance.",
+    ),
+    weather: makeFeaturedWeather("21°C", "9 km/h", "Altitude and pacing are the practical checks."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-5",
+    status: "Upcoming",
+    startsAt: "2026-07-21T00:00:00.000Z",
+    group: "Jornada 1",
+    time: "8:00 PM",
+    venue: "Estadio neutral",
+    city: "Torreon",
+    home: makeFeaturedTeam("Santos Laguna", "SAN", "#D8B45D", 72, 74, 70, 76),
+    away: makeFeaturedTeam("Atlas", "ATS", "#9DB7E8", 70, 73, 74, 72),
+    forecast: makeLigaMxForecast(
+      42,
+      27,
+      31,
+      55,
+      63,
+      "2-1",
+      "Santos gana un poco por ritmo en casa; Atlas necesita ordenar el partido y bajar el ida y vuelta.",
+      "Santos get a small home-tempo edge; Atlas need to slow the game and control transitions.",
+    ),
+    weather: makeFeaturedWeather("29°C", "12 km/h", "Heat can trim tempo if the match stretches."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-6",
+    status: "Upcoming",
+    startsAt: "2026-07-21T02:00:00.000Z",
+    group: "Jornada 1",
+    time: "10:00 PM",
+    venue: "Estadio neutral",
+    city: "Leon",
+    home: makeFeaturedTeam("Leon", "LEO", "#D8B45D", 74, 76, 72, 75),
+    away: makeFeaturedTeam("Necaxa", "NEC", "#9DB7E8", 68, 70, 71, 74),
+    forecast: makeLigaMxForecast(
+      46,
+      27,
+      27,
+      59,
+      57,
+      "2-1",
+      "Leon tiene mejor volumen de ataque; Necaxa se mantiene vivo si protege el area y roba una pelota parada.",
+      "Leon carry the better attacking volume; Necaxa stay live through box protection and set pieces.",
+    ),
+    weather: makeFeaturedWeather("23°C", "7 km/h", "Clean conditions put more weight on team shape."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-7",
+    status: "Upcoming",
+    startsAt: "2026-07-22T01:00:00.000Z",
+    group: "Jornada 1",
+    time: "9:00 PM",
+    venue: "Estadio neutral",
+    city: "Ciudad Juarez",
+    home: makeFeaturedTeam("Juarez", "JUA", "#D8B45D", 69, 72, 70, 73),
+    away: makeFeaturedTeam("Tijuana", "TIJ", "#9DB7E8", 68, 71, 69, 72),
+    forecast: makeLigaMxForecast(
+      40,
+      30,
+      30,
+      52,
+      68,
+      "1-1",
+      "Es lectura de empate: viaje, ritmo bajo y poca diferencia de plantel dejan el margen abierto.",
+      "This reads like a draw lane: travel, slower tempo, and similar team strength keep the margin open.",
+    ),
+    weather: makeFeaturedWeather("28°C", "15 km/h", "Wind and heat can make the game choppier."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-8",
+    status: "Upcoming",
+    startsAt: "2026-07-22T23:00:00.000Z",
+    group: "Jornada 1",
+    time: "7:00 PM",
+    venue: "Estadio neutral",
+    city: "Puebla",
+    home: makeFeaturedTeam("Puebla", "PUE", "#D8B45D", 67, 69, 68, 74),
+    away: makeFeaturedTeam("Queretaro", "QUE", "#9DB7E8", 66, 68, 67, 73),
+    forecast: makeLigaMxForecast(
+      39,
+      31,
+      30,
+      51,
+      66,
+      "1-1",
+      "La tabla puede pesar rapido: ambos necesitan puntos y el empate sigue muy vivo.",
+      "Table pressure can arrive early: both need points, and the draw lane stays very live.",
+    ),
+    weather: makeFeaturedWeather("20°C", "6 km/h", "Weather is quiet, so table pressure matters more."),
+  }),
+  makeFeaturedFallbackMatch({
+    id: "lmx-featured-9",
+    status: "Upcoming",
+    startsAt: "2026-07-23T02:00:00.000Z",
+    group: "Jornada 1",
+    time: "10:00 PM",
+    venue: "Estadio neutral",
+    city: "Mazatlan",
+    home: makeFeaturedTeam("Mazatlan", "MAZ", "#D8B45D", 66, 68, 65, 70),
+    away: makeFeaturedTeam("Atletico San Luis", "ASL", "#9DB7E8", 70, 72, 69, 73),
+    forecast: makeLigaMxForecast(
+      33,
+      29,
+      38,
+      54,
+      64,
+      "1-2",
+      "San Luis trae una ligera ventaja por orden y control; Mazatlan necesita convertir el partido en caos.",
+      "San Luis bring a small shape and control edge; Mazatlan need to turn the match chaotic.",
+    ),
+    weather: makeFeaturedWeather("30°C", "11 km/h", "Humidity can add a late-match fatigue nudge."),
   }),
 ];
 
@@ -934,6 +1128,45 @@ function makeFeaturedForecast(
           en: "A real scheduled match is staged early so the page never feels empty.",
           es: "Un partido real programado aparece temprano para que la página nunca se sienta vacía.",
           fr: "Un vrai match programmé apparaît tôt pour que la page ne semble jamais vide.",
+        },
+      },
+    ],
+  };
+}
+
+function makeLigaMxForecast(
+  home: number,
+  draw: number,
+  away: number,
+  confidence: number,
+  chaos: number,
+  projected: string,
+  reasonEs: string,
+  reasonEn: string,
+): Match["forecast"] {
+  const forecast = makeFeaturedForecast(home, draw, away, confidence, chaos, projected);
+
+  return {
+    ...forecast,
+    tone: {
+      en: reasonEn,
+      es: reasonEs,
+      fr: reasonEn,
+    },
+    reasons: {
+      en: [reasonEn],
+      es: [reasonEs],
+      fr: [reasonEn],
+    },
+    trail: [
+      {
+        id: "liga-mx-jornada-context",
+        label: "Jornada context",
+        tone: "steady",
+        text: {
+          en: "Form, home field, travel, altitude, and table pressure shape the first read.",
+          es: "Forma, localia, viaje, altura y presion de tabla forman la primera lectura.",
+          fr: "Form, home field, travel, altitude, and table pressure shape the first read.",
         },
       },
     ],
@@ -1250,6 +1483,8 @@ export default function MatchSeerHome({
   initialLanguage: Language;
 }) {
   const competition = getSoccerCompetition(competitionKey);
+  const isWorldCupMode = competition.key === "world-cup";
+  const isLigaMxMode = competition.key === "liga-mx";
   const competitionFallbackMatches = useMemo(
     () => getFeaturedFallbackMatches(competition.key),
     [competition.key],
@@ -1437,6 +1672,10 @@ export default function MatchSeerHome({
     [activeMatchId, sortedMatches],
   );
   const t = copy[language];
+  const explorerCopy = useMemo(
+    () => getCompetitionExplorerCopy(competition.key, language, t),
+    [competition.key, language, t],
+  );
   const oracleKey = activeMatch ? oracleReadKey(activeMatch, language) : "";
   const activeOracleRead = activeMatch ? oracleReads[oracleKey] : undefined;
   const activeOracleStatus = activeMatch ? oracleStatus[oracleKey] ?? "idle" : "idle";
@@ -1487,6 +1726,10 @@ export default function MatchSeerHome({
     () => buildWorldCupArchiveReport(matches, cupCandidates, seerScoreboard, language),
     [cupCandidates, language, matches, seerScoreboard],
   );
+  const leagueModeReport = useMemo(
+    () => (isLigaMxMode ? buildLeagueModeReport(matches, language) : null),
+    [isLigaMxMode, language, matches],
+  );
   useEffect(() => {
     if (
       visibleMatches.length > 0 &&
@@ -1512,7 +1755,11 @@ export default function MatchSeerHome({
       const response = await fetch("/api/ai/forecast-interpretation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matchId, language: selectedLanguage }),
+        body: JSON.stringify({
+          matchId,
+          language: selectedLanguage,
+          competitionKey: competition.key,
+        }),
       });
 
       if (!response.ok) {
@@ -1640,9 +1887,9 @@ export default function MatchSeerHome({
                     </button>
                   ))}
                 </div>
-                <div className="group-chip-panel" aria-label={t.groups}>
+                <div className="group-chip-panel" aria-label={explorerCopy.groupLabel}>
                   <button className="group-chip active" type="button">
-                    {t.allGroups}
+                    {explorerCopy.allGroups}
                   </button>
                 </div>
                 {feedIsEmpty && (
@@ -1734,8 +1981,8 @@ export default function MatchSeerHome({
                 <CalendarDays size={18} />
                 <span>{t.matchExplorer}</span>
               </div>
-              <h2>{t.heroExplorerTitle}</h2>
-              <p>{t.heroExplorerCopy}</p>
+              <h2>{explorerCopy.heroTitle}</h2>
+              <p>{explorerCopy.heroCopy}</p>
             </div>
             <div className="hero-board-count">
               <strong>{matches.length > 0 ? visibleMatches.length : t.loadingCount}</strong>
@@ -1762,13 +2009,13 @@ export default function MatchSeerHome({
                 </button>
               ))}
             </div>
-            <div className="group-chip-panel" aria-label={t.groups}>
+            <div className="group-chip-panel" aria-label={explorerCopy.groupLabel}>
               <button
                 className={cx("group-chip", groupFilter === "all" && "active")}
                 onClick={() => setGroupFilter("all")}
                 type="button"
               >
-                {t.allGroups}
+                {explorerCopy.allGroups}
               </button>
               {groups.map((group) => (
                 <button
@@ -1933,7 +2180,16 @@ export default function MatchSeerHome({
         </div>
       </section>
 
-      {!usingFeaturedFallback && (
+      {isLigaMxMode && leagueModeReport && (
+        <LigaMxLeagueModeBoard
+          report={leagueModeReport}
+          language={language}
+          usingFeaturedFallback={usingFeaturedFallback}
+          onSelectMatch={(matchId) => setActiveMatchId(matchId)}
+        />
+      )}
+
+      {!usingFeaturedFallback && isWorldCupMode && (
         <SeerScoreboardBoard
           scoreboard={seerScoreboard}
           t={t}
@@ -1956,7 +2212,7 @@ export default function MatchSeerHome({
         </section>
       )}
 
-      {!usingFeaturedFallback && (
+      {!usingFeaturedFallback && isWorldCupMode && (
         <CupSeerBoard
           candidates={cupCandidates}
           language={language}
@@ -1975,7 +2231,7 @@ export default function MatchSeerHome({
         />
       )}
 
-      {!usingFeaturedFallback && (
+      {!usingFeaturedFallback && isWorldCupMode && (
         <WorldCupArchiveReportBoard
           onSelectMatch={(matchId) => setActiveMatchId(matchId)}
           report={worldCupArchiveReport}
@@ -2613,6 +2869,58 @@ function getMatchCardReason(match: Match, language: Language) {
   return `${reason.slice(0, 109).trim()}...`;
 }
 
+function getCompetitionExplorerCopy(
+  competitionKey: SoccerCompetitionKey,
+  language: Language,
+  t: Record<string, string>,
+) {
+  if (competitionKey === "liga-mx") {
+    if (language === "es") {
+      return {
+        heroTitle: "Jornada y tabla",
+        heroCopy:
+          "Elige partido, revisa la tabla y deja que MatchSeer explique el pronostico sin hacerlo raro.",
+        groupLabel: "Jornadas",
+        allGroups: "Todas las jornadas",
+      };
+    }
+
+    return {
+      heroTitle: "Matchday and table",
+      heroCopy:
+        "Pick a fixture, check table pressure, and let MatchSeer explain the forecast clearly.",
+      groupLabel: "Matchdays",
+      allGroups: "All matchdays",
+    };
+  }
+
+  if (competitionKey === "champions-league") {
+    return {
+      heroTitle:
+        language === "es"
+          ? "Fase de liga"
+          : language === "fr"
+            ? "Phase de ligue"
+            : "League phase",
+      heroCopy:
+        language === "es"
+          ? "Filtra partidos, presion de tabla y rutas europeas antes de pedir la lectura."
+          : language === "fr"
+            ? "Filtre les matchs, la pression du tableau et les routes europeennes avant la lecture."
+            : "Filter fixtures, table pressure, and European paths before asking for the read.",
+      groupLabel: t.groups,
+      allGroups: t.allGroups,
+    };
+  }
+
+  return {
+    heroTitle: t.heroExplorerTitle,
+    heroCopy: t.heroExplorerCopy,
+    groupLabel: t.groups,
+    allGroups: t.allGroups,
+  };
+}
+
 function buildSeerScoreboard(
   matches: Match[],
   language: Language,
@@ -2640,6 +2948,283 @@ function buildSeerScoreboard(
     survivalRate: reviewed > 0 ? Math.round((winnerHits / reviewed) * 100) : 0,
     receipts: reviewedReceipts,
   };
+}
+
+type LeagueTableAccumulator = Omit<
+  LeagueTableRow,
+  "rank" | "zone" | "note"
+>;
+
+function buildLeagueModeReport(
+  matches: Match[],
+  language: Language,
+): LeagueModeReport {
+  const table = new Map<string, LeagueTableAccumulator>();
+  const ensureTeam = (team: Team) => {
+    const key = normalizeTeamKey(team.name);
+    const existing = table.get(key);
+
+    if (existing) {
+      return existing;
+    }
+
+    const row: LeagueTableAccumulator = {
+      team,
+      played: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      points: 0,
+      projectedPoints: 0,
+      form: [],
+      strength: leagueTeamStrength(team),
+    };
+
+    table.set(key, row);
+    return row;
+  };
+
+  for (const match of matches) {
+    const home = ensureTeam(match.home);
+    const away = ensureTeam(match.away);
+    const score = match.status === "Final" ? parseScoreline(match.score) : null;
+
+    if (score) {
+      applyLeagueResult(home, away, score.home, score.away);
+      continue;
+    }
+
+    home.projectedPoints += (match.forecast.home * 3 + match.forecast.draw) / 100;
+    away.projectedPoints += (match.forecast.away * 3 + match.forecast.draw) / 100;
+  }
+
+  const rows = Array.from(table.values())
+    .map<LeagueTableRow>((row) => ({
+      ...row,
+      rank: 0,
+      zone: "out",
+      note: "",
+    }))
+    .sort((left, right) => {
+      const projectedDiff =
+        right.points + right.projectedPoints - (left.points + left.projectedPoints);
+
+      if (Math.abs(projectedDiff) > 0.001) {
+        return projectedDiff;
+      }
+
+      if (right.gd !== left.gd) {
+        return right.gd - left.gd;
+      }
+
+      return right.strength - left.strength;
+    })
+    .map((row, index) => {
+      const rank = index + 1;
+      const zone = leagueTableZoneForRank(rank);
+
+      return {
+        ...row,
+        rank,
+        zone,
+        note: leagueTeamNote(zone, language),
+      };
+    });
+
+  const keyMatch =
+    matches.find((match) => match.status === "Live") ??
+    matches.find((match) => match.status === "Upcoming") ??
+    matches[0] ??
+    null;
+  const liveCount = matches.filter((match) => match.status === "Live").length;
+  const upcomingCount = matches.filter((match) => match.status === "Upcoming").length;
+  const finalCount = matches.filter((match) => match.status === "Final").length;
+  const currentLabel = keyMatch?.group ?? (language === "es" ? "Jornada actual" : "Current matchday");
+  const tableSummary =
+    language === "es"
+      ? "La tabla usa puntos reales cuando hay marcador final y presion proyectada cuando la jornada todavia no se juega."
+      : "The table uses real points when a match is final and projected pressure when the matchday has not kicked off.";
+
+  return {
+    rows,
+    zoneSummaries: buildLeagueZoneSummaries(rows, language),
+    keyMatch,
+    currentLabel,
+    tableSummary,
+    matches: matches.slice(0, 9),
+    liveCount,
+    upcomingCount,
+    finalCount,
+  };
+}
+
+function applyLeagueResult(
+  home: LeagueTableAccumulator,
+  away: LeagueTableAccumulator,
+  homeGoals: number,
+  awayGoals: number,
+) {
+  home.played += 1;
+  away.played += 1;
+  home.gf += homeGoals;
+  home.ga += awayGoals;
+  away.gf += awayGoals;
+  away.ga += homeGoals;
+  home.gd = home.gf - home.ga;
+  away.gd = away.gf - away.ga;
+
+  if (homeGoals > awayGoals) {
+    home.wins += 1;
+    away.losses += 1;
+    home.points += 3;
+    home.form.push("W");
+    away.form.push("L");
+    return;
+  }
+
+  if (awayGoals > homeGoals) {
+    away.wins += 1;
+    home.losses += 1;
+    away.points += 3;
+    away.form.push("W");
+    home.form.push("L");
+    return;
+  }
+
+  home.draws += 1;
+  away.draws += 1;
+  home.points += 1;
+  away.points += 1;
+  home.form.push("D");
+  away.form.push("D");
+}
+
+function leagueTeamStrength(team: Team) {
+  return Math.round(
+    team.attack * 0.3 +
+      team.control * 0.24 +
+      team.defense * 0.3 +
+      team.setPieces * 0.16,
+  );
+}
+
+function leagueTableZoneForRank(rank: number): LeagueZoneKey {
+  if (rank <= 4) {
+    return "top4";
+  }
+
+  if (rank <= 10) {
+    return "liguilla";
+  }
+
+  if (rank <= 12) {
+    return "chasing";
+  }
+
+  if (rank <= 15) {
+    return "needsHelp";
+  }
+
+  return "out";
+}
+
+function buildLeagueZoneSummaries(
+  rows: LeagueTableRow[],
+  language: Language,
+): LeagueZoneSummary[] {
+  const zones: LeagueZoneKey[] = ["top4", "liguilla", "chasing", "needsHelp", "out"];
+
+  return zones.map((zone) => ({
+    key: zone,
+    label: leagueZoneLabel(zone, language),
+    detail: leagueZoneDetail(zone, language),
+    count: rows.filter((row) => row.zone === zone).length,
+  }));
+}
+
+function leagueZoneLabel(zone: LeagueZoneKey, language: Language) {
+  const labels: Record<LeagueZoneKey, { en: string; es: string; fr: string }> = {
+    top4: { en: "Top 4", es: "Top 4", fr: "Top 4" },
+    liguilla: { en: "Liguilla", es: "Liguilla", fr: "Liguilla" },
+    chasing: { en: "Chasing", es: "Persigue", fr: "Poursuite" },
+    needsHelp: { en: "Needs help", es: "Necesita ayuda", fr: "Besoin d'aide" },
+    out: { en: "Out", es: "Fuera", fr: "Hors zone" },
+  };
+
+  return labels[zone][language];
+}
+
+function leagueZoneDetail(zone: LeagueZoneKey, language: Language) {
+  const details: Record<LeagueZoneKey, { en: string; es: string; fr: string }> = {
+    top4: {
+      en: "Direct pressure lane",
+      es: "Carril directo arriba",
+      fr: "Couloir direct",
+    },
+    liguilla: {
+      en: "Postseason room",
+      es: "Zona de liguilla",
+      fr: "Zone finale",
+    },
+    chasing: {
+      en: "One result away",
+      es: "A un resultado",
+      fr: "A un resultat",
+    },
+    needsHelp: {
+      en: "Needs form swing",
+      es: "Necesita racha",
+      fr: "Besoin de serie",
+    },
+    out: {
+      en: "Long road",
+      es: "Camino largo",
+      fr: "Long chemin",
+    },
+  };
+
+  return details[zone][language];
+}
+
+function leagueTeamNote(zone: LeagueZoneKey, language: Language) {
+  if (language === "es") {
+    const notes: Record<LeagueZoneKey, string> = {
+      top4: "Arriba por puntos y fuerza proyectada.",
+      liguilla: "Tiene margen, pero no conviene soltar puntos.",
+      chasing: "Una victoria cambia toda la lectura.",
+      needsHelp: "Necesita racha y ayuda de otros resultados.",
+      out: "Por ahora mira la liguilla desde lejos.",
+    };
+
+    return notes[zone];
+  }
+
+  const notes: Record<LeagueZoneKey, string> = {
+    top4: "Up front by points and projected strength.",
+    liguilla: "In the room, but cannot waste points.",
+    chasing: "One win can change the whole read.",
+    needsHelp: "Needs a form swing and outside help.",
+    out: "Currently outside the postseason picture.",
+  };
+
+  return notes[zone];
+}
+
+function formatLeagueForm(form: string[]) {
+  const recent = form.slice(-5);
+
+  if (recent.length === 0) {
+    return "-----";
+  }
+
+  return recent.join("");
+}
+
+function formatLeagueRecord(row: LeagueTableRow) {
+  return `${row.wins}-${row.draws}-${row.losses}`;
 }
 
 function buildWorldCupArchiveReport(
@@ -3997,6 +4582,210 @@ function CupCandidateCard({
   );
 }
 
+function LigaMxLeagueModeBoard({
+  language,
+  onSelectMatch,
+  report,
+  usingFeaturedFallback,
+}: {
+  language: Language;
+  onSelectMatch: (matchId: string) => void;
+  report: LeagueModeReport;
+  usingFeaturedFallback: boolean;
+}) {
+  const copy = {
+    section: language === "es" ? "Tabla + Jornada" : "Table + Matchday",
+    title: language === "es" ? "Liga MX en modo tradicional" : "Liga MX in league mode",
+    intro:
+      language === "es"
+        ? "Primero tabla, despues partido: puntos, diferencia, zona de liguilla y una explicacion clara del pronostico."
+        : "Table first, then fixture: points, goal difference, postseason zone, and a clear forecast explanation.",
+    source: usingFeaturedFallback
+      ? language === "es"
+        ? "Vista de prueba mientras conectamos fuente en vivo"
+        : "Preview mode while the live source connects"
+      : language === "es"
+        ? "Fuente en vivo conectada"
+        : "Live source connected",
+    tableTitle: language === "es" ? "Tabla General" : "League Table",
+    zoneTitle: language === "es" ? "Zonas" : "Zones",
+    jornadaTitle: language === "es" ? "Jornada hub" : "Matchday hub",
+    keyMatch: language === "es" ? "Partido a seguir" : "Match to watch",
+    live: language === "es" ? "En vivo" : "Live",
+    upcoming: language === "es" ? "Por jugar" : "Upcoming",
+    final: language === "es" ? "Finales" : "Finals",
+    pj: language === "es" ? "PJ" : "P",
+    pts: language === "es" ? "PTS" : "PTS",
+    dif: language === "es" ? "DIF" : "GD",
+    record: language === "es" ? "G-E-P" : "W-D-L",
+    form: language === "es" ? "U5" : "L5",
+    zone: language === "es" ? "Zona" : "Zone",
+    forecast: language === "es" ? "Lectura simple" : "Simple read",
+    change: language === "es" ? "Que puede cambiar" : "What can change",
+  };
+  const keyMatchLabel = report.keyMatch
+    ? `${report.keyMatch.home.name} vs ${report.keyMatch.away.name}`
+    : language === "es"
+      ? "Sin partido"
+      : "No match";
+
+  return (
+    <section className="liga-mode-board" id="liga-mx-table">
+      <div className="liga-mode-header">
+        <div>
+          <div className="section-heading">
+            <BarChart3 size={18} />
+            <span>{copy.section}</span>
+          </div>
+          <h2>{copy.title}</h2>
+          <p>{copy.intro}</p>
+        </div>
+        <span className="liga-source-pill">{copy.source}</span>
+      </div>
+
+      <div className="liga-snapshot-grid" aria-label={copy.section}>
+        <article>
+          <span>{language === "es" ? "Jornada" : "Matchday"}</span>
+          <strong>{report.currentLabel}</strong>
+          <p>{report.tableSummary}</p>
+        </article>
+        <article>
+          <span>{copy.keyMatch}</span>
+          <strong>{keyMatchLabel}</strong>
+          <p>{report.keyMatch ? formatMatchSchedule(report.keyMatch) : "-"}</p>
+        </article>
+        <article>
+          <span>{language === "es" ? "Partidos" : "Fixtures"}</span>
+          <strong>{report.matches.length}</strong>
+          <p>
+            {report.liveCount} {copy.live} · {report.upcomingCount} {copy.upcoming} ·{" "}
+            {report.finalCount} {copy.final}
+          </p>
+        </article>
+      </div>
+
+      <div className="liga-mode-layout">
+        <article className="liga-table-panel">
+          <header>
+            <div>
+              <h3>{copy.tableTitle}</h3>
+              <p>{language === "es" ? "Ordenada por puntos y presion proyectada." : "Sorted by points and projected pressure."}</p>
+            </div>
+            <span>{report.rows.length} clubs</span>
+          </header>
+          <div className="liga-table-wrap">
+            <table className="liga-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{language === "es" ? "Club" : "Club"}</th>
+                  <th>{copy.pj}</th>
+                  <th>{copy.pts}</th>
+                  <th>{copy.record}</th>
+                  <th>GF</th>
+                  <th>GA</th>
+                  <th>{copy.dif}</th>
+                  <th>{copy.form}</th>
+                  <th>{copy.zone}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row) => (
+                  <tr key={row.team.name}>
+                    <td>{row.rank}</td>
+                    <td>
+                      <span className="liga-club-cell">
+                        <TeamFlag team={row.team} compact />
+                        <span>
+                          <strong>{row.team.name}</strong>
+                          <em>{row.note}</em>
+                        </span>
+                      </span>
+                    </td>
+                    <td>{row.played}</td>
+                    <td>{row.points}</td>
+                    <td>{formatLeagueRecord(row)}</td>
+                    <td>{row.gf}</td>
+                    <td>{row.ga}</td>
+                    <td>{row.gd > 0 ? `+${row.gd}` : row.gd}</td>
+                    <td>{formatLeagueForm(row.form)}</td>
+                    <td>
+                      <span className={cx("liga-zone-chip", row.zone)}>
+                        {leagueZoneLabel(row.zone, language)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <aside className="liga-zone-panel" aria-label={copy.zoneTitle}>
+          <h3>{copy.zoneTitle}</h3>
+          {report.zoneSummaries.map((zone) => (
+            <div className={cx("liga-zone-card", zone.key)} key={zone.key}>
+              <span>{zone.label}</span>
+              <strong>{zone.count}</strong>
+              <p>{zone.detail}</p>
+            </div>
+          ))}
+        </aside>
+      </div>
+
+      <div className="jornada-hub">
+        <div className="jornada-hub-header">
+          <div>
+            <h3>{copy.jornadaTitle}</h3>
+            <p>
+              {language === "es"
+                ? "Cada tarjeta resume ventaja, marcador y el punto que mas puede mover el partido."
+                : "Each card summarizes lean, score path, and the biggest swing factor."}
+            </p>
+          </div>
+        </div>
+        <div className="jornada-grid">
+          {report.matches.map((match) => {
+            const accents = matchAccentColors(match);
+            const lean = getMatchLean(match, accents);
+            const reason = getMatchCardReason(match, language);
+
+            return (
+              <button
+                className="jornada-card"
+                key={match.id}
+                onClick={() => onSelectMatch(match.id)}
+                type="button"
+              >
+                <div className="jornada-card-top">
+                  <span>{formatMatchSchedule(match)}</span>
+                  <strong>{match.forecast.projected}</strong>
+                </div>
+                <div className="jornada-card-teams">
+                  <span>
+                    <TeamFlag accentColor={accents.home} team={match.home} compact />
+                    <strong>{match.home.name}</strong>
+                  </span>
+                  <span>
+                    <TeamFlag accentColor={accents.away} team={match.away} compact />
+                    <strong>{match.away.name}</strong>
+                  </span>
+                </div>
+                <div className="jornada-card-read">
+                  <span>{copy.forecast}</span>
+                  <strong style={{ color: lean.color }}>{lean.label} {lean.value}%</strong>
+                </div>
+                <p>{reason}</p>
+                <em>{copy.change}: {match.weather.mood[language] ?? match.weather.mood.en}</em>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CupSeerBoard({
   candidates,
   language,
@@ -4703,7 +5492,7 @@ function TeamFlag({
 
   return (
     <span
-      aria-label={`${team.name} flag`}
+      aria-label={`${team.name} marker`}
       className={cx("team-flag", compact && "compact")}
       style={{ "--team-color": displayColor } as React.CSSProperties}
       title={team.name}

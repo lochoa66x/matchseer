@@ -33,7 +33,11 @@ export default async function SoccerCompetitionPage({
     ? resolvedSearchParams?.lang[0]
     : resolvedSearchParams?.lang;
   const initialLanguage: Language =
-    rawLanguage === "es" || rawLanguage === "fr" ? rawLanguage : "en";
+    rawLanguage === "en" || rawLanguage === "es" || rawLanguage === "fr"
+      ? rawLanguage
+      : competition.key === "liga-mx"
+        ? "es"
+        : "en";
 
   return (
     <MatchSeerHome

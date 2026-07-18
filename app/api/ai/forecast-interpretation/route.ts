@@ -24,10 +24,13 @@ const disclaimer =
   "Forecasts are for entertainment and sports analysis only. No betting advice.";
 const baseSeerInterpretationInstruction =
   "You are the Seer: a mystical, playful football oracle who reads a match like omens, not a spreadsheet. Speak in vivid, sensory, theatrical language — the pitch, the night, the weather, momentum, the trail you follow. Keep the app's stored forecast exactly as given (the winner/draw direction, projected score, probabilities, confidence, and chaos); never invent your own prediction, winner, scoreline, probability, certainty, or guarantee. Do NOT sound like a match preview, analyst note, or data report: avoid stiff analyst tics such as 'however', 'that said', 'on paper', 'statistically', 'the data suggests', 'expected', 'overall', and 'in conclusion'. The summary must not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities', and must not state raw percentages, confidence numbers, or chaos numbers — translate those into feeling and imagery instead. It may name the projected score once. Lead with match imagery, tactical texture, venue/weather mood, or the Seer's trail. Keep it concise, punchy, and fun. If marketPulse appears in context, treat it only as crowd signal or public sentiment that colours the confidence/chaos mood, never as the match forecast itself, and never name Polymarket. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, sportsbook-style copy, make-money copy, or trading links. Never use national stereotypes, cultural costumes, cultural props, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into lively but neutral language while preserving the stored forecast.";
+const ligaMxInterpretationInstruction =
+  "You are MatchSeer for Liga MX: a friendly football analyst for Mexico and Latin America. Keep the stored forecast exactly as given; never invent your own winner, scoreline, probability, certainty, or guarantee. Sound like a sharp friend who explains the match clearly, not a mystical oracle. Prefer practical football language: jornada, tabla, localia, altura, viaje, forma, ritmo, banca, cierre del partido, and liguilla when relevant. Spanish should feel natural and direct for a Latin American football audience. Keep it compact, useful, and conversational. You may mention the projected score once, but do not overload the summary with raw percentages. If marketPulse appears, treat it only as crowd sentiment that can nudge confidence or chaos, never as the forecast itself, and never name Polymarket. Never write betting advice, odds language, wagers, picks, locks, parlays, lines, sure things, value bets, bookmaker, sportsbook-style copy, make-money copy, or trading links. Never use national stereotypes, cultural costumes, ethnicity jokes, or caricatures. If a previous draft is provided for repair, rewrite it into clear, friendly football analysis while preserving the stored forecast.";
 
 export const dynamic = "force-dynamic";
 
 type ForecastSide = "home" | "draw" | "away";
+type CompetitionTone = "default" | "liga-mx";
 
 type OfficialModelCall = {
   pick: ForecastSide;
@@ -78,6 +81,8 @@ export async function POST(request: Request) {
   const language = body.language;
   const model = process.env.OPENAI_MODEL ?? "gpt-5.5";
   const voice = getSeerVoice(body.voiceId);
+  const competitionTone: CompetitionTone =
+    body.competitionKey === "liga-mx" ? "liga-mx" : "default";
 
   if (isPendingMatchRead(match)) {
     const interpretation = createPendingMatchInterpretation(match, language, voice);
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
       requestPayload: {
         matchId: match.id,
         language,
+        competitionTone,
         voiceId: voice.id,
         reason: "pending-teams",
       },
@@ -112,6 +118,7 @@ export async function POST(request: Request) {
     result.source === "database",
     officialModelCall,
     voice,
+    competitionTone,
   );
 
   if (match.status === "Final") {
@@ -121,6 +128,7 @@ export async function POST(request: Request) {
       requestPayload: {
         matchId: match.id,
         language,
+        competitionTone,
         voiceId: voice.id,
         reason: "completed-match",
       },
@@ -153,6 +161,7 @@ export async function POST(request: Request) {
     model,
     officialModelCall,
     voice,
+    competitionTone,
   );
 
   try {
@@ -209,6 +218,7 @@ export async function POST(request: Request) {
         model,
         officialModelCall,
         voice,
+        competitionTone,
         safetyIssue,
         blockedInterpretation: interpretation,
       });
@@ -365,6 +375,7 @@ function createPendingMatchInterpretation(
 
 async function requestRepairedInterpretation({
   blockedInterpretation,
+  competitionTone,
   fallback,
   language,
   match,
@@ -374,6 +385,7 @@ async function requestRepairedInterpretation({
   safetyIssue,
 }: {
   blockedInterpretation: ForecastInterpretation;
+  competitionTone: CompetitionTone;
   fallback: ForecastInterpretation;
   language: Language;
   match: MatchSummary;
@@ -388,6 +400,7 @@ async function requestRepairedInterpretation({
     model,
     officialModelCall,
     voice,
+    competitionTone,
     {
       blockedInterpretation,
       safetyIssue,
@@ -472,6 +485,7 @@ function createFallbackInterpretation(
   usingDatabase: boolean,
   officialModelCall: OfficialModelCall,
   voice: SeerVoiceProfile,
+  competitionTone: CompetitionTone = "default",
 ): ForecastInterpretation {
   const context =
     match.forecast.reasons[language]?.[0] ?? match.forecast.tone[language];
@@ -488,6 +502,7 @@ function createFallbackInterpretation(
     match,
     officialModelCall,
     usingDatabase,
+    competitionTone,
   });
 
   return {
@@ -517,6 +532,7 @@ function createFallbackInterpretation(
 }
 
 function createSeerFallbackCopy({
+  competitionTone,
   context,
   favoriteName,
   language,
@@ -524,6 +540,7 @@ function createSeerFallbackCopy({
   officialModelCall,
   usingDatabase,
 }: {
+  competitionTone: CompetitionTone;
   context: string;
   favoriteName: string | null;
   language: Language;
@@ -535,6 +552,50 @@ function createSeerFallbackCopy({
   const home = officialModelCall.probabilities.home;
   const draw = officialModelCall.probabilities.draw;
   const away = officialModelCall.probabilities.away;
+
+  if (competitionTone === "liga-mx") {
+    if (language === "es") {
+      return {
+        headline: `${match.home.name} vs ${match.away.name}`,
+        summary: favoriteName
+          ? `${favoriteName} llega con la ventaja inicial, pero no es cheque en blanco: el partido apunta a ${score}. ${context}`
+          : `La lectura deja un partido muy parejo: el marcador base apunta a ${score}. ${context}`,
+        toneLine:
+          "Clave practica: revisar once inicial, altura/viaje y ritmo de arranque antes del silbatazo.",
+        forecastLabel: "Lectura del partido",
+        forecastFactor: favoriteName
+          ? `${favoriteName} aparece delante en la lectura de MatchSeer, con confianza moderada.`
+          : "La lectura deja el empate como carril principal y pide cuidar el margen.",
+        shapeLabel: "Mapa simple",
+        shapeFactor: `Local ${home}%, empate ${draw}%, visitante ${away}%.`,
+        contextLabel: "Que pesa",
+        contextFactor: context,
+        missingDataNote: usingDatabase
+          ? "Lectura desde datos guardados; se afina cuando entren alineaciones, clima y mercado."
+          : "Faltan datos en vivo para completar la lectura.",
+      };
+    }
+
+    return {
+      headline: `${match.home.name} vs ${match.away.name}`,
+      summary: favoriteName
+        ? `${favoriteName} has the first lean, not a free pass: the match points to ${score}. ${context}`
+        : `This reads tight from the start: the baseline score path is ${score}. ${context}`,
+      toneLine:
+        "Practical check: lineups, altitude/travel, and early tempo can still move the read.",
+      forecastLabel: "Match read",
+      forecastFactor: favoriteName
+        ? `${favoriteName} sits ahead in the MatchSeer read with moderate confidence.`
+        : "The draw lane is live, so the margin needs caution.",
+      shapeLabel: "Simple map",
+      shapeFactor: `Home ${home}%, draw ${draw}%, away ${away}%.`,
+      contextLabel: "What matters",
+      contextFactor: context,
+      missingDataNote: usingDatabase
+        ? "Read from stored data; lineups, weather, and crowd signal can sharpen it later."
+        : "Live data is unavailable for this match.",
+    };
+  }
 
   if (language === "es") {
     return {
@@ -604,8 +665,37 @@ function createOpenAiRequest(
   model: string,
   officialModelCall: OfficialModelCall,
   voice: SeerVoiceProfile,
+  competitionTone: CompetitionTone = "default",
   repairContext?: RepairContext,
 ) {
+  const isLigaMxTone = competitionTone === "liga-mx";
+  const instruction = isLigaMxTone
+    ? ligaMxInterpretationInstruction
+    : baseSeerInterpretationInstruction;
+  const outputRules = isLigaMxTone
+    ? {
+        headline:
+          "Use the teams or a short fixture title. No percentages in the headline.",
+        summary:
+          "One or two clear, friendly analyst sentences explaining why the stored forecast could happen. Spanish should feel natural for Mexico/Latin America. Use practical football terms like jornada, tabla, localia, altura, viaje, forma, ritmo, cierre, and liguilla when relevant. The projected score may appear once. Do not predict a different outcome.",
+        toneLine:
+          "One useful sentence about what can still change the read, such as lineups, travel, altitude, weather, or tempo. No mystical wording.",
+        keyFactors:
+          "Three factors max. Keep labels short and useful, such as Localia, Altura/viaje, Forma, Tabla, Ritmo, or Cierre.",
+        disclaimer,
+      }
+    : {
+        headline:
+          "Use the teams or a short match title. No percentages in the headline.",
+        summary:
+          "One or two vivid sentences explaining why the stored forecast could happen. Start with the Seer, a match image, tactical pressure, weather, or venue. Do not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities'. Do not include raw percentages, confidence numbers, or chaos numbers in the summary. The projected score may appear once. Do not predict a different outcome.",
+        toneLine:
+          "One playful sentence that matches the stored forecast exactly. Do not use cultural stereotypes or cultural props.",
+        keyFactors:
+          "Three factors max. Keep labels short and fan-friendly, such as Sharp edge, Midfield glue, Weather bite, Set-piece door, or Chaos lever.",
+        disclaimer,
+      };
+
   return {
     model,
     input: [
@@ -614,9 +704,7 @@ function createOpenAiRequest(
         content: [
           {
             type: "input_text",
-            text: `${baseSeerInterpretationInstruction} ${getSeerVoicePromptLine(
-              voice,
-            )}`,
+            text: `${instruction} ${isLigaMxTone ? "" : getSeerVoicePromptLine(voice)}`,
           },
         ],
       },
@@ -627,6 +715,7 @@ function createOpenAiRequest(
             type: "input_text",
             text: JSON.stringify({
               language,
+              competitionTone,
               officialModelForecast: officialModelCall,
               voice: {
                 id: voice.id,
@@ -648,17 +737,7 @@ function createOpenAiRequest(
                 referee: match.referee,
                 players: match.players,
               },
-              outputRules: {
-                headline:
-                  "Use the teams or a short match title. No percentages in the headline.",
-                summary:
-                  "One or two vivid sentences explaining why the stored forecast could happen. Start with the Seer, a match image, tactical pressure, weather, or venue. Do not use the phrases 'official model', 'stored forecast', 'public call', or 'probabilities'. Do not include raw percentages, confidence numbers, or chaos numbers in the summary. The projected score may appear once. Do not predict a different outcome.",
-                toneLine:
-                  "One playful sentence that matches the stored forecast exactly. Do not use cultural stereotypes or cultural props.",
-                keyFactors:
-                  "Three factors max. Keep labels short and fan-friendly, such as Sharp edge, Midfield glue, Weather bite, Set-piece door, or Chaos lever.",
-                disclaimer,
-              },
+              outputRules,
               repair: repairContext
                 ? {
                     safetyIssue: repairContext.safetyIssue,

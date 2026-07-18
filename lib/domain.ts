@@ -183,6 +183,7 @@ export type MatchSummary = {
 export type ForecastInterpretationRequest = {
   matchId: string;
   language: Language;
+  competitionKey?: string;
   voiceId?: SeerVoiceId;
 };
 

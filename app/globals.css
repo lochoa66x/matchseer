@@ -11455,6 +11455,425 @@ body {
 }
 
 .nfl-roster-map-grid {
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+}
+/* === End Fantasy Seer final containment polish === */
+
+/* === Liga MX traditional league mode === */
+.liga-mode-board {
+  width: min(100%, 1760px);
+  margin: 20px auto 0;
+  padding: clamp(14px, 2vw, 22px);
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, rgba(216, 180, 93, 0.065), transparent 38%),
+    linear-gradient(180deg, rgba(20, 24, 32, 0.96), rgba(11, 14, 18, 0.98));
+  border: 1px solid rgba(157, 183, 232, 0.16);
+  border-radius: 18px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+}
+
+.liga-mode-header,
+.liga-table-panel header,
+.jornada-hub-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.liga-mode-header h2 {
+  margin: 8px 0 0;
+  max-width: 760px;
+  color: var(--text-primary);
+  font-size: clamp(1.9rem, 3.4vw, 3rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.liga-mode-header p,
+.liga-table-panel header p,
+.jornada-hub-header p,
+.liga-snapshot-grid p,
+.liga-zone-card p,
+.jornada-card p,
+.jornada-card em {
+  margin: 0;
+  color: rgba(239, 235, 222, 0.68);
+  font-weight: 720;
+  line-height: 1.42;
+}
+
+.liga-mode-header p {
+  max-width: 760px;
+  margin-top: 8px;
+  font-size: 0.98rem;
+}
+
+.liga-source-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  max-width: min(320px, 100%);
+  padding: 9px 13px;
+  color: #0b0e12;
+  background: linear-gradient(135deg, #d8b45d, #9db7e8);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.liga-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.liga-snapshot-grid article,
+.liga-table-panel,
+.liga-zone-panel,
+.jornada-hub,
+.jornada-card {
+  min-width: 0;
+  background: rgba(11, 14, 18, 0.58);
+  border: 1px solid rgba(157, 183, 232, 0.13);
+  border-radius: 13px;
+}
+
+.liga-snapshot-grid article {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 108px;
+  padding: 13px;
+}
+
+.liga-snapshot-grid span,
+.liga-table-panel header span,
+.liga-zone-card span,
+.jornada-card-top span,
+.jornada-card-read span {
+  color: rgba(216, 180, 93, 0.82);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.liga-snapshot-grid strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: clamp(1.08rem, 1.5vw, 1.38rem);
+  font-weight: 900;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liga-mode-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.48fr) minmax(240px, 0.52fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.liga-table-panel,
+.liga-zone-panel,
+.jornada-hub {
+  padding: 14px;
+}
+
+.liga-table-panel h3,
+.liga-zone-panel h3,
+.jornada-hub h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.liga-table-wrap {
+  margin-top: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.liga-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.liga-table th {
+  padding: 0 10px 4px;
+  color: rgba(216, 223, 235, 0.56);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.liga-table td {
+  padding: 9px 10px;
+  color: rgba(239, 235, 222, 0.88);
+  background: rgba(20, 24, 32, 0.78);
+  border-top: 1px solid rgba(157, 183, 232, 0.12);
+  border-bottom: 1px solid rgba(157, 183, 232, 0.12);
+  font-size: 0.78rem;
+  font-weight: 850;
+  vertical-align: middle;
+}
+
+.liga-table td:first-child {
+  border-left: 1px solid rgba(157, 183, 232, 0.12);
+  border-radius: 10px 0 0 10px;
+}
+
+.liga-table td:last-child {
+  border-right: 1px solid rgba(157, 183, 232, 0.12);
+  border-radius: 0 10px 10px 0;
+}
+
+.liga-club-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.liga-club-cell > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.liga-club-cell strong {
+  overflow: hidden;
+  max-width: 24ch;
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liga-club-cell em {
+  overflow: hidden;
+  color: rgba(239, 235, 222, 0.55);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liga-zone-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 25px;
+  padding: 5px 8px;
+  border: 1px solid rgba(157, 183, 232, 0.16);
+  border-radius: 999px;
+  background: rgba(157, 183, 232, 0.08);
+  color: rgba(216, 223, 235, 0.9);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.liga-zone-chip.top4,
+.liga-zone-card.top4 {
+  border-color: rgba(216, 180, 93, 0.34);
+  background: rgba(216, 180, 93, 0.1);
+}
+
+.liga-zone-chip.liguilla,
+.liga-zone-card.liguilla {
+  border-color: rgba(157, 183, 232, 0.34);
+  background: rgba(157, 183, 232, 0.09);
+}
+
+.liga-zone-chip.chasing,
+.liga-zone-card.chasing {
+  border-color: rgba(101, 204, 155, 0.3);
+  background: rgba(101, 204, 155, 0.07);
+}
+
+.liga-zone-chip.needsHelp,
+.liga-zone-card.needsHelp {
+  border-color: rgba(216, 180, 93, 0.22);
+  background: rgba(216, 180, 93, 0.055);
+}
+
+.liga-zone-chip.out,
+.liga-zone-card.out {
+  border-color: rgba(217, 107, 74, 0.28);
+  background: rgba(217, 107, 74, 0.065);
+}
+
+.liga-zone-panel {
+  align-content: start;
+  display: grid;
+  gap: 9px;
+}
+
+.liga-zone-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  padding: 10px;
+  border-radius: 11px;
+}
+
+.liga-zone-card strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  font-weight: 950;
+}
+
+.liga-zone-card p {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+}
+
+.jornada-hub {
+  margin-top: 12px;
+}
+
+.jornada-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.jornada-card {
+  appearance: none;
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  padding: 12px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.jornada-card:hover,
+.jornada-card:focus-visible {
+  border-color: rgba(216, 180, 93, 0.34);
+  background: rgba(20, 24, 32, 0.92);
+  transform: translateY(-1px);
+}
+
+.jornada-card-top,
+.jornada-card-read {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.jornada-card-top strong,
+.jornada-card-read strong {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.jornada-card-teams {
+  display: grid;
+  gap: 7px;
+}
+
+.jornada-card-teams span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.jornada-card-teams strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jornada-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.8rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.jornada-card em {
+  display: -webkit-box;
+  overflow: hidden;
+  padding-top: 9px;
+  border-top: 1px solid rgba(157, 183, 232, 0.11);
+  font-size: 0.73rem;
+  font-style: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 1180px) {
+  .liga-mode-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .jornada-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .liga-mode-header,
+  .liga-table-panel header,
+  .jornada-hub-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .liga-source-pill {
+    width: fit-content;
+  }
+
+  .liga-snapshot-grid,
+  .jornada-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .liga-table-panel,
+  .liga-zone-panel,
+  .jornada-hub {
+    padding: 12px;
+  }
+
+  .liga-table {
+    min-width: 720px;
+  }
+}
+/* === End Liga MX traditional league mode === */
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 7px;
