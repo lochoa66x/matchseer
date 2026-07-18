@@ -911,7 +911,7 @@ export async function saveCupSeerSnapshot(
         ${JSON.stringify({
           modelVersion: "v4.0",
           matchesConsidered: matches.length,
-          note: "Final 4 title-lane snapshot with knockout path probability.",
+          note: "Title-lane snapshot with knockout path probability.",
         })}::jsonb
       );
     `;

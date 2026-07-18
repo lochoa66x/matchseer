@@ -335,13 +335,13 @@ const copy = {
     refereePending: "Assignment pending",
     cupSeer: "Weekly Cup Seer",
     cupSeerTitle: "Who is still in the title lane?",
-    cupSeerIntro: "The field is tighter now: finished matches count, upcoming fixtures stay projected, and the Seer tracks the four strongest title lanes.",
+    cupSeerIntro: "The field keeps tightening: finished matches count, upcoming fixtures stay projected, and MatchSeer tracks the live title lane.",
     cupPulse: "Weekly pulse",
     cupLeader: "Top signal",
     cupOpen: "Open weekly cup pulse",
     cupClose: "Hide weekly cup pulse",
     cupSignal: "Finalist signal",
-    cupAdvance: "R16 path",
+    cupAdvance: "Title path",
     seerVerdict: "Seer verdict",
     riskCloud: "Risk cloud",
     signalNotes: "Signal notes",
@@ -504,13 +504,13 @@ const copy = {
     refereePending: "Asignación pendiente",
     cupSeer: "Vidente semanal de la copa",
     cupSeerTitle: "¿Quién sigue en la ruta del título?",
-    cupSeerIntro: "El campo ya se cerró: los resultados terminados cuentan, los próximos siguen proyectados y el Vidente sigue las cuatro rutas más fuertes al título.",
+    cupSeerIntro: "El campo se sigue cerrando: los resultados terminados cuentan, los próximos siguen proyectados y MatchSeer sigue la ruta viva al título.",
     cupPulse: "Pulso semanal",
     cupLeader: "Señal líder",
     cupOpen: "Abrir pulso semanal",
     cupClose: "Ocultar pulso semanal",
     cupSignal: "Señal finalista",
-    cupAdvance: "Ruta R16",
+    cupAdvance: "Ruta al título",
     seerVerdict: "Veredicto vidente",
     riskCloud: "Nube de riesgo",
     signalNotes: "Notas de señal",
@@ -673,13 +673,13 @@ const copy = {
     refereePending: "Affectation en attente",
     cupSeer: "Voyant hebdo de la coupe",
     cupSeerTitle: "Qui reste dans la voie du titre ?",
-    cupSeerIntro: "Le champ se resserre : les matchs terminés comptent, les affiches à venir restent projetées, et le voyant suit les quatre routes les plus fortes vers le titre.",
+    cupSeerIntro: "Le champ se resserre encore : les matchs terminés comptent, les affiches à venir restent projetées, et MatchSeer suit la route vivante vers le titre.",
     cupPulse: "Pulse hebdo",
     cupLeader: "Signal leader",
     cupOpen: "Ouvrir le pulse hebdo",
     cupClose: "Masquer le pulse hebdo",
     cupSignal: "Signal finaliste",
-    cupAdvance: "Route R16",
+    cupAdvance: "Route au titre",
     seerVerdict: "Verdict du voyant",
     riskCloud: "Nuage de risque",
     signalNotes: "Notes du signal",
@@ -3249,6 +3249,62 @@ function formatLeagueRecord(row: LeagueTableRow) {
   return `${row.wins}-${row.draws}-${row.losses}`;
 }
 
+function worldCupFinalTeams(matches: Match[]) {
+  const finalMatch = matches.find(isWorldCupFinalMatch);
+
+  if (
+    !finalMatch ||
+    finalMatch.home.isPlaceholder ||
+    finalMatch.away.isPlaceholder
+  ) {
+    return [] as Team[];
+  }
+
+  return uniqueTeams([finalMatch.home, finalMatch.away]);
+}
+
+function worldCupTitleLaneLimit(matches: Match[]) {
+  return worldCupFinalTeams(matches).length >= 2 ? 2 : 4;
+}
+
+function worldCupTitleLaneCopy(limit: number) {
+  return limit === 2
+    ? {
+        detail: "finalist lane",
+        note: "two finalists",
+        title: "Finalist title lane",
+      }
+    : {
+        detail: "top-four lane",
+        note: "four teams",
+        title: "Top-four title lane",
+      };
+}
+
+function buildWorldCupChampionLane(matches: Match[], candidates: CupCandidate[]) {
+  const finalTeams = worldCupFinalTeams(matches);
+  const limit = finalTeams.length >= 2 ? 2 : 4;
+  const laneTeams = finalTeams.length >= 2
+    ? finalTeams
+    : candidates.slice(0, limit).map((candidate) => candidate.team);
+
+  return laneTeams.map((team) => {
+    const candidate = candidates.find(
+      (entry) => normalizeTeamKey(entry.team.name) === normalizeTeamKey(team.name),
+    );
+    const signal = candidate?.signal ?? candidate?.advanceProbability ?? 50;
+    const advanceProbability = candidate?.advanceProbability ?? signal;
+    const matches = candidate?.matches ?? 1;
+    const laneCopy = worldCupTitleLaneCopy(limit);
+
+    return {
+      detail: `${advanceProbability}% title path · ${matches} fixtures · ${laneCopy.detail}`,
+      signal,
+      team,
+    };
+  });
+}
+
 function buildWorldCupArchiveReport(
   matches: Match[],
   candidates: CupCandidate[],
@@ -3261,6 +3317,8 @@ function buildWorldCupArchiveReport(
   const thirdPlaceResult = matchResultTeams(thirdPlaceMatch);
   const archiveMode = Boolean(finalResult);
   const nextRound = buildWorldCupNextRoundField(matches, candidates, archiveMode);
+  const titleLaneLimit = worldCupTitleLaneLimit(matches);
+  const titleLaneCopy = worldCupTitleLaneCopy(titleLaneLimit);
   const usedTeams = new Set<string>();
   const podium: WorldCupArchivePodiumSlot[] = [];
 
@@ -3389,13 +3447,9 @@ function buildWorldCupArchiveReport(
 
   return {
     archiveMode,
-    championLane: candidates.slice(0, 4).map((candidate) => ({
-      detail: `${candidate.advanceProbability}% title path · ${candidate.matches} fixtures · top-four lane`,
-      signal: candidate.signal,
-      team: candidate.team,
-    })),
+    championLane: buildWorldCupChampionLane(matches, candidates),
     improvements: [
-      "Save top-four title snapshots on every sync so the final chart shows real movement, not only reconstruction.",
+      "Save title-lane snapshots on every sync so the final chart shows real movement, not only reconstruction.",
       "Keep travel distance, rest days, and extra-time fatigue as first-class receipts during the next knockout round.",
       "Separate 90-minute draw reads from advancement reads so cautious knockout games do not look like misses.",
       "Treat officiating controversy as chaos/confidence noise only after review, not as a hidden-hand assumption.",
@@ -3403,7 +3457,7 @@ function buildWorldCupArchiveReport(
     ],
     intro: archiveMode
       ? "Final results are in. This closes the tournament as a readable Seer report: what landed, what missed, and what the next model should learn."
-      : "The knockout picture is sharper now. The Seer trims the title lane to four teams, keeps the next-round bracket visible, and logs what this round taught the model.",
+      : `The knockout picture is sharper now. MatchSeer trims the champion lane to ${titleLaneCopy.note}, keeps the next-round bracket visible, and logs what this round taught the model.`,
     lessons: [
       scoreboard.reviewed > 0
         ? `The model is sitting at ${scoreboard.survivalRate}% direction survival across ${scoreboard.reviewed} reviewed matches.`
@@ -3706,7 +3760,15 @@ function buildWorldCupNextRoundField(
   candidates: CupCandidate[],
   archiveMode: boolean,
 ): WorldCupNextRoundField {
-  const nextMatches = nextOpenKnockoutMatches(matches);
+  const titleLaneLimit = worldCupTitleLaneLimit(matches);
+  const titleLaneCopy = worldCupTitleLaneCopy(titleLaneLimit);
+  const openFinalMatch = matches.find((match) =>
+    match.status !== "Final" &&
+    isWorldCupFinalMatch(match) &&
+    !match.home.isPlaceholder &&
+    !match.away.isPlaceholder,
+  );
+  const nextMatches = openFinalMatch ? [openFinalMatch] : nextOpenKnockoutMatches(matches);
   const teams = uniqueTeams(
     nextMatches.flatMap((match) => [match.home, match.away]),
   );
@@ -3725,7 +3787,7 @@ function buildWorldCupNextRoundField(
         venue: match.venue,
       })),
       label,
-      note: `${label} is the live bracket focus. The title lane is intentionally trimmed to four so the read gets sharper, not louder.`,
+      note: `${label} is the live bracket focus. The champion lane is now trimmed to ${titleLaneCopy.note} so the read gets sharper, not louder.`,
       status,
       teams,
     };
@@ -3739,20 +3801,22 @@ function buildWorldCupNextRoundField(
     return {
       fixtures: [],
       label: `${nextLabel} field`,
-      note: `${completedField.teams.length} teams advanced from ${completedField.label}. Fixtures are not loaded yet, but the title lane is already trimmed to four.`,
+      note: `${completedField.teams.length} teams advanced from ${completedField.label}. Fixtures are not loaded yet, but the champion lane is already trimmed to ${titleLaneCopy.note}.`,
       status: `${completedField.teams.length} teams through`,
       teams: completedField.teams,
     };
   }
 
-  const fallbackTeams = candidates.slice(0, 4).map((candidate) => candidate.team);
+  const fallbackTeams = buildWorldCupChampionLane(matches, candidates).map(
+    (candidate) => candidate.team,
+  );
 
   return {
     fixtures: [],
-    label: archiveMode ? "Tournament field settled" : "Top-four title lane",
+    label: archiveMode ? "Tournament field settled" : titleLaneCopy.title,
     note: archiveMode
       ? "The archive now studies final receipts instead of projecting the next round."
-      : "No confirmed next-round fixtures are loaded yet, so the Seer is showing the four strongest title paths from stored forecasts.",
+      : `No confirmed next-round fixtures are loaded yet, so MatchSeer is showing the ${titleLaneCopy.detail} from stored forecasts.`,
     status: `${fallbackTeams.length} title teams`,
     teams: fallbackTeams,
   };
