@@ -12,6 +12,25 @@
   --blue: #2563eb;
   --red: #ef4444;
   --radius: 8px;
+  --soccer-bg: #07090f;
+  --soccer-panel: #0f1525;
+  --soccer-panel-deep: #0a1020;
+  --soccer-surface: #111d35;
+  --soccer-ink: #dfe7f7;
+  --soccer-muted: #8fa2c4;
+  --soccer-line: rgba(30, 46, 82, 0.58);
+  --soccer-line-strong: rgba(245, 197, 24, 0.24);
+  --soccer-gold: #f5c518;
+  --soccer-flame: #ff6b35;
+  --soccer-turf: #10a36f;
+  --soccer-blue: #2563eb;
+  --soccer-danger: #ef4444;
+  --soccer-card-shadow: 0 24px 72px rgba(0, 0, 0, 0.36);
+  --soccer-control-gradient: linear-gradient(135deg, var(--soccer-gold) 0%, #ffb11f 52%, var(--soccer-flame) 100%);
+  --soccer-panel-gradient:
+    radial-gradient(circle at 10% 0%, rgba(245, 197, 24, 0.08), transparent 30%),
+    radial-gradient(circle at 92% 6%, rgba(37, 99, 235, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(15, 21, 37, 0.94), rgba(7, 9, 15, 0.98));
 }
 
 * {
@@ -23806,3 +23825,199 @@ body {
 }
 
 .nfl-roster-map-grid {
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+}
+
+/* === Shared Soccer Seer palette refresh === */
+.team-flag.club-color-marker {
+  background:
+    radial-gradient(circle at 24% 20%, rgba(255, 255, 255, 0.32), transparent 27%),
+    linear-gradient(145deg, rgba(223, 231, 247, 0.12), rgba(15, 21, 37, 0.76));
+  border-color: rgba(143, 162, 196, 0.34);
+}
+
+.team-color-shield {
+  box-shadow:
+    0 0 0 1px rgba(223, 231, 247, 0.28) inset,
+    0 -9px 18px rgba(7, 9, 15, 0.32) inset;
+}
+
+.team-color-shield.pattern-split {
+  background:
+    linear-gradient(135deg, var(--team-color, var(--soccer-gold)) 0 49%, var(--team-color-2, var(--soccer-blue)) 50%),
+    var(--team-color-3, var(--soccer-panel-deep));
+}
+
+.team-color-shield.pattern-stripe {
+  background:
+    linear-gradient(
+      90deg,
+      var(--team-color, var(--soccer-gold)) 0 32%,
+      var(--team-color-2, var(--soccer-ink)) 32% 66%,
+      var(--team-color, var(--soccer-gold)) 66%
+    );
+}
+
+.team-color-shield.pattern-diagonal {
+  background:
+    linear-gradient(
+      135deg,
+      var(--team-color, var(--soccer-gold)) 0 38%,
+      var(--team-color-2, var(--soccer-blue)) 38% 62%,
+      var(--team-color-3, var(--soccer-panel-deep)) 62%
+    );
+}
+
+.team-color-shield.pattern-hoops {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      var(--team-color, var(--soccer-gold)) 0 7px,
+      var(--team-color-2, var(--soccer-ink)) 7px 14px
+    );
+}
+
+.soccer-competition-strip,
+.soccer-hub-hero,
+.soccer-competition-card,
+.liga-mode-board,
+.liga-snapshot-grid article,
+.liga-context-card,
+.liga-table-panel,
+.liga-zone-panel,
+.jornada-hub,
+.jornada-card {
+  color: var(--soccer-ink);
+  background: var(--soccer-panel-gradient);
+  border-color: var(--soccer-line);
+  box-shadow: var(--soccer-card-shadow);
+}
+
+.soccer-competition-strip,
+.liga-mode-board {
+  background:
+    radial-gradient(circle at 7% 0%, rgba(245, 197, 24, 0.12), transparent 29%),
+    radial-gradient(circle at 90% 2%, rgba(255, 107, 53, 0.1), transparent 32%),
+    radial-gradient(circle at 52% 115%, rgba(37, 99, 235, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(15, 21, 37, 0.98), rgba(7, 9, 15, 0.99));
+  border-color: var(--soccer-line-strong);
+}
+
+.soccer-competition-strip span,
+.soccer-hub-kicker,
+.soccer-card-topline span,
+.liga-snapshot-grid span,
+.liga-context-card span,
+.liga-table-panel header span,
+.liga-zone-card span,
+.jornada-card-top span,
+.jornada-card-read span {
+  color: var(--soccer-gold);
+}
+
+.soccer-competition-strip strong,
+.soccer-hub-hero h2,
+.soccer-hub-receipt strong,
+.soccer-competition-card h3,
+.liga-mode-header h2,
+.liga-snapshot-grid strong,
+.liga-context-title strong,
+.liga-context-card strong,
+.liga-table-panel h3,
+.liga-zone-panel h3,
+.jornada-hub h3,
+.jornada-card-top strong,
+.jornada-card-read strong,
+.jornada-card-teams strong,
+.liga-club-cell strong {
+  color: var(--soccer-ink);
+}
+
+.soccer-competition-strip em,
+.soccer-hub-hero p,
+.soccer-hub-receipt span,
+.soccer-competition-card p,
+.soccer-competition-card li,
+.liga-mode-header p,
+.liga-table-panel header p,
+.jornada-hub-header p,
+.liga-snapshot-grid p,
+.liga-zone-card p,
+.jornada-card p,
+.jornada-card em,
+.liga-context-card p,
+.liga-club-cell em {
+  color: rgba(143, 162, 196, 0.92);
+}
+
+.soccer-competition-pill,
+.soccer-competition-card li,
+.liga-table td,
+.liga-zone-chip {
+  background:
+    linear-gradient(180deg, rgba(17, 29, 53, 0.88), rgba(10, 16, 32, 0.92));
+  border-color: rgba(143, 162, 196, 0.18);
+}
+
+.soccer-competition-pill.active,
+.liga-source-pill,
+.jornada-card-action {
+  color: var(--soccer-bg);
+  background: var(--soccer-control-gradient);
+  border-color: rgba(245, 197, 24, 0.44);
+}
+
+.soccer-competition-card:hover,
+.jornada-card:hover,
+.jornada-card:focus-visible,
+.jornada-card.active {
+  border-color: rgba(245, 197, 24, 0.46);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(245, 197, 24, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(17, 29, 53, 0.94), rgba(7, 9, 15, 0.98));
+}
+
+.liga-context-title {
+  color: var(--soccer-gold);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(245, 197, 24, 0.16), transparent 42%),
+    linear-gradient(145deg, rgba(17, 29, 53, 0.94), rgba(10, 16, 32, 0.94));
+  border-color: rgba(245, 197, 24, 0.28);
+}
+
+.liga-zone-chip.top4,
+.liga-zone-card.top4 {
+  border-color: rgba(245, 197, 24, 0.34);
+  background: rgba(245, 197, 24, 0.1);
+}
+
+.liga-zone-chip.liguilla,
+.liga-zone-card.liguilla {
+  border-color: rgba(37, 99, 235, 0.32);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.liga-zone-chip.chasing,
+.liga-zone-card.chasing {
+  border-color: rgba(16, 163, 111, 0.34);
+  background: rgba(16, 163, 111, 0.09);
+}
+
+.liga-zone-chip.needsHelp,
+.liga-zone-card.needsHelp {
+  border-color: rgba(245, 197, 24, 0.24);
+  background: rgba(245, 197, 24, 0.07);
+}
+
+.liga-zone-chip.out,
+.liga-zone-card.out {
+  border-color: rgba(255, 107, 53, 0.32);
+  background: rgba(255, 107, 53, 0.08);
+}
+
+.jornada-card.active {
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(245, 197, 24, 0.18) inset;
+}
+/* === End Shared Soccer Seer palette refresh === */
