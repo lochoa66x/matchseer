@@ -38,6 +38,20 @@ export type FootballDataMatch = {
   venueName: string | null;
 };
 
+export type FootballDataStanding = {
+  providerTeamId: number;
+  position: number | null;
+  playedGames: number | null;
+  won: number | null;
+  draw: number | null;
+  lost: number | null;
+  points: number | null;
+  goalsFor: number | null;
+  goalsAgainst: number | null;
+  goalDifference: number | null;
+  form: string[];
+};
+
 export type FootballDataSnapshot = {
   provider: "football-data";
   competition: {
@@ -49,6 +63,11 @@ export type FootballDataSnapshot = {
   };
   teams: FootballDataTeam[];
   matches: FootballDataMatch[];
+  standings: FootballDataStanding[];
+  sourceStatus: {
+    standings: "live" | "unavailable";
+    standingsStatus: number | null;
+  };
   fetchedAt: string;
 };
 
@@ -107,6 +126,27 @@ type FootballDataMatchesResponse = {
   }>;
 };
 
+type FootballDataStandingsResponse = {
+  standings?: Array<{
+    type?: string | null;
+    table?: Array<{
+      position?: number | null;
+      playedGames?: number | null;
+      won?: number | null;
+      draw?: number | null;
+      lost?: number | null;
+      points?: number | null;
+      goalsFor?: number | null;
+      goalsAgainst?: number | null;
+      goalDifference?: number | null;
+      form?: string | null;
+      team?: {
+        id?: number | null;
+      } | null;
+    }>;
+  }>;
+};
+
 type FootballDataMatchTeam = {
   id?: number | null;
   name?: string | null;
@@ -126,7 +166,7 @@ export async function fetchFootballDataSnapshot({
   };
   const baseUrl = "https://api.football-data.org/v4";
 
-  const [teamsResponse, matchesResponse] = await Promise.all([
+  const [teamsResponse, matchesResponse, standingsResult] = await Promise.all([
     fetch(`${baseUrl}/competitions/${competitionCode}/teams`, {
       headers,
       cache: "no-store",
@@ -135,6 +175,7 @@ export async function fetchFootballDataSnapshot({
       headers,
       cache: "no-store",
     }),
+    fetchOptionalStandings(baseUrl, competitionCode, headers),
   ]);
 
   if (!teamsResponse.ok) {
@@ -172,8 +213,80 @@ export async function fetchFootballDataSnapshot({
     matches: (matchesPayload.matches ?? [])
       .map(toFootballDataMatch)
       .filter((match): match is FootballDataMatch => match !== null),
+    standings: standingsResult.standings,
+    sourceStatus: {
+      standings: standingsResult.standings.length > 0 ? "live" : "unavailable",
+      standingsStatus: standingsResult.status,
+    },
     fetchedAt: new Date().toISOString(),
   };
+}
+
+async function fetchOptionalStandings(
+  baseUrl: string,
+  competitionCode: string,
+  headers: { "X-Auth-Token": string },
+): Promise<{ standings: FootballDataStanding[]; status: number | null }> {
+  try {
+    const response = await fetch(
+      `${baseUrl}/competitions/${competitionCode}/standings`,
+      {
+        headers,
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      return {
+        standings: [],
+        status: response.status,
+      };
+    }
+
+    const payload = (await response.json()) as FootballDataStandingsResponse;
+
+    return {
+      standings: extractStandings(payload),
+      status: response.status,
+    };
+  } catch {
+    return {
+      standings: [],
+      status: null,
+    };
+  }
+}
+
+function extractStandings(
+  payload: FootballDataStandingsResponse,
+): FootballDataStanding[] {
+  const totalStanding =
+    payload.standings?.find((standing) => standing.type === "TOTAL") ??
+    payload.standings?.[0];
+
+  return (totalStanding?.table ?? []).flatMap((row) => {
+    const providerTeamId = row.team?.id;
+
+    if (typeof providerTeamId !== "number") {
+      return [];
+    }
+
+    return [
+      {
+        providerTeamId,
+        position: nullableNumber(row.position),
+        playedGames: nullableNumber(row.playedGames),
+        won: nullableNumber(row.won),
+        draw: nullableNumber(row.draw),
+        lost: nullableNumber(row.lost),
+        points: nullableNumber(row.points),
+        goalsFor: nullableNumber(row.goalsFor),
+        goalsAgainst: nullableNumber(row.goalsAgainst),
+        goalDifference: nullableNumber(row.goalDifference),
+        form: normalizeStandingForm(row.form),
+      },
+    ];
+  });
 }
 
 function buildTeamList(
@@ -402,6 +515,22 @@ function toMatchStatus(status: string | null | undefined): FootballDataMatch["st
 
 function extractSeason(dateValue: string | null | undefined) {
   return dateValue?.slice(0, 4) || null;
+}
+
+function nullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeStandingForm(value: string | null | undefined) {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(/[, ]+/)
+    .map((item) => item.trim().toUpperCase())
+    .filter((item) => item === "W" || item === "D" || item === "L")
+    .slice(-5);
 }
 
 function normalizeCode(code: string | null | undefined, fallback: string) {

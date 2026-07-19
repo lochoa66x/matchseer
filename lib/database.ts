@@ -14,6 +14,7 @@ import type {
   TrailSignal,
 } from "./domain";
 import type {
+  FootballDataStanding,
   FootballDataSnapshot,
   FootballDataTeam,
 } from "./providers/football-data";
@@ -85,6 +86,7 @@ export type RealDataSyncResult = {
   season: string;
   teams: number;
   matches: number;
+  standings: number;
   placeholderMatches: number;
   venuesMapped: number;
   forecasts: number;
@@ -2093,12 +2095,24 @@ export async function syncFootballDataSnapshot(
   const teamByProviderId = new Map(
     snapshot.teams.map((team) => [team.id, team] as const),
   );
+  const standingByProviderId = new Map(
+    snapshot.standings.map((standing) => [
+      standing.providerTeamId,
+      standing,
+    ] as const),
+  );
   const ratingsByProviderId = new Map<number, TeamRatings>();
 
   for (const team of snapshot.teams) {
     const ratings = teamRatings(team);
     ratingsByProviderId.set(team.id, ratings);
-    const record = team.isPlaceholder ? "Knockout slot pending" : "Provider synced";
+    const standing = standingByProviderId.get(team.id) ?? null;
+    const record = standing
+      ? footballDataStandingRecord(standing)
+      : team.isPlaceholder
+        ? "Knockout slot pending"
+        : "Provider synced";
+    const form = footballDataStandingForm(standing);
 
     await sql`
       insert into teams (
@@ -2123,7 +2137,7 @@ export async function syncFootballDataSnapshot(
         ${team.color},
         ${team.country},
         ${record},
-        array[]::text[],
+        ${textArrayLiteral(form)}::text[],
         ${ratings.attack},
         ${ratings.control},
         ${ratings.defense},
@@ -2135,6 +2149,8 @@ export async function syncFootballDataSnapshot(
         code = excluded.code,
         color = excluded.color,
         country = excluded.country,
+        record = excluded.record,
+        form = excluded.form,
         attack = excluded.attack,
         control = excluded.control,
         defense = excluded.defense,
@@ -2806,6 +2822,7 @@ export async function syncFootballDataSnapshot(
     season: snapshot.competition.season,
     teams: snapshot.teams.length,
     matches: snapshot.matches.length,
+    standings: snapshot.standings.length,
     placeholderMatches,
     venuesMapped,
     forecasts,
@@ -6921,6 +6938,27 @@ function sortJsonValue(value: unknown): unknown {
   return value;
 }
 
+function footballDataStandingRecord(standing: FootballDataStanding) {
+  const played = standing.playedGames ?? 0;
+  const points = standing.points ?? 0;
+  const won = standing.won ?? 0;
+  const draw = standing.draw ?? 0;
+  const lost = standing.lost ?? 0;
+
+  return `${played} PJ · ${points} pts · ${won}-${draw}-${lost}`;
+}
+
+function footballDataStandingForm(standing: FootballDataStanding | null) {
+  return standing?.form.filter((result) => ["W", "D", "L"].includes(result)) ?? [];
+}
+
+function textArrayLiteral(values: string[]) {
+  return `{${values.map(escapePostgresArrayValue).join(",")}}`;
+}
+
+function escapePostgresArrayValue(value: string) {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
 
 function teamRatings(team: FootballDataTeam): TeamRatings {
   if (team.isPlaceholder) {
