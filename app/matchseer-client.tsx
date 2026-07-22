@@ -1989,6 +1989,7 @@ export default function MatchSeerHome({
       ? { eyebrow: "Lectura del partido", title: "Pronostico claro" }
       : { eyebrow: "Match read", title: "Clear forecast" }
     : { eyebrow: t.seerHub, title: t.matchday };
+  const showWorldCupArchivePrimary = isWorldCupMode && worldCupArchiveReport.archiveMode;
 
   return (
     <main className="app-shell">
@@ -2030,7 +2031,14 @@ export default function MatchSeerHome({
       </section>
       <SoccerCompetitionStrip activeKey={competition.key} />
 
-      {isLigaMxMode && leagueModeReport && (
+      {showWorldCupArchivePrimary && (
+        <WorldCupArchiveReportBoard
+          onSelectMatch={(matchId) => setActiveMatchId(matchId)}
+          report={worldCupArchiveReport}
+        />
+      )}
+
+      {!showWorldCupArchivePrimary && isLigaMxMode && leagueModeReport && (
         <LigaMxLeagueModeBoard
           report={leagueModeReport}
           language={language}
@@ -2040,6 +2048,7 @@ export default function MatchSeerHome({
         />
       )}
 
+      {!showWorldCupArchivePrimary && (
       <section className={cx("hero-grid hero-matchroom", isLigaMxMode && "liga-selected-matchroom")} id="forecast-board">
         {!isLigaMxMode && (
           <div className="hero-match-board">
@@ -2250,8 +2259,9 @@ export default function MatchSeerHome({
           </div>
         </div>
       </section>
+      )}
 
-      {!usingFeaturedFallback && isWorldCupMode && (
+      {!showWorldCupArchivePrimary && !usingFeaturedFallback && isWorldCupMode && (
         <SeerScoreboardBoard
           scoreboard={seerScoreboard}
           t={t}
@@ -2259,7 +2269,7 @@ export default function MatchSeerHome({
         />
       )}
 
-      {activeMatch.players.length > 0 && (
+      {!showWorldCupArchivePrimary && activeMatch.players.length > 0 && (
         <section className="content-grid content-grid-support player-detail-only">
           <section className="detail-panel">
             <div className="detail-support-header">
@@ -2274,7 +2284,7 @@ export default function MatchSeerHome({
         </section>
       )}
 
-      {!usingFeaturedFallback && isWorldCupMode && (
+      {!showWorldCupArchivePrimary && !usingFeaturedFallback && isWorldCupMode && (
         <CupSeerBoard
           candidates={cupTitleCandidates}
           finalistLane={isCupFinalistLane}
@@ -2294,7 +2304,7 @@ export default function MatchSeerHome({
         />
       )}
 
-      {!usingFeaturedFallback && isWorldCupMode && (
+      {!showWorldCupArchivePrimary && !usingFeaturedFallback && isWorldCupMode && (
         <WorldCupArchiveReportBoard
           onSelectMatch={(matchId) => setActiveMatchId(matchId)}
           report={worldCupArchiveReport}
