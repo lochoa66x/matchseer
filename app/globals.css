@@ -18903,6 +18903,66 @@ body {
   text-transform: uppercase;
 }
 
+.archive-closeout-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.2fr) repeat(4, minmax(140px, 0.72fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.archive-closeout-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 138px;
+  padding: 13px;
+  background:
+    linear-gradient(145deg, rgba(157, 183, 232, 0.07), transparent 58%),
+    rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(157, 183, 232, 0.16);
+  border-radius: 12px;
+}
+
+.archive-closeout-card.primary {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(247, 212, 95, 0.22), transparent 30%),
+    linear-gradient(145deg, rgba(49, 211, 145, 0.11), rgba(255, 255, 255, 0.045));
+  border-color: rgba(247, 212, 95, 0.24);
+}
+
+.archive-closeout-card > span,
+.archive-calibration-panel > div > span,
+.archive-lessons-grid article > span,
+.archive-builder-notes summary,
+.archive-gap-card > span {
+  color: #f7d45f;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.archive-closeout-card div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.archive-closeout-card strong {
+  color: #fff;
+  font-size: clamp(1.15rem, 1.8vw, 1.75rem);
+  line-height: 1;
+}
+
+.archive-closeout-card em {
+  color: var(--ms-copy-soft);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
 .archive-podium-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 14px;
@@ -19069,6 +19129,172 @@ body {
 .archive-metric-card p {
   margin: 0;
   font-size: 0.78rem;
+}
+
+.archive-calibration-panel,
+.archive-lessons-grid,
+.archive-builder-notes {
+  margin-top: 12px;
+  background:
+    linear-gradient(135deg, rgba(247, 212, 95, 0.055), transparent 44%),
+    rgba(5, 8, 16, 0.44);
+  border: 1px solid rgba(157, 183, 232, 0.14);
+  border-radius: 14px;
+}
+
+.archive-calibration-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.52fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.archive-calibration-panel h3,
+.archive-calibration-panel p {
+  margin: 0;
+}
+
+.archive-calibration-panel h3 {
+  margin-top: 7px;
+  color: #fff;
+  font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+  line-height: 1.05;
+}
+
+.archive-calibration-panel p {
+  margin-top: 7px;
+  color: var(--ms-copy-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.archive-calibration-list {
+  display: grid;
+  gap: 9px;
+}
+
+.archive-calibration-row {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 11px;
+}
+
+.archive-calibration-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.archive-calibration-row strong {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.archive-calibration-row span {
+  color: var(--ms-copy-soft);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.archive-calibration-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  background: rgba(143, 160, 189, 0.18);
+  border-radius: 999px;
+}
+
+.archive-calibration-fill {
+  position: absolute;
+  left: 0;
+  border-radius: inherit;
+}
+
+.archive-calibration-fill.expected {
+  top: 0;
+  height: 100%;
+  background: rgba(247, 212, 95, 0.32);
+}
+
+.archive-calibration-fill.observed {
+  top: 3px;
+  height: 6px;
+  background: linear-gradient(90deg, #f7d45f, #31d391);
+}
+
+.archive-lessons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.archive-lessons-grid article {
+  min-width: 0;
+}
+
+.archive-builder-notes {
+  padding: 0;
+  overflow: hidden;
+}
+
+.archive-builder-notes summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 13px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.archive-builder-notes summary::-webkit-details-marker {
+  display: none;
+}
+
+.archive-builder-notes summary::after {
+  content: "+";
+  color: #fff;
+  font-size: 1rem;
+}
+
+.archive-builder-notes[open] summary::after {
+  content: "-";
+}
+
+.archive-builder-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+
+.archive-gap-card {
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(143, 160, 189, 0.12);
+  border-radius: 11px;
+}
+
+.archive-gap-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.archive-gap-card p {
+  margin: 6px 0 0;
+  color: var(--ms-copy-soft);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .tournament-path-view {
@@ -19833,16 +20059,29 @@ body {
   font-size: 1.05rem;
 }
 
+@media (max-width: 1180px) {
+  .archive-closeout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .archive-closeout-card.primary {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 980px) {
   .archive-report-head,
   .archive-next-round-panel,
   .archive-body-grid,
-  .archive-miss-strip {
+  .archive-miss-strip,
+  .archive-calibration-panel,
+  .archive-lessons-grid {
     grid-template-columns: 1fr;
   }
 
   .archive-podium-grid,
-  .archive-metric-grid {
+  .archive-metric-grid,
+  .archive-builder-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -19969,7 +20208,9 @@ body {
 
 @media (max-width: 620px) {
   .archive-podium-grid,
-  .archive-metric-grid {
+  .archive-metric-grid,
+  .archive-closeout-grid,
+  .archive-builder-grid {
     grid-template-columns: 1fr;
   }
 

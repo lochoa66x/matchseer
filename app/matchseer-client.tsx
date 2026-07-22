@@ -87,6 +87,28 @@ type WorldCupArchiveMetric = {
   value: string;
   detail: string;
 };
+type WorldCupArchiveCalibrationRow = {
+  label: string;
+  expected: number;
+  observed: number;
+  count: number;
+  detail: string;
+};
+type WorldCupArchiveCopy = {
+  calibrationDetail: string;
+  calibrationLabel: string;
+  calibrationTitle: string;
+  closeoutLabel: string;
+  finalPendingDetail: string;
+  finalPendingTitle: string;
+  improvementsTitle: string;
+  lessonsTitle: string;
+  missesDetail: string;
+  missesLabel: string;
+  missesTitle: string;
+  nextPhaseTitle: string;
+  sourceNotesTitle: string;
+};
 type WorldCupNextRoundFixture = {
   id: string;
   home: Team;
@@ -139,13 +161,17 @@ type WorldCupArchiveReport = {
   nextRound: WorldCupNextRoundField;
   podium: WorldCupArchivePodiumSlot[];
   metrics: WorldCupArchiveMetric[];
+  calibrationRows: WorldCupArchiveCalibrationRow[];
   championLane: Array<{
     team: Team;
     signal: number;
     detail: string;
   }>;
+  copy: WorldCupArchiveCopy;
+  dataGaps: WorldCupArchiveMetric[];
   lessons: string[];
   improvements: string[];
+  sourceNotes: string[];
   topMisses: ForecastReceipt[];
   tournamentPath: TournamentPathRound[];
 };
@@ -3534,6 +3560,372 @@ function buildFallbackWorldCupFinalistCandidate(
   };
 }
 
+function formatArchiveRate(hits: number, total: number) {
+  return total > 0 ? `${Math.round((hits / total) * 100)}%` : "pending";
+}
+
+function primaryForecastSideForReceipt(receipt: ForecastReceipt) {
+  return getProjectedForecastSide(receipt.match);
+}
+
+function primaryForecastHit(receipt: ForecastReceipt) {
+  if (!receipt.actualSide) {
+    return false;
+  }
+
+  return receipt.actualSide === primaryForecastSideForReceipt(receipt);
+}
+
+function buildWorldCupCrowdMetric(
+  receipts: ForecastReceipt[],
+  language: Language,
+): WorldCupArchiveMetric {
+  const coveredReceipts = receipts.filter((receipt) =>
+    Boolean(receipt.actualSide && usableMarketPulse(receipt.match.forecast.marketPulse)),
+  );
+  const hits = coveredReceipts.filter((receipt) => {
+    const pulse = usableMarketPulse(receipt.match.forecast.marketPulse);
+
+    return pulse?.leader === receipt.actualSide;
+  }).length;
+
+  if (coveredReceipts.length === 0) {
+    return {
+      detail:
+        language === "es"
+          ? `${receipts.length} finales revisadas, pero ninguna tuvo una senal crowd limpia para comparar.`
+          : `${receipts.length} final receipts reviewed, but none carried a clean crowd lane to score.`,
+      label: archiveLabel(language, "Crowd signal"),
+      value: language === "es" ? "brecha" : "gap",
+    };
+  }
+
+  return {
+    detail:
+      language === "es"
+        ? `${hits}/${coveredReceipts.length} senales crowd coincidieron con el resultado; ${receipts.length - coveredReceipts.length} finales quedaron sin cobertura limpia.`
+        : `${hits}/${coveredReceipts.length} crowd lanes matched the result; ${receipts.length - coveredReceipts.length} finals had no clean coverage.`,
+    label: archiveLabel(language, "Crowd signal"),
+    value: formatArchiveRate(hits, coveredReceipts.length),
+  };
+}
+
+function buildWorldCupScoreErrorMetric(
+  receipts: ForecastReceipt[],
+  language: Language,
+): WorldCupArchiveMetric {
+  const errors = receipts.flatMap((receipt) => {
+    const projected = parsePrimaryProjectedScore(receipt.match.forecast.projected);
+    const actual = parseScoreline(receipt.match.score);
+
+    if (!projected || !actual) {
+      return [];
+    }
+
+    return [
+      Math.abs(projected.home - actual.home) + Math.abs(projected.away - actual.away),
+    ];
+  });
+
+  if (errors.length === 0) {
+    return {
+      detail:
+        language === "es"
+          ? "Faltan marcadores finales suficientes para medir el error del marcador."
+          : "More final score receipts are needed before score error can be measured.",
+      label: archiveLabel(language, "Score error"),
+      value: "pending",
+    };
+  }
+
+  const averageError =
+    errors.reduce((total, error) => total + error, 0) / errors.length;
+
+  return {
+    detail:
+      language === "es"
+        ? `Promedio de goles fallados entre el primer marcador proyectado y el marcador final en ${errors.length} partidos.`
+        : `Average goals missed between the first projected scoreline and the final score across ${errors.length} matches.`,
+    label: archiveLabel(language, "Score error"),
+    value: `+/-${averageError.toFixed(1)}`,
+  };
+}
+
+function buildWorldCupCalibrationRows(
+  receipts: ForecastReceipt[],
+  language: Language,
+): WorldCupArchiveCalibrationRow[] {
+  const buckets = [
+    {
+      label:
+        language === "es"
+          ? "Lecturas cerradas"
+          : language === "fr"
+            ? "Lectures serrees"
+            : "Tight reads",
+      min: 0,
+      max: 49,
+    },
+    {
+      label:
+        language === "es"
+          ? "Ventajas moderadas"
+          : language === "fr"
+            ? "Avantages moderes"
+            : "Moderate leans",
+      min: 50,
+      max: 64,
+    },
+    {
+      label:
+        language === "es"
+          ? "Senales fuertes"
+          : language === "fr"
+            ? "Signaux forts"
+            : "Strong signals",
+      min: 65,
+      max: 100,
+    },
+  ];
+
+  return buckets
+    .map((bucket) => {
+      const bucketReceipts = receipts.filter((receipt) => {
+        const probability = forecastProbabilityForSide(
+          receipt.match,
+          primaryForecastSideForReceipt(receipt),
+        );
+
+        return probability >= bucket.min && probability <= bucket.max;
+      });
+
+      if (bucketReceipts.length === 0) {
+        return null;
+      }
+
+      const expected = Math.round(
+        bucketReceipts.reduce(
+          (total, receipt) =>
+            total +
+            forecastProbabilityForSide(
+              receipt.match,
+              primaryForecastSideForReceipt(receipt),
+            ),
+          0,
+        ) / bucketReceipts.length,
+      );
+      const observed = Math.round(
+        (bucketReceipts.filter(primaryForecastHit).length / bucketReceipts.length) *
+          100,
+      );
+
+      return {
+        count: bucketReceipts.length,
+        detail:
+          language === "es"
+            ? `${bucketReceipts.length} recibos en este rango. Esperado ${expected}%, observado ${observed}%.`
+            : `${bucketReceipts.length} receipts in this range. Expected ${expected}%, observed ${observed}%.`,
+        expected,
+        label: bucket.label,
+        observed,
+      };
+    })
+    .filter(
+      (row): row is WorldCupArchiveCalibrationRow => Boolean(row),
+    );
+}
+
+function buildWorldCupDataGaps(language: Language): WorldCupArchiveMetric[] {
+  if (language === "es") {
+    return [
+      {
+        detail: "Necesitamos un feed estable de tiros, xG, posesion y presion por partido.",
+        label: "Estadisticas en vivo",
+        value: "parcial",
+      },
+      {
+        detail: "Alineaciones confirmadas, bajas, sanciones y roles tardios no estuvieron completas.",
+        label: "Plantillas",
+        value: "incompleto",
+      },
+      {
+        detail: "La senal crowd no cubrio todos los partidos con liquidez y mapeo confiable.",
+        label: "Crowd/mercado",
+        value: "brecha",
+      },
+      {
+        detail: "Faltaron snapshots ronda a ronda para medir movimiento real del ranking.",
+        label: "Historial",
+        value: "mejorar",
+      },
+    ];
+  }
+
+  return [
+    {
+      detail: "A stable match feed for shots, xG, possession, and pressure would make receipts sharper.",
+      label: "Live stats",
+      value: "partial",
+    },
+    {
+      detail: "Confirmed lineups, absences, suspensions, and late roles were not complete enough.",
+      label: "Lineups",
+      value: "incomplete",
+    },
+    {
+      detail: "Crowd signal did not cover every match with clean liquidity and mapping.",
+      label: "Crowd/market",
+      value: "gap",
+    },
+    {
+      detail: "Round-by-round snapshots are needed to measure real ranking movement.",
+      label: "History",
+      value: "upgrade",
+    },
+  ];
+}
+
+function buildWorldCupLessons(
+  scoreboard: SeerScoreboard,
+  drawHits: number,
+  drawReceipts: ForecastReceipt[],
+  knockoutHits: number,
+  knockoutReceipts: ForecastReceipt[],
+  language: Language,
+) {
+  if (language === "es") {
+    return [
+      scoreboard.reviewed > 0
+        ? `La direccion fue la lectura mas util: ${scoreboard.winnerHits}/${scoreboard.reviewed} recibos finales siguieron el lado correcto.`
+        : "La direccion necesita mas recibos finales antes de juzgarse con seriedad.",
+      scoreboard.exactHits > 0
+        ? `El marcador exacto fue raro, como debe ser: ${scoreboard.exactHits}/${scoreboard.reviewed} aciertos exactos.`
+        : "El marcador exacto debe ser una textura, no la promesa principal.",
+      drawReceipts.length > 0
+        ? `El empate/deadlock fue ruidoso: ${drawHits}/${drawReceipts.length} sobrevivieron. En eliminatoria hay que separar 90 minutos de clasificacion.`
+        : "El empate de 90 minutos debe vivir separado del avance en eliminatoria.",
+      knockoutReceipts.length > 0
+        ? `La eliminatoria funciono mejor cuando mostro dos carriles: partido cerrado y camino de avance (${knockoutHits}/${knockoutReceipts.length}).`
+        : "La eliminatoria necesita carril de avance, tiempo extra y penales desde el primer diseno.",
+      "Caos debe bajar confianza, no escoger ganador. Ruido social u arbitral debe quedar como contexto revisado, no como acusacion fija.",
+    ];
+  }
+
+  return [
+    scoreboard.reviewed > 0
+      ? `Direction was the most useful read: ${scoreboard.winnerHits}/${scoreboard.reviewed} final receipts followed the right side.`
+      : "Direction needs more final receipts before it can be judged seriously.",
+    scoreboard.exactHits > 0
+      ? `Exact scores were rare, as expected: ${scoreboard.exactHits}/${scoreboard.reviewed} exact receipts.`
+      : "Exact score should stay a texture, not the main promise.",
+    drawReceipts.length > 0
+      ? `Draw/deadlock was noisy: ${drawHits}/${drawReceipts.length} survived. Knockouts need separate 90-minute and advancement lanes.`
+      : "The 90-minute draw read must stay separate from advancement in knockouts.",
+    knockoutReceipts.length > 0
+      ? `Knockout reads worked best when they showed two lanes: tight match and advancement path (${knockoutHits}/${knockoutReceipts.length}).`
+      : "Knockouts need advancement, extra-time, and penalty lanes from the first design pass.",
+    "Chaos should lower confidence, not pick winners. Social or officiating noise belongs in reviewed context, not as a fixed accusation.",
+  ];
+}
+
+function buildWorldCupImprovements(language: Language) {
+  if (language === "es") {
+    return [
+      "Guardar snapshots en cada sync para mostrar como cambio el ranking, no reconstruirlo al final.",
+      "Calibrar por rangos: cuando decimos 55%, 65% o 75%, medir si se cumple parecido.",
+      "Separar prediccion de 90 minutos, tiempo extra, penales y avance como cuatro carriles distintos.",
+      "Agregar cobertura de fuentes: calendario, resultados, xG, clima, plantillas, crowd y estado de confianza.",
+      "Convertir el aprendizaje en modo liga para Liga MX y Champions: tabla primero, lectura del partido despues.",
+    ];
+  }
+
+  return [
+    "Save snapshots on every sync so movement is measured, not reconstructed at the end.",
+    "Calibrate by probability buckets: when we say 55%, 65%, or 75%, measure whether it lands close.",
+    "Separate 90-minute prediction, extra time, penalties, and advancement into four distinct lanes.",
+    "Add source coverage: schedule, results, xG, weather, lineups, crowd, and confidence state.",
+    "Turn the learning into league mode for Liga MX and Champions: table first, match read second.",
+  ];
+}
+
+function buildWorldCupSourceNotes(language: Language) {
+  if (language === "es") {
+    return [
+      "Los porcentajes usan recibos guardados por MatchSeer con marcador final parseable.",
+      "La senal crowd solo se mide cuando el partido trae un mercado usable; si no hay cobertura, se marca como brecha.",
+      "El error de marcador usa el primer marcador proyectado, no todas las opciones alternativas.",
+      "Los datos faltantes no son fracaso del modelo: son limites de fuente que hay que hacer visibles.",
+    ];
+  }
+
+  return [
+    "Percentages use MatchSeer receipts with parseable final scores.",
+    "Crowd signal is scored only when a match carries a usable market lane; missing coverage is marked as a gap.",
+    "Score error uses the first projected scoreline, not every alternate score option.",
+    "Missing data is not treated as model failure; it is source coverage that must be made visible.",
+  ];
+}
+
+function buildWorldCupArchiveCopy(language: Language): WorldCupArchiveCopy {
+  if (language === "es") {
+    return {
+      calibrationDetail:
+        "Los pronosticos se agrupan por nivel de confianza. La meta no es perfeccion: es que 60% se comporte cerca de 60%.",
+      calibrationLabel: "Calibracion",
+      calibrationTitle: "Cuando el Seer dijo probable, se cumplio?",
+      closeoutLabel: "Cierre del experimento",
+      finalPendingDetail: "El reporte cierra cuando el marcador final queda guardado.",
+      finalPendingTitle: "Recibo final pendiente",
+      improvementsTitle: "Proximas mejoras del modelo",
+      lessonsTitle: "Lo que funciono",
+      missesDetail:
+        "Los fallos sirven si explican que datos o reglas necesita el modelo.",
+      missesLabel: "Recibos para estudiar",
+      missesTitle: "Mejores fallos",
+      nextPhaseTitle: "Siguiente fase",
+      sourceNotesTitle: "Notas de cobertura de fuentes",
+    };
+  }
+
+  if (language === "fr") {
+    return {
+      calibrationDetail:
+        "Forecasts are grouped by confidence bucket. The goal is not perfection; it is to make 60% behave close to 60%.",
+      calibrationLabel: "Calibration",
+      calibrationTitle: "When the Seer called it likely, did it land?",
+      closeoutLabel: "Experiment closeout",
+      finalPendingDetail: "The report will close when the final score is stored.",
+      finalPendingTitle: "Final receipt pending",
+      improvementsTitle: "Next model upgrades",
+      lessonsTitle: "What landed",
+      missesDetail:
+        "Misses are useful when they explain what data or rule the model needs next.",
+      missesLabel: "Receipts to study",
+      missesTitle: "Best misses",
+      nextPhaseTitle: "Next phase field",
+      sourceNotesTitle: "Source coverage notes",
+    };
+  }
+
+  return {
+    calibrationDetail:
+      "Forecasts are grouped by confidence bucket. The goal is not perfection; it is to make 60% behave close to 60%.",
+    calibrationLabel: "Calibration",
+    calibrationTitle: "When the Seer called it likely, did it land?",
+    closeoutLabel: "Experiment closeout",
+    finalPendingDetail: "The report will close when the final score is stored.",
+    finalPendingTitle: "Final receipt pending",
+    improvementsTitle: "Next model upgrades",
+    lessonsTitle: "What landed",
+    missesDetail:
+      "Misses are useful when they explain what data or rule the model needs next.",
+    missesLabel: "Receipts to study",
+    missesTitle: "Best misses",
+    nextPhaseTitle: "Next phase field",
+    sourceNotesTitle: "Source coverage notes",
+  };
+}
+
 function buildWorldCupArchiveReport(
   matches: Match[],
   candidates: CupCandidate[],
@@ -3628,13 +4020,22 @@ function buildWorldCupArchiveReport(
   const topMisses = scoreboard.receipts
     .filter((receipt) => receipt.outcome === "miss")
     .slice(0, 3);
+  const exactRate =
+    scoreboard.reviewed > 0
+      ? Math.round((scoreboard.exactHits / scoreboard.reviewed) * 100)
+      : 0;
+  const calibrationRows = buildWorldCupCalibrationRows(scoreboard.receipts, language);
   const metrics = [
     {
       detail:
         scoreboard.reviewed > 0
-          ? `${scoreboard.winnerHits} direction hits from ${scoreboard.reviewed} final receipts.`
-          : "Final receipts will fill this once more games complete.",
-      label: archiveLabel(language, "Direction reads"),
+          ? language === "es"
+            ? `${scoreboard.winnerHits} aciertos de direccion en ${scoreboard.reviewed} recibos finales.`
+            : `${scoreboard.winnerHits} direction hits from ${scoreboard.reviewed} final receipts.`
+          : language === "es"
+            ? "Los recibos finales llenan esta metrica cuando cierran mas partidos."
+            : "Final receipts will fill this once more games complete.",
+      label: archiveLabel(language, "Model direction"),
       value:
         scoreboard.reviewed > 0
           ? `${scoreboard.survivalRate}%`
@@ -3642,68 +4043,94 @@ function buildWorldCupArchiveReport(
     },
     {
       detail:
+        scoreboard.reviewed > 0
+          ? language === "es"
+            ? `${scoreboard.exactHits} marcadores exactos en ${scoreboard.reviewed} recibos finales revisados.`
+            : `${scoreboard.exactHits} exact scores from ${scoreboard.reviewed} reviewed final receipts.`
+          : language === "es"
+            ? "El marcador exacto necesita resultados finales antes de medirse."
+            : "Exact-score receipts need final scorelines before review.",
+      label: archiveLabel(language, "Exact score"),
+      value:
+        scoreboard.reviewed > 0
+          ? `${exactRate}%`
+          : "pending",
+    },
+    buildWorldCupCrowdMetric(scoreboard.receipts, language),
+    buildWorldCupScoreErrorMetric(scoreboard.receipts, language),
+    {
+      detail:
         drawReceipts.length > 0
-          ? `${drawHits} of ${drawReceipts.length} draw/deadlock calls survived.`
-          : "Draw and 90-minute deadlock receipts stay separated for review.",
+          ? language === "es"
+            ? `${drawHits} de ${drawReceipts.length} llamadas de empate/deadlock sobrevivieron.`
+            : `${drawHits} of ${drawReceipts.length} draw/deadlock calls survived.`
+          : language === "es"
+            ? "Empate y deadlock de 90 minutos se revisan por separado."
+            : "Draw and 90-minute deadlock receipts stay separated for review.",
       label: archiveLabel(language, "Draw lane"),
       value: `${drawHits}/${drawReceipts.length}`,
     },
     {
       detail:
         knockoutReceipts.length > 0
-          ? `${knockoutHits} of ${knockoutReceipts.length} knockout-stage directions held.`
-          : "Knockout reads will judge advancement logic once results close.",
+          ? language === "es"
+            ? `${knockoutHits} de ${knockoutReceipts.length} direcciones de eliminatoria se sostuvieron.`
+            : `${knockoutHits} of ${knockoutReceipts.length} knockout-stage directions held.`
+          : language === "es"
+            ? "La eliminatoria mide el avance cuando cierran los resultados."
+            : "Knockout reads will judge advancement logic once results close.",
       label: archiveLabel(language, "Knockout lane"),
       value: `${knockoutHits}/${knockoutReceipts.length}`,
     },
     {
       detail:
         penaltyLaneMatches.length > 0
-          ? `${penaltyLaneMatches.length} matches carried an extra-time/penalty room.`
-          : "Penalty-room receipts will appear when a knockout read needs them.",
+          ? language === "es"
+            ? `${penaltyLaneMatches.length} partidos activaron carril de tiempo extra/penales.`
+            : `${penaltyLaneMatches.length} matches carried an extra-time/penalty room.`
+          : language === "es"
+            ? "Los recibos de penales aparecen cuando una eliminatoria los necesita."
+            : "Penalty-room receipts will appear when a knockout read needs them.",
       label: archiveLabel(language, "Penalty lane"),
       value: `${penaltyLaneMatches.length}`,
     },
     {
       detail:
         upsetReceipts.length > 0
-          ? `${upsetHits} underpriced winners were caught from ${upsetReceipts.length} upset paths.`
-          : "Upset reads wake up when a lower-probability side wins.",
+          ? language === "es"
+            ? `${upsetHits} ganadores subvalorados fueron detectados en ${upsetReceipts.length} rutas de sorpresa.`
+            : `${upsetHits} underpriced winners were caught from ${upsetReceipts.length} upset paths.`
+          : language === "es"
+            ? "Las sorpresas se activan cuando gana un lado de menor probabilidad."
+            : "Upset reads wake up when a lower-probability side wins.",
       label: archiveLabel(language, "Upset reads"),
       value: `${upsetHits}/${upsetReceipts.length}`,
     },
   ];
+  const lessons = buildWorldCupLessons(
+    scoreboard,
+    drawHits,
+    drawReceipts,
+    knockoutHits,
+    knockoutReceipts,
+    language,
+  );
 
   return {
     archiveMode,
+    calibrationRows,
     championLane: buildWorldCupChampionLane(matches, candidates),
-    improvements: [
-      "Save title-lane snapshots on every sync so the final chart shows real movement, not only reconstruction.",
-      "Keep travel distance, rest days, and extra-time fatigue as first-class receipts during the next knockout round.",
-      "Separate 90-minute draw reads from advancement reads so cautious knockout games do not look like misses.",
-      "Treat officiating controversy as chaos/confidence noise only after review, not as a hidden-hand assumption.",
-      "Calibrate crowd signal after every final result, especially for favorites and public-heavy teams.",
-    ],
+    copy: buildWorldCupArchiveCopy(language),
+    dataGaps: buildWorldCupDataGaps(language),
+    improvements: buildWorldCupImprovements(language),
     intro: archiveMode
-      ? "Final results are in. This closes the tournament as a readable Seer report: what landed, what missed, and what the next model should learn."
+      ? "Final results are in. This closes the tournament as a readable experiment report: what landed, what missed, and what the next model should learn."
       : `The knockout picture is sharper now. MatchSeer trims the champion lane to ${titleLaneCopy.note}, keeps the next-round bracket visible, and logs what this round taught the model.`,
-    lessons: [
-      scoreboard.reviewed > 0
-        ? `The model is sitting at ${scoreboard.survivalRate}% direction survival across ${scoreboard.reviewed} reviewed matches.`
-        : "The model needs more final receipts before the success story can be judged honestly.",
-      `${nextRound.status}: ${nextRound.note}`,
-      drawReceipts.length > 0
-        ? `Draw/deadlock calls were noisy: ${drawHits}/${drawReceipts.length} survived, so caution needs calibration.`
-        : "Draw pricing should stay visible, because knockout football can look like a draw for 90 minutes even when someone must advance.",
-      penaltyLaneMatches.length > 0
-        ? "Penalty rooms are already part of the read, but the archive needs shootout-result receipts to judge them cleanly."
-        : "Penalty logic is ready; it should activate only when the regulation-deadlock lane gets loud enough.",
-      "Disputed-call discourse should raise chaos and lower certainty until receipts are reviewed; the Seer should never convert social noise into a fixed accusation.",
-      "The exercise is a success if users can see both the call and the receipt. The final page should show confidence without pretending certainty.",
-    ],
+    lessons,
     metrics,
     nextRound,
     podium,
+    sourceNotes: buildWorldCupSourceNotes(language),
     status: archiveMode ? "Final archive" : "Next phase tuning",
     title: archiveMode ? "World Cup closing report" : "World Cup next-round tuning",
     topMisses,
@@ -4198,6 +4625,10 @@ function archiveLabel(language: Language, english: string) {
       "Third place": "Tercer lugar",
       "Fourth place": "Cuarto lugar",
       "Direction reads": "Dirección",
+      "Model direction": "Dirección modelo",
+      "Exact score": "Marcador exacto",
+      "Crowd signal": "Señal crowd",
+      "Score error": "Error de marcador",
       "Draw lane": "Empate",
       "Knockout lane": "Eliminatoria",
       "Penalty lane": "Penales",
@@ -4214,6 +4645,10 @@ function archiveLabel(language: Language, english: string) {
       "Third place": "Troisième",
       "Fourth place": "Quatrième",
       "Direction reads": "Directions",
+      "Model direction": "Direction modèle",
+      "Exact score": "Score exact",
+      "Crowd signal": "Signal public",
+      "Score error": "Erreur score",
       "Draw lane": "Nuls",
       "Knockout lane": "Élimination",
       "Penalty lane": "Tirs au but",
@@ -5279,6 +5714,10 @@ function WorldCupArchiveReportBoard({
   onSelectMatch: (matchId: string) => void;
   report: WorldCupArchiveReport;
 }) {
+  const headlineMetrics = report.metrics.slice(0, 4);
+  const supportingMetrics = report.metrics.slice(4);
+  const champion = report.podium[0];
+
   return (
     <section
       className={cx("world-cup-archive-report", !report.archiveMode && "preview")}
@@ -5298,7 +5737,34 @@ function WorldCupArchiveReportBoard({
         </span>
       </div>
 
-      <div className="archive-podium-grid" aria-label="Tournament top four">
+      <div className="archive-closeout-grid" aria-label="Tournament closeout summary">
+        <article className="archive-closeout-card primary">
+          <span>{report.copy.closeoutLabel}</span>
+          {champion ? (
+            <>
+              <div>
+                <TeamFlag team={champion.team} compact />
+                <strong>{champion.team.name}</strong>
+              </div>
+              <em>{champion.label} · {champion.detail}</em>
+            </>
+          ) : (
+            <>
+              <strong>{report.copy.finalPendingTitle}</strong>
+              <em>{report.copy.finalPendingDetail}</em>
+            </>
+          )}
+        </article>
+        {headlineMetrics.map((metric) => (
+          <article className="archive-closeout-card" key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <em>{metric.detail}</em>
+          </article>
+        ))}
+      </div>
+
+      <div className="archive-podium-grid" aria-label="Tournament final table">
         {report.podium.map((slot) => (
           <div className="archive-podium-card" key={`${slot.label}-${slot.team.name}`}>
             <span>{slot.label}</span>
@@ -5311,51 +5777,144 @@ function WorldCupArchiveReportBoard({
         ))}
       </div>
 
-      <article className="archive-next-round-panel" aria-label="World Cup next round">
-        <div>
-          <div className="section-heading">
-            <CalendarDays size={17} />
-            <span>{report.nextRound.label}</span>
-          </div>
-          <h3>Next phase field</h3>
-          <p>{report.nextRound.note}</p>
-        </div>
-        <div className="archive-next-round-teams">
-          {report.nextRound.teams.map((team) => (
-            <span key={team.name}>
-              <TeamFlag team={team} compact />
-              <strong>{team.name}</strong>
-            </span>
+      {supportingMetrics.length > 0 && (
+        <div className="archive-metric-grid" aria-label="Seer tournament metrics">
+          {supportingMetrics.map((metric) => (
+            <div className="archive-metric-card" key={metric.label}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <p>{metric.detail}</p>
+            </div>
           ))}
         </div>
-        {report.nextRound.fixtures.length > 0 && (
-          <div className="archive-next-round-fixtures">
-            {report.nextRound.fixtures.map((fixture) => (
-              <button
-                key={fixture.id}
-                onClick={() => onSelectMatch(fixture.id)}
-                type="button"
-              >
-                <span>{fixture.schedule}</span>
-                <strong>
-                  {fixture.home.name} vs {fixture.away.name}
-                </strong>
-                <em>{fixture.venue} · {fixture.lean}</em>
-              </button>
+      )}
+
+      {report.calibrationRows.length > 0 && (
+        <article className="archive-calibration-panel" aria-label="World Cup calibration">
+          <div>
+            <span>{report.copy.calibrationLabel}</span>
+            <h3>{report.copy.calibrationTitle}</h3>
+            <p>{report.copy.calibrationDetail}</p>
+          </div>
+          <div className="archive-calibration-list">
+            {report.calibrationRows.map((row) => (
+              <div className="archive-calibration-row" key={row.label}>
+                <div>
+                  <strong>{row.label}</strong>
+                  <span>{row.count} receipts</span>
+                </div>
+                <div className="archive-calibration-track" aria-hidden="true">
+                  <span
+                    className="archive-calibration-fill expected"
+                    style={{ width: `${row.expected}%` }}
+                  />
+                  <span
+                    className="archive-calibration-fill observed"
+                    style={{ width: `${row.observed}%` }}
+                  />
+                </div>
+                <p>{row.detail}</p>
+              </div>
             ))}
           </div>
-        )}
-      </article>
+        </article>
+      )}
 
-      <div className="archive-metric-grid" aria-label="Seer tournament metrics">
-        {report.metrics.map((metric) => (
-          <div className="archive-metric-card" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <p>{metric.detail}</p>
-          </div>
-        ))}
+      <div className="archive-lessons-grid" aria-label="World Cup learnings">
+        <article>
+          <span>{report.copy.lessonsTitle}</span>
+          <ul className="archive-note-list">
+            {report.lessons.map((lesson) => (
+              <li key={lesson}>{lesson}</li>
+            ))}
+          </ul>
+        </article>
+        <article>
+          <span>{report.copy.improvementsTitle}</span>
+          <ul className="archive-note-list">
+            {report.improvements.map((improvement) => (
+              <li key={improvement}>{improvement}</li>
+            ))}
+          </ul>
+        </article>
       </div>
+
+      <details className="archive-builder-notes">
+        <summary>{report.copy.sourceNotesTitle}</summary>
+        <div className="archive-builder-grid">
+          {report.dataGaps.map((gap) => (
+            <div className="archive-gap-card" key={gap.label}>
+              <span>{gap.label}</span>
+              <strong>{gap.value}</strong>
+              <p>{gap.detail}</p>
+            </div>
+          ))}
+        </div>
+        <ul className="archive-note-list">
+          {report.sourceNotes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      </details>
+
+      {report.topMisses.length > 0 && (
+        <div className="archive-miss-strip" aria-label="Receipts to study">
+          <div>
+            <span>{report.copy.missesLabel}</span>
+            <strong>{report.copy.missesTitle}</strong>
+            <em>{report.copy.missesDetail}</em>
+          </div>
+          {report.topMisses.map((receipt) => (
+            <button
+              key={receipt.match.id}
+              onClick={() => onSelectMatch(receipt.match.id)}
+              type="button"
+            >
+              <span>{receipt.match.home.code} vs {receipt.match.away.code}</span>
+              <strong>{receipt.finalScore ?? receipt.match.score}</strong>
+              <em>{receipt.summary}</em>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!report.archiveMode && (
+        <article className="archive-next-round-panel" aria-label="World Cup next round">
+          <div>
+            <div className="section-heading">
+              <CalendarDays size={17} />
+              <span>{report.nextRound.label}</span>
+            </div>
+            <h3>{report.copy.nextPhaseTitle}</h3>
+            <p>{report.nextRound.note}</p>
+          </div>
+          <div className="archive-next-round-teams">
+            {report.nextRound.teams.map((team) => (
+              <span key={team.name}>
+                <TeamFlag team={team} compact />
+                <strong>{team.name}</strong>
+              </span>
+            ))}
+          </div>
+          {report.nextRound.fixtures.length > 0 && (
+            <div className="archive-next-round-fixtures">
+              {report.nextRound.fixtures.map((fixture) => (
+                <button
+                  key={fixture.id}
+                  onClick={() => onSelectMatch(fixture.id)}
+                  type="button"
+                >
+                  <span>{fixture.schedule}</span>
+                  <strong>
+                    {fixture.home.name} vs {fixture.away.name}
+                  </strong>
+                  <em>{fixture.venue} · {fixture.lean}</em>
+                </button>
+              ))}
+            </div>
+          )}
+        </article>
+      )}
 
       <TournamentPathView
         onSelectMatch={onSelectMatch}
