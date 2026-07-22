@@ -87,6 +87,11 @@ type WorldCupArchiveMetric = {
   value: string;
   detail: string;
 };
+type WorldCupArchiveSeasonReceipt = {
+  label: string;
+  value: string;
+  detail: string;
+};
 type WorldCupArchiveCalibrationRow = {
   label: string;
   expected: number;
@@ -107,6 +112,8 @@ type WorldCupArchiveCopy = {
   missesLabel: string;
   missesTitle: string;
   nextPhaseTitle: string;
+  seasonReceiptsDetail: string;
+  seasonReceiptsTitle: string;
   sourceNotesTitle: string;
 };
 type WorldCupNextRoundFixture = {
@@ -161,6 +168,7 @@ type WorldCupArchiveReport = {
   nextRound: WorldCupNextRoundField;
   podium: WorldCupArchivePodiumSlot[];
   metrics: WorldCupArchiveMetric[];
+  seasonReceipts: WorldCupArchiveSeasonReceipt[];
   calibrationRows: WorldCupArchiveCalibrationRow[];
   championLane: Array<{
     team: Team;
@@ -3795,6 +3803,100 @@ function buildWorldCupDataGaps(language: Language): WorldCupArchiveMetric[] {
   ];
 }
 
+function buildWorldCupSeasonReceipts(
+  scoreboard: SeerScoreboard,
+  drawHits: number,
+  drawReceipts: ForecastReceipt[],
+  knockoutHits: number,
+  knockoutReceipts: ForecastReceipt[],
+  upsetHits: number,
+  upsetReceipts: ForecastReceipt[],
+  penaltyLaneMatches: Match[],
+  language: Language,
+): WorldCupArchiveSeasonReceipt[] {
+  const pending = language === "es" ? "pendiente" : "pending";
+  const ratio = (hits: number, total: number) => (total > 0 ? `${hits}/${total}` : pending);
+
+  if (language === "es") {
+    return [
+      {
+        label: "Partidos revisados",
+        value: scoreboard.reviewed > 0 ? `${scoreboard.reviewed}` : pending,
+        detail: "Recibos finales usados para medir direccion, marcador y calibracion.",
+      },
+      {
+        label: "Direccion del modelo",
+        value: scoreboard.reviewed > 0 ? `${scoreboard.winnerHits}/${scoreboard.reviewed}` : pending,
+        detail: "La senal principal: si el lado elegido sobrevivio al resultado final.",
+      },
+      {
+        label: "Marcador exacto",
+        value: scoreboard.reviewed > 0 ? `${scoreboard.exactHits}/${scoreboard.reviewed}` : pending,
+        detail: "Debe ser bonus de precision, no la promesa central del producto.",
+      },
+      {
+        label: "Empate / deadlock",
+        value: ratio(drawHits, drawReceipts.length),
+        detail: "Aqui aprendimos a separar 90 minutos de avance en eliminatoria.",
+      },
+      {
+        label: "Eliminatorias",
+        value: ratio(knockoutHits, knockoutReceipts.length),
+        detail: "El avance necesita su propio carril: tiempo extra, penales y fatiga.",
+      },
+      {
+        label: "Sorpresas",
+        value: ratio(upsetHits, upsetReceipts.length),
+        detail: "Casos donde un lado menos probable gano y el modelo debe estudiar el por que.",
+      },
+      {
+        label: "Carril de penales",
+        value: `${penaltyLaneMatches.length}`,
+        detail: "Partidos donde el Seer activo lectura de tiempo extra o tanda.",
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Reviewed matches",
+      value: scoreboard.reviewed > 0 ? `${scoreboard.reviewed}` : pending,
+      detail: "Final receipts used to judge direction, scoreline, and calibration.",
+    },
+    {
+      label: "Model direction",
+      value: scoreboard.reviewed > 0 ? `${scoreboard.winnerHits}/${scoreboard.reviewed}` : pending,
+      detail: "The main signal: whether the selected side survived the final result.",
+    },
+    {
+      label: "Exact scores",
+      value: scoreboard.reviewed > 0 ? `${scoreboard.exactHits}/${scoreboard.reviewed}` : pending,
+      detail: "A precision bonus, not the core product promise.",
+    },
+    {
+      label: "Draw / deadlock",
+      value: ratio(drawHits, drawReceipts.length),
+      detail: "The lesson was to separate 90-minute reads from advancement reads.",
+    },
+    {
+      label: "Knockout reads",
+      value: ratio(knockoutHits, knockoutReceipts.length),
+      detail: "Advancement needs its own lane: extra time, penalties, and fatigue.",
+    },
+    {
+      label: "Upset paths",
+      value: ratio(upsetHits, upsetReceipts.length),
+      detail: "Lower-probability winners that the model needs to study.",
+    },
+    {
+      label: "Penalty lane",
+      value: `${penaltyLaneMatches.length}`,
+      detail: "Matches where extra-time or shootout logic was active.",
+    },
+  ];
+}
+
+
 function buildWorldCupLessons(
   scoreboard: SeerScoreboard,
   drawHits: number,
@@ -3841,20 +3943,20 @@ function buildWorldCupLessons(
 function buildWorldCupImprovements(language: Language) {
   if (language === "es") {
     return [
-      "Guardar snapshots en cada sync para mostrar como cambio el ranking, no reconstruirlo al final.",
-      "Calibrar por rangos: cuando decimos 55%, 65% o 75%, medir si se cumple parecido.",
-      "Separar prediccion de 90 minutos, tiempo extra, penales y avance como cuatro carriles distintos.",
-      "Agregar cobertura de fuentes: calendario, resultados, xG, clima, plantillas, crowd y estado de confianza.",
-      "Convertir el aprendizaje en modo liga para Liga MX y Champions: tabla primero, lectura del partido despues.",
+      "Seguir afinando el algoritmo con un loop de recibos: cada resultado final debe ajustar calibracion, confianza y error de marcador.",
+      "Mejorar fuentes vivas: calendario/resultados primero; despues xG, bajas, alineaciones, clima, viaje, descanso y senal crowd con cobertura visible.",
+      "Separar carriles: resultado a 90 minutos, avance, tiempo extra, penales y caos no deben mezclarse en una sola lectura.",
+      "Mejorar la interfaz publica: menos tarjetas densas, mejor jerarquia, movimiento antes/despues y una linea de tiempo de cambios del modelo.",
+      "Reusar esta base para Liga MX y Champions: tabla primero, calendario segundo, lectura del Seer solo cuando el usuario elige un partido.",
     ];
   }
 
   return [
-    "Save snapshots on every sync so movement is measured, not reconstructed at the end.",
-    "Calibrate by probability buckets: when we say 55%, 65%, or 75%, measure whether it lands close.",
-    "Separate 90-minute prediction, extra time, penalties, and advancement into four distinct lanes.",
-    "Add source coverage: schedule, results, xG, weather, lineups, crowd, and confidence state.",
-    "Turn the learning into league mode for Liga MX and Champions: table first, match read second.",
+    "Keep tuning the algorithm with a receipts loop: every final result should update calibration, confidence, and score-error baselines.",
+    "Improve live source coverage: schedule/results first; then xG, injuries, lineups, weather, travel, rest, and crowd signal with visible coverage.",
+    "Separate forecast lanes: 90-minute result, advancement, extra time, penalties, and chaos should not be collapsed into one read.",
+    "Improve the public interface: fewer dense cards, clearer hierarchy, before/after movement, and a model-change timeline.",
+    "Reuse this shell for Liga MX and Champions: standings first, fixtures second, Seer read only after a match is selected.",
   ];
 }
 
@@ -3893,6 +3995,9 @@ function buildWorldCupArchiveCopy(language: Language): WorldCupArchiveCopy {
       missesLabel: "Recibos para estudiar",
       missesTitle: "Mejores fallos",
       nextPhaseTitle: "Siguiente fase",
+      seasonReceiptsDetail:
+        "Auditoria compacta de los recibos guardados: direccion, marcador, empates, eliminatorias, penales y sorpresas.",
+      seasonReceiptsTitle: "Recibos de temporada",
       sourceNotesTitle: "Notas de cobertura de fuentes",
     };
   }
@@ -3913,6 +4018,9 @@ function buildWorldCupArchiveCopy(language: Language): WorldCupArchiveCopy {
       missesLabel: "Receipts to study",
       missesTitle: "Best misses",
       nextPhaseTitle: "Next phase field",
+      seasonReceiptsDetail:
+        "Compact audit of saved receipts: direction, exact score, draws, knockouts, penalties, and upset paths.",
+      seasonReceiptsTitle: "Season receipts",
       sourceNotesTitle: "Source coverage notes",
     };
   }
@@ -3932,6 +4040,9 @@ function buildWorldCupArchiveCopy(language: Language): WorldCupArchiveCopy {
     missesLabel: "Receipts to study",
     missesTitle: "Best misses",
     nextPhaseTitle: "Next phase field",
+    seasonReceiptsDetail:
+      "Compact audit of saved receipts: direction, exact score, draws, knockouts, penalties, and upset paths.",
+    seasonReceiptsTitle: "Season receipts",
     sourceNotesTitle: "Source coverage notes",
   };
 }
@@ -4125,6 +4236,17 @@ function buildWorldCupArchiveReport(
     knockoutReceipts,
     language,
   );
+  const seasonReceipts = buildWorldCupSeasonReceipts(
+    scoreboard,
+    drawHits,
+    drawReceipts,
+    knockoutHits,
+    knockoutReceipts,
+    upsetHits,
+    upsetReceipts,
+    penaltyLaneMatches,
+    language,
+  );
 
   return {
     archiveMode,
@@ -4138,6 +4260,7 @@ function buildWorldCupArchiveReport(
       : `The knockout picture is sharper now. MatchSeer trims the champion lane to ${titleLaneCopy.note}, keeps the next-round bracket visible, and logs what this round taught the model.`,
     lessons,
     metrics,
+    seasonReceipts,
     nextRound,
     podium,
     sourceNotes: buildWorldCupSourceNotes(language),
@@ -5786,6 +5909,24 @@ function WorldCupArchiveReportBoard({
           </div>
         ))}
       </div>
+
+      {report.seasonReceipts.length > 0 && (
+        <article className="archive-season-receipts" aria-label={report.copy.seasonReceiptsTitle}>
+          <div>
+            <span>{report.copy.seasonReceiptsTitle}</span>
+            <p>{report.copy.seasonReceiptsDetail}</p>
+          </div>
+          <div className="archive-season-receipt-grid">
+            {report.seasonReceipts.map((receipt) => (
+              <div className="archive-season-receipt-card" key={receipt.label}>
+                <span>{receipt.label}</span>
+                <strong>{receipt.value}</strong>
+                <p>{receipt.detail}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
 
       {supportingMetrics.length > 0 && (
         <div className="archive-metric-grid" aria-label="Seer tournament metrics">

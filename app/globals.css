@@ -24262,3 +24262,110 @@ body {
     0 0 0 1px rgba(245, 197, 24, 0.18) inset;
 }
 /* === End Shared Soccer Seer palette refresh === */
+
+
+/* World Cup closeout palette and receipts polish */
+.world-cup-archive-report {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 199, 39, 0.18), transparent 34%),
+    radial-gradient(circle at 92% 4%, rgba(255, 107, 53, 0.16), transparent 34%),
+    linear-gradient(145deg, #101827 0%, #07111f 56%, #120f1b 100%);
+  border-color: rgba(255, 199, 39, 0.3);
+}
+
+.archive-closeout-card,
+.archive-podium-card,
+.archive-metric-card,
+.archive-body-grid article,
+.archive-miss-strip,
+.archive-season-receipt-card {
+  background:
+    linear-gradient(145deg, rgba(157, 183, 232, 0.07), rgba(255, 255, 255, 0.026)),
+    rgba(5, 9, 18, 0.58);
+  border-color: rgba(157, 183, 232, 0.18);
+}
+
+.archive-closeout-card.primary,
+.archive-season-receipts,
+.archive-calibration-panel,
+.archive-lessons-grid,
+.archive-builder-notes {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 199, 39, 0.13), transparent 32%),
+    radial-gradient(circle at 100% 4%, rgba(41, 221, 183, 0.1), transparent 30%),
+    linear-gradient(145deg, rgba(12, 19, 31, 0.92), rgba(5, 9, 18, 0.72));
+  border-color: rgba(255, 199, 39, 0.22);
+}
+
+.archive-status-chip,
+.archive-calibration-fill.observed {
+  background: linear-gradient(90deg, #ffc727, #ff6b35, #29ddb7);
+}
+
+.archive-closeout-card > span,
+.archive-calibration-panel > div > span,
+.archive-lessons-grid article > span,
+.archive-builder-notes summary,
+.archive-gap-card > span,
+.archive-season-receipts > div:first-child span,
+.archive-season-receipt-card span {
+  color: #ffc727;
+}
+
+.archive-season-receipts {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 199, 39, 0.22);
+  border-radius: 14px;
+}
+
+.archive-season-receipts > div:first-child p {
+  max-width: 780px;
+  margin: 6px 0 0;
+  color: var(--ms-copy-soft);
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.archive-season-receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.archive-season-receipt-card {
+  display: grid;
+  gap: 7px;
+  min-height: 126px;
+  padding: 12px;
+  border: 1px solid rgba(157, 183, 232, 0.18);
+  border-radius: 12px;
+}
+
+.archive-season-receipt-card strong {
+  color: #fff;
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.archive-season-receipt-card p {
+  margin: 0;
+  color: var(--ms-copy-soft);
+  font-size: 0.78rem;
+  font-weight: 820;
+  line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+  .archive-season-receipt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-season-receipt-card {
+    min-height: auto;
+  }
+}
