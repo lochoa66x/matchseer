@@ -1858,24 +1858,16 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       }),
     [activeFantasyTeam, fantasyContextLayer.byTeam, fantasyPlayers, scoringFormat, teamLens],
   );
-  const rosteredScoutingPlayerIds = useMemo(
-    () =>
-      new Set(
-        fantasyImport
-          ? fantasyTeams.flatMap((team) => team.rosterIds)
-          : [],
-      ),
-    [fantasyImport, fantasyTeams],
-  );
-  const rosteredScoutingPlayerKeys = useMemo(
+  const fantasyOwnershipIndex = useMemo(
     () =>
       fantasyImport
-        ? rosteredFantasyPlayerIdentityKeys({
+        ? buildFantasyPlayerOwnershipIndex({
+            activeTeamId: activeFantasyTeam.id,
             players: [...fantasyPlayers, ...fantasyImport.players],
             teams: fantasyTeams,
           })
-        : new Set<string>(),
-    [fantasyImport, fantasyPlayers, fantasyTeams],
+        : emptyFantasyOwnershipIndex(),
+    [activeFantasyTeam.id, fantasyImport, fantasyPlayers, fantasyTeams],
   );
   const visibleScoutingRows = useMemo(
     () =>
@@ -1883,11 +1875,10 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
         depth: scoutingDepth,
         lineupSlots: activeTeamReport.lineupSlots,
         mode: scoutingBoardMode,
+        ownershipIndex: fantasyOwnershipIndex,
         playablePositions: activeTeamReport.lineupPositions,
         position: scoutingPosition,
         rows: scoutingBoard,
-        rosteredIds: rosteredScoutingPlayerIds,
-        rosteredKeys: rosteredScoutingPlayerKeys,
         teamLens,
         weakestPosition: activeTeamReport.weakestLane.position,
       }),
@@ -1895,8 +1886,7 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
       activeTeamReport.weakestLane.position,
       activeTeamReport.lineupSlots,
       activeTeamReport.lineupPositions,
-      rosteredScoutingPlayerIds,
-      rosteredScoutingPlayerKeys,
+      fantasyOwnershipIndex,
       scoutingBoard,
       scoutingBoardMode,
       scoutingDepth,
@@ -2007,17 +1997,15 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
   const fantasyWaiverFits = useMemo(
     () =>
       buildFantasyWaiverFitRecommendations({
+        ownershipIndex: fantasyOwnershipIndex,
         playablePositions: activeTeamReport.lineupPositions,
         report: activeTeamReport,
-        rosteredIds: rosteredScoutingPlayerIds,
-        rosteredKeys: rosteredScoutingPlayerKeys,
         rows: scoutingBoard,
         teamLens,
       }),
     [
       activeTeamReport,
-      rosteredScoutingPlayerIds,
-      rosteredScoutingPlayerKeys,
+      fantasyOwnershipIndex,
       scoutingBoard,
       teamLens,
     ],
@@ -3394,9 +3382,8 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               actions={fantasyActionQueue}
               matchupReport={fantasyMatchupReport}
               matchupSource={fantasyMatchupSource}
+              ownershipIndex={fantasyOwnershipIndex}
               report={activeTeamReport}
-              rosteredIds={rosteredScoutingPlayerIds}
-              rosteredKeys={rosteredScoutingPlayerKeys}
               rows={scoutingBoard}
               scoringFormat={scoringFormat}
               teamLens={teamLens}
@@ -3416,10 +3403,9 @@ export default function NflLabClient({ mode = "nfl" }: { mode?: NflLabMode }) {
               onRequest={requestScoutingRead}
               hasLiveOrImportedSourceRankings={hasLiveOrImportedSourceRankings}
               lineupSlots={activeTeamReport.lineupSlots}
+              ownershipIndex={fantasyOwnershipIndex}
               playablePositions={activeTeamReport.lineupPositions}
               position={scoutingPosition}
-              rosteredIds={rosteredScoutingPlayerIds}
-              rosteredKeys={rosteredScoutingPlayerKeys}
               rows={visibleScoutingRows}
               scoringFormat={scoringFormat}
               status={scoutStatus}
@@ -6122,9 +6108,8 @@ function FantasyOverview({
   actions,
   matchupReport,
   matchupSource,
+  ownershipIndex,
   report,
-  rosteredIds,
-  rosteredKeys,
   rows,
   scoringFormat,
   teamLens,
@@ -6133,9 +6118,8 @@ function FantasyOverview({
   actions: FantasyActionItem[];
   matchupReport: FantasyMatchupReport;
   matchupSource: FantasyMatchupSourceRead;
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   report: FantasyTeamReport;
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
@@ -6154,8 +6138,7 @@ function FantasyOverview({
         ...scoutingRowsForMode(
           rows,
           "topPicks",
-          rosteredIds,
-          rosteredKeys,
+          ownershipIndex,
           report.weakestLane.position,
           teamLens,
           report.lineupPositions,
@@ -6164,8 +6147,7 @@ function FantasyOverview({
     [
       report.lineupPositions,
       report.weakestLane.position,
-      rosteredIds,
-      rosteredKeys,
+      ownershipIndex,
       rows,
       teamLens,
       waiverFits,
@@ -6256,7 +6238,7 @@ function FantasyOverview({
     report.benchPlayers[0] ??
     null;
   const availableStatusLabel =
-    rosteredIds.size > 0 || rosteredKeys.size > 0
+    ownershipIndex.hasLeagueSignal
       ? "Sleeper ownership applied"
       : "Sample availability until a league is connected";
   const lineupSlotsLabel = report.lineupPositions
@@ -6271,9 +6253,8 @@ function FantasyOverview({
     : bestAvailablePlayer
       ? fantasyDeepResearchReason({
           player: bestAvailablePlayer,
-          report,
-          scoringFormat,
           teamLens,
+          weakestPosition: report.weakestLane.position,
         })
       : "No clean available add is loaded for this league yet.";
   const safestCutDetail = bestAvailableFit?.cutRead
@@ -6443,10 +6424,9 @@ function FantasyOverview({
         {selectedPlayer ? (
           <FantasySuggestedPlayerPanel
             fit={waiverFits.find((item) => item.player.id === selectedPlayer.id) ?? null}
+            ownershipIndex={ownershipIndex}
             player={selectedPlayer}
             report={report}
-            rosteredIds={rosteredIds}
-            rosteredKeys={rosteredKeys}
             scoringFormat={scoringFormat}
             teamLens={teamLens}
           />
@@ -6558,23 +6538,22 @@ function FantasyOverview({
 
 function FantasySuggestedPlayerPanel({
   fit,
+  ownershipIndex,
   player,
   report,
-  rosteredIds,
-  rosteredKeys,
   scoringFormat,
   teamLens,
 }: {
   fit: FantasyWaiverFitRecommendation | null;
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   player: ScoutingRow;
   report: FantasyTeamReport;
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
 }) {
   const position = normalizeScoutingPosition(player.position);
-  const available = isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys);
+  const ownership = fantasyPlayerOwnershipFor(player, ownershipIndex);
+  const available = ownership.available;
   const dropCandidate = fantasyDropCandidate(report, player);
   const action = fantasyDeepResearchAction({
     available,
@@ -6603,6 +6582,7 @@ function FantasySuggestedPlayerPanel({
           position={player.position}
         />
         <span>{action}</span>
+        <em className={fantasyOwnershipBadgeClass(ownership)}>{ownership.label}</em>
       </div>
       <div className="nfl-hub-player-copy">
         <span className="nfl-hub-label">Player fit read</span>
@@ -8300,10 +8280,9 @@ function ScoutingBoard({
   onPositionChange,
   onRequest,
   lineupSlots,
+  ownershipIndex,
   playablePositions,
   position,
-  rosteredIds,
-  rosteredKeys,
   rows,
   scoringFormat,
   status,
@@ -8320,10 +8299,9 @@ function ScoutingBoard({
   onPositionChange: (position: ScoutingPosition) => void;
   onRequest: () => void;
   lineupSlots: FantasyLineupSlotDefinition[];
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   playablePositions: FantasyPosition[];
   position: ScoutingPosition;
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   scoringFormat: ScoringFormat;
   status: ScoutStatus;
@@ -8334,7 +8312,7 @@ function ScoutingBoard({
     scoutingDepthOptions.find((option) => option.value === depth) ??
     scoutingDepthOptions[0];
   const modeOption = scoutingBoardModeOptions.find((option) => option.value === mode);
-  const hasLeagueRosterSignal = rosteredIds.size > 0 || rosteredKeys.size > 0;
+  const hasLeagueRosterSignal = ownershipIndex.hasLeagueSignal;
   const positionOptions = scoutingPositionOptionsForLineup(
     lineupSlots,
     playablePositions,
@@ -8342,8 +8320,7 @@ function ScoutingBoard({
   const modeRows = scoutingRowsForMode(
     allRows,
     mode,
-    rosteredIds,
-    rosteredKeys,
+    ownershipIndex,
     weakestPosition,
     teamLens,
     playablePositions,
@@ -8356,8 +8333,8 @@ function ScoutingBoard({
       ? modeRows
       : scoutingRowsForOption(modeRows, activePositionOption);
   const deepResearchRows = buildDeepResearchRows({
-    rosteredIds,
-    rosteredKeys,
+    mode,
+    ownershipIndex,
     rows: laneModeRows,
     teamLens,
     weakestPosition,
@@ -8367,8 +8344,7 @@ function ScoutingBoard({
     const nextRows = scoutingRowsForMode(
       allRows,
       nextMode,
-      rosteredIds,
-      rosteredKeys,
+      ownershipIndex,
       weakestPosition,
       teamLens,
       playablePositions,
@@ -8499,6 +8475,7 @@ function ScoutingBoard({
         </article>
       ) : null}
       <DeepResearchPanel
+        ownershipIndex={ownershipIndex}
         rows={deepResearchRows}
         scoringFormat={scoringFormat}
         teamLens={teamLens}
@@ -8506,57 +8483,64 @@ function ScoutingBoard({
       />
       {rows.length ? (
         <div className="nfl-scouting-list">
-          {rows.map((player, index) => (
-            <article className="nfl-scout-row" key={player.id}>
-              <div className="nfl-rank-stack">
-                <span>#{index + 1}</span>
-                <em>{scoutingBoardModeLabel(mode)}</em>
-              </div>
-              <div className="nfl-scout-player">
-                <div className="nfl-player-id">
-                  <FantasyPlayerArtwork
-                    className="compact"
-                    playerName={player.name}
-                    position={player.position}
-                  />
-                  <div>
-                    <strong>{player.name}</strong>
-                    <em>
-                      {fantasyPlayerTeamLine(player)}
-                    </em>
+          {rows.map((player, index) => {
+            const ownership = fantasyPlayerOwnershipFor(player, ownershipIndex);
+
+            return (
+              <article className="nfl-scout-row" key={player.id}>
+                <div className="nfl-rank-stack">
+                  <span>#{index + 1}</span>
+                  <em>{scoutingBoardModeLabel(mode)}</em>
+                </div>
+                <div className="nfl-scout-player">
+                  <div className="nfl-player-id">
+                    <FantasyPlayerArtwork
+                      className="compact"
+                      playerName={player.name}
+                      position={player.position}
+                    />
+                    <div>
+                      <strong>{player.name}</strong>
+                      <em>
+                        {fantasyPlayerTeamLine(player)}
+                      </em>
+                      <span className={fantasyOwnershipBadgeClass(ownership)}>
+                        {ownership.label}
+                      </span>
+                    </div>
                   </div>
+                  <div className="nfl-trait-list">
+                    {fantasySignalTags(player).slice(0, 3).map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                    {player.traits.map((trait) => (
+                      <span key={trait}>{trait}</span>
+                    ))}
+                  </div>
+                  <ProjectionReceipt
+                    compact
+                    player={player}
+                    projection={player.contextProjection}
+                  />
                 </div>
-                <div className="nfl-trait-list">
-                  {fantasySignalTags(player).slice(0, 3).map((tag) => (
-                    <span key={tag}>{tag}</span>
-                  ))}
-                  {player.traits.map((trait) => (
-                    <span key={trait}>{trait}</span>
-                  ))}
+                <div className="nfl-scout-metric">
+                  <span>Projection</span>
+                  <strong>{player.contextProjection.projection.toFixed(1)}</strong>
                 </div>
-                <ProjectionReceipt
-                  compact
-                  player={player}
-                  projection={player.contextProjection}
-                />
-              </div>
-              <div className="nfl-scout-metric">
-                <span>Projection</span>
-                <strong>{player.contextProjection.projection.toFixed(1)}</strong>
-              </div>
-              <div className="nfl-scout-metric">
-                <span>Range</span>
-                <strong>
-                  {player.contextProjection.floor.toFixed(1)}-
-                  {player.contextProjection.ceiling.toFixed(1)}
-                </strong>
-              </div>
-              <div className="nfl-rank-delta">
-                <span>Baseline #{player.nflRank}</span>
-                <strong>{formatRankDelta(player.rankDelta)}</strong>
-              </div>
-            </article>
-          ))}
+                <div className="nfl-scout-metric">
+                  <span>Range</span>
+                  <strong>
+                    {player.contextProjection.floor.toFixed(1)}-
+                    {player.contextProjection.ceiling.toFixed(1)}
+                  </strong>
+                </div>
+                <div className="nfl-rank-delta">
+                  <span>Baseline #{player.nflRank}</span>
+                  <strong>{formatRankDelta(player.rankDelta)}</strong>
+                </div>
+              </article>
+            );
+          })}
         </div>
       ) : (
         <article className="nfl-scouting-empty">
@@ -8576,11 +8560,13 @@ function ScoutingBoard({
 }
 
 function DeepResearchPanel({
+  ownershipIndex,
   rows,
   scoringFormat,
   teamLens,
   weakestPosition,
 }: {
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   rows: FantasyDeepResearchRow[];
   scoringFormat: ScoringFormat;
   teamLens: FantasyTeamLens;
@@ -8609,45 +8595,52 @@ function DeepResearchPanel({
         </span>
       </div>
       <div className="nfl-deep-research-grid">
-        {rows.map((row) => (
-          <article className="nfl-deep-research-card" key={row.player.id}>
-            <div className="nfl-player-id">
-              <FantasyPlayerArtwork
-                className="compact research-avatar"
-                playerName={row.player.name}
-                position={row.player.position}
-              />
-              <div>
-                <strong>{row.player.name}</strong>
-                <em>
-                  {fantasyPlayerTeamLine(row.player)}
-                </em>
+        {rows.map((row) => {
+          const ownership = fantasyPlayerOwnershipFor(row.player, ownershipIndex);
+
+          return (
+            <article className="nfl-deep-research-card" key={row.player.id}>
+              <div className="nfl-player-id">
+                <FantasyPlayerArtwork
+                  className="compact research-avatar"
+                  playerName={row.player.name}
+                  position={row.player.position}
+                />
+                <div>
+                  <strong>{row.player.name}</strong>
+                  <em>
+                    {fantasyPlayerTeamLine(row.player)}
+                  </em>
+                  <span className={fantasyOwnershipBadgeClass(ownership)}>
+                    {ownership.label}
+                  </span>
+                </div>
               </div>
-            </div>
-            <strong>{row.action}</strong>
-            <p>{row.reason}</p>
-            <div className="nfl-deep-research-metrics">
-              <span>
-                Projection
-                <strong>{row.player.contextProjection.projection.toFixed(1)}</strong>
-              </span>
-              <span>
-                Ceiling
-                <strong>{row.player.contextProjection.ceiling.toFixed(1)}</strong>
-              </span>
-              <span>
-                Role
-                <strong>{row.fit}</strong>
-              </span>
-            </div>
-            <em>{row.risk}</em>
-            <div className="nfl-deep-research-tags">
-              {row.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
-            </div>
-          </article>
-        ))}
+              <strong>{row.action}</strong>
+              <p>{row.reason}</p>
+              <div className="nfl-deep-research-metrics">
+                <span>
+                  Projection
+                  <strong>{row.player.contextProjection.projection.toFixed(1)}</strong>
+                </span>
+                <span>
+                  Ceiling
+                  <strong>{row.player.contextProjection.ceiling.toFixed(1)}</strong>
+                </span>
+                <span>
+                  Role
+                  <strong>{row.fit}</strong>
+                </span>
+              </div>
+              <em>{row.risk}</em>
+              <div className="nfl-deep-research-tags">
+                {row.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </article>
   );
@@ -10665,11 +10658,14 @@ function buildWaiverMoveTarget({
     (player) =>
       active.report.lineupPositions.includes(normalizeScoutingPosition(player.position)),
   );
-  const rosteredIds = new Set(teams.flatMap((team) => team.rosterIds));
-  const rosteredKeys = rosteredFantasyPlayerIdentityKeys({ players: board, teams });
+  const ownershipIndex = buildFantasyPlayerOwnershipIndex({
+    activeTeamId: active.report.team.id,
+    players: [...allPlayers, ...board],
+    teams,
+  });
   const position = active.weakestPosition.position;
   const freeAgents = board.filter((player) =>
-    isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys),
+    fantasyPlayerOwnershipFor(player, ownershipIndex).available,
   );
   const candidates = freeAgents.length > 0 ? freeAgents : active.report.benchPlayers;
   const target =
@@ -10683,7 +10679,7 @@ function buildWaiverMoveTarget({
     return fallbackFantasyMoveTarget("waiver", position);
   }
 
-  const isTrueFreeAgent = isScoutingPlayerAvailable(target, rosteredIds, rosteredKeys);
+  const isTrueFreeAgent = fantasyPlayerOwnershipFor(target, ownershipIndex).available;
 
   return {
     action: isTrueFreeAgent ? "Add or watch" : "Watch list",
@@ -11666,45 +11662,145 @@ type FantasyPlayerIdentityInput = {
   team?: string;
 };
 
-function rosteredFantasyPlayerIdentityKeys({
+type FantasyPlayerOwnershipState = {
+  available: boolean;
+  isMine: boolean;
+  label: string;
+  ownerTeamId?: string;
+  ownerTeamName?: string;
+};
+
+type FantasyPlayerOwnershipIndex = {
+  byId: Map<string, FantasyPlayerOwnershipState>;
+  byKey: Map<string, FantasyPlayerOwnershipState>;
+  hasLeagueSignal: boolean;
+  rosteredIds: Set<string>;
+  rosteredKeys: Set<string>;
+};
+
+function emptyFantasyOwnershipIndex(): FantasyPlayerOwnershipIndex {
+  return {
+    byId: new Map(),
+    byKey: new Map(),
+    hasLeagueSignal: false,
+    rosteredIds: new Set(),
+    rosteredKeys: new Set(),
+  };
+}
+
+function fantasyTeamRosterPlayerIds(
+  team: Pick<FantasyTeam, "benchIds" | "rosterIds" | "starterIds">,
+) {
+  return [
+    ...new Set([
+      ...(team.rosterIds ?? []),
+      ...(team.starterIds ?? []),
+      ...(team.benchIds ?? []),
+    ]),
+  ].filter(Boolean);
+}
+
+function buildFantasyPlayerOwnershipIndex({
+  activeTeamId,
   players,
   teams,
 }: {
+  activeTeamId: string;
   players: FantasyPlayerIdentityInput[];
   teams: FantasyTeam[];
-}) {
-  const playersById = new Map(players.map((player) => [player.id, player]));
-  const keys = new Set<string>();
+}): FantasyPlayerOwnershipIndex {
+  const playersById = new Map<string, FantasyPlayerIdentityInput>();
+  const byId = new Map<string, FantasyPlayerOwnershipState>();
+  const byKey = new Map<string, FantasyPlayerOwnershipState>();
+  const rosteredIds = new Set<string>();
+  const rosteredKeys = new Set<string>();
+
+  players.forEach((player) => {
+    if (player.id) {
+      playersById.set(player.id, player);
+    }
+  });
 
   teams.forEach((team) => {
-    team.rosterIds.forEach((playerId) => {
+    const isMine = team.id === activeTeamId;
+    const ownerTeamName = team.name || team.manager || "another team";
+    const ownership: FantasyPlayerOwnershipState = {
+      available: false,
+      isMine,
+      label: isMine ? "My roster" : `Rostered by ${ownerTeamName}`,
+      ownerTeamId: team.id,
+      ownerTeamName,
+    };
+
+    fantasyTeamRosterPlayerIds(team).forEach((playerId) => {
+      rosteredIds.add(playerId);
+      byId.set(playerId, ownership);
+
       const player = playersById.get(playerId);
 
       if (!player) {
         return;
       }
 
-      fantasyPlayerIdentityKeys(player).forEach((key) => keys.add(key));
+      fantasyPlayerIdentityKeys(player).forEach((key) => {
+        rosteredKeys.add(key);
+
+        if (!byKey.has(key)) {
+          byKey.set(key, ownership);
+        }
+      });
     });
   });
 
-  return keys;
+  return {
+    byId,
+    byKey,
+    hasLeagueSignal: teams.some((team) => fantasyTeamRosterPlayerIds(team).length > 0),
+    rosteredIds,
+    rosteredKeys,
+  };
 }
 
-function isScoutingPlayerAvailable(
+function fantasyPlayerOwnershipFor(
   player: FantasyPlayerIdentityInput,
-  rosteredIds: Set<string>,
-  rosteredKeys: Set<string>,
-) {
-  if (rosteredIds.size === 0 && rosteredKeys.size === 0) {
-    return true;
+  ownershipIndex: FantasyPlayerOwnershipIndex,
+): FantasyPlayerOwnershipState {
+  if (!ownershipIndex.hasLeagueSignal) {
+    return {
+      available: true,
+      isMine: false,
+      label: "Pool player",
+    };
   }
 
-  if (player.id && rosteredIds.has(player.id)) {
-    return false;
+  if (player.id) {
+    const byId = ownershipIndex.byId.get(player.id);
+
+    if (byId) {
+      return byId;
+    }
   }
 
-  return !fantasyPlayerIdentityKeys(player).some((key) => rosteredKeys.has(key));
+  for (const key of fantasyPlayerIdentityKeys(player)) {
+    const byKey = ownershipIndex.byKey.get(key);
+
+    if (byKey) {
+      return byKey;
+    }
+  }
+
+  return {
+    available: true,
+    isMine: false,
+    label: "Free agent",
+  };
+}
+
+function fantasyOwnershipBadgeClass(ownership: FantasyPlayerOwnershipState) {
+  return cx(
+    "nfl-ownership-badge",
+    ownership.available ? "available" : ownership.isMine ? "mine" : "rostered",
+  );
 }
 
 function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
@@ -11716,11 +11812,9 @@ function fantasyPlayerIdentityKeys(player: FantasyPlayerIdentityInput) {
     return [];
   }
 
-  const keys = [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`];
-
-  if (name.length >= 6) {
-    keys.push(name);
-  }
+  const keys = team
+    ? [`${name}|${team}|${position}`, `${name}|${team}`, `${name}|${position}`]
+    : [`${name}|${position}`];
 
   return keys;
 }
@@ -11768,10 +11862,9 @@ function filterScoutingRows({
   depth,
   lineupSlots,
   mode,
+  ownershipIndex,
   playablePositions,
   position,
-  rosteredIds,
-  rosteredKeys,
   rows,
   teamLens,
   weakestPosition,
@@ -11779,10 +11872,9 @@ function filterScoutingRows({
   depth: ScoutingDepth;
   lineupSlots: FantasyLineupSlotDefinition[];
   mode: ScoutingBoardMode;
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   playablePositions: FantasyPosition[];
   position: ScoutingPosition;
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
@@ -11793,8 +11885,7 @@ function filterScoutingRows({
   const modeRows = scoutingRowsForMode(
     rows,
     mode,
-    rosteredIds,
-    rosteredKeys,
+    ownershipIndex,
     weakestPosition,
     teamLens,
     playablePositions,
@@ -11814,8 +11905,7 @@ function filterScoutingRows({
 function scoutingRowsForMode(
   rows: ScoutingRow[],
   mode: ScoutingBoardMode,
-  rosteredIds: Set<string>,
-  rosteredKeys: Set<string>,
+  ownershipIndex: FantasyPlayerOwnershipIndex,
   weakestPosition: ScoutingPlayerPosition,
   teamLens: FantasyTeamLens,
   playablePositions: FantasyPosition[] = fantasyCoveragePositions,
@@ -11824,7 +11914,7 @@ function scoutingRowsForMode(
     playablePositions.includes(normalizeScoutingPosition(row.position)),
   );
   const availableRows = playableRows.filter((row) =>
-    isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
+    fantasyPlayerOwnershipFor(row, ownershipIndex).available,
   );
 
   if (mode === "available") {
@@ -11841,7 +11931,7 @@ function scoutingRowsForMode(
       fantasyTopPickupCandidate(player, weakestPosition, teamLens),
     );
     const rankedRows = [
-      ...(topPickupRows.length > 0 ? topPickupRows : availableRows.slice(0, 12)),
+      ...(topPickupRows.length > 0 ? topPickupRows : availableRows.slice(0, 8)),
     ].sort(
       (left, right) =>
         fantasyPickupScore(right, weakestPosition, teamLens, "pickup") -
@@ -11850,14 +11940,27 @@ function scoutingRowsForMode(
     );
     const candidateLimit = Math.min(
       rankedRows.length,
-      Math.round(clampValue(availableRows.length * 0.08, 8, 48)),
+      Math.round(clampValue(availableRows.length * 0.05, 6, 36)),
     );
 
     return rankedRows.slice(0, candidateLimit);
   }
 
   if (mode === "ultraDeep") {
-    const deepRows = availableRows.filter((player) => fantasyUltraDeepCandidate(player));
+    const deepRows = availableRows.filter((player) => {
+      const position = normalizeScoutingPosition(player.position);
+      const rank = player.sourceRank ?? player.nflRank;
+      const projection = player.contextProjection.projection;
+
+      return (
+        fantasyUltraDeepCandidate(player) &&
+        !(
+          fantasyTopPickupCandidate(player, weakestPosition, teamLens) &&
+          rank < 180 &&
+          projection > (position === "QB" ? 18 : 12.5)
+        )
+      );
+    });
 
     return [...deepRows].sort(
       (left, right) =>
@@ -11884,24 +11987,22 @@ function uniqueScoutingRowsById(rows: ScoutingRow[]) {
 }
 
 function buildFantasyWaiverFitRecommendations({
+  ownershipIndex,
   playablePositions,
   report,
-  rosteredIds,
-  rosteredKeys,
   rows,
   teamLens,
 }: {
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   playablePositions: FantasyPosition[];
   report: FantasyTeamReport;
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   teamLens: FantasyTeamLens;
 }): FantasyWaiverFitRecommendation[] {
   const weakestPosition = report.weakestLane.position;
   const availableRows = rows
     .filter((row) => playablePositions.includes(normalizeScoutingPosition(row.position)))
-    .filter((row) => isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys));
+    .filter((row) => fantasyPlayerOwnershipFor(row, ownershipIndex).available);
   const candidatePool = availableRows.filter(
     (player) =>
       normalizeScoutingPosition(player.position) === weakestPosition ||
@@ -12048,24 +12149,30 @@ function fantasyTopPickupCandidate(
   const rank = player.sourceRank ?? player.nflRank;
   const projection = player.contextProjection.projection;
   const floor = player.contextProjection.floor;
+  const upsideGap =
+    player.contextProjection.ceiling - player.contextProjection.projection;
   const roleSecurity = player.roleSecurity ?? player.health;
   const dynastyValue = player.dynastyValue ?? player.health;
-  const weakestLaneHelp = position === weakestPosition && projection >= 6.5;
+  const weakestLaneHelp = position === weakestPosition && projection >= 8.5;
 
   if (position === "K" || position === "DST") {
-    return projection >= 7.5 || weakestLaneHelp;
+    return projection >= 8.8 || weakestLaneHelp;
   }
 
-  if (teamLens === "dynasty" && dynastyValue >= 78 && projection >= 6.5) {
-    return true;
+  if (teamLens === "dynasty") {
+    return (
+      weakestLaneHelp ||
+      (dynastyValue >= 82 && projection >= 8.5) ||
+      (dynastyValue >= 76 && upsideGap >= 7.5 && projection >= 6.5)
+    );
   }
 
   return (
     weakestLaneHelp ||
-    projection >= 9.5 ||
-    floor >= 6 ||
-    roleSecurity >= 70 ||
-    (rank <= 220 && projection >= 7.5)
+    projection >= 12 ||
+    floor >= 8.5 ||
+    (roleSecurity >= 78 && projection >= 8.5) ||
+    (rank <= 160 && projection >= 8)
   );
 }
 
@@ -12106,20 +12213,24 @@ function fantasyPickupScore(
 }
 
 function fantasyUltraDeepCandidate(player: ScoutingRow) {
+  const position = normalizeScoutingPosition(player.position);
   const upsideGap =
     player.contextProjection.ceiling - player.contextProjection.projection;
   const rank = player.sourceRank ?? player.nflRank;
   const dynastyValue = player.dynastyValue ?? 0;
   const roleSecurity = player.roleSecurity ?? player.health;
-  const weeklyLow = player.contextProjection.projection <= 10.5;
+  const weeklyLow = player.contextProjection.projection <= 11.5;
+
+  if (position === "K" || position === "DST") {
+    return player.depthTier === "streamer" && player.contextProjection.projection <= 9.5;
+  }
 
   return (
     player.depthTier === "stash" ||
-    player.depthTier === "streamer" ||
-    (rank >= 180 && (weeklyLow || roleSecurity < 68 || dynastyValue >= 68)) ||
-    (dynastyValue >= 70 && roleSecurity < 66) ||
-    (upsideGap >= 8.5 && player.contextProjection.projection <= 14) ||
-    (player.roleSecurity === undefined && rank >= 180)
+    (rank >= 220 && (weeklyLow || roleSecurity < 65 || dynastyValue >= 70)) ||
+    (dynastyValue >= 72 && roleSecurity < 64 && player.contextProjection.projection <= 12.5) ||
+    (upsideGap >= 8.5 && player.contextProjection.projection <= 13 && rank >= 120) ||
+    (player.roleSecurity === undefined && rank >= 220)
   );
 }
 
@@ -12143,16 +12254,16 @@ function fantasyUltraDeepScore(
 }
 
 function buildDeepResearchRows({
+  mode,
+  ownershipIndex,
   playablePositions,
-  rosteredIds,
-  rosteredKeys,
   rows,
   teamLens,
   weakestPosition,
 }: {
+  mode: ScoutingBoardMode;
+  ownershipIndex: FantasyPlayerOwnershipIndex;
   playablePositions: FantasyPosition[];
-  rosteredIds: Set<string>;
-  rosteredKeys: Set<string>;
   rows: ScoutingRow[];
   teamLens: FantasyTeamLens;
   weakestPosition: ScoutingPlayerPosition;
@@ -12161,18 +12272,35 @@ function buildDeepResearchRows({
     playablePositions.includes(normalizeScoutingPosition(row.position)),
   );
   const availableRows = playableRows.filter((row) =>
-    isScoutingPlayerAvailable(row, rosteredIds, rosteredKeys),
+    fantasyPlayerOwnershipFor(row, ownershipIndex).available,
   );
-  const deepPool = availableRows.filter(
-    (player) =>
-      fantasyUltraDeepCandidate(player) ||
-      normalizeScoutingPosition(player.position) === weakestPosition,
+  const topPickupRows = availableRows.filter((player) =>
+    fantasyTopPickupCandidate(player, weakestPosition, teamLens),
   );
-  const candidates = deepPool.length >= 4 ? deepPool : availableRows;
+  const ultraDeepRows = availableRows.filter((player) => fantasyUltraDeepCandidate(player));
+  const weakLaneRows = availableRows.filter(
+    (player) => normalizeScoutingPosition(player.position) === weakestPosition,
+  );
+  const primaryPool =
+    mode === "topPicks"
+      ? topPickupRows
+      : mode === "ultraDeep"
+        ? ultraDeepRows
+        : mode === "available"
+          ? availableRows
+          : availableRows.filter(
+              (player) =>
+                fantasyUltraDeepCandidate(player) ||
+                normalizeScoutingPosition(player.position) === weakestPosition,
+            );
+  const candidates = uniqueScoutingRowsById([
+    ...(primaryPool.length > 0 ? primaryPool : availableRows),
+    ...weakLaneRows,
+  ]);
 
-  return [...candidates]
+  return candidates
     .map((player) => {
-      const available = isScoutingPlayerAvailable(player, rosteredIds, rosteredKeys);
+      const available = fantasyPlayerOwnershipFor(player, ownershipIndex).available;
       const score = fantasyDeepResearchScore({
         available,
         player,
