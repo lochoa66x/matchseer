@@ -24369,3 +24369,149 @@ body {
     min-height: auto;
   }
 }
+
+/* Fantasy Seer weekly decision cockpit */
+.nfl-weekly-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(216, 180, 93, 0.22);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(216, 180, 93, 0.13), transparent 28%),
+    linear-gradient(135deg, rgba(20, 24, 32, 0.92), rgba(11, 14, 18, 0.96));
+}
+
+.nfl-weekly-cockpit-primary,
+.nfl-weekly-cockpit-card {
+  min-width: 0;
+  border: 1px solid var(--nfl-line);
+  border-radius: 14px;
+  background: rgba(12, 15, 20, 0.74);
+}
+
+.nfl-weekly-cockpit-primary {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  padding: 18px;
+}
+
+.nfl-weekly-cockpit-primary h3 {
+  max-width: 760px;
+  margin: 0;
+  color: var(--nfl-ink);
+  font-size: clamp(2rem, 4vw, 4.1rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 0.96;
+}
+
+.nfl-weekly-cockpit-primary p,
+.nfl-weekly-cockpit-card p {
+  margin: 0;
+  color: var(--nfl-muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.nfl-weekly-cockpit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nfl-weekly-cockpit-meta span {
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(157, 183, 232, 0.2);
+  border-radius: 999px;
+  background: rgba(157, 183, 232, 0.1);
+  color: var(--nfl-subtle);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.nfl-weekly-cockpit-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nfl-weekly-cockpit-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 124px;
+  padding: 12px;
+}
+
+.nfl-weekly-cockpit-card:first-child {
+  border-color: rgba(216, 180, 93, 0.32);
+  background: rgba(216, 180, 93, 0.08);
+}
+
+.nfl-weekly-cockpit-card span {
+  color: var(--nfl-brass);
+  font-size: 0.69rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nfl-weekly-cockpit-card strong {
+  color: var(--nfl-ink);
+  font-size: clamp(1rem, 1.7vw, 1.35rem);
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.nfl-weekly-cockpit-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.nfl-cockpit-context-drawer,
+.nfl-action-queue-drawer {
+  margin-top: 2px;
+}
+
+.nfl-cockpit-context-drawer .nfl-hub-grid,
+.nfl-action-queue-drawer .nfl-fantasy-action-queue {
+  margin-top: 12px;
+}
+
+.nfl-action-queue-drawer .nfl-fantasy-action-queue {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+@media (max-width: 1180px) {
+  .nfl-weekly-cockpit {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .nfl-weekly-cockpit {
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .nfl-weekly-cockpit-primary {
+    padding: 14px;
+  }
+
+  .nfl-weekly-cockpit-list {
+    grid-template-columns: 1fr;
+  }
+
+  .nfl-weekly-cockpit-card {
+    min-height: auto;
+  }
+}

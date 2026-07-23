@@ -6240,6 +6240,74 @@ function FantasyOverview({
       detail: report.closeCalls[0]?.summary ?? "No forced swap. Keep checking news.",
     },
   ];
+  const bestMoveAction = actions[0] ?? null;
+  const closeCallAction =
+    actions.find((action) => action.kind === "watch") ?? actions[1] ?? null;
+  const recheckAction =
+    actions.find((action) => action.kind === "swap") ??
+    actions.find((action) => action.title.toLowerCase().includes("re-check")) ??
+    actions[2] ??
+    closeCallAction;
+  const bestAvailableFit = waiverFits[0] ?? null;
+  const bestAvailablePlayer = bestAvailableFit?.player ?? selectedPlayer;
+  const safestCut =
+    bestAvailableFit?.cutPlayer ??
+    (bestAvailablePlayer ? fantasyDropCandidate(report, bestAvailablePlayer) : null) ??
+    report.benchPlayers[0] ??
+    null;
+  const availableStatusLabel =
+    rosteredIds.size > 0 || rosteredKeys.size > 0
+      ? "Sleeper ownership applied"
+      : "Sample availability until a league is connected";
+  const lineupSlotsLabel = report.lineupPositions
+    .map((position) => (position === "DST" ? "DST" : position))
+    .join(" / ");
+  const bestAvailableDetail = bestAvailableFit
+    ? `${bestAvailableFit.reason} ${
+        bestAvailableFit.projectedLift !== null
+          ? `${formatFantasyDelta(bestAvailableFit.projectedLift)} projected lift.`
+          : "Price it against your bench first."
+      }`
+    : bestAvailablePlayer
+      ? fantasyDeepResearchReason({
+          player: bestAvailablePlayer,
+          report,
+          scoringFormat,
+          teamLens,
+        })
+      : "No clean available add is loaded for this league yet.";
+  const safestCutDetail = bestAvailableFit?.cutRead
+    ? bestAvailableFit.cutRead
+    : safestCut
+      ? `${safestCut.name} is the first bench player to compare before forcing an add.`
+      : "No automatic cut. Keep the roster intact unless news changes.";
+  const cockpitItems = [
+    {
+      label: "Best move",
+      value: bestMoveAction?.playerName ?? weeklyCoach.bestMove.call,
+      detail: bestMoveAction?.detail ?? weeklyCoach.bestMove.why,
+    },
+    {
+      label: "Close call",
+      value: closeCallAction?.playerName ?? closeCallAction?.state ?? "No urgent swap",
+      detail: closeCallAction?.detail ?? closeCalls[0],
+    },
+    {
+      label: "Re-check",
+      value: recheckAction?.state ?? "Watch late news",
+      detail: recheckAction?.detail ?? weeklyCoach.pressure.summary,
+    },
+    {
+      label: "Best available add",
+      value: bestAvailablePlayer?.name ?? "No clean add",
+      detail: bestAvailableDetail,
+    },
+    {
+      label: "Safest cut",
+      value: safestCut?.name ?? "Hold roster",
+      detail: safestCutDetail,
+    },
+  ];
 
   return (
     <section className="nfl-fantasy-overview" id="fantasy-overview">
@@ -6263,7 +6331,39 @@ function FantasyOverview({
           </div>
         </div>
 
-        <div className="nfl-hub-grid">
+        <div className="nfl-weekly-cockpit" aria-label="Fantasy weekly decision cockpit">
+          <article className="nfl-weekly-cockpit-primary">
+            <span className="nfl-hub-label">This week&apos;s plan</span>
+            <h3>{weeklyCoach.bestMove.call}</h3>
+            <p>{weeklyCoach.bestMove.why}</p>
+            <div className="nfl-weekly-cockpit-meta">
+              <span>{availableStatusLabel}</span>
+              <span>{lineupSlotsLabel}</span>
+              <span>Weak lane: {report.weakestLane.label}</span>
+            </div>
+          </article>
+
+          <div className="nfl-weekly-cockpit-list">
+            {cockpitItems.map((item) => (
+              <article key={item.label} className="nfl-weekly-cockpit-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <p>{item.detail}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <details className="nfl-fantasy-workbench-drawer nfl-cockpit-context-drawer">
+          <summary>
+            <span>
+              <Search size={16} />
+              Roster lanes, available players, and weekly timeline
+            </span>
+            <em>Open the supporting context behind the plan</em>
+          </summary>
+
+          <div className="nfl-hub-grid">
           <article className="nfl-hub-panel nfl-hub-matchup-card">
             <span className="nfl-hub-label">Current matchup</span>
             <div className={cx("nfl-hub-source-pill", matchupSource.tone)}>
@@ -6362,10 +6462,20 @@ function FantasyOverview({
               <p>{item.detail}</p>
             </article>
           ))}
-        </div>
+          </div>
+        </details>
       </section>
 
-      <FantasyActionQueue actions={actions} />
+      <details className="nfl-fantasy-workbench-drawer nfl-action-queue-drawer">
+        <summary>
+          <span>
+            <ClipboardList size={16} />
+            Action receipts
+          </span>
+          <em>Open the full queue when you want the model trace</em>
+        </summary>
+        <FantasyActionQueue actions={actions} />
+      </details>
 
       <details className="nfl-fantasy-workbench-drawer">
         <summary>
